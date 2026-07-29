@@ -1,0 +1,690 @@
+"""AuthService: owns all authentication business behaviour (RULE-003).
+
+Routers only authenticate/authorise/validate/call-service/return-response (RULE-004).
+Repositories never make business decisions (RULE-002) — locking policy, token rotation
+rules, and MFA gating all live here.
+"""
+
+import uuid
+from datetime import UTC, datetime, timedelta
+
+import pyotp
+
+from pawguard.core.config import get_settings
+from pawguard.core.constants import DeviceType
+from pawguard.core.exceptions import ForbiddenError, NotFoundError
+from pawguard.core.security import (
+    TokenError,
+    TokenType,
+    create_access_token,
+    create_pre_auth_token,
+    decode_token,
+    generate_opaque_token,
+    hash_opaque_token,
+    hash_password,
+    verify_password,
+)
+from pawguard.modules.auth.exceptions import (
+    AccountInactiveError,
+    AccountLockedError,
+    EmailAlreadyRegisteredError,
+    InvalidCredentialsError,
+    InvalidMFACodeError,
+    InvalidRefreshTokenError,
+    InvalidSessionError,
+    InvalidTokenError,
+    MFAAlreadyEnabledError,
+    RefreshTokenReuseDetectedError,
+)
+from pawguard.modules.auth.models import (
+    AuthAuditEventType,
+    EmailVerificationToken,
+    MFADevice,
+    PasswordResetToken,
+    Permission,
+    RefreshToken,
+    Role,
+    User,
+    UserSession,
+)
+from pawguard.modules.auth.repository import (
+    EmailVerificationTokenRepository,
+    MFARepository,
+    PasswordResetTokenRepository,
+    PermissionRepository,
+    RefreshTokenRepository,
+    RoleRepository,
+    SessionRepository,
+    UserRepository,
+    UserRoleRepository,
+)
+from pawguard.modules.auth.schemas import DeviceContext
+from pawguard.services.audit_service import AuditService
+
+MAX_FAILED_LOGIN_ATTEMPTS = 5
+ACCOUNT_LOCKOUT_MINUTES = 15
+
+
+class RequestContext:
+    """Transport-agnostic metadata about the calling client, set by the router."""
+
+    __slots__ = ("ip_address", "user_agent")
+
+    def __init__(self, *, ip_address: str | None, user_agent: str | None) -> None:
+        self.ip_address = ip_address
+        self.user_agent = user_agent
+
+
+class AuthenticatedTokens:
+    __slots__ = ("access_token", "refresh_token", "expires_in", "user")
+
+    def __init__(
+        self, *, access_token: str, refresh_token: str, expires_in: int, user: User
+    ) -> None:
+        self.access_token = access_token
+        self.refresh_token = refresh_token
+        self.expires_in = expires_in
+        self.user = user
+
+
+class AuthService:
+    def __init__(
+        self,
+        *,
+        user_repo: UserRepository,
+        session_repo: SessionRepository,
+        refresh_token_repo: RefreshTokenRepository,
+        mfa_repo: MFARepository,
+        password_reset_repo: PasswordResetTokenRepository,
+        email_verification_repo: EmailVerificationTokenRepository,
+        audit_service: AuditService,
+    ) -> None:
+        self._users = user_repo
+        self._sessions = session_repo
+        self._refresh_tokens = refresh_token_repo
+        self._mfa = mfa_repo
+        self._password_resets = password_reset_repo
+        self._email_verifications = email_verification_repo
+        self._audit = audit_service
+        self._settings = get_settings()
+
+    # --- Registration ---
+
+    async def register(
+        self, *, email: str, password: str, full_name: str, phone: str | None
+    ) -> User:
+        normalized_email = email.lower()
+        existing = await self._users.get_by_email(normalized_email)
+        if existing is not None:
+            raise EmailAlreadyRegisteredError("An account with this email already exists.")
+
+        role = await self._users.get_default_role()
+        user = User(
+            email=normalized_email,
+            full_name=full_name,
+            phone=phone,
+            hashed_password=hash_password(password),
+            is_active=True,
+            is_verified=False,
+        )
+        if role is not None:
+            user.roles.append(role)
+
+        await self._users.create(user)
+        # Re-fetch to populate eagerly-loaded relationships (e.g., roles).
+        fresh = await self._users.get_by_id(user.id)
+        return fresh or user
+
+    # --- Login ---
+
+    async def login(
+        self, *, email: str, password: str, device: DeviceContext, ctx: RequestContext
+    ) -> AuthenticatedTokens | str:
+        """Returns AuthenticatedTokens, or a pre-auth token (str) if MFA is required."""
+        user = await self._users.get_by_email(email.lower())
+
+        if user is None or not verify_password(password, user.hashed_password):
+            if user is not None:
+                await self._register_failed_attempt(user)
+            await self._audit.record(
+                event_type=AuthAuditEventType.LOGIN_FAILED,
+                actor_id=user.id if user else None,
+                ip_address=ctx.ip_address,
+                user_agent=ctx.user_agent,
+            )
+            raise InvalidCredentialsError("Invalid email or password.")
+
+        if user.locked_until and user.locked_until > datetime.now(UTC):
+            raise AccountLockedError("Account is temporarily locked due to failed login attempts.")
+
+        if not user.is_active:
+            raise AccountInactiveError("This account has been deactivated.")
+
+        user.failed_login_count = 0
+        user.locked_until = None
+        user.last_login_at = datetime.now(UTC)
+
+        session = await self._create_session(user_id=user.id, device=device, ctx=ctx)
+
+        if user.mfa_enabled:
+            return create_pre_auth_token(user_id=user.id, session_id=session.id)
+
+        tokens = await self._issue_tokens(user=user, session=session)
+        await self._audit.record(
+            event_type=AuthAuditEventType.LOGIN_SUCCESS,
+            actor_id=user.id,
+            ip_address=ctx.ip_address,
+            user_agent=ctx.user_agent,
+        )
+        return tokens
+
+    async def verify_mfa_login(
+        self, *, pre_auth_token: str, code: str, device: DeviceContext, ctx: RequestContext
+    ) -> AuthenticatedTokens:
+        try:
+            payload = decode_token(pre_auth_token, expected_type=TokenType.PRE_AUTH)
+        except TokenError as exc:
+            raise InvalidTokenError("Pre-authentication token is invalid or expired.") from exc
+
+        user_id = uuid.UUID(payload["sub"])
+        session_id = uuid.UUID(payload["sid"])
+
+        user = await self._users.get_by_id(user_id)
+        session = await self._sessions.get_by_id(session_id)
+        if user is None or session is None or not session.is_active:
+            raise InvalidSessionError("Session is no longer valid.")
+
+        device_record = await self._mfa.get_for_user(user.id)
+        if device_record is None or not self._verify_totp(device_record, code):
+            await self._audit.record(
+                event_type=AuthAuditEventType.MFA_FAILED,
+                actor_id=user.id,
+                ip_address=ctx.ip_address,
+                user_agent=ctx.user_agent,
+            )
+            raise InvalidMFACodeError("Invalid MFA code.")
+
+        tokens = await self._issue_tokens(user=user, session=session)
+        await self._audit.record(
+            event_type=AuthAuditEventType.MFA_VERIFIED,
+            actor_id=user.id,
+            ip_address=ctx.ip_address,
+            user_agent=ctx.user_agent,
+        )
+        await self._audit.record(
+            event_type=AuthAuditEventType.LOGIN_SUCCESS,
+            actor_id=user.id,
+            ip_address=ctx.ip_address,
+            user_agent=ctx.user_agent,
+        )
+        return tokens
+
+    # --- Refresh (with rotation + reuse detection) ---
+
+    async def refresh(self, *, raw_refresh_token: str, ctx: RequestContext) -> AuthenticatedTokens:
+        token_hash = hash_opaque_token(raw_refresh_token)
+        existing = await self._refresh_tokens.get_by_hash(token_hash)
+
+        if existing is None:
+            raise InvalidRefreshTokenError("Refresh token is invalid.")
+
+        if existing.revoked_at is not None:
+            # Reuse of a rotated/revoked token — treat as a breach signal and kill the session.
+            await self._sessions.revoke(existing.session_id, reason="refresh_token_reuse_detected")
+            await self._refresh_tokens.revoke_all_for_session(
+                existing.session_id, reason="refresh_token_reuse_detected"
+            )
+            session = await self._sessions.get_by_id(existing.session_id)
+            await self._audit.record(
+                event_type=AuthAuditEventType.REFRESH_REUSE_DETECTED,
+                actor_id=session.user_id if session else None,
+                ip_address=ctx.ip_address,
+                user_agent=ctx.user_agent,
+            )
+            raise RefreshTokenReuseDetectedError("Refresh token reuse detected. Session revoked.")
+
+        if existing.expires_at < datetime.now(UTC):
+            raise InvalidRefreshTokenError("Refresh token has expired.")
+
+        session = await self._sessions.get_by_id(existing.session_id)
+        if session is None or not session.is_active:
+            raise InvalidSessionError("Session is no longer valid.")
+
+        user = await self._users.get_by_id(session.user_id)
+        if user is None or not user.is_active:
+            raise AccountInactiveError("This account has been deactivated.")
+
+        new_refresh_raw = generate_opaque_token()
+        new_refresh_token = RefreshToken(
+            session_id=session.id,
+            token_hash=hash_opaque_token(new_refresh_raw),
+            expires_at=datetime.now(UTC) + timedelta(days=self._settings.refresh_token_expire_days),
+        )
+        await self._refresh_tokens.create(new_refresh_token)
+        await self._refresh_tokens.revoke(
+            existing.id, reason="rotated", rotated_to_id=new_refresh_token.id
+        )
+        await self._sessions.touch_last_used(session.id)
+
+        access_token = create_access_token(
+            user_id=user.id,
+            session_id=session.id,
+            roles=[role.name for role in user.roles],
+        )
+        await self._audit.record(
+            event_type=AuthAuditEventType.REFRESH,
+            actor_id=user.id,
+            ip_address=ctx.ip_address,
+            user_agent=ctx.user_agent,
+        )
+        return AuthenticatedTokens(
+            access_token=access_token,
+            refresh_token=new_refresh_raw,
+            expires_in=self._settings.access_token_expire_minutes * 60,
+            user=user,
+        )
+
+    # --- Logout ---
+
+    async def logout(
+        self, *, session_id: uuid.UUID, user_id: uuid.UUID, ctx: RequestContext
+    ) -> None:
+        await self._sessions.revoke(session_id, reason="user_logout")
+        await self._refresh_tokens.revoke_all_for_session(session_id, reason="user_logout")
+        await self._audit.record(
+            event_type=AuthAuditEventType.LOGOUT,
+            actor_id=user_id,
+            ip_address=ctx.ip_address,
+            user_agent=ctx.user_agent,
+        )
+
+    async def logout_all(
+        self, *, user_id: uuid.UUID, current_session_id: uuid.UUID | None, ctx: RequestContext
+    ) -> None:
+        sessions = await self._sessions.list_active_for_user(user_id)
+        await self._sessions.revoke_all_for_user(
+            user_id, reason="user_logout_all", except_session_id=current_session_id
+        )
+        for s in sessions:
+            if s.id != current_session_id:
+                await self._refresh_tokens.revoke_all_for_session(s.id, reason="user_logout_all")
+        await self._audit.record(
+            event_type=AuthAuditEventType.LOGOUT_ALL,
+            actor_id=user_id,
+            ip_address=ctx.ip_address,
+            user_agent=ctx.user_agent,
+        )
+
+    # --- Password management ---
+
+    async def change_password(
+        self,
+        *,
+        user: User,
+        current_password: str,
+        new_password: str,
+        current_session_id: uuid.UUID,
+        ctx: RequestContext,
+    ) -> None:
+        if not verify_password(current_password, user.hashed_password):
+            raise InvalidCredentialsError("Current password is incorrect.")
+
+        user.hashed_password = hash_password(new_password)
+        await self._sessions.revoke_all_for_user(
+            user.id, reason="password_changed", except_session_id=current_session_id
+        )
+        await self._audit.record(
+            event_type=AuthAuditEventType.PASSWORD_CHANGE,
+            actor_id=user.id,
+            ip_address=ctx.ip_address,
+            user_agent=ctx.user_agent,
+        )
+
+    async def request_password_reset(self, *, email: str, ctx: RequestContext) -> str | None:
+        """Returns the raw token to be emailed, or None if no account exists (no enumeration)."""
+        user = await self._users.get_by_email(email.lower())
+        if user is None:
+            return None
+
+        raw_token = generate_opaque_token()
+        token = PasswordResetToken(
+            user_id=user.id,
+            token_hash=hash_opaque_token(raw_token),
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+        )
+        await self._password_resets.create(token)
+        await self._audit.record(
+            event_type=AuthAuditEventType.PASSWORD_RESET_REQUESTED,
+            actor_id=user.id,
+            ip_address=ctx.ip_address,
+            user_agent=ctx.user_agent,
+        )
+        return raw_token
+
+    async def confirm_password_reset(
+        self, *, raw_token: str, new_password: str, ctx: RequestContext
+    ) -> None:
+        token_hash = hash_opaque_token(raw_token)
+        token = await self._password_resets.get_by_hash(token_hash)
+
+        if token is None or token.used_at is not None or token.expires_at < datetime.now(UTC):
+            raise InvalidTokenError("Password reset token is invalid or expired.")
+
+        user = await self._users.get_by_id(token.user_id)
+        if user is None:
+            raise InvalidTokenError("Password reset token is invalid or expired.")
+
+        user.hashed_password = hash_password(new_password)
+        await self._password_resets.mark_used(token.id)
+        await self._sessions.revoke_all_for_user(user.id, reason="password_reset")
+        await self._audit.record(
+            event_type=AuthAuditEventType.PASSWORD_RESET_COMPLETED,
+            actor_id=user.id,
+            ip_address=ctx.ip_address,
+            user_agent=ctx.user_agent,
+        )
+
+    # --- Email verification ---
+
+    async def request_email_verification(self, *, user: User, ctx: RequestContext) -> str:
+        raw_token = generate_opaque_token()
+        token = EmailVerificationToken(
+            user_id=user.id,
+            token_hash=hash_opaque_token(raw_token),
+            expires_at=datetime.now(UTC) + timedelta(hours=24),
+        )
+        await self._email_verifications.create(token)
+        await self._audit.record(
+            event_type=AuthAuditEventType.EMAIL_VERIFICATION_REQUESTED,
+            actor_id=user.id,
+            ip_address=ctx.ip_address,
+            user_agent=ctx.user_agent,
+        )
+        return raw_token
+
+    async def confirm_email_verification(self, *, raw_token: str, ctx: RequestContext) -> None:
+        token_hash = hash_opaque_token(raw_token)
+        token = await self._email_verifications.get_by_hash(token_hash)
+
+        if token is None or token.used_at is not None or token.expires_at < datetime.now(UTC):
+            raise InvalidTokenError("Email verification token is invalid or expired.")
+
+        user = await self._users.get_by_id(token.user_id)
+        if user is None:
+            raise InvalidTokenError("Email verification token is invalid or expired.")
+
+        user.is_verified = True
+        user.email_verified_at = datetime.now(UTC)
+        await self._email_verifications.mark_used(token.id)
+        await self._audit.record(
+            event_type=AuthAuditEventType.EMAIL_VERIFIED,
+            actor_id=user.id,
+            ip_address=ctx.ip_address,
+            user_agent=ctx.user_agent,
+        )
+
+    # --- MFA enrollment ---
+
+    async def enroll_mfa(self, *, user: User) -> tuple[str, str]:
+        if user.mfa_enabled:
+            raise MFAAlreadyEnabledError("MFA is already enabled for this account.")
+
+        secret = pyotp.random_base32()
+        existing = await self._mfa.get_for_user(user.id)
+        if existing is None:
+            await self._mfa.create(
+                MFADevice(user_id=user.id, device_type="totp", secret_encrypted=secret)
+            )
+        else:
+            existing.secret_encrypted = secret
+            existing.is_verified = False
+
+        uri = pyotp.totp.TOTP(secret).provisioning_uri(name=user.email, issuer_name="PawGuard")
+        return secret, uri
+
+    async def confirm_mfa_enrollment(self, *, user: User, code: str, ctx: RequestContext) -> None:
+        device = await self._mfa.get_for_user(user.id)
+        if device is None or not self._verify_totp(device, code):
+            raise InvalidMFACodeError("Invalid MFA code.")
+
+        device.is_verified = True
+        user.mfa_enabled = True
+        await self._audit.record(
+            event_type=AuthAuditEventType.MFA_ENROLLED,
+            actor_id=user.id,
+            ip_address=ctx.ip_address,
+            user_agent=ctx.user_agent,
+        )
+
+    # --- Sessions ---
+
+    async def list_sessions(self, *, user_id: uuid.UUID) -> list[UserSession]:
+        return await self._sessions.list_active_for_user(user_id)
+
+    async def revoke_session(
+        self, *, user_id: uuid.UUID, session_id: uuid.UUID, ctx: RequestContext
+    ) -> None:
+        session = await self._sessions.get_by_id(session_id)
+        if session is None or session.user_id != user_id:
+            raise InvalidSessionError("Session not found.")
+        await self._sessions.revoke(session_id, reason="user_revoked")
+        await self._refresh_tokens.revoke_all_for_session(session_id, reason="user_revoked")
+        await self._audit.record(
+            event_type=AuthAuditEventType.SESSION_REVOKED,
+            actor_id=user_id,
+            ip_address=ctx.ip_address,
+            user_agent=ctx.user_agent,
+        )
+
+    # --- Internal helpers ---
+
+    async def _create_session(
+        self, *, user_id: uuid.UUID, device: DeviceContext, ctx: RequestContext
+    ) -> UserSession:
+        session = UserSession(
+            user_id=user_id,
+            device_id=device.device_id,
+            device_name=device.device_name,
+            device_type=device.device_type or DeviceType.UNKNOWN,
+            ip_address=ctx.ip_address,
+            user_agent=ctx.user_agent,
+            is_active=True,
+            expires_at=datetime.now(UTC) + timedelta(days=self._settings.refresh_token_expire_days),
+        )
+        return await self._sessions.create(session)
+
+    async def _issue_tokens(self, *, user: User, session: UserSession) -> AuthenticatedTokens:
+        access_token = create_access_token(
+            user_id=user.id,
+            session_id=session.id,
+            roles=[role.name for role in user.roles],
+        )
+        raw_refresh_token = generate_opaque_token()
+        refresh_token = RefreshToken(
+            session_id=session.id,
+            token_hash=hash_opaque_token(raw_refresh_token),
+            expires_at=datetime.now(UTC) + timedelta(days=self._settings.refresh_token_expire_days),
+        )
+        await self._refresh_tokens.create(refresh_token)
+
+        return AuthenticatedTokens(
+            access_token=access_token,
+            refresh_token=raw_refresh_token,
+            expires_in=self._settings.access_token_expire_minutes * 60,
+            user=user,
+        )
+
+    async def _register_failed_attempt(self, user: User) -> None:
+        user.failed_login_count += 1
+        if user.failed_login_count >= MAX_FAILED_LOGIN_ATTEMPTS:
+            user.locked_until = datetime.now(UTC) + timedelta(minutes=ACCOUNT_LOCKOUT_MINUTES)
+
+    @staticmethod
+    def _verify_totp(device: MFADevice, code: str) -> bool:
+        return pyotp.totp.TOTP(device.secret_encrypted).verify(code, valid_window=1)
+
+
+# ── Admin service ────────────────────────────────────────────────────────────
+
+class AdminService:
+    """User provisioning and RBAC management for Super Administrator."""
+
+    def __init__(
+        self,
+        *,
+        user_repo: UserRepository,
+        role_repo: RoleRepository,
+        permission_repo: PermissionRepository,
+        user_role_repo: UserRoleRepository,
+    ) -> None:
+        self._users = user_repo
+        self._roles = role_repo
+        self._permissions = permission_repo
+        self._user_roles = user_role_repo
+
+    # ── Role management ──────────────────────────────────────────────────────
+
+    async def list_roles(self) -> list[Role]:
+        return await self._roles.list_all()
+
+    async def get_role(self, role_id: uuid.UUID) -> Role:
+        role = await self._roles.get_by_id(role_id)
+        if role is None:
+            raise NotFoundError(f"Role {role_id} not found.")
+        return role
+
+    async def create_role(
+        self, *, name: str, description: str | None, permission_codes: list[str]
+    ) -> Role:
+        existing = await self._roles.get_by_name(name)
+        if existing is not None:
+            from pawguard.core.exceptions import ConflictError
+            raise ConflictError(f"Role '{name}' already exists.")
+
+        role = Role(name=name, description=description, is_system=False)
+        await self._roles.create(role)
+        if permission_codes:
+            perms = await self._permissions.get_by_codes(permission_codes)
+            await self._roles.set_permissions(role.id, [p.id for p in perms])
+        return role
+
+    async def update_role(
+        self,
+        role_id: uuid.UUID,
+        *,
+        description: str | None,
+        permission_codes: list[str] | None,
+    ) -> Role:
+        role = await self._roles.get_by_id(role_id)
+        if role is None:
+            raise NotFoundError(f"Role {role_id} not found.")
+        if role.is_system:
+            raise ForbiddenError("System roles cannot be modified.")
+
+        if description is not None:
+            role.description = description
+        if permission_codes is not None:
+            perms = await self._permissions.get_by_codes(permission_codes)
+            await self._roles.set_permissions(role.id, [p.id for p in perms])
+        return role
+
+    async def delete_role(self, role_id: uuid.UUID) -> None:
+        role = await self._roles.get_by_id(role_id)
+        if role is None:
+            raise NotFoundError(f"Role {role_id} not found.")
+        if role.is_system:
+            raise ForbiddenError("System roles cannot be deleted.")
+        await self._roles.delete(role_id)
+
+    # ── Permission management ────────────────────────────────────────────────
+
+    async def list_permissions(self) -> list[Permission]:
+        return await self._permissions.list_all()
+
+    # ── User provisioning ────────────────────────────────────────────────────
+
+    async def list_users(self) -> list[User]:
+        return await self._users.list_all()
+
+    async def get_user(self, user_id: uuid.UUID) -> User:
+        user = await self._users.get_by_id(user_id)
+        if user is None:
+            raise NotFoundError(f"User {user_id} not found.")
+        return user
+
+    async def create_user(
+        self,
+        *,
+        email: str,
+        password: str,
+        full_name: str,
+        phone: str | None,
+        role_names: list[str],
+    ) -> User:
+        normalized_email = email.lower()
+        existing = await self._users.get_by_email(normalized_email)
+        if existing is not None:
+            from pawguard.core.exceptions import ConflictError
+            raise ConflictError("A user with this email already exists.")
+
+        user = User(
+            email=normalized_email,
+            full_name=full_name,
+            phone=phone,
+            hashed_password=hash_password(password),
+            is_active=True,
+            is_verified=False,
+        )
+        await self._users.create(user)
+
+        if role_names:
+            role_ids: list[uuid.UUID] = []
+            for name in role_names:
+                role = await self._roles.get_by_name(name)
+                if role is not None:
+                    role_ids.append(role.id)
+            if role_ids:
+                await self._user_roles.set_roles(user.id, role_ids)
+
+        fresh = await self._users.get_by_id(user.id)
+        return fresh or user
+
+    async def update_user(
+        self,
+        user_id: uuid.UUID,
+        *,
+        full_name: str | None = None,
+        phone: str | None = None,
+        is_active: bool | None = None,
+        role_names: list[str] | None = None,
+    ) -> User:
+        user = await self._users.get_by_id(user_id)
+        if user is None:
+            raise NotFoundError(f"User {user_id} not found.")
+
+        if full_name is not None:
+            user.full_name = full_name
+        if phone is not None:
+            user.phone = phone
+        if is_active is not None:
+            user.is_active = is_active
+
+        if role_names is not None:
+            role_ids: list[uuid.UUID] = []
+            for name in role_names:
+                role = await self._roles.get_by_name(name)
+                if role is not None:
+                    role_ids.append(role.id)
+            await self._user_roles.set_roles(user_id, role_ids)
+
+        fresh = await self._users.get_by_id(user_id)
+        return fresh or user
+
+    async def delete_user(self, user_id: uuid.UUID) -> None:
+        user = await self._users.get_by_id(user_id)
+        if user is None:
+            raise NotFoundError(f"User {user_id} not found.")
+        user.deleted_at = datetime.now(UTC)
+
+    async def assign_roles(self, user_id: uuid.UUID, role_names: list[str]) -> User:
+        return await self.update_user(user_id, role_names=role_names)
