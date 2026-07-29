@@ -1,0 +1,83 @@
+[project]
+name = "pawguard-backend"
+version = "0.1.0"
+description = "PawGuard enterprise backend platform"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.6.0",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30.0",
+    "alembic>=1.14.0",
+    "redis>=5.2.0",
+    "argon2-cffi>=23.1.0",
+    "pyjwt[crypto]>=2.10.0",
+    "pyotp>=2.9.0",
+    "arq>=0.26.0",
+    "jinja2>=3.1.4",
+    "boto3>=1.35.0",
+    "python-magic-bin>=0.4.14; platform_system == 'Windows'",
+    "python-magic>=0.4.27; platform_system != 'Windows'",
+    "pillow>=11.0.0",
+    "structlog>=24.4.0",
+    "orjson>=3.10.0",
+    "email-validator>=2.2.0",
+    "python-multipart>=0.0.17",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "httpx>=0.27.0",
+    "ruff>=0.7.0",
+    "mypy>=1.13.0",
+    "bandit>=1.7.10",
+    "aiosqlite>=0.20.0",
+    "types-redis>=4.6.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pawguard"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC", "S"]
+# B008: FastAPI's `Depends(...)` in argument defaults is the idiomatic DI pattern, not a bug.
+# S105: triggers on non-secret string literals like token_type="bearer".
+ignore = ["S101", "B008", "S105"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+plugins = ["pydantic.mypy"]
+exclude = ["alembic/"]
+
+[[tool.mypy.overrides]]
+module = ["boto3.*", "botocore.*", "pyotp.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.bandit]
+exclude_dirs = ["tests", "alembic"]
+# B101: internal invariant checks in UnitOfWork, not security validation.
+# B105: false positives on enum event-type/cookie-name string literals, not secrets.
+skips = ["B101", "B105"]

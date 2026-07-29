@@ -1,0 +1,1829 @@
+{
+  "info": {
+    "name": "PawGuard Backend API",
+    "description": "Comprehensive API collection for the PawGuard authentication and admin system",
+    "version": "1.0.0",
+    "contact": {
+      "name": "PawGuard Engineering",
+      "email": "engineering@pawguard.com"
+    },
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseURL",
+      "value": "{{host}}"
+    },
+    {
+      "key": "host",
+      "value": "http://127.0.0.1:8000"
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register New User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"newuser@example.com\",\n  \"password\": \"Password123!\",\n  \"full_name\": \"New User\",\n  \"phone\": \"+1234567890\",\n  \"device\": {\n    \"id\": \"web-browser-001\",\n    \"device_type\": \"web\",\n    \"os\": \"Chrome\",\n    \"model\": \"desktop\",\n    \"manufacturer\": \"Google\",\n    \"push_token\": null\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/auth/register",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "register"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login (Web Client)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Client-Type",
+                "value": "web"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"Password123!\",\n  \"device\": {\n    \"id\": \"web-browser-001\",\n    \"device_type\": \"web\",\n    \"os\": \"Chrome\",\n    \"model\": \"desktop\",\n    \"manufacturer\": \"Google\",\n    \"push_token\": null\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/auth/login",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login (Mobile Client)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Client-Type",
+                "value": "mobile"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"Password123!\",\n  \"device\": {\n    \"id\": \"mobile-app-001\",\n    \"device_type\": \"mobile\",\n    \"os\": \"iOS\",\n    \"model\": \"iPhone 14\",\n    \"manufacturer\": \"Apple\",\n    \"push_token\": \"token123\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/auth/login",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"your_refresh_token_here\"\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/auth/refresh",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "refresh"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}\n"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/auth/logout",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "logout"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "pg_access_token=your_access_token_here"
+              }
+            ],
+            "url": {
+              "raw": "{{baseURL}}/api/v1/auth/me",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Sessions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "pg_access_token=your_access_token_here"
+              }
+            ],
+            "url": {
+              "raw": "{{baseURL}}/api/v1/auth/sessions",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "sessions"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Revoke Session",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "pg_access_token=your_access_token_here"
+              }
+            ],
+            "url": {
+              "raw": "{{baseURL}}/api/v1/auth/sessions/{{session_id}}",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "sessions",
+                "{{session_id}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "List All Roles",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "pg_access_token=your_admin_access_token_here"
+              }
+            ],
+            "url": {
+              "raw": "{{baseURL}}/api/v1/admin/roles",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "roles"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Role",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "pg_access_token=your_admin_access_token_here"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"custom_role\",\n  \"description\": \"A custom role for testing\",\n  \"permission_codes\": [\n    \"admin:read\",\n    \"user:create\",\n    \"user:read\",\n    \"user:update\",\n    \"user:delete\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/admin/roles",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "roles"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Role",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "pg_access_token=your_admin_access_token_here"
+              }
+            ],
+            "url": {
+              "raw": "{{baseURL}}/api/v1/admin/roles/{{role_id}}",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "roles",
+                "{{role_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Role",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "pg_access_token=your_admin_access_token_here"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permission_codes\": [\n    \"admin:read\",\n    \"admin:create\",\n    \"admin:update\",\n    \"admin:delete\",\n    \"user:read\",\n    \"user:create\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/admin/roles/{{role_id}}",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "roles",
+                "{{role_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Role",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "pg_access_token=your_admin_access_token_here"
+              }
+            ],
+            "url": {
+              "raw": "{{baseURL}}/api/v1/admin/roles/{{role_id}}",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "roles",
+                "{{role_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List All Permissions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "pg_access_token=your_admin_access_token_here"
+              }
+            ],
+            "url": {
+              "raw": "{{baseURL}}/api/v1/admin/permissions",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "permissions"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List All Users",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "pg_access_token=your_admin_access_token_here"
+              }
+            ],
+            "url": {
+              "raw": "{{baseURL}}/api/v1/admin/users",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "users"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "pg_access_token=your_admin_access_token_here"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"newadmin@example.com\",\n  \"password\": \"AdminPassword123!\",\n  \"full_name\": \"New Admin User\",\n  \"phone\": \"+1234567890\",\n  \"role_names\": [\n    \"super_administrator\",\n    \"rescue_administrator\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/admin/users",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "users"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get User",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "pg_access_token=your_admin_access_token_here"
+              }
+            ],
+            "url": {
+              "raw": "{{baseURL}}/api/v1/admin/users/{{user_id}}",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "users",
+                "{{user_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "pg_access_token=your_admin_access_token_here"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"full_name\": \"Updated Admin Name\",\n  \"phone\": \"+1234567890\",\n  \"is_active\": false,\n  \"role_names\": [\n    \"super_administrator\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/admin/users/{{user_id}}",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "users",
+                "{{user_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "pg_access_token=your_admin_access_token_here"
+              }
+            ],
+            "url": {
+              "raw": "{{baseURL}}/api/v1/admin/users/{{user_id}}",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "users",
+                "{{user_id}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "PII Masks",
+      "item": [
+        {
+          "name": "Mask Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"john.doe@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/auth/util/mask-email",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "util",
+                "mask-email"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Mask Phone",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+1234567890\"\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/auth/util/mask-phone",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "util",
+                "mask-phone"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Mask Full Name",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"full_name\": \"John Michael Doe\"\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/auth/util/mask-full-name",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "util",
+                "mask-full-name"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Emergency Rescue",
+      "item": [
+        {
+          "name": "Report Rescue Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reporter_name\": \"John Doe\",\n  \"reporter_phone\": \"+9876543210\",\n  \"location_address\": \"Street 10, Sector 4\",\n  \"location_landmark\": \"Near Central Park\",\n  \"latitude\": 17.4482,\n  \"longitude\": 78.3741,\n  \"physical_condition\": \"Injured/Fractured\",\n  \"animal_count\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/rescue/report",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "rescue",
+                "report"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Rescue Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"verified\"\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/rescue/{{case_id}}/verify",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "rescue",
+                "{{case_id}}",
+                "verify"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Dispatch Rescue Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assigned_driver_id\": \"{{user_id}}\",\n  \"vehicle_id\": \"VAN-001\",\n  \"equipment_details\": \"Cage, Net Gun\"\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/rescue/{{case_id}}/dispatch",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "rescue",
+                "{{case_id}}",
+                "dispatch"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Rescue Located",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseURL}}/api/v1/rescue/{{case_id}}/located",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "rescue",
+                "{{case_id}}",
+                "located"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Rescue Secured",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseURL}}/api/v1/rescue/{{case_id}}/secured",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "rescue",
+                "{{case_id}}",
+                "secured"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Admit Rescue",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Animal admitted safely.\",\n  \"photos\": [\"http://example.com/photo1.jpg\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/rescue/{{case_id}}/admitted",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "rescue",
+                "{{case_id}}",
+                "admitted"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Rescue Request",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseURL}}/api/v1/rescue/{{case_id}}",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "rescue",
+                "{{case_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Rescue Requests",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseURL}}/api/v1/rescue",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "rescue"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Dog Management",
+      "item": [
+        {
+          "name": "Register Dog Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rescue_case_id\": \"{{case_id}}\",\n  \"name\": \"Barnaby\",\n  \"breed\": \"Indie Mix\",\n  \"gender\": \"male\",\n  \"estimated_age\": \"2 years\",\n  \"weight\": 15.4,\n  \"color\": \"brown\",\n  \"temperament\": \"friendly\",\n  \"is_adoptable\": true,\n  \"is_quarantine_passed\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/dogs",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "dogs"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Dog Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Barnaby Updated\",\n  \"status\": \"shelter\"\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/dogs/{{dog_id}}",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "dogs",
+                "{{dog_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Dog Profile",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseURL}}/api/v1/dogs/{{dog_id}}",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "dogs",
+                "{{dog_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Dog Profiles",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseURL}}/api/v1/dogs",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "dogs"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Dog Profile",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseURL}}/api/v1/dogs/{{dog_id}}",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "dogs",
+                "{{dog_id}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Adoption",
+      "item": [
+        {
+          "name": "Apply for Adoption",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dog_id\": \"{{dog_id}}\",\n  \"residential_status\": \"owned\",\n  \"has_landlord_approval\": true,\n  \"has_yard_fence\": true,\n  \"household_members_count\": 3,\n  \"pet_care_experience\": \"Owned a dog previously for 10 years\"\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/adoptions",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "adoptions"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Adoption Application",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseURL}}/api/v1/adoptions/{{app_id}}",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "adoptions",
+                "{{app_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Application Status",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"approved\",\n  \"notes\": \"Passed background check and yard review.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/adoptions/{{app_id}}",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "adoptions",
+                "{{app_id}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Volunteer Management",
+      "item": [
+        {
+          "name": "Apply for Volunteer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"emergency_contact_name\": \"Jane Doe\",\n  \"emergency_contact_phone\": \"+9876543210\",\n  \"skills\": \"Animal handling, grooming\",\n  \"availability\": \"weekends\"\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/volunteers/apply",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "volunteers",
+                "apply"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Volunteer Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseURL}}/api/v1/volunteers/{{vol_profile_id}}",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "volunteers",
+                "{{vol_profile_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Volunteer Profile Status",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"active\"\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/volunteers/{{vol_profile_id}}",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "volunteers",
+                "{{vol_profile_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Shift",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role_name\": \"feeding\",\n  \"start_at\": \"2026-07-30T09:00:00Z\",\n  \"end_at\": \"2026-07-30T13:00:00Z\",\n  \"capacity\": 5\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/volunteers/shifts",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "volunteers",
+                "shifts"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Shifts",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseURL}}/api/v1/volunteers/shifts",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "volunteers",
+                "shifts"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Join Shift",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseURL}}/api/v1/volunteers/shifts/{{shift_id}}/join",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "volunteers",
+                "shifts",
+                "{{shift_id}}",
+                "join"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Check In Shift Attendance",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseURL}}/api/v1/volunteers/attendance/{{attendance_id}}/check-in",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "volunteers",
+                "attendance",
+                "{{attendance_id}}",
+                "check-in"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Check Out Shift Attendance",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseURL}}/api/v1/volunteers/attendance/{{attendance_id}}/check-out",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "volunteers",
+                "attendance",
+                "{{attendance_id}}",
+                "check-out"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Foster Care",
+      "item": [
+        {
+          "name": "Apply for Foster Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"preferences\": \"Pups, recovery\",\n  \"max_capacity\": 2,\n  \"notes\": \"Spacious apartment\"\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/fosters/apply",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "fosters",
+                "apply"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Foster Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseURL}}/api/v1/fosters/{{foster_profile_id}}",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "fosters",
+                "{{foster_profile_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Foster Profile Status",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"approved\"\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/fosters/{{foster_profile_id}}",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "fosters",
+                "{{foster_profile_id}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Place Dog in Foster",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dog_id\": \"{{dog_id}}\",\n  \"notes\": \"Placing for recovery care\"\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/fosters/{{foster_profile_id}}/placements",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "fosters",
+                "{{foster_profile_id}}",
+                "placements"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Return Dog from Foster",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Returned healthy\"\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/fosters/placements/{{placement_id}}/return",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "fosters",
+                "placements",
+                "{{placement_id}}",
+                "return"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Donation Management",
+      "item": [
+        {
+          "name": "Register Donor Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tax_identifier\": \"TAX-123456\",\n  \"notes\": \"Regular corporate donor\"\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/donations/register",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "donations",
+                "register"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Make Donation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dog_id\": \"{{dog_id}}\",\n  \"amount\": 250.00,\n  \"currency\": \"USD\",\n  \"donation_type\": \"sponsorship\",\n  \"notes\": \"Barnaby recovery fund sponsorship\"\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/donations",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "donations"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Donation History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseURL}}/api/v1/donations/history",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "donations",
+                "history"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Lost & Found",
+      "item": [
+        {
+          "name": "Report Lost Pet",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pet_name\": \"Max\",\n  \"breed\": \"Beagle Mix\",\n  \"color\": \"Brown/Black\",\n  \"location_address\": \"Road No 5, Jubilee Hills\",\n  \"latitude\": 17.4285,\n  \"longitude\": 78.4020,\n  \"lost_at\": \"2026-07-28T10:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/lost-found/lost",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "lost-found",
+                "lost"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Report Found Pet",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"breed_observed\": \"Beagle Mix\",\n  \"color_observed\": \"Brown/Black\",\n  \"location_address\": \"Road No 6, Jubilee Hills\",\n  \"latitude\": 17.4290,\n  \"longitude\": 78.4025,\n  \"found_at\": \"2026-07-28T11:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/lost-found/found",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "lost-found",
+                "found"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Lost Reports",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseURL}}/api/v1/lost-found/lost",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "lost-found",
+                "lost"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Found Reports",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseURL}}/api/v1/lost-found/found",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "lost-found",
+                "found"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Proximity Matches",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseURL}}/api/v1/lost-found/lost/{{lost_id}}/matches",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "lost-found",
+                "lost",
+                "{{lost_id}}",
+                "matches"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Resolve Match",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"approve\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseURL}}/api/v1/lost-found/matches/{{match_id}}/resolve?approve=true",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "lost-found",
+                "matches",
+                "{{match_id}}",
+                "resolve"
+              ],
+              "query": [
+                {
+                  "key": "approve",
+                  "value": "true"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
