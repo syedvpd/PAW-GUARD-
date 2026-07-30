@@ -11,6 +11,7 @@ from pawguard.core.search import SortParams, apply_sorting, build_search_filter
 from pawguard.modules.fleet.models import (
     EquipmentCheckout,
     FleetMaintenance,
+    FuelLog,
     Vehicle,
     VehicleStatus,
 )
@@ -28,6 +29,8 @@ class FleetRepository:
     EQUIPMENT_SORTABLE_FIELDS = {
         "equipment_name", "checked_out_at", "returned_at", "created_at",
     }
+    FUEL_SORTABLE_FIELDS = {"filled_at", "volume_litres", "cost", "mileage_at_fill"}
+    FUEL_SEARCH_FIELDS = ("vendor", "notes")
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -175,6 +178,35 @@ class FleetRepository:
             stmt = stmt.where(EquipmentCheckout.returned_at.is_(None))
 
         stmt = apply_sorting(stmt, sort, self.EQUIPMENT_SORTABLE_FIELDS)
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = (await self._session.execute(count_stmt)).scalar_one()
+
+        stmt = stmt.offset(page.offset).limit(page.limit)
+        results = (await self._session.execute(stmt)).scalars().all()
+        return results, total
+
+    async def create_fuel_log(self, log: FuelLog) -> FuelLog:
+        self._session.add(log)
+        await self._session.flush()
+        return log
+
+    async def get_fuel_log(self, log_id: uuid.UUID) -> FuelLog | None:
+        stmt = select(FuelLog).where(FuelLog.id == log_id)
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def paginate_fuel_logs(
+        self,
+        page: PageParams,
+        sort: SortParams,
+        vehicle_id: uuid.UUID | None = None,
+    ) -> tuple[Sequence[FuelLog], int]:
+        stmt = select(FuelLog)
+
+        if vehicle_id is not None:
+            stmt = stmt.where(FuelLog.vehicle_id == vehicle_id)
+
+        stmt = apply_sorting(stmt, sort, self.FUEL_SORTABLE_FIELDS, default_field="filled_at")
 
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self._session.execute(count_stmt)).scalar_one()

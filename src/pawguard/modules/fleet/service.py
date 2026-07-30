@@ -11,6 +11,7 @@ from pawguard.modules.auth.models import AuthAuditEventType
 from pawguard.modules.fleet.models import (
     EquipmentCheckout,
     FleetMaintenance,
+    FuelLog,
     Vehicle,
     VehicleStatus,
 )
@@ -19,6 +20,8 @@ from pawguard.modules.fleet.schemas import (
     EquipmentCheckoutCreate,
     EquipmentCheckoutResponse,
     EquipmentReturnRequest,
+    FuelLogCreate,
+    FuelLogResponse,
     MaintenanceCreate,
     MaintenanceResponse,
     VehicleCreate,
@@ -301,3 +304,55 @@ class FleetService:
             data=[EquipmentCheckoutResponse.model_validate(r) for r in results],
             meta=build_pagination_meta(total=total, params=page),
         )
+
+    async def log_fuel(
+        self,
+        vehicle_id: uuid.UUID,
+        payload: FuelLogCreate,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> FuelLog:
+        vehicle = await self._repo.get_vehicle(vehicle_id)
+        if vehicle is None:
+            raise NotFoundError("Vehicle not found.")
+        log = FuelLog(
+            vehicle_id=vehicle_id,
+            filled_by_id=actor_id,
+            **payload.model_dump(),
+            filled_at=datetime.now(UTC),
+        )
+        if payload.mileage_at_fill > vehicle.mileage:
+            vehicle.mileage = payload.mileage_at_fill
+        record = await self._repo.create_fuel_log(log)
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.FLEET_VEHICLE_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"fuel_log_id": str(record.id), "vehicle_id": str(vehicle_id)},
+            )
+        return record
+
+    async def get_fuel_logs_paginated(
+        self,
+        page: PageParams,
+        sort: SortParams,
+        vehicle_id: uuid.UUID | None = None,
+    ) -> PaginatedResponse[FuelLogResponse]:
+        results, total = await self._repo.paginate_fuel_logs(
+            page=page,
+            sort=sort,
+            vehicle_id=vehicle_id,
+        )
+        return PaginatedResponse(
+            data=[FuelLogResponse.model_validate(r) for r in results],
+            meta=build_pagination_meta(total=total, params=page),
+        )
+
+    async def get_fuel_log(self, log_id: uuid.UUID) -> FuelLog:
+        log = await self._repo.get_fuel_log(log_id)
+        if log is None:
+            raise NotFoundError("Fuel log not found.")
+        return log

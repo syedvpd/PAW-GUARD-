@@ -45,3 +45,27 @@ def mask_full_name(name: str | None) -> str | None:
     if not parts:
         return name
     return parts[0] + (" " + " ".join(p[0] + "***" for p in parts[1:]) if len(parts) > 1 else "")
+
+
+def mask_report_data(
+    rows: list[list], headers: list[str], pii_columns: set[str]
+) -> list[list]:
+    masked_rows = []
+    for row in rows:
+        masked_row = list(row)
+        for i, header in enumerate(headers):
+            if header in pii_columns:
+                value = masked_row[i]
+                if value is None or value == "":
+                    continue
+                header_lower = header.lower()
+                if "email" in header_lower:
+                    masked_row[i] = mask_email(str(value))
+                elif "phone" in header_lower:
+                    masked_row[i] = mask_phone(str(value))
+                elif "ip" in header_lower:
+                    masked_row[i] = mask_ip(str(value))
+                elif any(x in header_lower for x in ("name", "reporter", "adopter")):
+                    masked_row[i] = mask_full_name(str(value))
+        masked_rows.append(masked_row)
+    return masked_rows

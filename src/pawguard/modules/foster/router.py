@@ -16,6 +16,7 @@ from pawguard.core.pagination import PageParams, page_params
 from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.core.search import SortParams, sort_params
 from pawguard.db.session import get_db
+from pawguard.modules.adoption.repository import AdoptionRepository
 from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.rbac import require_permission
@@ -28,6 +29,8 @@ from pawguard.modules.foster.schemas import (
     FosterProfileCreate,
     FosterProfileResponse,
     FosterProfileUpdate,
+    FosterProgressLogCreate,
+    FosterProgressLogResponse,
     FosterReturnRequest,
 )
 from pawguard.modules.foster.service import FosterService
@@ -42,7 +45,8 @@ def get_foster_service(
 ) -> FosterService:
     repo = FosterRepository(db)
     dog_repo = DogRepository(db)
-    return FosterService(repo, dog_repo, audit_service=audit)
+    adoption_repo = AdoptionRepository(db)
+    return FosterService(repo, dog_repo, adoption_repo=adoption_repo, audit_service=audit)
 
 
 @router.post(
@@ -210,4 +214,69 @@ async def bulk_delete_profiles(
             message=f"{deleted} foster profile(s) deleted.",
             deleted_count=deleted,
         ),
+    )
+
+
+@router.post(
+    "/placements/{placement_id}/progress",
+    response_model=ApiResponse[FosterProgressLogResponse],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("foster:approve"))],
+)
+async def log_progress(
+    placement_id: uuid.UUID,
+    payload: FosterProgressLogCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FosterService = Depends(get_foster_service),
+) -> ApiResponse[FosterProgressLogResponse]:
+    ip = request.client.host if request.client else None
+    log = await service.log_daily_progress(
+        placement_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=FosterProgressLogResponse.model_validate(log),
+        message="Progress logged successfully.",
+    )
+
+
+@router.get(
+    "/placements/{placement_id}/progress",
+    response_model=ApiResponse[list[FosterProgressLogResponse]],
+    dependencies=[Depends(require_permission("foster:read"))],
+)
+async def get_progress_logs(
+    placement_id: uuid.UUID,
+    service: FosterService = Depends(get_foster_service),
+) -> ApiResponse[list[FosterProgressLogResponse]]:
+    logs = await service.get_progress_logs(placement_id)
+    return ApiResponse(
+        data=[FosterProgressLogResponse.model_validate(log) for log in logs],
+    )
+
+
+@router.post(
+    "/placements/{placement_id}/convert-to-adopt",
+    response_model=ApiResponse[dict],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("foster:approve"))],
+)
+async def convert_to_adopt(
+    placement_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FosterService = Depends(get_foster_service),
+) -> ApiResponse[dict]:
+    ip = request.client.host if request.client else None
+    app = await service.convert_to_adoption(
+        placement_id,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data={"adoption_id": str(app.id)},
+        message="Foster placement converted to adoption successfully.",
     )

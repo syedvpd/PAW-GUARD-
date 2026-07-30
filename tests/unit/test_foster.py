@@ -10,14 +10,21 @@ from pawguard.core.exceptions import ConflictError, NotFoundError
 from pawguard.core.pagination import PageParams
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
+from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
+from pawguard.modules.adoption.repository import AdoptionRepository
 from pawguard.modules.dog.models import DogProfile, DogStatus
 from pawguard.modules.dog.repository import DogRepository
-from pawguard.modules.foster.models import FosterPlacement, FosterProfile, FosterStatus
+from pawguard.modules.foster.models import (
+    FosterPlacement,
+    FosterProfile,
+    FosterStatus,
+)
 from pawguard.modules.foster.repository import FosterRepository
 from pawguard.modules.foster.schemas import (
     FosterPlacementCreate,
     FosterProfileCreate,
     FosterProfileUpdate,
+    FosterProgressLogCreate,
 )
 from pawguard.modules.foster.service import FosterService
 from pawguard.services.audit_service import AuditService
@@ -193,3 +200,142 @@ class TestFosterService:
         result = await service.list_profiles_paginated(page, sort)
         assert isinstance(result, PaginatedResponse)
         assert result.meta.total == 1
+
+
+class TestFosterProgressLog:
+    @pytest.fixture
+    def mock_repo(self):
+        repo = AsyncMock(spec=FosterRepository)
+        repo._session = AsyncMock()
+        return repo
+
+    @pytest.fixture
+    def mock_dog_repo(self):
+        return AsyncMock(spec=DogRepository)
+
+    @pytest.fixture
+    def mock_adoption_repo(self):
+        return AsyncMock(spec=AdoptionRepository)
+
+    @pytest.fixture
+    def mock_audit(self):
+        return AsyncMock(spec=AuditService)
+
+    @pytest.fixture
+    def service(self, mock_repo, mock_dog_repo, mock_adoption_repo, mock_audit):
+        return FosterService(mock_repo, mock_dog_repo, mock_adoption_repo, mock_audit)
+
+    @pytest.mark.asyncio
+    async def test_log_progress_success(self, service, mock_repo, mock_audit):
+        placement_id = uuid.uuid4()
+        placement = FosterPlacement(
+            id=placement_id, foster_id=uuid.uuid4(), dog_id=uuid.uuid4(),
+            is_active=True, placed_at=datetime.now(),
+        )
+        mock_repo.get_placement_by_id.return_value = placement
+        mock_repo.create_progress_log.return_value = None
+        payload = FosterProgressLogCreate(weight_kg=12.5, mood_rating=4)
+        result = await service.log_daily_progress(
+            placement_id, payload, actor_id=uuid.uuid4(),
+        )
+        assert result.weight_kg == 12.5
+        assert result.mood_rating == 4
+
+    @pytest.mark.asyncio
+    async def test_log_progress_placement_not_active(self, service, mock_repo):
+        placement_id = uuid.uuid4()
+        placement = FosterPlacement(
+            id=placement_id, foster_id=uuid.uuid4(), dog_id=uuid.uuid4(),
+            is_active=False, placed_at=datetime.now(),
+        )
+        mock_repo.get_placement_by_id.return_value = placement
+        with pytest.raises(ConflictError, match="not active"):
+            await service.log_daily_progress(
+                placement_id, FosterProgressLogCreate(), actor_id=uuid.uuid4(),
+            )
+
+
+class TestFosterToAdopt:
+    @pytest.fixture
+    def mock_repo(self):
+        repo = AsyncMock(spec=FosterRepository)
+        repo._session = AsyncMock()
+        return repo
+
+    @pytest.fixture
+    def mock_dog_repo(self):
+        return AsyncMock(spec=DogRepository)
+
+    @pytest.fixture
+    def mock_adoption_repo(self):
+        return AsyncMock(spec=AdoptionRepository)
+
+    @pytest.fixture
+    def mock_audit(self):
+        return AsyncMock(spec=AuditService)
+
+    @pytest.fixture
+    def service(self, mock_repo, mock_dog_repo, mock_adoption_repo, mock_audit):
+        return FosterService(mock_repo, mock_dog_repo, mock_adoption_repo, mock_audit)
+
+    @pytest.mark.asyncio
+    async def test_convert_to_adopt_success(
+        self, service, mock_repo, mock_dog_repo, mock_adoption_repo, mock_audit,
+    ):
+        placement_id = uuid.uuid4()
+        foster_id = uuid.uuid4()
+        dog_id = uuid.uuid4()
+        user_id = uuid.uuid4()
+        dog = DogProfile(
+            id=dog_id, registration_number="DOG-001", name="Rex", breed="Mix",
+            gender="male", status=DogStatus.FOSTERED, is_adoptable=True,
+        )
+        placement = FosterPlacement(
+            id=placement_id, foster_id=foster_id, dog_id=dog_id,
+            is_active=True, placed_at=datetime.now(),
+        )
+        foster = FosterProfile(
+            id=foster_id, user_id=user_id, status=FosterStatus.APPROVED,
+            max_capacity=2, active_count=1, is_available=False,
+        )
+        mock_repo.get_placement_by_id.return_value = placement
+        mock_repo.get_profile_by_id.return_value = foster
+        mock_dog_repo.get_by_id.return_value = dog
+        mock_adoption_repo.get_approved_application_for_dog.return_value = None
+        app_id = uuid.uuid4()
+        mock_adoption_repo.create.return_value = None
+        mock_adoption_repo.get_by_id.return_value = AdoptionApplication(
+            id=app_id, dog_id=dog_id, adopter_id=user_id,
+            residential_status="foster", status=AdoptionStatus.HOME_CHECK,
+        )
+        result = await service.convert_to_adoption(
+            placement_id, actor_id=uuid.uuid4(),
+        )
+        assert result.id == app_id
+        assert result.status == AdoptionStatus.HOME_CHECK
+        assert placement.is_active is False
+        assert dog.status == DogStatus.ADOPTED
+
+    @pytest.mark.asyncio
+    async def test_convert_to_adopt_already_adopted(
+        self, service, mock_repo, mock_dog_repo,
+    ):
+        placement_id = uuid.uuid4()
+        foster_id = uuid.uuid4()
+        dog_id = uuid.uuid4()
+        placement = FosterPlacement(
+            id=placement_id, foster_id=foster_id, dog_id=dog_id,
+            is_active=True, placed_at=datetime.now(),
+        )
+        mock_repo.get_placement_by_id.return_value = placement
+        mock_repo.get_profile_by_id.return_value = FosterProfile(
+            id=foster_id, user_id=uuid.uuid4(), status=FosterStatus.APPROVED,
+            max_capacity=2, active_count=1, is_available=False,
+        )
+        dog = DogProfile(
+            id=dog_id, registration_number="DOG-001", name="Rex", breed="Mix",
+            gender="male", status=DogStatus.ADOPTED, is_adoptable=False,
+        )
+        mock_dog_repo.get_by_id.return_value = dog
+        with pytest.raises(ConflictError, match="already been adopted"):
+            await service.convert_to_adoption(placement_id)

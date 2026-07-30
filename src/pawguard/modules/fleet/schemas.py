@@ -22,6 +22,10 @@ class VehicleUpdate(BaseModel):
     status: VehicleStatus | None = None
     mileage: int | None = Field(None, ge=0)
     primary_driver_id: uuid.UUID | None = None
+    insurance_provider: str | None = Field(None, max_length=255)
+    insurance_policy_number: str | None = Field(None, max_length=128)
+    insurance_expiry_date: date | None = None
+    insurance_contact_phone: str | None = Field(None, max_length=32)
 
 
 class VehicleStatusUpdate(BaseModel):
@@ -35,6 +39,10 @@ class VehicleResponse(BaseModel):
     status: VehicleStatus
     mileage: int
     primary_driver_id: uuid.UUID | None
+    insurance_provider: str | None = None
+    insurance_policy_number: str | None = None
+    insurance_expiry_date: date | None = None
+    insurance_contact_phone: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -81,5 +89,33 @@ class EquipmentCheckoutResponse(BaseModel):
     returned_at: datetime | None
     notes: str | None
     created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FuelLogCreate(BaseModel):
+    fuel_type: str = Field(..., min_length=1, max_length=32)
+    volume_litres: float = Field(..., gt=0)
+    cost: float = Field(..., ge=0)
+    mileage_at_fill: int = Field(..., ge=0)
+    vendor: str | None = Field(None, max_length=255)
+    receipt_url: str | None = Field(None, max_length=512)
+    notes: str | None = None
+
+
+class FuelLogResponse(BaseModel):
+    id: uuid.UUID
+    vehicle_id: uuid.UUID
+    filled_by_id: uuid.UUID | None
+    fuel_type: str
+    volume_litres: float
+    cost: float
+    mileage_at_fill: int
+    vendor: str | None
+    receipt_url: str | None
+    notes: str | None
+    filled_at: datetime
+    created_at: datetime
+    updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

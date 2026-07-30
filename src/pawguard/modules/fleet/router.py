@@ -24,6 +24,8 @@ from pawguard.modules.fleet.schemas import (
     EquipmentCheckoutCreate,
     EquipmentCheckoutResponse,
     EquipmentReturnRequest,
+    FuelLogCreate,
+    FuelLogResponse,
     MaintenanceCreate,
     MaintenanceResponse,
     VehicleCreate,
@@ -322,3 +324,51 @@ async def return_equipment(
         data=EquipmentCheckoutResponse.model_validate(record),
         message="Equipment returned.",
     )
+
+
+@router.post(
+    "/vehicles/{vehicle_id}/fuel",
+    response_model=ApiResponse[FuelLogResponse],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("vehicle:update"))],
+)
+async def log_fuel(
+    vehicle_id: uuid.UUID,
+    payload: FuelLogCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FleetService = Depends(get_fleet_service),
+) -> ApiResponse[FuelLogResponse]:
+    record = await service.log_fuel(
+        vehicle_id, payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(data=FuelLogResponse.model_validate(record), message="Fuel log created.")
+
+
+@router.get(
+    "/vehicles/{vehicle_id}/fuel",
+    response_model=PaginatedResponse[FuelLogResponse],
+    dependencies=[Depends(require_permission("vehicle:read"))],
+)
+async def list_fuel_logs(
+    vehicle_id: uuid.UUID,
+    page: PageParams = Depends(page_params),
+    sort: SortParams = Depends(sort_params),
+    service: FleetService = Depends(get_fleet_service),
+) -> PaginatedResponse[FuelLogResponse]:
+    return await service.get_fuel_logs_paginated(page=page, sort=sort, vehicle_id=vehicle_id)
+
+
+@router.get(
+    "/fuel/{log_id}",
+    response_model=ApiResponse[FuelLogResponse],
+    dependencies=[Depends(require_permission("vehicle:read"))],
+)
+async def get_fuel_log(
+    log_id: uuid.UUID,
+    service: FleetService = Depends(get_fleet_service),
+) -> ApiResponse[FuelLogResponse]:
+    log = await service.get_fuel_log(log_id)
+    return ApiResponse(data=FuelLogResponse.model_validate(log))

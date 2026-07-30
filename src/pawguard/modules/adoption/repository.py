@@ -12,7 +12,7 @@ from sqlalchemy.orm import selectinload
 
 from pawguard.core.pagination import PageParams
 from pawguard.core.search import SortParams, apply_sorting, build_search_filter
-from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
+from pawguard.modules.adoption.models import AdoptionApplication, AdoptionScore, AdoptionStatus
 
 
 class AdoptionRepository:
@@ -146,3 +146,25 @@ class AdoptionRepository:
         )
         result = await self._session.execute(stmt)
         return result.rowcount  # type: ignore[attr-defined,no-any-return]
+
+    async def create_score(self, score: AdoptionScore) -> AdoptionScore:
+        self._session.add(score)
+        await self._session.flush()
+        return score
+
+    async def get_scores_for_application(self, app_id: uuid.UUID) -> Sequence[AdoptionScore]:
+        stmt = (
+            select(AdoptionScore)
+            .where(AdoptionScore.application_id == app_id)
+            .order_by(AdoptionScore.scored_at.desc())
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def get_latest_score_for_application(self, app_id: uuid.UUID) -> AdoptionScore | None:
+        stmt = (
+            select(AdoptionScore)
+            .where(AdoptionScore.application_id == app_id)
+            .order_by(AdoptionScore.scored_at.desc())
+            .limit(1)
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()

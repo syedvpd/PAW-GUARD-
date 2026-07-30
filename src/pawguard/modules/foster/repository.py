@@ -12,7 +12,12 @@ from sqlalchemy.orm import selectinload
 
 from pawguard.core.pagination import PageParams
 from pawguard.core.search import SortParams, apply_sorting, build_search_filter
-from pawguard.modules.foster.models import FosterPlacement, FosterProfile, FosterStatus
+from pawguard.modules.foster.models import (
+    FosterPlacement,
+    FosterProfile,
+    FosterProgressLog,
+    FosterStatus,
+)
 
 
 class FosterRepository:
@@ -119,3 +124,29 @@ class FosterRepository:
         )
         result = await self._session.execute(stmt)
         return result.rowcount  # type: ignore[attr-defined,no-any-return]
+
+    async def create_progress_log(self, log: FosterProgressLog) -> FosterProgressLog:
+        self._session.add(log)
+        await self._session.flush()
+        return log
+
+    async def get_progress_logs_for_placement(
+        self, placement_id: uuid.UUID
+    ) -> Sequence[FosterProgressLog]:
+        stmt = (
+            select(FosterProgressLog)
+            .where(FosterProgressLog.placement_id == placement_id)
+            .order_by(FosterProgressLog.logged_at.desc())
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def get_recent_progress_logs_for_placement(
+        self, placement_id: uuid.UUID, limit: int = 5
+    ) -> Sequence[FosterProgressLog]:
+        stmt = (
+            select(FosterProgressLog)
+            .where(FosterProgressLog.placement_id == placement_id)
+            .order_by(FosterProgressLog.logged_at.desc())
+            .limit(limit)
+        )
+        return (await self._session.execute(stmt)).scalars().all()

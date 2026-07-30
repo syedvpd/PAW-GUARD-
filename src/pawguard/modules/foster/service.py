@@ -7,16 +7,24 @@ from pawguard.core.exceptions import ConflictError, NotFoundError
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
+from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
+from pawguard.modules.adoption.repository import AdoptionRepository
 from pawguard.modules.auth.models import AuthAuditEventType
 from pawguard.modules.dog.models import DogStatus
 from pawguard.modules.dog.repository import DogRepository
-from pawguard.modules.foster.models import FosterPlacement, FosterProfile, FosterStatus
+from pawguard.modules.foster.models import (
+    FosterPlacement,
+    FosterProfile,
+    FosterProgressLog,
+    FosterStatus,
+)
 from pawguard.modules.foster.repository import FosterRepository
 from pawguard.modules.foster.schemas import (
     FosterPlacementCreate,
     FosterProfileCreate,
     FosterProfileResponse,
     FosterProfileUpdate,
+    FosterProgressLogCreate,
 )
 from pawguard.services.audit_service import AuditService
 
@@ -26,10 +34,12 @@ class FosterService:
         self,
         repository: FosterRepository,
         dog_repo: DogRepository,
+        adoption_repo: AdoptionRepository | None = None,
         audit_service: AuditService | None = None,
     ) -> None:
         self._repo = repository
         self._dog_repo = dog_repo
+        self._adoption_repo = adoption_repo or AdoptionRepository(repository._session)
         self._audit = audit_service
 
     async def apply_to_foster(
@@ -235,6 +245,142 @@ class FosterService:
             )
 
         return placement
+
+    async def log_daily_progress(
+        self,
+        placement_id: uuid.UUID,
+        payload: FosterProgressLogCreate,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> FosterProgressLog:
+        placement = await self._repo.get_placement_by_id(placement_id)
+        if placement is None:
+            raise NotFoundError("Foster placement not found.")
+        if not placement.is_active:
+            raise ConflictError("Placement is not active.")
+
+        log = FosterProgressLog(
+            placement_id=placement_id,
+            tracked_by_id=actor_id,
+            weight_kg=payload.weight_kg,
+            behavior_notes=payload.behavior_notes,
+            feeding_notes=payload.feeding_notes,
+            medication_notes=payload.medication_notes,
+            exercise_minutes=payload.exercise_minutes,
+            photo_urls=payload.photo_urls,
+            mood_rating=payload.mood_rating,
+            notes=payload.notes,
+            logged_at=datetime.now(UTC),
+        )
+        await self._repo.create_progress_log(log)
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.FOSTER_PLACEMENT_CREATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "placement_id": str(placement_id),
+                    "progress_log_id": str(log.id),
+                },
+            )
+        return log
+
+    async def get_progress_logs(
+        self, placement_id: uuid.UUID
+    ) -> list[FosterProgressLog]:
+        placement = await self._repo.get_placement_by_id(placement_id)
+        if placement is None:
+            raise NotFoundError("Foster placement not found.")
+        logs = await self._repo.get_progress_logs_for_placement(placement_id)
+        return list(logs)
+
+    async def convert_to_adoption(
+        self,
+        placement_id: uuid.UUID,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> AdoptionApplication:
+        placement = await self._repo.get_placement_by_id(placement_id)
+        if placement is None:
+            raise NotFoundError("Foster placement not found.")
+        if not placement.is_active:
+            raise ConflictError("Placement is not active.")
+
+        foster = await self._repo.get_profile_by_id(placement.foster_id)
+        if foster is None:
+            raise NotFoundError("Foster profile not found.")
+
+        dog = await self._dog_repo.get_by_id(placement.dog_id)
+        if dog is None:
+            raise NotFoundError("Dog profile not found.")
+        if dog.status == DogStatus.ADOPTED:
+            raise ConflictError("This dog has already been adopted.")
+
+        existing_approved = await self._adoption_repo.get_approved_application_for_dog(
+            placement.dog_id
+        )
+        if existing_approved is not None:
+            raise ConflictError(
+                "This dog already has an approved adoption application in progress."
+            )
+
+        app = AdoptionApplication(
+            dog_id=placement.dog_id,
+            adopter_id=foster.user_id,
+            residential_status="foster",
+            has_landlord_approval=False,
+            has_yard_fence=False,
+            household_members_count=1,
+            existing_pets_medical_details=None,
+            pet_care_experience=None,
+            status=AdoptionStatus.HOME_CHECK,
+        )
+        await self._adoption_repo.create(app)
+
+        now = datetime.now(UTC)
+        placement.returned_at = now
+        placement.is_active = False
+        foster.active_count = max(0, foster.active_count - 1)
+        if foster.active_count < foster.max_capacity:
+            foster.is_available = True
+
+        dog.status = DogStatus.ADOPTED
+
+        await self._repo._session.flush()
+
+        res = await self._adoption_repo.get_by_id(app.id)
+        if res is None:
+            raise NotFoundError("Failed to fetch newly created adoption application.")
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.ADOPTION_SUBMITTED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "adoption_id": str(res.id),
+                    "dog_id": str(placement.dog_id),
+                    "source": "foster-to-adopt",
+                },
+            )
+            await self._audit.record(
+                event_type=AuthAuditEventType.FOSTER_PLACEMENT_ENDED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "placement_id": str(placement_id),
+                    "dog_id": str(placement.dog_id),
+                    "adoption_id": str(res.id),
+                },
+            )
+
+        return res
 
     async def bulk_soft_delete(
         self,

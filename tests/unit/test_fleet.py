@@ -13,6 +13,7 @@ from pawguard.core.search import SortParams
 from pawguard.modules.fleet.models import (
     EquipmentCheckout,
     FleetMaintenance,
+    FuelLog,
     Vehicle,
     VehicleStatus,
 )
@@ -20,6 +21,7 @@ from pawguard.modules.fleet.repository import FleetRepository
 from pawguard.modules.fleet.schemas import (
     EquipmentCheckoutCreate,
     EquipmentReturnRequest,
+    FuelLogCreate,
     MaintenanceCreate,
     VehicleCreate,
     VehicleUpdate,
@@ -271,3 +273,70 @@ class TestFleetService:
         result = await service.list_equipment_checkouts_paginated(PageParams(), SortParams())
         assert isinstance(result, PaginatedResponse)
         assert result.meta.total == 1
+
+
+class TestFleetFuelLogs:
+    @pytest.fixture
+    def mock_repo(self):
+        repo = AsyncMock(spec=FleetRepository)
+        repo._session = AsyncMock()
+        return repo
+
+    @pytest.fixture
+    def mock_audit(self):
+        return AsyncMock(spec=AuditService)
+
+    @pytest.fixture
+    def service(self, mock_repo, mock_audit):
+        return FleetService(mock_repo, mock_audit)
+
+    @pytest.mark.asyncio
+    async def test_log_fuel_success(self, service, mock_repo):
+        vehicle_id = uuid.uuid4()
+        mock_repo.get_vehicle.return_value = Vehicle(
+            id=vehicle_id, make_model="Toyota Hilux", license_plate="ABC-123",
+            status=VehicleStatus.ACTIVE, mileage=5000,
+        )
+        log_id = uuid.uuid4()
+        filled_at = datetime.now(UTC)
+        mock_repo.create_fuel_log.return_value = FuelLog(
+            id=log_id, vehicle_id=vehicle_id, filled_by_id=uuid.uuid4(),
+            fuel_type="diesel", volume_litres=50.0, cost=7500.0,
+            mileage_at_fill=5100, filled_at=filled_at,
+            created_at=filled_at, updated_at=filled_at,
+        )
+        payload = FuelLogCreate(
+            fuel_type="diesel", volume_litres=50.0, cost=7500.0, mileage_at_fill=5100,
+        )
+        result = await service.log_fuel(vehicle_id, payload, actor_id=uuid.uuid4())
+        assert result.fuel_type == "diesel"
+        assert result.volume_litres == 50.0
+
+    @pytest.mark.asyncio
+    async def test_log_fuel_updates_mileage(self, service, mock_repo):
+        vehicle_id = uuid.uuid4()
+        vehicle = Vehicle(
+            id=vehicle_id, make_model="Toyota Hilux", license_plate="ABC-123",
+            status=VehicleStatus.ACTIVE, mileage=5000,
+        )
+        mock_repo.get_vehicle.return_value = vehicle
+        payload = FuelLogCreate(
+            fuel_type="petrol", volume_litres=40.0, cost=6000.0, mileage_at_fill=5500,
+        )
+        mock_repo.create_fuel_log.return_value = FuelLog(
+            id=uuid.uuid4(), vehicle_id=vehicle_id, filled_by_id=uuid.uuid4(),
+            fuel_type="petrol", volume_litres=40.0, cost=6000.0,
+            mileage_at_fill=5500, filled_at=datetime.now(UTC),
+            created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
+        )
+        await service.log_fuel(vehicle_id, payload, actor_id=uuid.uuid4())
+        assert vehicle.mileage == 5500
+
+    @pytest.mark.asyncio
+    async def test_log_fuel_vehicle_not_found(self, service, mock_repo):
+        mock_repo.get_vehicle.return_value = None
+        payload = FuelLogCreate(
+            fuel_type="diesel", volume_litres=50.0, cost=7500.0, mileage_at_fill=5100,
+        )
+        with pytest.raises(NotFoundError):
+            await service.log_fuel(uuid.uuid4(), payload)

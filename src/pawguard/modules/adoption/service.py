@@ -7,18 +7,18 @@ from pawguard.core.exceptions import ConflictError, NotFoundError, ValidationFai
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
-from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
+from pawguard.modules.adoption.models import AdoptionApplication, AdoptionScore, AdoptionStatus
 from pawguard.modules.adoption.repository import AdoptionRepository
 from pawguard.modules.adoption.schemas import (
     AdoptionApplicationCreate,
     AdoptionApplicationResponse,
     AdoptionApplicationUpdate,
+    AdoptionScoreCreate,
 )
 from pawguard.modules.auth.models import AuthAuditEventType
 from pawguard.modules.dog.models import DogStatus
 from pawguard.modules.dog.repository import DogRepository
 from pawguard.services.audit_service import AuditService
-
 
 # Explicit state machine for the 6-phase vetting pipeline (PRR 3.7). REJECTED
 # is reachable from any pre-completion state (an application can be rejected
@@ -223,6 +223,61 @@ class AdoptionService:
             )
 
         return res
+
+    async def add_score(
+        self,
+        application_id: uuid.UUID,
+        payload: AdoptionScoreCreate,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> AdoptionScore:
+        app = await self._repo.get_by_id(application_id)
+        if app is None:
+            raise NotFoundError("Adoption application not found.")
+
+        total = (
+            payload.home_environment_score
+            + payload.pet_care_knowledge_score
+            + payload.financial_readiness_score
+            + payload.lifestyle_compatibility_score
+        ) / 4.0
+
+        score = AdoptionScore(
+            application_id=application_id,
+            scored_by_id=actor_id,
+            home_environment_score=payload.home_environment_score,
+            pet_care_knowledge_score=payload.pet_care_knowledge_score,
+            financial_readiness_score=payload.financial_readiness_score,
+            lifestyle_compatibility_score=payload.lifestyle_compatibility_score,
+            overall_score=total,
+            recommendation=payload.recommendation,
+            notes=payload.notes,
+            scored_at=datetime.now(UTC),
+        )
+        await self._repo.create_score(score)
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.ADOPTION_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "adoption_id": str(application_id),
+                    "score_id": str(score.id),
+                    "overall_score": float(total),
+                    "recommendation": payload.recommendation,
+                },
+            )
+
+        return score
+
+    async def get_scores(self, application_id: uuid.UUID) -> list[AdoptionScore]:
+        app = await self._repo.get_by_id(application_id)
+        if app is None:
+            raise NotFoundError("Adoption application not found.")
+        return list(await self._repo.get_scores_for_application(application_id))
 
     async def get_application(self, app_id: uuid.UUID) -> AdoptionApplication:
         app = await self._repo.get_by_id(app_id)
