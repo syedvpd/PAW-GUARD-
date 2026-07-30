@@ -62,6 +62,35 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         return response
 
 
+# Paths whose HTML pages need to load JS/CSS from a CDN (Swagger UI / ReDoc assets).
+# Everything else on the API keeps the strict, CDN-free CSP.
+_DOCS_PATHS = ("/docs", "/redoc")
+
+_STRICT_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data:; "
+    "font-src 'self'; "
+    "connect-src 'self'; "
+    "frame-ancestors 'none'; "
+    "form-action 'self'; "
+    "base-uri 'self'"
+)
+
+_DOCS_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+    "img-src 'self' data: https://fastapi.tiangolo.com; "
+    "font-src 'self' https://cdn.jsdelivr.net; "
+    "connect-src 'self'; "
+    "frame-ancestors 'none'; "
+    "form-action 'self'; "
+    "base-uri 'self'"
+)
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Applies baseline security headers to every response."""
 
@@ -72,17 +101,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
         response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
-            "style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data:; "
-            "font-src 'self'; "
-            "connect-src 'self'; "
-            "frame-ancestors 'none'; "
-            "form-action 'self'; "
-            "base-uri 'self'"
-        )
+
+        if request.url.path in _DOCS_PATHS:
+            response.headers["Content-Security-Policy"] = _DOCS_CSP
+        else:
+            response.headers["Content-Security-Policy"] = _STRICT_CSP
+
         if request.url.path.startswith(("/api/", "/auth/")):
             response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
         return response
