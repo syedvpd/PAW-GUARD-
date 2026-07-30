@@ -123,8 +123,8 @@ class DogService:
                 user_agent="",
                 metadata={
                     "dog_id": str(dog_id),
-                    "old_status": old_status.value,
-                    "new_status": status.value,
+                    "old_status": str(old_status),
+                    "new_status": str(status),
                 },
             )
 
