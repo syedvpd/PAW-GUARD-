@@ -116,7 +116,7 @@ class RescueService:
                 user_agent="",
                 metadata={
                     "rescue_id": str(request_id),
-                    "new_status": request.status.value,
+                    "new_status": str(request.status),
                     "rationale": rationale,
                 },
             )
@@ -251,8 +251,8 @@ class RescueService:
                 user_agent="",
                 metadata={
                     "rescue_id": str(request_id),
-                    "old_status": old_status.value,
-                    "new_status": status.value,
+                    "old_status": str(old_status),
+                    "new_status": str(request.status),
                     "failure_reason": failure_reason,
                 },
             )
