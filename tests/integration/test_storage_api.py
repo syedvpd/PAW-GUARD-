@@ -102,8 +102,8 @@ class TestStorageAPI:
         resp = await client.get("/api/v1/storage", headers=headers)
         assert resp.status_code == 200
         body = resp.json()
-        assert "items" in body
-        assert "total" in body
+        assert "data" in body
+        assert "total" in body["meta"]
 
     async def test_list_files_with_filters(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)

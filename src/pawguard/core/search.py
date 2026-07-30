@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import Annotated, Any
 
 from fastapi import Query
-from sqlalchemy import ColumnElement, Unicode, cast, func
+from sqlalchemy import ColumnElement, Unicode, asc, cast, desc
 
 
 @dataclass(slots=True)
@@ -41,7 +41,7 @@ def apply_sorting(
     column = getattr(stmt.froms[0].columns, field, None)
     if column is None:
         return stmt
-    order_fn = func.desc if sort.is_descending else func.asc
+    order_fn = desc if sort.is_descending else asc
     return stmt.order_by(order_fn(column))
 
 
