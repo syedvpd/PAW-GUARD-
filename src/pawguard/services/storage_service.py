@@ -17,6 +17,9 @@ class StorageService:
         self._client = boto3.client(
             "s3",
             region_name=settings.s3_region,
+            endpoint_url=settings.s3_endpoint_url or None,
+            aws_access_key_id=settings.aws_access_key_id or None,
+            aws_secret_access_key=settings.aws_secret_access_key or None,
             config=Config(signature_version="s3v4"),
         )
 
