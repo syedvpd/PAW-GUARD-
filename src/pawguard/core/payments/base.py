@@ -36,7 +36,7 @@ class WebhookEvent:
     order_id: str | None
     payment_id: str | None
     is_success: bool
-    raw_payload: dict
+    raw_payload: dict[str, object]
 
 
 class PaymentGateway(ABC):

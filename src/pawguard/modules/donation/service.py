@@ -2,8 +2,9 @@
 
 import uuid
 
-from pawguard.core.exceptions import ConflictError, NotFoundError
+from pawguard.core.exceptions import ConflictError, NotFoundError, ValidationFailedError
 from pawguard.core.pagination import PageParams, build_pagination_meta
+from pawguard.core.payments import PaymentGateway, PaymentGatewayError, WebhookEvent
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
 from pawguard.modules.dog.repository import DogRepository
@@ -11,6 +12,7 @@ from pawguard.modules.donation.models import Donation, DonationStatus, DonorProf
 from pawguard.modules.donation.repository import DonationRepository
 from pawguard.modules.donation.schemas import (
     DonationCreate,
+    DonationOrderResponse,
     DonationResponse,
     DonorProfileCreate,
     DonorProfileResponse,
@@ -19,9 +21,15 @@ from pawguard.modules.donation.schemas import (
 
 
 class DonationService:
-    def __init__(self, repository: DonationRepository, dog_repo: DogRepository) -> None:
+    def __init__(
+        self,
+        repository: DonationRepository,
+        dog_repo: DogRepository,
+        payment_gateway: PaymentGateway | None = None,
+    ) -> None:
         self._repo = repository
         self._dog_repo = dog_repo
+        self._gateway = payment_gateway
 
     async def register_donor(self, user_id: uuid.UUID, payload: DonorProfileCreate) -> DonorProfile:
         existing = await self._repo.get_donor_by_user_id(user_id)
@@ -73,6 +81,129 @@ class DonationService:
         if donation is None:
             raise NotFoundError("Donation record not found.")
         return donation
+
+    async def initiate_online_donation(
+        self, user_id: uuid.UUID, payload: DonationCreate
+    ) -> DonationOrderResponse:
+        """Create a PENDING donation and an order with the configured payment
+        gateway. The client uses the returned order details to open the
+        provider's checkout; the donation is only marked SUCCESS once
+        `verify_donation_payment` (or the provider webhook) confirms it."""
+        if self._gateway is None:
+            raise ValidationFailedError("Online payments are not configured for this deployment.")
+
+        donor = await self.get_or_create_donor(user_id)
+
+        if payload.dog_id is not None:
+            dog = await self._dog_repo.get_by_id(payload.dog_id)
+            if dog is None:
+                raise NotFoundError("Dog profile not found.")
+
+        donation = Donation(
+            donor_id=donor.id,
+            dog_id=payload.dog_id,
+            amount=payload.amount,
+            currency=payload.currency,
+            donation_type=payload.donation_type,
+            status=DonationStatus.PENDING,
+            notes=payload.notes,
+            payment_provider=self._gateway.provider_name,
+        )
+        await self._repo.create_donation(donation)
+
+        receipt = f"donation-{donation.id}"
+        try:
+            order = await self._gateway.create_order(
+                amount=payload.amount,
+                currency=payload.currency,
+                receipt=receipt,
+                notes={"donation_id": str(donation.id), "donor_id": str(donor.id)},
+            )
+        except PaymentGatewayError as exc:
+            await self._repo.update_donation_status(donation.id, DonationStatus.FAILED)
+            raise ValidationFailedError(str(exc)) from exc
+
+        await self._repo.update_gateway_fields(donation.id, gateway_order_id=order.order_id)
+
+        return DonationOrderResponse(
+            donation_id=donation.id,
+            provider=order.provider,
+            order_id=order.order_id,
+            amount=order.amount,
+            currency=order.currency,
+            checkout_key=order.checkout_key,
+        )
+
+    async def verify_donation_payment(
+        self,
+        donation_id: uuid.UUID,
+        gateway_order_id: str,
+        gateway_payment_id: str,
+        gateway_signature: str,
+    ) -> Donation:
+        if self._gateway is None:
+            raise ValidationFailedError("Online payments are not configured for this deployment.")
+
+        donation = await self.get_donation(donation_id)
+        if donation.gateway_order_id != gateway_order_id:
+            raise ValidationFailedError("Order reference does not match this donation.")
+        if donation.status == DonationStatus.SUCCESS:
+            return donation
+
+        result = self._gateway.verify_payment_signature(
+            order_id=gateway_order_id,
+            payment_id=gateway_payment_id,
+            signature=gateway_signature,
+        )
+        if not result.verified:
+            await self._repo.update_gateway_fields(
+                donation.id,
+                status=DonationStatus.FAILED,
+                gateway_payment_id=gateway_payment_id,
+            )
+            raise ValidationFailedError(
+                result.failure_reason or "Payment verification failed."
+            )
+
+        tx_id = f"TXN-{uuid.uuid4().hex[:12].upper()}"
+        updated = await self._repo.update_gateway_fields(
+            donation.id,
+            status=DonationStatus.SUCCESS,
+            gateway_payment_id=gateway_payment_id,
+            gateway_signature=gateway_signature,
+            transaction_id=tx_id,
+        )
+        if updated is None:
+            raise NotFoundError("Donation record not found.")
+        res = await self._repo.get_donation_by_id(updated.id)
+        if res is None:
+            raise NotFoundError("Donation record not found.")
+        return res
+
+    async def handle_gateway_webhook(self, payload: bytes, signature: str) -> None:
+        """Server-to-server confirmation, in case the client never returns to
+        call `verify_donation_payment` (closed tab, network drop, etc.)."""
+        if self._gateway is None:
+            raise ValidationFailedError("Online payments are not configured for this deployment.")
+
+        event: WebhookEvent = self._gateway.parse_webhook(payload=payload, signature=signature)
+        if event.order_id is None:
+            return
+
+        donation = await self._repo.get_donation_by_gateway_order_id(event.order_id)
+        if donation is None or donation.status == DonationStatus.SUCCESS:
+            return
+
+        if event.is_success:
+            tx_id = f"TXN-{uuid.uuid4().hex[:12].upper()}"
+            await self._repo.update_gateway_fields(
+                donation.id,
+                status=DonationStatus.SUCCESS,
+                gateway_payment_id=event.payment_id,
+                transaction_id=tx_id,
+            )
+        elif event.event_type == "payment.failed":
+            await self._repo.update_gateway_fields(donation.id, status=DonationStatus.FAILED)
 
     async def list_donations_for_user(self, user_id: uuid.UUID) -> list[Donation]:
         donor = await self._repo.get_donor_by_user_id(user_id)

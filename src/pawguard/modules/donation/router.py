@@ -3,9 +3,10 @@
 Routers only validate and call services (RULE-004).
 """
 
+import contextlib
 import uuid
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.bulk import (
@@ -14,7 +15,9 @@ from pawguard.core.bulk import (
     BulkStatusUpdateRequest,
     BulkStatusUpdateResponse,
 )
+from pawguard.core.exceptions import ValidationFailedError
 from pawguard.core.pagination import PageParams, page_params
+from pawguard.core.payments import PaymentGatewayError, get_payment_gateway
 from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.core.search import SortParams, sort_params
 from pawguard.db.session import get_db
@@ -25,8 +28,10 @@ from pawguard.modules.donation.models import DonationStatus, DonationType
 from pawguard.modules.donation.repository import DonationRepository
 from pawguard.modules.donation.schemas import (
     DonationCreate,
+    DonationOrderResponse,
     DonationResponse,
     DonationStatusUpdate,
+    DonationVerifyRequest,
     DonorProfileCreate,
     DonorProfileResponse,
     DonorProfileUpdate,
@@ -39,7 +44,11 @@ router = APIRouter(prefix="/donations", tags=["donations"])
 def get_donation_service(db: AsyncSession = Depends(get_db)) -> DonationService:
     repo = DonationRepository(db)
     dog_repo = DogRepository(db)
-    return DonationService(repo, dog_repo)
+    try:
+        gateway = get_payment_gateway()
+    except PaymentGatewayError:
+        gateway = None
+    return DonationService(repo, dog_repo, gateway)
 
 
 @router.post(
@@ -105,6 +114,64 @@ async def make_donation(
         data=DonationResponse.model_validate(donation),
         message="Thank you! Donation processed successfully.",
     )
+
+
+@router.post(
+    "/checkout",
+    response_model=ApiResponse[DonationOrderResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def initiate_donation_checkout(
+    payload: DonationCreate,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: DonationService = Depends(get_donation_service),
+) -> ApiResponse[DonationOrderResponse]:
+    """Create a PENDING donation plus a payment-provider order. The client
+    opens the provider's checkout with the returned order details, then calls
+    `/donations/verify` once the user completes payment."""
+    order = await service.initiate_online_donation(current_user.id, payload)
+    return ApiResponse(data=order, message="Donation order created. Complete payment to confirm.")
+
+
+@router.post(
+    "/verify",
+    response_model=ApiResponse[DonationResponse],
+)
+async def verify_donation_checkout(
+    payload: DonationVerifyRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: DonationService = Depends(get_donation_service),
+) -> ApiResponse[DonationResponse]:
+    donation = await service.verify_donation_payment(
+        donation_id=payload.donation_id,
+        gateway_order_id=payload.gateway_order_id,
+        gateway_payment_id=payload.gateway_payment_id,
+        gateway_signature=payload.gateway_signature,
+    )
+    return ApiResponse(
+        data=DonationResponse.model_validate(donation),
+        message="Thank you! Donation confirmed.",
+    )
+
+
+@router.post(
+    "/webhook/razorpay",
+    response_model=ApiResponse[None],
+    include_in_schema=False,
+)
+async def razorpay_webhook(
+    request: Request,
+    service: DonationService = Depends(get_donation_service),
+) -> ApiResponse[None]:
+    """Server-to-server confirmation from Razorpay. Not authenticated with a
+    user session - verified instead via the webhook signature header."""
+    signature = request.headers.get("X-Razorpay-Signature", "")
+    body = await request.body()
+    # Swallow signature/config errors here so Razorpay doesn't retry a request
+    # that will never succeed; real failures are logged upstream.
+    with contextlib.suppress(ValidationFailedError):
+        await service.handle_gateway_webhook(body, signature)
+    return ApiResponse(message="ok")
 
 
 @router.get(
