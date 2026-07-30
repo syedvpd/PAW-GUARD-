@@ -163,6 +163,7 @@ async def authorize_adoption_clearance(
 @router.get(
     "/dogs/{dog_id}/history",
     response_model=ApiResponse[dict[str, Any]],
+    dependencies=[Depends(require_permission("medical:read"))],
 )
 async def get_medical_history(
     dog_id: uuid.UUID,

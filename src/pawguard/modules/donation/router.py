@@ -21,6 +21,7 @@ from pawguard.core.payments import PaymentGatewayError, get_payment_gateway
 from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.core.search import SortParams, sort_params
 from pawguard.db.session import get_db
+from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.rbac import require_permission
 from pawguard.modules.dog.repository import DogRepository
@@ -37,18 +38,22 @@ from pawguard.modules.donation.schemas import (
     DonorProfileUpdate,
 )
 from pawguard.modules.donation.service import DonationService
+from pawguard.services.audit_service import AuditService
 
 router = APIRouter(prefix="/donations", tags=["donations"])
 
 
-def get_donation_service(db: AsyncSession = Depends(get_db)) -> DonationService:
+def get_donation_service(
+    db: AsyncSession = Depends(get_db),
+    audit: AuditService = Depends(get_audit_service),
+) -> DonationService:
     repo = DonationRepository(db)
     dog_repo = DogRepository(db)
     try:
         gateway = get_payment_gateway()
     except PaymentGatewayError:
         gateway = None
-    return DonationService(repo, dog_repo, gateway)
+    return DonationService(repo, dog_repo, gateway, audit_service=audit)
 
 
 @router.post(
@@ -76,9 +81,14 @@ async def register_donor(
 async def update_donor(
     donor_id: uuid.UUID,
     payload: DonorProfileUpdate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     service: DonationService = Depends(get_donation_service),
 ) -> ApiResponse[DonorProfileResponse]:
-    donor = await service.update_donor(donor_id, payload)
+    donor = await service.update_donor(
+        donor_id, payload, actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
     return ApiResponse(
         data=DonorProfileResponse.model_validate(donor),
         message="Donor profile updated successfully.",
@@ -93,9 +103,14 @@ async def update_donor(
 )
 async def soft_delete_donor(
     donor_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     service: DonationService = Depends(get_donation_service),
 ) -> ApiResponse[None]:
-    await service.soft_delete_donor(donor_id)
+    await service.soft_delete_donor(
+        donor_id, actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
     return ApiResponse(message="Donor profile deleted successfully.")
 
 
@@ -103,16 +118,25 @@ async def soft_delete_donor(
     "",
     response_model=ApiResponse[DonationResponse],
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("donation:manage"))],
 )
-async def make_donation(
+async def record_manual_donation(
     payload: DonationCreate,
+    request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: DonationService = Depends(get_donation_service),
 ) -> ApiResponse[DonationResponse]:
-    donation = await service.make_donation(current_user.id, payload)
+    """Records an already-collected offline donation (cash, bank transfer,
+    etc.) without going through a payment gateway. Staff-only: online
+    donations from the public must use POST /donations/checkout + /verify,
+    which actually verify payment before marking a donation SUCCESS."""
+    donation = await service.make_donation(
+        current_user.id, payload, actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
     return ApiResponse(
         data=DonationResponse.model_validate(donation),
-        message="Thank you! Donation processed successfully.",
+        message="Donation recorded successfully.",
     )
 
 
@@ -139,6 +163,7 @@ async def initiate_donation_checkout(
 )
 async def verify_donation_checkout(
     payload: DonationVerifyRequest,
+    request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: DonationService = Depends(get_donation_service),
 ) -> ApiResponse[DonationResponse]:
@@ -147,6 +172,8 @@ async def verify_donation_checkout(
         gateway_order_id=payload.gateway_order_id,
         gateway_payment_id=payload.gateway_payment_id,
         gateway_signature=payload.gateway_signature,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
     )
     return ApiResponse(
         data=DonationResponse.model_validate(donation),
@@ -238,9 +265,14 @@ async def list_donors(
 async def update_donation_status(
     donation_id: uuid.UUID,
     payload: DonationStatusUpdate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     service: DonationService = Depends(get_donation_service),
 ) -> ApiResponse[DonationResponse]:
-    donation = await service.update_donation_status(donation_id, payload.status)
+    donation = await service.update_donation_status(
+        donation_id, payload.status, actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
     return ApiResponse(
         data=DonationResponse.model_validate(donation),
         message="Donation status updated successfully.",
@@ -254,11 +286,15 @@ async def update_donation_status(
 )
 async def bulk_update_donation_status(
     payload: BulkStatusUpdateRequest,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     service: DonationService = Depends(get_donation_service),
 ) -> ApiResponse[BulkStatusUpdateResponse]:
     updated = await service.bulk_update_status(
         payload.ids,
         DonationStatus(payload.status),
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
     )
     return ApiResponse(
         data=BulkStatusUpdateResponse(
@@ -275,9 +311,14 @@ async def bulk_update_donation_status(
 )
 async def bulk_delete_donors(
     payload: BulkDeleteRequest,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     service: DonationService = Depends(get_donation_service),
 ) -> ApiResponse[BulkDeleteResponse]:
-    deleted = await service.bulk_soft_delete(payload.ids)
+    deleted = await service.bulk_soft_delete(
+        payload.ids, actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
     return ApiResponse(
         data=BulkDeleteResponse(
             message=f"{deleted} donor(s) deleted.",

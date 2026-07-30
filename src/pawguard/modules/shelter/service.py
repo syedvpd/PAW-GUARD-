@@ -167,6 +167,13 @@ class ShelterService:
                 f"{kennel.sanitation_state}."
             )
 
+        occupancy = await self._dog_repo.count_by_kennel(kennel.id, exclude_dog_id=dog.id)
+        if occupancy >= kennel.capacity:
+            raise ConflictError(
+                f"Cannot assign dog. Kennel {kennel.identifier} is at capacity "
+                f"({occupancy}/{kennel.capacity})."
+            )
+
         section = await self._repo.get_section(kennel.section_id)
         if section is None:
             raise NotFoundError("Associated shelter section not found.")
@@ -253,12 +260,19 @@ class ShelterService:
             )
         return transfer
 
-    async def confirm_transfer(
+    async def _confirm_transfer_side(
         self,
         transfer_id: uuid.UUID,
-        actor_id: uuid.UUID | None = None,
-        ip_address: str | None = None,
+        side: str,
+        actor_id: uuid.UUID | None,
+        ip_address: str | None,
     ) -> FacilityTransfer:
+        """Records one side's (sender's or receiver's) confirmation.
+
+        A transfer only completes once BOTH sides have confirmed (PRR 3.6);
+        the requesting facility cannot unilaterally complete its own
+        transfer, and the same actor cannot confirm both sides.
+        """
         transfer = await self._repo.get_transfer(transfer_id)
         if transfer is None:
             raise NotFoundError("Facility transfer request not found.")
@@ -266,28 +280,55 @@ class ShelterService:
         if transfer.status != TransferStatus.PENDING:
             raise ConflictError("Transfer request has already been processed.")
 
-        dog = await self._dog_repo.get_by_id(transfer.dog_id)
-        if dog is None:
-            raise NotFoundError("Dog profile not found.")
+        other_side = "receiver" if side == "sender" else "sender"
+        if getattr(transfer, f"{side}_confirmed_at") is not None:
+            raise ConflictError(f"The {side} facility has already confirmed this transfer.")
+        other_confirmed_by = getattr(transfer, f"{other_side}_confirmed_by")
+        if actor_id is not None and other_confirmed_by is not None and other_confirmed_by == actor_id:
+            raise ConflictError(
+                "The same user cannot confirm both the sending and receiving side "
+                "of a transfer."
+            )
 
-        # Update dog profile facility location
-        dog.shelter_facility_id = transfer.to_facility_id
-        dog.kennel_id = None  # require re-assignment to kennel at destination
+        now = datetime.now(UTC)
+        setattr(transfer, f"{side}_confirmed_at", now)
+        setattr(transfer, f"{side}_confirmed_by", actor_id)
 
-        transfer.status = TransferStatus.COMPLETED
-        await self._repo._session.flush()
         if self._audit and actor_id:
             await self._audit.record(
                 event_type=AuthAuditEventType.TRANSFER_CONFIRMED,
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
-                metadata={
-                    "transfer_id": str(transfer_id),
-                    "dog_id": str(transfer.dog_id),
-                },
+                metadata={"transfer_id": str(transfer_id), "side": side},
             )
+
+        if transfer.sender_confirmed_at is not None and transfer.receiver_confirmed_at is not None:
+            dog = await self._dog_repo.get_by_id(transfer.dog_id)
+            if dog is None:
+                raise NotFoundError("Dog profile not found.")
+            dog.shelter_facility_id = transfer.to_facility_id
+            dog.kennel_id = None  # require re-assignment to kennel at destination
+            transfer.status = TransferStatus.COMPLETED
+
+        await self._repo._session.flush()
         return transfer
+
+    async def confirm_transfer_sender(
+        self,
+        transfer_id: uuid.UUID,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> FacilityTransfer:
+        return await self._confirm_transfer_side(transfer_id, "sender", actor_id, ip_address)
+
+    async def confirm_transfer_receiver(
+        self,
+        transfer_id: uuid.UUID,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> FacilityTransfer:
+        return await self._confirm_transfer_side(transfer_id, "receiver", actor_id, ip_address)
 
     async def submit_daily_care_log(
         self,

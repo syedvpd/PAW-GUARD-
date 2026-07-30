@@ -5,7 +5,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -39,12 +39,20 @@ class VolunteerProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     emergency_contact_name: Mapped[str] = mapped_column(String(255), nullable=False)
     emergency_contact_phone: Mapped[str] = mapped_column(String(32), nullable=False)
 
-    # comma separated e.g. "Grooming,Transport"
+    # comma separated e.g. "Grooming,Transport,Photography,Training"
     skills: Mapped[str | None] = mapped_column(Text, nullable=True)
     availability: Mapped[str | None] = mapped_column(
         String(255), nullable=True
     )  # "Weekends", "Evenings", etc.
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Onboarding/skills matrix (PRR 3.9) - previously absent from the model.
+    background_check_completed: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    background_check_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    medical_conditions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    animal_handling_experience: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     user: Mapped["User"] = relationship("User", lazy="joined")
     attendances: Mapped[list["ShiftAttendance"]] = relationship(

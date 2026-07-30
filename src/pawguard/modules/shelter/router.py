@@ -82,6 +82,7 @@ async def create_facility(
 @router.get(
     "/facilities",
     response_model=PaginatedResponse[ShelterFacilityResponse],
+    dependencies=[Depends(require_permission("shelter:read"))],
 )
 async def list_facilities(
     page: PageParams = Depends(page_params),
@@ -135,6 +136,7 @@ async def create_section(
 @router.get(
     "/facilities/{facility_id}/sections",
     response_model=PaginatedResponse[ShelterSectionResponse],
+    dependencies=[Depends(require_permission("shelter:read"))],
 )
 async def list_sections(
     facility_id: uuid.UUID,
@@ -186,6 +188,7 @@ async def create_kennel(
 @router.get(
     "/sections/{section_id}/kennels",
     response_model=PaginatedResponse[KennelResponse],
+    dependencies=[Depends(require_permission("shelter:read"))],
 )
 async def list_kennels(
     section_id: uuid.UUID,
@@ -287,26 +290,50 @@ async def request_transfer(
 
 
 @router.post(
-    "/transfers/{transfer_id}/confirm",
+    "/transfers/{transfer_id}/confirm-sender",
     response_model=ApiResponse[FacilityTransferResponse],
     dependencies=[Depends(require_permission("shelter:update"))],
 )
-async def confirm_transfer(
+async def confirm_transfer_sender(
     transfer_id: uuid.UUID,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: ShelterService = Depends(get_shelter_service),
 ) -> ApiResponse[FacilityTransferResponse]:
-    transfer = await service.confirm_transfer(
+    """Confirmation from the SENDING facility. A transfer only completes
+    once both this and /confirm-receiver have been called (PRR 3.6)."""
+    transfer = await service.confirm_transfer_sender(
         transfer_id,
         actor_id=current_user.id,
-        ip_address=request.client.host
-        if request.client
-        else None,
+        ip_address=request.client.host if request.client else None,
     )
     return ApiResponse(
         data=FacilityTransferResponse.model_validate(transfer),
-        message="Inter-facility transfer confirmation recorded.",
+        message="Sending facility confirmation recorded.",
+    )
+
+
+@router.post(
+    "/transfers/{transfer_id}/confirm-receiver",
+    response_model=ApiResponse[FacilityTransferResponse],
+    dependencies=[Depends(require_permission("shelter:update"))],
+)
+async def confirm_transfer_receiver(
+    transfer_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: ShelterService = Depends(get_shelter_service),
+) -> ApiResponse[FacilityTransferResponse]:
+    """Confirmation from the RECEIVING facility. A transfer only completes
+    once both this and /confirm-sender have been called (PRR 3.6)."""
+    transfer = await service.confirm_transfer_receiver(
+        transfer_id,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(
+        data=FacilityTransferResponse.model_validate(transfer),
+        message="Receiving facility confirmation recorded.",
     )
 
 
@@ -342,6 +369,7 @@ async def submit_daily_care_log(
 @router.get(
     "/dogs/{dog_id}/care-logs",
     response_model=ApiResponse[list[DailyCareLogResponse]],
+    dependencies=[Depends(require_permission("shelter:read"))],
 )
 async def list_care_logs(
     dog_id: uuid.UUID,

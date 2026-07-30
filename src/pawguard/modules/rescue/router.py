@@ -21,6 +21,7 @@ from pawguard.db.session import get_db
 from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.rbac import require_permission
+from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.rescue.models import RescueStatus
 from pawguard.modules.rescue.repository import RescueRepository
 from pawguard.modules.rescue.schemas import (
@@ -41,7 +42,8 @@ def get_rescue_service(
     audit: AuditService = Depends(get_audit_service),
 ) -> RescueService:
     repo = RescueRepository(db)
-    return RescueService(repo, audit_service=audit)
+    dog_repo = DogRepository(db)
+    return RescueService(repo, audit_service=audit, dog_repo=dog_repo)
 
 
 @router.post(
@@ -58,6 +60,7 @@ async def report_incident(
     request_obj = await service.report_incident(
         reporter_name=payload.reporter_name,
         reporter_phone=payload.reporter_phone,
+        reporter_alternate_phone=payload.reporter_alternate_phone,
         reporter_email=payload.reporter_email,
         is_anonymous=payload.is_anonymous,
         location_address=payload.location_address,

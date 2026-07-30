@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pawguard.core.bulk import BulkDeleteRequest, BulkDeleteResponse
 from pawguard.core.exceptions import ForbiddenError, NotFoundError
 from pawguard.core.pagination import PageParams, page_params
+from pawguard.core.pii import mask_email
 from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.core.search import SortParams, sort_params
 from pawguard.db.session import get_db
@@ -27,6 +28,22 @@ from pawguard.modules.lost_found.service import LostFoundService
 from pawguard.services.audit_service import AuditService
 
 router = APIRouter(prefix="/lost-found", tags=["lost-found"])
+
+
+def _mask_reporter_email(
+    item: LostReportResponse | FoundReportResponse, current_user: CurrentUser
+) -> None:
+    """Masks the reporter's email for anyone who isn't the reporter or an admin.
+
+    General list/detail views must not leak reporter PII per RULE-006; unmasked
+    contact details are only released through the claim-verification workflow.
+    """
+    if item.user is None or item.user_id == current_user.id:
+        return
+    user_permissions = {p.code for r in current_user.user.roles for p in r.permissions}
+    if "system:admin" in user_permissions:
+        return
+    item.user = item.user.model_copy(update={"email": mask_email(item.user.email)})
 
 
 def get_lost_found_service(
@@ -90,15 +107,16 @@ async def list_lost_reports(
     search: str | None = None,
     status: ReportStatus | None = None,
     species: Species | None = None,
+    current_user: CurrentUser = Depends(get_current_user),
     service: LostFoundService = Depends(get_lost_found_service),
 ) -> PaginatedResponse[LostReportResponse]:
     result = await service.list_lost_reports_paginated(
         page, sort, search_term=search, status=status, species=species,
     )
-    return PaginatedResponse(
-        data=[LostReportResponse.model_validate(r) for r in result.data],
-        meta=result.meta,
-    )
+    data = [LostReportResponse.model_validate(r) for r in result.data]
+    for item in data:
+        _mask_reporter_email(item, current_user)
+    return PaginatedResponse(data=data, meta=result.meta)
 
 
 @router.get(
@@ -112,15 +130,16 @@ async def list_found_reports(
     search: str | None = None,
     status: ReportStatus | None = None,
     species: Species | None = None,
+    current_user: CurrentUser = Depends(get_current_user),
     service: LostFoundService = Depends(get_lost_found_service),
 ) -> PaginatedResponse[FoundReportResponse]:
     result = await service.list_found_reports_paginated(
         page, sort, search_term=search, status=status, species=species,
     )
-    return PaginatedResponse(
-        data=[FoundReportResponse.model_validate(r) for r in result.data],
-        meta=result.meta,
-    )
+    data = [FoundReportResponse.model_validate(r) for r in result.data]
+    for item in data:
+        _mask_reporter_email(item, current_user)
+    return PaginatedResponse(data=data, meta=result.meta)
 
 
 @router.get(
@@ -143,10 +162,13 @@ async def get_matches_for_lost(
         raise ForbiddenError("You do not have permission to view matches for this report.")
 
     result = await service.list_matches_paginated(page, sort, lost_report_id=report_id)
-    return PaginatedResponse(
-        data=[ReportMatchResponse.model_validate(m) for m in result.data],
-        meta=result.meta,
-    )
+    data = [ReportMatchResponse.model_validate(m) for m in result.data]
+    for match in data:
+        if match.lost_report is not None:
+            _mask_reporter_email(match.lost_report, current_user)
+        if match.found_report is not None:
+            _mask_reporter_email(match.found_report, current_user)
+    return PaginatedResponse(data=data, meta=result.meta)
 
 
 @router.post(

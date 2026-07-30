@@ -59,3 +59,27 @@ class MaintenanceResponse(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class EquipmentCheckoutCreate(BaseModel):
+    equipment_name: str = Field(..., min_length=1, max_length=255)
+    assigned_to_agent_id: uuid.UUID | None = None
+    assigned_to_vehicle_id: uuid.UUID | None = None
+    notes: str | None = None
+
+
+class EquipmentReturnRequest(BaseModel):
+    notes: str | None = None
+
+
+class EquipmentCheckoutResponse(BaseModel):
+    id: uuid.UUID
+    equipment_name: str
+    assigned_to_agent_id: uuid.UUID | None
+    assigned_to_vehicle_id: uuid.UUID | None
+    checked_out_at: datetime
+    returned_at: datetime | None
+    notes: str | None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

@@ -16,6 +16,7 @@ from pawguard.modules.grievance.repository import GrievanceRepository
 from pawguard.modules.grievance.schemas import (
     CommentCreate,
     GrievanceCreate,
+    GrievanceEscalate,
     GrievanceListFilter,
     GrievanceUpdate,
     ServiceFeedbackCreate,
@@ -53,6 +54,9 @@ class TestGrievanceService:
         )
         result = await service.submit_complaint(payload)
         assert result.status == GrievanceStatus.OPEN
+        # SLA deadline is computed and passed to the created ticket.
+        created_kwargs = mock_repo.create_ticket.call_args[0][0]
+        assert created_kwargs.sla_due_at is not None
 
     @pytest.mark.asyncio
     async def test_update_ticket(self, service, mock_repo):
@@ -190,6 +194,54 @@ class TestGrievanceService:
         payload = CommentCreate(body="Thanks")
         result = await service.add_comment(ticket_id, payload, author_id=uuid.uuid4())
         assert result.body == "Thanks"
+
+    @pytest.mark.asyncio
+    async def test_add_comment_sets_first_responded_at(self, service, mock_repo):
+        ticket_id = uuid.uuid4()
+        ticket = GrievanceTicket(
+            id=ticket_id, reporter_name="J", reporter_phone="+1",
+            complaint_type="service", details="Bad",
+            status=GrievanceStatus.OPEN,
+        )
+        mock_repo.get_ticket.return_value = ticket
+        mock_repo.create_comment.return_value = GrievanceComment(
+            id=uuid.uuid4(), ticket_id=ticket_id, author_id=uuid.uuid4(),
+            body="On it", is_internal=True,
+        )
+        assert ticket.first_responded_at is None
+        await service.add_comment(ticket_id, CommentCreate(body="On it", is_internal=True), author_id=uuid.uuid4())
+        assert ticket.first_responded_at is not None
+
+    @pytest.mark.asyncio
+    async def test_escalate_ticket(self, service, mock_repo, mock_audit):
+        ticket_id = uuid.uuid4()
+        ticket = GrievanceTicket(
+            id=ticket_id, reporter_name="J", reporter_phone="+1",
+            complaint_type="service", details="Bad",
+            status=GrievanceStatus.INVESTIGATING, escalation_level=0,
+        )
+        mock_repo.get_ticket.return_value = ticket
+        admin_id = uuid.uuid4()
+        result = await service.escalate_ticket(
+            ticket_id, GrievanceEscalate(escalated_to_admin_id=admin_id, reason="SLA breach"),
+            actor_id=uuid.uuid4(),
+        )
+        assert result.escalation_level == 1
+        assert result.escalated_to_admin_id == admin_id
+        assert result.escalated_at is not None
+
+    @pytest.mark.asyncio
+    async def test_escalate_closed_ticket_rejected(self, service, mock_repo):
+        ticket_id = uuid.uuid4()
+        mock_repo.get_ticket.return_value = GrievanceTicket(
+            id=ticket_id, reporter_name="J", reporter_phone="+1",
+            complaint_type="service", details="Bad",
+            status=GrievanceStatus.CLOSED,
+        )
+        with pytest.raises(ValidationFailedError, match="closed ticket"):
+            await service.escalate_ticket(
+                ticket_id, GrievanceEscalate(escalated_to_admin_id=uuid.uuid4())
+            )
 
     @pytest.mark.asyncio
     async def test_add_comment_ticket_not_found(self, service, mock_repo):

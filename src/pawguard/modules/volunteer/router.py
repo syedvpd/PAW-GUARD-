@@ -114,9 +114,10 @@ async def join_shift(
 )
 async def check_in(
     attendance_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
     service: VolunteerService = Depends(get_volunteer_service),
 ) -> ApiResponse[ShiftAttendanceResponse]:
-    attendance = await service.check_in(attendance_id)
+    attendance = await service.check_in(attendance_id, current_user.id)
     return ApiResponse(
         data=ShiftAttendanceResponse.model_validate(attendance),
         message="Checked in for shift.",
@@ -129,9 +130,10 @@ async def check_in(
 )
 async def check_out(
     attendance_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
     service: VolunteerService = Depends(get_volunteer_service),
 ) -> ApiResponse[ShiftAttendanceResponse]:
-    attendance = await service.check_out(attendance_id)
+    attendance = await service.check_out(attendance_id, current_user.id)
     return ApiResponse(
         data=ShiftAttendanceResponse.model_validate(attendance),
         message="Checked out from shift.",

@@ -24,6 +24,7 @@ from pawguard.modules.grievance.schemas import (
     CommentResponse,
     GrievanceAssign,
     GrievanceCreate,
+    GrievanceEscalate,
     GrievanceListFilter,
     GrievanceResponse,
     GrievanceUpdate,
@@ -88,6 +89,7 @@ async def list_tickets(
 @router.get(
     "/{ticket_id}",
     response_model=ApiResponse[GrievanceResponse],
+    dependencies=[Depends(require_permission("grievance:read"))],
 )
 async def get_ticket(
     ticket_id: uuid.UUID,
@@ -170,6 +172,30 @@ async def assign_ticket(
 
 
 @router.post(
+    "/{ticket_id}/escalate",
+    response_model=ApiResponse[GrievanceResponse],
+    dependencies=[Depends(require_permission("grievance:assign"))],
+)
+async def escalate_ticket(
+    ticket_id: uuid.UUID,
+    payload: GrievanceEscalate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: GrievanceService = Depends(get_grievance_service),
+) -> ApiResponse[GrievanceResponse]:
+    ticket = await service.escalate_ticket(
+        ticket_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(
+        data=GrievanceResponse.model_validate(ticket),
+        message="Ticket escalated.",
+    )
+
+
+@router.post(
     "/{ticket_id}/comments",
     response_model=ApiResponse[CommentResponse],
     status_code=status.HTTP_201_CREATED,
@@ -193,6 +219,7 @@ async def add_comment(
 @router.get(
     "/{ticket_id}/comments",
     response_model=ApiResponse[list[CommentResponse]],
+    dependencies=[Depends(require_permission("grievance:read"))],
 )
 async def list_comments(
     ticket_id: uuid.UUID,

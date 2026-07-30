@@ -10,9 +10,20 @@ from pawguard.core.exceptions import ConflictError, NotFoundError
 from pawguard.core.pagination import PageParams
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
-from pawguard.modules.fleet.models import FleetMaintenance, Vehicle, VehicleStatus
+from pawguard.modules.fleet.models import (
+    EquipmentCheckout,
+    FleetMaintenance,
+    Vehicle,
+    VehicleStatus,
+)
 from pawguard.modules.fleet.repository import FleetRepository
-from pawguard.modules.fleet.schemas import MaintenanceCreate, VehicleCreate, VehicleUpdate
+from pawguard.modules.fleet.schemas import (
+    EquipmentCheckoutCreate,
+    EquipmentReturnRequest,
+    MaintenanceCreate,
+    VehicleCreate,
+    VehicleUpdate,
+)
 from pawguard.modules.fleet.service import FleetService
 from pawguard.services.audit_service import AuditService
 
@@ -204,3 +215,59 @@ class TestFleetService:
         mock_repo.get_vehicle.return_value = None
         with pytest.raises(NotFoundError):
             await service.soft_delete_vehicle(uuid.uuid4())
+
+    @pytest.mark.asyncio
+    async def test_checkout_equipment(self, service, mock_repo):
+        checkout_id = uuid.uuid4()
+        mock_repo.create_equipment_checkout.return_value = EquipmentCheckout(
+            id=checkout_id, equipment_name="Net Gun", checked_out_at=datetime.now(UTC),
+        )
+        payload = EquipmentCheckoutCreate(equipment_name="Net Gun")
+        result = await service.checkout_equipment(payload, actor_id=uuid.uuid4())
+        assert result.equipment_name == "Net Gun"
+        assert result.returned_at is None
+
+    @pytest.mark.asyncio
+    async def test_checkout_equipment_vehicle_not_found(self, service, mock_repo):
+        mock_repo.get_vehicle.return_value = None
+        payload = EquipmentCheckoutCreate(equipment_name="Net Gun", assigned_to_vehicle_id=uuid.uuid4())
+        with pytest.raises(NotFoundError):
+            await service.checkout_equipment(payload)
+
+    @pytest.mark.asyncio
+    async def test_return_equipment(self, service, mock_repo):
+        checkout_id = uuid.uuid4()
+        mock_repo.get_equipment_checkout.return_value = EquipmentCheckout(
+            id=checkout_id, equipment_name="Net Gun", checked_out_at=datetime.now(UTC),
+        )
+        result = await service.return_equipment(
+            checkout_id, EquipmentReturnRequest(), actor_id=uuid.uuid4()
+        )
+        assert result.returned_at is not None
+
+    @pytest.mark.asyncio
+    async def test_return_equipment_not_found(self, service, mock_repo):
+        mock_repo.get_equipment_checkout.return_value = None
+        with pytest.raises(NotFoundError):
+            await service.return_equipment(uuid.uuid4(), EquipmentReturnRequest())
+
+    @pytest.mark.asyncio
+    async def test_return_equipment_already_returned(self, service, mock_repo):
+        checkout_id = uuid.uuid4()
+        mock_repo.get_equipment_checkout.return_value = EquipmentCheckout(
+            id=checkout_id, equipment_name="Net Gun", checked_out_at=datetime.now(UTC),
+            returned_at=datetime.now(UTC),
+        )
+        with pytest.raises(ConflictError, match="already been returned"):
+            await service.return_equipment(checkout_id, EquipmentReturnRequest())
+
+    @pytest.mark.asyncio
+    async def test_list_equipment_checkouts_paginated(self, service, mock_repo):
+        record = EquipmentCheckout(
+            id=uuid.uuid4(), equipment_name="Trap", checked_out_at=datetime.now(UTC),
+            created_at=datetime.now(UTC),
+        )
+        mock_repo.paginate_equipment_checkouts.return_value = ([record], 1)
+        result = await service.list_equipment_checkouts_paginated(PageParams(), SortParams())
+        assert isinstance(result, PaginatedResponse)
+        assert result.meta.total == 1

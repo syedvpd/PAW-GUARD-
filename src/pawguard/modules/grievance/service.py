@@ -1,12 +1,14 @@
 """GrievanceService: owns complaint and feedback business behaviour (RULE-003)."""
 
 import uuid
+from datetime import UTC, datetime, timedelta
 
 from pawguard.core.exceptions import NotFoundError, ValidationFailedError
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginationMeta
 from pawguard.modules.auth.models import AuthAuditEventType
 from pawguard.modules.grievance.models import (
+    DEFAULT_SLA_HOURS,
     GrievanceComment,
     GrievanceStatus,
     GrievanceTicket,
@@ -16,6 +18,7 @@ from pawguard.modules.grievance.repository import GrievanceRepository
 from pawguard.modules.grievance.schemas import (
     CommentCreate,
     GrievanceCreate,
+    GrievanceEscalate,
     GrievanceListFilter,
     GrievanceUpdate,
     ServiceFeedbackCreate,
@@ -49,7 +52,10 @@ class GrievanceService:
         self._audit = audit_service
 
     async def submit_complaint(self, payload: GrievanceCreate) -> GrievanceTicket:
-        return await self._repo.create_ticket(GrievanceTicket(**payload.model_dump()))
+        sla_due_at = datetime.now(UTC) + timedelta(hours=DEFAULT_SLA_HOURS)
+        return await self._repo.create_ticket(
+            GrievanceTicket(**payload.model_dump(), sla_due_at=sla_due_at)
+        )
 
     async def update_ticket(
         self,
@@ -157,6 +163,42 @@ class GrievanceService:
 
         return ticket
 
+    async def escalate_ticket(
+        self,
+        ticket_id: uuid.UUID,
+        payload: GrievanceEscalate,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> GrievanceTicket:
+        ticket = await self._repo.get_ticket(ticket_id)
+        if ticket is None:
+            raise NotFoundError("Grievance ticket not found.")
+        if ticket.status == GrievanceStatus.CLOSED:
+            raise ValidationFailedError("Cannot escalate a closed ticket.")
+
+        ticket.escalation_level += 1
+        ticket.escalated_at = datetime.now(UTC)
+        ticket.escalated_to_admin_id = payload.escalated_to_admin_id
+        await self._repo._session.flush()
+        await self._repo._session.refresh(ticket)
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.GRIEVANCE_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "ticket_id": str(ticket_id),
+                    "escalation_level": ticket.escalation_level,
+                    "escalated_to_admin_id": str(payload.escalated_to_admin_id),
+                    "reason": payload.reason,
+                },
+            )
+
+        return ticket
+
     async def get_ticket(self, ticket_id: uuid.UUID) -> GrievanceTicket:
         ticket = await self._repo.get_ticket(ticket_id)
         if ticket is None:
@@ -207,7 +249,13 @@ class GrievanceService:
             body=payload.body,
             is_internal=payload.is_internal,
         )
-        return await self._repo.create_comment(comment)
+        created = await self._repo.create_comment(comment)
+
+        if ticket.first_responded_at is None:
+            ticket.first_responded_at = datetime.now(UTC)
+            await self._repo._session.flush()
+
+        return created
 
     async def list_comments(self, ticket_id: uuid.UUID) -> list[GrievanceComment]:
         ticket = await self._repo.get_ticket(ticket_id)

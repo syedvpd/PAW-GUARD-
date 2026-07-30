@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from pawguard.core.exceptions import ConflictError, NotFoundError
+from pawguard.core.exceptions import ConflictError, NotFoundError, ValidationFailedError
 from pawguard.core.pagination import PageParams
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
@@ -128,16 +128,70 @@ class TestAdoptionService:
         dog_id = uuid.uuid4()
         app = AdoptionApplication(
             id=app_id, dog_id=dog_id, adopter_id=uuid.uuid4(),
-            status=AdoptionStatus.SUBMITTED, residential_status="owned",
+            status=AdoptionStatus.HOME_CHECK, residential_status="owned",
         )
         mock_repo.get_by_id.side_effect = [app, app]
         mock_repo.get_approved_application_for_dog.return_value = None
-        mock_dog_repo.get_by_id.return_value = DogProfile(
+        dog = DogProfile(
             id=dog_id, registration_number="DOG-001", name="B", breed="Mix",
             gender="female", status=DogStatus.SHELTER, is_adoptable=True,
         )
+        mock_dog_repo.get_by_id.return_value = dog
+        mock_dog_repo.get_by_id_for_update.return_value = dog
         result = await service.update_application_status(app_id, AdoptionStatus.APPROVED, actor_id=uuid.uuid4())
         assert result.status == AdoptionStatus.APPROVED
+        mock_dog_repo.get_by_id_for_update.assert_awaited_once_with(dog_id)
+
+    @pytest.mark.asyncio
+    async def test_update_application_status_invalid_transition(self, service, mock_repo):
+        app_id = uuid.uuid4()
+        app = AdoptionApplication(
+            id=app_id, dog_id=uuid.uuid4(), adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.SUBMITTED, residential_status="owned",
+        )
+        mock_repo.get_by_id.return_value = app
+        with pytest.raises(ValidationFailedError, match="Cannot transition"):
+            await service.update_application_status(app_id, AdoptionStatus.APPROVED)
+
+    @pytest.mark.asyncio
+    async def test_home_check_locks_dog_against_other_applications(
+        self, service, mock_repo, mock_dog_repo
+    ):
+        app_id = uuid.uuid4()
+        dog_id = uuid.uuid4()
+        app = AdoptionApplication(
+            id=app_id, dog_id=dog_id, adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.VETTING, residential_status="owned",
+        )
+        mock_repo.get_by_id.side_effect = [app, app]
+        mock_repo.get_approved_application_for_dog.return_value = None
+        dog = DogProfile(
+            id=dog_id, registration_number="DOG-001", name="B", breed="Mix",
+            gender="female", status=DogStatus.SHELTER, is_adoptable=True,
+        )
+        mock_dog_repo.get_by_id_for_update.return_value = dog
+        result = await service.update_application_status(app_id, AdoptionStatus.HOME_CHECK)
+        assert result.status == AdoptionStatus.HOME_CHECK
+        assert dog.is_adoptable is False
+
+    @pytest.mark.asyncio
+    async def test_home_check_conflicts_with_other_locked_application(
+        self, service, mock_repo, mock_dog_repo
+    ):
+        app_id = uuid.uuid4()
+        dog_id = uuid.uuid4()
+        app = AdoptionApplication(
+            id=app_id, dog_id=dog_id, adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.VETTING, residential_status="owned",
+        )
+        other_app = AdoptionApplication(
+            id=uuid.uuid4(), dog_id=dog_id, adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.HOME_CHECK, residential_status="owned",
+        )
+        mock_repo.get_by_id.return_value = app
+        mock_repo.get_approved_application_for_dog.return_value = other_app
+        with pytest.raises(ConflictError, match="already reached home inspection"):
+            await service.update_application_status(app_id, AdoptionStatus.HOME_CHECK)
 
     @pytest.mark.asyncio
     async def test_get_application(self, service, mock_repo):

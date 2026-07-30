@@ -21,6 +21,9 @@ from pawguard.modules.auth.rbac import require_permission
 from pawguard.modules.fleet.models import VehicleStatus
 from pawguard.modules.fleet.repository import FleetRepository
 from pawguard.modules.fleet.schemas import (
+    EquipmentCheckoutCreate,
+    EquipmentCheckoutResponse,
+    EquipmentReturnRequest,
     MaintenanceCreate,
     MaintenanceResponse,
     VehicleCreate,
@@ -241,4 +244,81 @@ async def bulk_delete_vehicles(
             message=f"{deleted} vehicle(s) deleted.",
             deleted_count=deleted,
         ),
+    )
+
+
+@router.post(
+    "/equipment",
+    response_model=ApiResponse[EquipmentCheckoutResponse],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("vehicle:update"))],
+)
+async def checkout_equipment(
+    payload: EquipmentCheckoutCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FleetService = Depends(get_fleet_service),
+) -> ApiResponse[EquipmentCheckoutResponse]:
+    record = await service.checkout_equipment(
+        payload, actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(
+        data=EquipmentCheckoutResponse.model_validate(record),
+        message="Equipment checked out.",
+    )
+
+
+@router.get(
+    "/equipment",
+    response_model=PaginatedResponse[EquipmentCheckoutResponse],
+    dependencies=[Depends(require_permission("vehicle:read"))],
+)
+async def list_equipment_checkouts(
+    page: PageParams = Depends(page_params),
+    sort: SortParams = Depends(sort_params),
+    search: str | None = Query(None, description="Search by equipment name, notes"),
+    outstanding_only: bool = Query(False, description="Only show equipment not yet returned"),
+    service: FleetService = Depends(get_fleet_service),
+) -> PaginatedResponse[EquipmentCheckoutResponse]:
+    return await service.list_equipment_checkouts_paginated(
+        page=page,
+        sort=sort,
+        search_term=search,
+        outstanding_only=outstanding_only,
+    )
+
+
+@router.get(
+    "/equipment/{checkout_id}",
+    response_model=ApiResponse[EquipmentCheckoutResponse],
+    dependencies=[Depends(require_permission("vehicle:read"))],
+)
+async def get_equipment_checkout(
+    checkout_id: uuid.UUID,
+    service: FleetService = Depends(get_fleet_service),
+) -> ApiResponse[EquipmentCheckoutResponse]:
+    record = await service.get_equipment_checkout(checkout_id)
+    return ApiResponse(data=EquipmentCheckoutResponse.model_validate(record))
+
+
+@router.post(
+    "/equipment/{checkout_id}/return",
+    response_model=ApiResponse[EquipmentCheckoutResponse],
+    dependencies=[Depends(require_permission("vehicle:update"))],
+)
+async def return_equipment(
+    checkout_id: uuid.UUID,
+    payload: EquipmentReturnRequest,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FleetService = Depends(get_fleet_service),
+) -> ApiResponse[EquipmentCheckoutResponse]:
+    record = await service.return_equipment(
+        checkout_id, payload, actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(
+        data=EquipmentCheckoutResponse.model_validate(record),
+        message="Equipment returned.",
     )

@@ -33,11 +33,32 @@ class DogRepository:
         stmt = select(DogProfile).where(DogProfile.id == dog_id, DogProfile.deleted_at.is_(None))
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    async def get_by_id_for_update(self, dog_id: uuid.UUID) -> DogProfile | None:
+        """Locks the dog row (SELECT ... FOR UPDATE) for the rest of the
+        transaction - used to serialize concurrent adoption approvals on the
+        same dog so the exclusivity check-then-act isn't a race condition."""
+        stmt = (
+            select(DogProfile)
+            .where(DogProfile.id == dog_id, DogProfile.deleted_at.is_(None))
+            .with_for_update()
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
     async def get_by_registration(self, reg_num: str) -> DogProfile | None:
         stmt = select(DogProfile).where(
             DogProfile.registration_number == reg_num, DogProfile.deleted_at.is_(None)
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def count_by_kennel(
+        self, kennel_id: uuid.UUID, exclude_dog_id: uuid.UUID | None = None
+    ) -> int:
+        stmt = select(func.count()).select_from(DogProfile).where(
+            DogProfile.kennel_id == kennel_id, DogProfile.deleted_at.is_(None)
+        )
+        if exclude_dog_id is not None:
+            stmt = stmt.where(DogProfile.id != exclude_dog_id)
+        return (await self._session.execute(stmt)).scalar_one()
 
     async def list_paginated(
         self,

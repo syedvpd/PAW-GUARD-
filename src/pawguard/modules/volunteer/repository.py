@@ -107,6 +107,13 @@ class VolunteerRepository:
         stmt = select(VolunteerShift).where(VolunteerShift.id == shift_id)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    async def get_shift_by_id_for_update(self, shift_id: uuid.UUID) -> VolunteerShift | None:
+        """Locks the shift row (SELECT ... FOR UPDATE) for the rest of the
+        transaction - serializes concurrent joins near capacity so the
+        check-then-act in join_shift isn't a race condition."""
+        stmt = select(VolunteerShift).where(VolunteerShift.id == shift_id).with_for_update()
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
     async def count_shifts(self, *, role_name: str | None = None) -> int:
         stmt = select(func.count(VolunteerShift.id))
         if role_name:

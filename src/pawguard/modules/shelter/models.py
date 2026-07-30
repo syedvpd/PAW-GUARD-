@@ -104,6 +104,21 @@ class FacilityTransfer(UUIDPkMixin, TimestampMixin, Base):
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Dual confirmation: a transfer only completes once both the sending and
+    # the receiving facility have separately confirmed it (PRR 3.6).
+    sender_confirmed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    sender_confirmed_by: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    receiver_confirmed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    receiver_confirmed_by: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
 
 class DailyCareLog(UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "daily_care_logs"

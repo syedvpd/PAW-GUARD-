@@ -7,10 +7,11 @@ StoredFile metadata records in the database.
 import uuid
 from datetime import UTC, datetime
 
-from pawguard.core.exceptions import NotFoundError
+from pawguard.core.exceptions import NotFoundError, ValidationFailedError
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
+from pawguard.core.upload import MAX_FILE_SIZE_BYTES, UploadError, verify_mime_type
 from pawguard.modules.storage.models import StoredFile
 from pawguard.modules.storage.repository import StorageRepository
 from pawguard.modules.storage.schemas import (
@@ -60,9 +61,35 @@ class StorageService:
         )
 
     async def confirm_upload(self, file_id: uuid.UUID) -> StoredFile:
+        """Verifies the object actually uploaded to S3 before trusting it.
+
+        The presigned-URL flow means the client uploads bytes straight to S3;
+        the declared mime_type/file_size on StoredFile are otherwise just
+        client-supplied claims. This re-checks real size and file-signature
+        (magic bytes) against the object S3 received, deleting it and
+        rejecting confirmation if it doesn't match what was declared.
+        """
         stored = await self._repo.get_by_id(file_id)
         if stored is None:
             raise NotFoundError("Stored file not found.")
+
+        try:
+            actual_size = self._s3.get_object_size(object_key=stored.object_key)
+            if actual_size > MAX_FILE_SIZE_BYTES:
+                raise UploadError(
+                    f"Uploaded file exceeds maximum size of "
+                    f"{MAX_FILE_SIZE_BYTES // (1024 * 1024)} MB (got {actual_size} bytes)."
+                )
+            prefix = self._s3.get_object_prefix_bytes(object_key=stored.object_key)
+            detected_mime = verify_mime_type(prefix, stored.mime_type)
+        except UploadError as exc:
+            self._s3.delete_object(object_key=stored.object_key)
+            await self._repo._session.delete(stored)
+            await self._repo._session.flush()
+            raise ValidationFailedError(str(exc)) from exc
+
+        stored.mime_type = detected_mime
+        stored.file_size = actual_size
         stored.is_uploaded = True
         stored.uploaded_at = datetime.now(UTC)
         await self._repo._session.flush()

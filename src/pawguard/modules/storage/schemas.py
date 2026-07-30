@@ -3,18 +3,29 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from pawguard.core.upload import ALLOWED_MIME_TYPES, MAX_FILE_SIZE_BYTES
 from pawguard.modules.storage.models import FileFolder
 
 
 class StoredFileCreate(BaseModel):
     original_filename: str = Field(..., min_length=1, max_length=512)
     mime_type: str = Field(..., min_length=1, max_length=128)
-    file_size: int = Field(..., ge=0)
+    file_size: int = Field(..., gt=0, le=MAX_FILE_SIZE_BYTES)
     folder: FileFolder
     entity_type: str | None = Field(None, max_length=64)
     entity_id: uuid.UUID | None = None
+
+    @field_validator("mime_type")
+    @classmethod
+    def validate_mime_type(cls, value: str) -> str:
+        if value not in ALLOWED_MIME_TYPES:
+            raise ValueError(
+                f"Unsupported file type '{value}'. "
+                f"Allowed: {', '.join(sorted(ALLOWED_MIME_TYPES))}."
+            )
+        return value
 
 
 class StoredFileUpdate(BaseModel):

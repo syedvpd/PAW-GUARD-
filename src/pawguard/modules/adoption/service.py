@@ -3,7 +3,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from pawguard.core.exceptions import ConflictError, NotFoundError
+from pawguard.core.exceptions import ConflictError, NotFoundError, ValidationFailedError
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
@@ -20,6 +20,20 @@ from pawguard.modules.dog.repository import DogRepository
 from pawguard.services.audit_service import AuditService
 
 
+# Explicit state machine for the 6-phase vetting pipeline (PRR 3.7). REJECTED
+# is reachable from any pre-completion state (an application can be rejected
+# at document review, interview, or home inspection); nothing is reachable
+# from a terminal state.
+VALID_STATUS_TRANSITIONS: dict[AdoptionStatus, set[AdoptionStatus]] = {
+    AdoptionStatus.SUBMITTED: {AdoptionStatus.VETTING, AdoptionStatus.REJECTED},
+    AdoptionStatus.VETTING: {AdoptionStatus.HOME_CHECK, AdoptionStatus.REJECTED},
+    AdoptionStatus.HOME_CHECK: {AdoptionStatus.APPROVED, AdoptionStatus.REJECTED},
+    AdoptionStatus.APPROVED: {AdoptionStatus.COMPLETED, AdoptionStatus.REJECTED},
+    AdoptionStatus.REJECTED: set(),
+    AdoptionStatus.COMPLETED: set(),
+}
+
+
 class AdoptionService:
     def __init__(
         self,
@@ -30,6 +44,22 @@ class AdoptionService:
         self._repo = repository
         self._dog_repo = dog_repo
         self._audit = audit_service
+
+    @staticmethod
+    def _check_transition(old_status: AdoptionStatus, new_status: AdoptionStatus) -> None:
+        if old_status == new_status:
+            return
+        # old_status may come back as a plain str after a session refresh
+        # (StrEnum hashes/compares equal to its string value either way, so
+        # the dict lookup and comparisons above are safe) - coerce explicitly
+        # before formatting so `.value` access below can't crash.
+        old_status = AdoptionStatus(old_status)
+        allowed = VALID_STATUS_TRANSITIONS.get(old_status, set())
+        if new_status not in allowed:
+            raise ValidationFailedError(
+                f"Cannot transition adoption application from '{old_status.value}' "
+                f"to '{new_status.value}'."
+            )
 
     async def apply_for_adoption(
         self,
@@ -95,15 +125,22 @@ class AdoptionService:
 
         if "status" in update_data:
             new_status = update_data["status"]
+            self._check_transition(app.status, new_status)
 
-            if new_status in (AdoptionStatus.APPROVED, AdoptionStatus.COMPLETED):
+            if new_status in (
+                AdoptionStatus.HOME_CHECK, AdoptionStatus.APPROVED, AdoptionStatus.COMPLETED,
+            ):
+                # Lock the dog row first: this serializes concurrent approvals
+                # for the same dog so the check-then-act below can't race.
+                dog = await self._dog_repo.get_by_id_for_update(app.dog_id)
+
                 existing_approved = await self._repo.get_approved_application_for_dog(app.dog_id)
                 if existing_approved is not None and existing_approved.id != app_id:
                     raise ConflictError(
-                        "Another application has already been approved for this dog."
+                        "Another application has already reached home inspection or "
+                        "approval for this dog."
                     )
 
-                dog = await self._dog_repo.get_by_id(app.dog_id)
                 if dog is not None:
                     dog.is_adoptable = False
                     if new_status == AdoptionStatus.COMPLETED:
@@ -144,13 +181,20 @@ class AdoptionService:
             raise NotFoundError("Adoption application not found.")
 
         old_status = app.status
+        self._check_transition(old_status, status)
 
-        if status in (AdoptionStatus.APPROVED, AdoptionStatus.COMPLETED):
+        if status in (AdoptionStatus.HOME_CHECK, AdoptionStatus.APPROVED, AdoptionStatus.COMPLETED):
+            # Lock the dog row first: this serializes concurrent approvals for
+            # the same dog so the check-then-act below can't race.
+            dog = await self._dog_repo.get_by_id_for_update(app.dog_id)
+
             existing_approved = await self._repo.get_approved_application_for_dog(app.dog_id)
             if existing_approved is not None and existing_approved.id != app_id:
-                raise ConflictError("Another application has already been approved for this dog.")
+                raise ConflictError(
+                    "Another application has already reached home inspection or "
+                    "approval for this dog."
+                )
 
-            dog = await self._dog_repo.get_by_id(app.dog_id)
             if dog is not None:
                 dog.is_adoptable = False
                 if status == AdoptionStatus.COMPLETED:
@@ -173,7 +217,7 @@ class AdoptionService:
                 user_agent="",
                 metadata={
                     "adoption_id": str(app_id),
-                    "old_status": old_status.value,
+                    "old_status": AdoptionStatus(old_status).value,
                     "new_status": status.value,
                 },
             )
