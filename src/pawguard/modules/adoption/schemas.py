@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -55,6 +56,37 @@ class AdoptionApplicationResponse(BaseModel):
     adopter: UserProfile | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class AdoptionScoreCreate(BaseModel):
+    home_environment_score: int = Field(..., ge=1, le=10)
+    pet_care_knowledge_score: int = Field(..., ge=1, le=10)
+    financial_readiness_score: int = Field(..., ge=1, le=10)
+    lifestyle_compatibility_score: int = Field(..., ge=1, le=10)
+    recommendation: str = Field(..., min_length=1, max_length=32)
+    notes: str | None = None
+
+
+class AdoptionScoreResponse(BaseModel):
+    id: uuid.UUID
+    application_id: uuid.UUID
+    scored_by_id: uuid.UUID
+    home_environment_score: int
+    pet_care_knowledge_score: int
+    financial_readiness_score: int
+    lifestyle_compatibility_score: int
+    overall_score: Decimal
+    recommendation: str
+    notes: str | None
+    scored_at: datetime
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AdoptionApplicationDetail(AdoptionApplicationResponse):
+    scores: list[AdoptionScoreResponse] = []
 
 
 class AdoptionApplicationListQueryParams(BaseModel):

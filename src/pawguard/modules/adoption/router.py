@@ -25,6 +25,8 @@ from pawguard.modules.adoption.schemas import (
     AdoptionApplicationCreate,
     AdoptionApplicationResponse,
     AdoptionApplicationUpdate,
+    AdoptionScoreCreate,
+    AdoptionScoreResponse,
     AdoptionStatusUpdate,
 )
 from pawguard.modules.adoption.service import AdoptionService
@@ -156,6 +158,46 @@ async def update_application_status(
     return ApiResponse(
         data=AdoptionApplicationResponse.model_validate(app),
         message="Adoption application status updated successfully.",
+    )
+
+
+@router.post(
+    "/{app_id}/scores",
+    response_model=ApiResponse[AdoptionScoreResponse],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("adoption:process"))],
+)
+async def add_score(
+    app_id: uuid.UUID,
+    payload: AdoptionScoreCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: AdoptionService = Depends(get_adoption_service),
+) -> ApiResponse[AdoptionScoreResponse]:
+    score = await service.add_score(
+        app_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(
+        data=AdoptionScoreResponse.model_validate(score),
+        message="Adoption score added successfully.",
+    )
+
+
+@router.get(
+    "/{app_id}/scores",
+    response_model=ApiResponse[list[AdoptionScoreResponse]],
+)
+async def get_scores(
+    app_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: AdoptionService = Depends(get_adoption_service),
+) -> ApiResponse[list[AdoptionScoreResponse]]:
+    scores = await service.get_scores(app_id)
+    return ApiResponse(
+        data=[AdoptionScoreResponse.model_validate(s) for s in scores],
     )
 
 

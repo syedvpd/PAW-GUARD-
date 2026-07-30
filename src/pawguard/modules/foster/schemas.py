@@ -10,6 +10,36 @@ from pawguard.modules.dog.schemas import DogProfileResponse
 from pawguard.modules.foster.models import FosterStatus
 
 
+class FosterProgressLogCreate(BaseModel):
+    weight_kg: float | None = Field(None, ge=0, le=999.99)
+    behavior_notes: str | None = None
+    feeding_notes: str | None = None
+    medication_notes: str | None = None
+    exercise_minutes: int | None = Field(None, ge=0)
+    photo_urls: list[str] | None = None
+    mood_rating: int | None = Field(None, ge=1, le=5)
+    notes: str | None = None
+
+
+class FosterProgressLogResponse(BaseModel):
+    id: uuid.UUID
+    placement_id: uuid.UUID
+    tracked_by_id: uuid.UUID
+    weight_kg: float | None
+    behavior_notes: str | None
+    feeding_notes: str | None
+    medication_notes: str | None
+    exercise_minutes: int | None
+    photo_urls: list[str] | None
+    mood_rating: int | None
+    notes: str | None
+    logged_at: datetime
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class FosterProfileCreate(BaseModel):
     preferences: str | None = None
     max_capacity: int = Field(1, ge=1)

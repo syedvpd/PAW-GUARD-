@@ -1,11 +1,12 @@
 import os
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from pawguard.modules.adoption.models import AdoptionApplication
-from pawguard.modules.dog.models import DogProfile
+from pawguard.core.pii import mask_report_data
+from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
+from pawguard.modules.dog.models import DogProfile, DogStatus
 from pawguard.modules.donation.models import Donation
 from pawguard.modules.finance.models import FinancialTransaction
 from pawguard.modules.foster.models import FosterPlacement
@@ -19,7 +20,7 @@ from pawguard.modules.reports.renderers import (
     report_filename,
 )
 from pawguard.modules.reports.schemas import ReportFormat, ReportType
-from pawguard.modules.rescue.models import RescueRequest
+from pawguard.modules.rescue.models import RescueDispatch, RescueRequest
 from pawguard.modules.volunteer.models import VolunteerProfile
 
 
@@ -160,19 +161,22 @@ class ReportService:
                 AdoptionApplication.status == filters["status"]
             )
         results = (await self._session.execute(stmt)).scalars().all()
+        headers = [
+            "ID", "Dog ID", "Adopter ID", "Status",
+            "Submitted At", "Completed At",
+        ]
+        rows = [
+            [str(a.id), str(a.dog_id), str(a.adopter_id), a.status,
+             a.created_at.date(),
+             a.completed_at.date() if a.completed_at else ""]
+            for a in results
+        ]
+        rows = mask_report_data(rows, headers, {"Adopter Name", "Adopter Email", "Adopter Phone"})
         return {
             "title": "Adoption Report",
             "subtitle": f"{start or 'N/A'} to {end or 'N/A'}",
-            "headers": [
-                "ID", "Dog ID", "Adopter ID", "Status",
-                "Submitted At", "Completed At",
-            ],
-            "rows": [
-                [str(a.id), str(a.dog_id), str(a.adopter_id), a.status,
-                 a.created_at.date(),
-                 a.completed_at.date() if a.completed_at else ""]
-                for a in results
-            ],
+            "headers": headers,
+            "rows": rows,
         }
 
     async def _medical_report(
@@ -230,18 +234,21 @@ class ReportService:
         if filters and "status" in filters:
             stmt = stmt.where(RescueRequest.status == filters["status"])
         results = (await self._session.execute(stmt)).scalars().all()
+        headers = [
+            "ID", "Ticket", "Status", "Reporter",
+            "Location", "Animal Count", "Created",
+        ]
+        rows = [
+            [str(r.id), r.ticket_number, r.status, r.reporter_name,
+             r.location_address, r.animal_count, r.created_at.date()]
+            for r in results
+        ]
+        rows = mask_report_data(rows, headers, {"Reporter"})
         return {
             "title": "Rescue Report",
             "subtitle": f"{start or 'N/A'} to {end or 'N/A'}",
-            "headers": [
-                "ID", "Ticket", "Status", "Reporter",
-                "Location", "Animal Count", "Created",
-            ],
-            "rows": [
-                [str(r.id), r.ticket_number, r.status, r.reporter_name,
-                 r.location_address, r.animal_count, r.created_at.date()]
-                for r in results
-            ],
+            "headers": headers,
+            "rows": rows,
         }
 
     async def _finance_report(
@@ -281,14 +288,112 @@ class ReportService:
             ],
         }
 
+    @staticmethod
+    def _months_in_range(start: date | None, end: date | None) -> int:
+        if not start or not end:
+            return 1
+        return max(1, (end.year - start.year) * 12 + end.month - start.month + 1)
+
     async def _staff_performance_report(
         self, start: date | None, end: date | None, filters: dict | None
     ) -> dict:
+        adoption_stmt = select(func.count(AdoptionApplication.id)).where(
+            AdoptionApplication.status == AdoptionStatus.COMPLETED
+        )
+        if start:
+            adoption_stmt = adoption_stmt.where(AdoptionApplication.created_at >= start)
+        if end:
+            adoption_stmt = adoption_stmt.where(AdoptionApplication.created_at <= end)
+        total_adoptions = (await self._session.execute(adoption_stmt)).scalar() or 0
+
+        months = self._months_in_range(start, end)
+        adoption_velocity = total_adoptions / months
+
+        active_foster_stmt = select(func.count(FosterPlacement.id)).where(
+            FosterPlacement.is_active.is_(True)
+        )
+        active_foster = (await self._session.execute(active_foster_stmt)).scalar() or 0
+
+        total_placements_stmt = select(func.count(FosterPlacement.id))
+        total_placements = (await self._session.execute(total_placements_stmt)).scalar() or 0
+        returned_placements_stmt = select(func.count(FosterPlacement.id)).where(
+            FosterPlacement.returned_at.isnot(None)
+        )
+        returned_placements = (await self._session.execute(returned_placements_stmt)).scalar() or 0
+        foster_efficiency = (
+            (returned_placements / total_placements * 100) if total_placements else 0.0
+        )
+
+        rescue_stmt = select(func.count(RescueRequest.id))
+        if start:
+            rescue_stmt = rescue_stmt.where(RescueRequest.created_at >= start)
+        if end:
+            rescue_stmt = rescue_stmt.where(RescueRequest.created_at <= end)
+        rescue_count = (await self._session.execute(rescue_stmt)).scalar() or 0
+
+        avg_response_stmt = select(
+            func.avg(
+                func.extract(
+                    "epoch",
+                    RescueDispatch.dispatched_at - RescueRequest.created_at,
+                ) / 3600.0
+            )
+        ).select_from(RescueDispatch).join(
+            RescueRequest, RescueDispatch.rescue_request_id == RescueRequest.id
+        )
+        if start:
+            avg_response_stmt = avg_response_stmt.where(RescueRequest.created_at >= start)
+        if end:
+            avg_response_stmt = avg_response_stmt.where(RescueRequest.created_at <= end)
+        avg_response_time = (await self._session.execute(avg_response_stmt)).scalar()
+        avg_response_time = round(avg_response_time, 1) if avg_response_time is not None else None
+
+        medical_stmt = select(func.count(MedicalTreatment.id))
+        if start:
+            medical_stmt = medical_stmt.where(MedicalTreatment.treatment_date >= start)
+        if end:
+            medical_stmt = medical_stmt.where(MedicalTreatment.treatment_date <= end)
+        medical_count = (await self._session.execute(medical_stmt)).scalar() or 0
+
+        dogs_in_care_stmt = select(func.count(DogProfile.id)).where(
+            DogProfile.status != DogStatus.ADOPTED
+        )
+        dogs_in_care = (await self._session.execute(dogs_in_care_stmt)).scalar() or 0
+
+        avg_los_stmt = select(
+            func.avg(
+                func.extract("epoch", func.now() - DogProfile.created_at) / 86400.0
+            )
+        ).where(DogProfile.status != DogStatus.ADOPTED)
+        avg_los = (await self._session.execute(avg_los_stmt)).scalar()
+        avg_los = round(avg_los, 1) if avg_los is not None else None
+
+        volunteer_stmt = select(func.count(VolunteerProfile.id)).where(
+            VolunteerProfile.status == "active"
+        )
+        volunteer_count = (await self._session.execute(volunteer_stmt)).scalar() or 0
+
         return {
             "title": "Staff Performance Report",
+            "subtitle": f"{start or 'N/A'} to {end or 'N/A'}",
             "headers": ["Metric", "Value"],
             "rows": [
-                ["Report generation", "Pending implementation"],
+                ["Total Adoptions", str(total_adoptions)],
+                ["Adoption Velocity", f"{adoption_velocity:.1f} / month"],
+                ["Active Foster Placements", str(active_foster)],
+                ["Foster Efficiency Rate", f"{foster_efficiency:.1f}%"],
+                ["Rescue Response Count", str(rescue_count)],
+                [
+                    "Avg Rescue Response Time",
+                    f"{avg_response_time}h" if avg_response_time is not None else "N/A",
+                ],
+                ["Medical Treatments This Period", str(medical_count)],
+                ["Total Dogs in Care", str(dogs_in_care)],
+                [
+                    "Avg Length of Stay",
+                    f"{avg_los} days" if avg_los is not None else "N/A",
+                ],
+                ["Volunteer Hours", str(volunteer_count)],
             ],
         }
 

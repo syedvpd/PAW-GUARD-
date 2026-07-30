@@ -152,6 +152,9 @@ class TestReportService:
 
     @pytest.mark.asyncio
     async def test_staff_performance_report(self, service, mock_session):
+        mock_session.execute = AsyncMock(side_effect=[
+            MagicMock(scalar=MagicMock(return_value=v)) for v in [0, 1, 0, 0, 0, 0, 0, 0, 0, 0]
+        ])
         result = await service.generate_report(
             ReportType.STAFF_PERFORMANCE, ReportFormat.CSV,
         )
@@ -190,3 +193,55 @@ class TestReportService:
             filters={"status": "success"},
         )
         assert result is not None
+
+    @pytest.mark.asyncio
+    async def test_rescue_report_with_pii_masking(self, service, mock_session):
+        mock_rescue = MagicMock()
+        mock_rescue.id = "res-1"
+        mock_rescue.ticket_number = "TKT-001"
+        mock_rescue.status = "reported"
+        mock_rescue.reporter_name = "John Smith"
+        mock_rescue.location_address = "123 Main St"
+        mock_rescue.animal_count = 2
+        mock_rescue.created_at.date.return_value = "2026-07-01"
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [mock_rescue]
+        mock_session.execute.return_value = mock_result
+        result = await service._rescue_report(None, None, None)
+        row = result["rows"][0]
+        assert row[3] != "John Smith"
+        assert "***" in row[3]
+
+
+class TestStaffPerformanceReport:
+    @pytest.fixture
+    def mock_session(self):
+        session = AsyncMock()
+        session.execute = AsyncMock()
+        return session
+
+    @pytest.fixture
+    def service(self, mock_session):
+        return ReportService(mock_session)
+
+    @pytest.mark.asyncio
+    async def test_staff_performance_report_returns_metrics(self, service, mock_session):
+        mock_session.execute = AsyncMock(side_effect=[
+            MagicMock(scalar=MagicMock(return_value=v))
+            for v in [42, 12, 20, 15, 8, 3.5, 25, 50, 45.2, 30]
+        ])
+        result = await service._staff_performance_report(None, None, None)
+        assert result["title"] == "Staff Performance Report"
+        assert result["headers"] == ["Metric", "Value"]
+        assert len(result["rows"]) == 10
+        metric_names = [r[0] for r in result["rows"]]
+        assert "Total Adoptions" in metric_names
+        assert "Adoption Velocity" in metric_names
+        assert "Active Foster Placements" in metric_names
+        assert "Foster Efficiency Rate" in metric_names
+        assert "Rescue Response Count" in metric_names
+        assert "Avg Rescue Response Time" in metric_names
+        assert "Medical Treatments This Period" in metric_names
+        assert "Total Dogs in Care" in metric_names
+        assert "Avg Length of Stay" in metric_names
+        assert "Volunteer Hours" in metric_names

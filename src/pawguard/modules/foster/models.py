@@ -5,7 +5,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -69,3 +69,30 @@ class FosterPlacement(UUIDPkMixin, TimestampMixin, Base):
 
     foster: Mapped["FosterProfile"] = relationship(back_populates="placements")
     dog: Mapped["DogProfile"] = relationship("DogProfile", lazy="joined")
+    progress_logs: Mapped[list["FosterProgressLog"]] = relationship(
+        back_populates="placement", cascade="all, delete-orphan"
+    )
+
+
+class FosterProgressLog(UUIDPkMixin, TimestampMixin, Base):
+    __tablename__ = "foster_progress_logs"
+
+    placement_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("foster_placements.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    tracked_by_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=False
+    )
+    weight_kg: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    behavior_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    feeding_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    medication_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    exercise_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    photo_urls: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    mood_rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    logged_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    placement: Mapped["FosterPlacement"] = relationship(back_populates="progress_logs")

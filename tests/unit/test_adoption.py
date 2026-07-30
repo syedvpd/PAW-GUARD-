@@ -15,6 +15,7 @@ from pawguard.modules.adoption.repository import AdoptionRepository
 from pawguard.modules.adoption.schemas import (
     AdoptionApplicationCreate,
     AdoptionApplicationUpdate,
+    AdoptionScoreCreate,
 )
 from pawguard.modules.adoption.service import AdoptionService
 from pawguard.modules.dog.models import DogProfile, DogStatus
@@ -237,3 +238,63 @@ class TestAdoptionService:
         mock_repo.get_by_id.return_value = None
         with pytest.raises(NotFoundError):
             await service.soft_delete_application(uuid.uuid4())
+
+
+class TestAdoptionScores:
+    @pytest.fixture
+    def mock_repo(self):
+        repo = AsyncMock(spec=AdoptionRepository)
+        repo._session = AsyncMock()
+        return repo
+
+    @pytest.fixture
+    def mock_dog_repo(self):
+        return AsyncMock(spec=DogRepository)
+
+    @pytest.fixture
+    def mock_audit(self):
+        return AsyncMock(spec=AuditService)
+
+    @pytest.fixture
+    def service(self, mock_repo, mock_dog_repo, mock_audit):
+        return AdoptionService(mock_repo, mock_dog_repo, mock_audit)
+
+    @pytest.mark.asyncio
+    async def test_add_score_success(self, service, mock_repo, mock_audit):
+        app_id = uuid.uuid4()
+        actor_id = uuid.uuid4()
+        mock_repo.get_by_id.return_value = AdoptionApplication(
+            id=app_id, dog_id=uuid.uuid4(), adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.SUBMITTED, residential_status="owned",
+        )
+
+        def _capture_score(score):
+            score.id = uuid.uuid4()
+            return score
+
+        mock_repo.create_score.side_effect = _capture_score
+
+        payload = AdoptionScoreCreate(
+            home_environment_score=8,
+            pet_care_knowledge_score=7,
+            financial_readiness_score=6,
+            lifestyle_compatibility_score=9,
+            recommendation="approved",
+        )
+        result = await service.add_score(app_id, payload, actor_id=actor_id)
+        assert result.overall_score == 7.5
+        assert result.recommendation == "approved"
+        assert result.scored_by_id == actor_id
+        assert result.application_id == app_id
+        mock_audit.record.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_get_scores_empty(self, service, mock_repo):
+        app_id = uuid.uuid4()
+        mock_repo.get_by_id.return_value = AdoptionApplication(
+            id=app_id, dog_id=uuid.uuid4(), adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.SUBMITTED, residential_status="owned",
+        )
+        mock_repo.get_scores_for_application.return_value = []
+        result = await service.get_scores(app_id)
+        assert result == []
