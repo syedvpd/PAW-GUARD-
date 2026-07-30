@@ -23,6 +23,9 @@ from pawguard.modules.shelter import models as shelter_models  # noqa: F401
 from pawguard.modules.inventory import models as inventory_models  # noqa: F401
 from pawguard.modules.fleet import models as fleet_models  # noqa: F401
 from pawguard.modules.grievance import models as grievance_models  # noqa: F401
+from pawguard.modules.notifications import models as notification_models  # noqa: F401
+from pawguard.modules.portal import models as portal_models  # noqa: F401
+from pawguard.modules.finance import models as finance_models  # noqa: F401
 
 config = context.config
 
