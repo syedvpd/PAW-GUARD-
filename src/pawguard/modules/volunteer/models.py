@@ -39,8 +39,11 @@ class VolunteerProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     emergency_contact_name: Mapped[str] = mapped_column(String(255), nullable=False)
     emergency_contact_phone: Mapped[str] = mapped_column(String(32), nullable=False)
 
-    skills: Mapped[str | None] = mapped_column(Text, nullable=True)  # comma separated e.g. "Grooming,Transport"
-    availability: Mapped[str | None] = mapped_column(String(255), nullable=True)  # "Weekends", "Evenings", etc.
+    # comma separated e.g. "Grooming,Transport"
+    skills: Mapped[str | None] = mapped_column(Text, nullable=True)
+    availability: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )  # "Weekends", "Evenings", etc.
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     user: Mapped["User"] = relationship("User", lazy="joined")
@@ -52,8 +55,11 @@ class VolunteerProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
 class VolunteerShift(UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "volunteer_shifts"
 
-    shelter_facility_id: Mapped[uuid.UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
-    role_name: Mapped[str] = mapped_column(String(64), nullable=False)  # Feeding, Cleaning, Walking, Admin
+    shelter_facility_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=True
+    )
+    # Feeding, Cleaning, Walking, Admin
+    role_name: Mapped[str] = mapped_column(String(64), nullable=False)
     start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     capacity: Mapped[int] = mapped_column(Integer, default=5, nullable=False)

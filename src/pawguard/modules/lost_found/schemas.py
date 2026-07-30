@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from pawguard.modules.auth.schemas import UserProfile
 from pawguard.modules.lost_found.models import MatchStatus, ReportStatus, Species
@@ -39,8 +39,7 @@ class LostReportResponse(BaseModel):
     created_at: datetime
     user: UserProfile | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class FoundReportCreate(BaseModel):
@@ -69,8 +68,7 @@ class FoundReportResponse(BaseModel):
     created_at: datetime
     user: UserProfile | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ReportMatchResponse(BaseModel):
@@ -83,5 +81,4 @@ class ReportMatchResponse(BaseModel):
     lost_report: LostReportResponse | None = None
     found_report: FoundReportResponse | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

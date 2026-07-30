@@ -1,4 +1,7 @@
-"""API router for the Medical, Surgical & Veterinary Suite module. Routers only validate and call services."""
+"""API router for the Medical, Surgical & Veterinary Suite module.
+
+Routers only validate and call services.
+"""
 
 import uuid
 from typing import Any

@@ -70,6 +70,14 @@ class Settings(BaseSettings):
     refresh_rate_limit_per_minute: int = 30
     password_reset_rate_limit_per_hour: int = 5
 
+    # --- Payments ---
+    # Provider is swappable: implement PaymentGateway and register it in
+    # core/payments/__init__.py, then flip this one setting.
+    payment_provider: str = "razorpay"
+    razorpay_key_id: str = ""
+    razorpay_key_secret: str = ""
+    razorpay_webhook_secret: str = ""
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def allowed_hosts_list(self) -> list[str]:

@@ -20,11 +20,20 @@ from pawguard.services.audit_service import AuditService
 
 
 class FleetService:
-    def __init__(self, repository: FleetRepository, audit_service: AuditService | None = None) -> None:
+    def __init__(
+        self,
+        repository: FleetRepository,
+        audit_service: AuditService | None = None,
+    ) -> None:
         self._repo = repository
         self._audit = audit_service
 
-    async def create_vehicle(self, payload: VehicleCreate, actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> Vehicle:
+    async def create_vehicle(
+        self,
+        payload: VehicleCreate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> Vehicle:
         if await self._repo.get_vehicle_by_plate(payload.license_plate) is not None:
             raise ConflictError(f"Vehicle with plate '{payload.license_plate}' already exists.")
         vehicle = await self._repo.create_vehicle(Vehicle(**payload.model_dump()))
@@ -38,7 +47,13 @@ class FleetService:
             )
         return vehicle
 
-    async def update_vehicle(self, vehicle_id: uuid.UUID, payload: VehicleUpdate, actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> Vehicle:
+    async def update_vehicle(
+        self,
+        vehicle_id: uuid.UUID,
+        payload: VehicleUpdate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> Vehicle:
         vehicle = await self._repo.get_vehicle(vehicle_id)
         if vehicle is None:
             raise NotFoundError("Vehicle not found.")
@@ -59,7 +74,13 @@ class FleetService:
             )
         return vehicle
 
-    async def update_vehicle_status(self, vehicle_id: uuid.UUID, status: VehicleStatus, actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> Vehicle:
+    async def update_vehicle_status(
+        self,
+        vehicle_id: uuid.UUID,
+        status: VehicleStatus,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> Vehicle:
         vehicle = await self._repo.get_vehicle(vehicle_id)
         if vehicle is None:
             raise NotFoundError("Vehicle not found.")
@@ -82,7 +103,12 @@ class FleetService:
             raise NotFoundError("Vehicle not found.")
         return vehicle
 
-    async def soft_delete_vehicle(self, vehicle_id: uuid.UUID, actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> None:
+    async def soft_delete_vehicle(
+        self,
+        vehicle_id: uuid.UUID,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> None:
         vehicle = await self._repo.get_vehicle(vehicle_id)
         if vehicle is None:
             raise NotFoundError("Vehicle not found.")
@@ -114,7 +140,12 @@ class FleetService:
             meta=build_pagination_meta(total=total, params=page),
         )
 
-    async def log_maintenance(self, payload: MaintenanceCreate, actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> FleetMaintenance:
+    async def log_maintenance(
+        self,
+        payload: MaintenanceCreate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> FleetMaintenance:
         vehicle = await self._repo.get_vehicle(payload.vehicle_id)
         if vehicle is None:
             raise NotFoundError("Vehicle not found.")
@@ -159,7 +190,11 @@ class FleetService:
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
-                metadata={"vehicle_ids": [str(i) for i in ids], "new_status": status.value, "count": count},
+                metadata={
+                    "vehicle_ids": [str(i) for i in ids],
+                    "new_status": status.value,
+                    "count": count,
+                },
             )
         return count
 

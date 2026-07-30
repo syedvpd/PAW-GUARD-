@@ -123,7 +123,7 @@ class TestFosterService:
             gender="male", status=DogStatus.SHELTER, is_adoptable=False,
         )
         mock_repo.get_active_placement_for_dog.return_value = None
-        placement_id = uuid.uuid4()
+        uuid.uuid4()
         mock_repo.create_placement.return_value = None
         payload = FosterPlacementCreate(dog_id=dog_id)
         result = await service.place_dog(foster_id, payload, actor_id=uuid.uuid4())

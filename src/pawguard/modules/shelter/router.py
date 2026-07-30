@@ -1,4 +1,7 @@
-"""API router for the Shelter & Capacity module. Routers only validate and call services (RULE-004)."""
+"""Shelter & Capacity API router.
+
+Routers only validate and call services (RULE-004).
+"""
 
 import uuid
 
@@ -19,7 +22,11 @@ from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.rbac import require_permission
 from pawguard.modules.dog.repository import DogRepository
-from pawguard.modules.shelter.models import FacilityStatus, FacilityType, KennelSanitationState
+from pawguard.modules.shelter.models import (
+    FacilityStatus,
+    FacilityType,
+    KennelSanitationState,
+)
 from pawguard.modules.shelter.repository import ShelterRepository
 from pawguard.modules.shelter.schemas import (
     DailyCareLogCreate,
@@ -40,7 +47,10 @@ from pawguard.services.audit_service import AuditService
 router = APIRouter(prefix="/shelter", tags=["shelter"])
 
 
-def get_shelter_service(db: AsyncSession = Depends(get_db), audit: AuditService = Depends(get_audit_service)) -> ShelterService:
+def get_shelter_service(
+    db: AsyncSession = Depends(get_db),
+    audit: AuditService = Depends(get_audit_service),
+) -> ShelterService:
     repo = ShelterRepository(db)
     dog_repo = DogRepository(db)
     return ShelterService(repo, dog_repo, audit_service=audit)
@@ -58,7 +68,11 @@ async def create_facility(
     current_user: CurrentUser = Depends(get_current_user),
     service: ShelterService = Depends(get_shelter_service),
 ) -> ApiResponse[ShelterFacilityResponse]:
-    facility = await service.create_facility(payload, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
+    facility = await service.create_facility(
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
     return ApiResponse(
         data=ShelterFacilityResponse.model_validate(facility),
         message="Shelter facility created successfully.",
@@ -77,9 +91,18 @@ async def list_facilities(
     facility_type: FacilityType | None = None,
     service: ShelterService = Depends(get_shelter_service),
 ) -> PaginatedResponse[ShelterFacilityResponse]:
-    result = await service.list_facilities_paginated(page, sort, search_term=search, status=status, facility_type=facility_type)
+    result = await service.list_facilities_paginated(
+        page,
+        sort,
+        search_term=search,
+        status=status,
+        facility_type=facility_type,
+    )
     return PaginatedResponse(
-        data=[ShelterFacilityResponse.model_validate(f) for f in result.data],
+        data=[
+            ShelterFacilityResponse.model_validate(f)
+            for f in result.data
+        ],
         meta=result.meta,
     )
 
@@ -97,7 +120,12 @@ async def create_section(
     current_user: CurrentUser = Depends(get_current_user),
     service: ShelterService = Depends(get_shelter_service),
 ) -> ApiResponse[ShelterSectionResponse]:
-    section = await service.create_section(facility_id, payload, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
+    section = await service.create_section(
+        facility_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
     return ApiResponse(
         data=ShelterSectionResponse.model_validate(section),
         message="Shelter section created successfully.",
@@ -115,9 +143,17 @@ async def list_sections(
     search: str | None = None,
     service: ShelterService = Depends(get_shelter_service),
 ) -> PaginatedResponse[ShelterSectionResponse]:
-    result = await service.list_sections_paginated(page, sort, facility_id=facility_id, search_term=search)
+    result = await service.list_sections_paginated(
+        page,
+        sort,
+        facility_id=facility_id,
+        search_term=search,
+    )
     return PaginatedResponse(
-        data=[ShelterSectionResponse.model_validate(s) for s in result.data],
+        data=[
+            ShelterSectionResponse.model_validate(s)
+            for s in result.data
+        ],
         meta=result.meta,
     )
 
@@ -135,7 +171,12 @@ async def create_kennel(
     current_user: CurrentUser = Depends(get_current_user),
     service: ShelterService = Depends(get_shelter_service),
 ) -> ApiResponse[KennelResponse]:
-    kennel = await service.create_kennel(section_id, payload, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
+    kennel = await service.create_kennel(
+        section_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
     return ApiResponse(
         data=KennelResponse.model_validate(kennel),
         message="Kennel created successfully.",
@@ -152,9 +193,14 @@ async def list_kennels(
     sort: SortParams = Depends(sort_params),
     service: ShelterService = Depends(get_shelter_service),
 ) -> PaginatedResponse[KennelResponse]:
-    result = await service.list_kennels_paginated(page, sort, section_id=section_id)
+    result = await service.list_kennels_paginated(
+        page, sort, section_id=section_id,
+    )
     return PaginatedResponse(
-        data=[KennelResponse.model_validate(k) for k in result.data],
+        data=[
+            KennelResponse.model_validate(k)
+            for k in result.data
+        ],
         meta=result.meta,
     )
 
@@ -171,8 +217,18 @@ async def assign_dog_to_kennel(
     current_user: CurrentUser = Depends(get_current_user),
     service: ShelterService = Depends(get_shelter_service),
 ) -> ApiResponse[bool]:
-    success = await service.assign_dog_to_kennel(dog_id, kennel_id, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
-    return ApiResponse(data=success, message="Dog successfully assigned to kennel.")
+    success = await service.assign_dog_to_kennel(
+        dog_id,
+        kennel_id,
+        actor_id=current_user.id,
+        ip_address=request.client.host
+        if request.client
+        else None,
+    )
+    return ApiResponse(
+        data=success,
+        message="Dog successfully assigned to kennel.",
+    )
 
 
 @router.put(
@@ -187,7 +243,14 @@ async def update_kennel_sanitation(
     current_user: CurrentUser = Depends(get_current_user),
     service: ShelterService = Depends(get_shelter_service),
 ) -> ApiResponse[KennelResponse]:
-    kennel = await service.update_kennel_sanitation(kennel_id, status_val, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
+    kennel = await service.update_kennel_sanitation(
+        kennel_id,
+        status_val,
+        actor_id=current_user.id,
+        ip_address=request.client.host
+        if request.client
+        else None,
+    )
     return ApiResponse(
         data=KennelResponse.model_validate(kennel),
         message="Kennel sanitation status updated successfully.",
@@ -206,10 +269,20 @@ async def request_transfer(
     current_user: CurrentUser = Depends(get_current_user),
     service: ShelterService = Depends(get_shelter_service),
 ) -> ApiResponse[FacilityTransferResponse]:
-    transfer = await service.request_transfer(current_user.user.id, payload, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
+    transfer = await service.request_transfer(
+        current_user.user.id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host
+        if request.client
+        else None,
+    )
     return ApiResponse(
         data=FacilityTransferResponse.model_validate(transfer),
-        message="Inter-facility transfer request submitted successfully.",
+        message=(
+            "Inter-facility transfer request submitted "
+            "successfully."
+        ),
     )
 
 
@@ -224,7 +297,13 @@ async def confirm_transfer(
     current_user: CurrentUser = Depends(get_current_user),
     service: ShelterService = Depends(get_shelter_service),
 ) -> ApiResponse[FacilityTransferResponse]:
-    transfer = await service.confirm_transfer(transfer_id, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
+    transfer = await service.confirm_transfer(
+        transfer_id,
+        actor_id=current_user.id,
+        ip_address=request.client.host
+        if request.client
+        else None,
+    )
     return ApiResponse(
         data=FacilityTransferResponse.model_validate(transfer),
         message="Inter-facility transfer confirmation recorded.",
@@ -243,10 +322,20 @@ async def submit_daily_care_log(
     current_user: CurrentUser = Depends(get_current_user),
     service: ShelterService = Depends(get_shelter_service),
 ) -> ApiResponse[DailyCareLogResponse]:
-    care_log = await service.submit_daily_care_log(current_user.user.id, payload, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
+    care_log = await service.submit_daily_care_log(
+        current_user.user.id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host
+        if request.client
+        else None,
+    )
     return ApiResponse(
         data=DailyCareLogResponse.model_validate(care_log),
-        message="Daily care operational updates recorded successfully.",
+        message=(
+            "Daily care operational updates recorded "
+            "successfully."
+        ),
     )
 
 
@@ -259,7 +348,12 @@ async def list_care_logs(
     service: ShelterService = Depends(get_shelter_service),
 ) -> ApiResponse[list[DailyCareLogResponse]]:
     logs = await service.list_care_logs(dog_id)
-    return ApiResponse(data=[DailyCareLogResponse.model_validate(log) for log in logs])
+    return ApiResponse(
+        data=[
+            DailyCareLogResponse.model_validate(log)
+            for log in logs
+        ],
+    )
 
 
 @router.delete(
@@ -285,7 +379,9 @@ async def update_facility_status(
     payload: FacilityStatusUpdate,
     service: ShelterService = Depends(get_shelter_service),
 ) -> ApiResponse[ShelterFacilityResponse]:
-    facility = await service.update_facility_status(facility_id, payload.status)
+    facility = await service.update_facility_status(
+        facility_id, payload.status,
+    )
     return ApiResponse(
         data=ShelterFacilityResponse.model_validate(facility),
         message="Facility status updated.",
@@ -301,7 +397,9 @@ async def bulk_delete_facilities(
     payload: BulkDeleteRequest,
     service: ShelterService = Depends(get_shelter_service),
 ) -> BulkDeleteResponse:
-    deleted = await service.bulk_delete_facilities(payload.ids)
+    deleted = await service.bulk_delete_facilities(
+        payload.ids,
+    )
     return BulkDeleteResponse(
         message=f"{deleted} facilities deleted.",
         deleted_count=deleted,

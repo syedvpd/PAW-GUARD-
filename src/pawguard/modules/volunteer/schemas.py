@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from pawguard.modules.auth.schemas import UserProfile
 from pawguard.modules.volunteer.models import VolunteerStatus
@@ -39,8 +39,7 @@ class VolunteerProfileResponse(BaseModel):
     updated_at: datetime
     user: UserProfile | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class VolunteerShiftCreate(BaseModel):
@@ -60,8 +59,7 @@ class VolunteerShiftResponse(BaseModel):
     capacity: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ShiftAttendanceResponse(BaseModel):
@@ -72,5 +70,4 @@ class ShiftAttendanceResponse(BaseModel):
     check_out_at: datetime | None
     hours_logged: float | None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

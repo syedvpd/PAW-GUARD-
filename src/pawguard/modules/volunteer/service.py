@@ -188,5 +188,7 @@ class VolunteerService:
     async def bulk_delete_profiles(self, ids: list[uuid.UUID]) -> int:
         return await self._repo.bulk_soft_delete_profiles(ids)
 
-    async def bulk_update_profile_status(self, ids: list[uuid.UUID], status: VolunteerStatus) -> int:
+    async def bulk_update_profile_status(
+        self, ids: list[uuid.UUID], status: VolunteerStatus
+    ) -> int:
         return await self._repo.bulk_update_profile_status(ids, status)

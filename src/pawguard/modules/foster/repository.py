@@ -1,4 +1,7 @@
-"""Data access for the Foster Management module. Repositories never contain business decisions (RULE-002)."""
+"""Data access for the Foster Management module.
+
+Repositories never contain business decisions (RULE-002).
+"""
 
 import uuid
 from collections.abc import Sequence

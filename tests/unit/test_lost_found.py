@@ -43,7 +43,7 @@ class TestLostFoundService:
         user_id = uuid.uuid4()
         mock_repo.create_lost_report.return_value = None
         mock_repo.list_found_reports.return_value = []
-        report_id = uuid.uuid4()
+        uuid.uuid4()
         mock_repo.create_lost_report.side_effect = None
         mock_repo._session.flush.return_value = None
         payload = LostReportCreate(

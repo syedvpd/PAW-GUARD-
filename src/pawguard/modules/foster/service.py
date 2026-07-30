@@ -22,12 +22,23 @@ from pawguard.services.audit_service import AuditService
 
 
 class FosterService:
-    def __init__(self, repository: FosterRepository, dog_repo: DogRepository, audit_service: AuditService | None = None) -> None:
+    def __init__(
+        self,
+        repository: FosterRepository,
+        dog_repo: DogRepository,
+        audit_service: AuditService | None = None,
+    ) -> None:
         self._repo = repository
         self._dog_repo = dog_repo
         self._audit = audit_service
 
-    async def apply_to_foster(self, user_id: uuid.UUID, payload: FosterProfileCreate, actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> FosterProfile:
+    async def apply_to_foster(
+        self,
+        user_id: uuid.UUID,
+        payload: FosterProfileCreate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> FosterProfile:
         existing = await self._repo.get_profile_by_user_id(user_id)
         if existing is not None:
             raise ConflictError("You have already applied or registered as a foster home.")
@@ -54,7 +65,11 @@ class FosterService:
         return res
 
     async def update_profile(
-        self, profile_id: uuid.UUID, payload: FosterProfileUpdate, actor_id: uuid.UUID | None = None, ip_address: str | None = None
+        self,
+        profile_id: uuid.UUID,
+        payload: FosterProfileUpdate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
     ) -> FosterProfile:
         profile = await self._repo.get_profile_by_id(profile_id)
         if profile is None:
@@ -84,7 +99,12 @@ class FosterService:
             raise NotFoundError("Foster profile not found.")
         return profile
 
-    async def soft_delete_profile(self, profile_id: uuid.UUID, actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> None:
+    async def soft_delete_profile(
+        self,
+        profile_id: uuid.UUID,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> None:
         profile = await self._repo.get_profile_by_id(profile_id)
         if profile is None:
             raise NotFoundError("Foster profile not found.")
@@ -118,7 +138,13 @@ class FosterService:
             meta=build_pagination_meta(total=total, params=page),
         )
 
-    async def place_dog(self, foster_id: uuid.UUID, payload: FosterPlacementCreate, actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> FosterPlacement:
+    async def place_dog(
+        self,
+        foster_id: uuid.UUID,
+        payload: FosterPlacementCreate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> FosterPlacement:
         foster = await self._repo.get_profile_by_id(foster_id)
         if foster is None:
             raise NotFoundError("Foster profile not found.")
@@ -160,12 +186,23 @@ class FosterService:
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
-                metadata={"placement_id": str(placement.id), "dog_id": str(payload.dog_id), "foster_id": str(foster_id)},
+                metadata={
+                    "placement_id": str(placement.id),
+                    "dog_id": str(payload.dog_id),
+                    "foster_id": str(foster_id),
+                },
             )
 
         return placement
 
-    async def return_dog(self, placement_id: uuid.UUID, *, notes: str | None = None, actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> FosterPlacement:
+    async def return_dog(
+        self,
+        placement_id: uuid.UUID,
+        *,
+        notes: str | None = None,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> FosterPlacement:
         placement = await self._repo.get_placement_by_id(placement_id)
         if placement is None:
             raise NotFoundError("Foster placement not found.")

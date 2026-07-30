@@ -104,7 +104,11 @@ class GrievanceService:
         if ticket is None:
             raise NotFoundError("Grievance ticket not found.")
 
-        if new_status != ticket.status and new_status not in VALID_TRANSITIONS.get(ticket.status, set()):
+        if (
+            new_status != ticket.status
+            and new_status
+            not in VALID_TRANSITIONS.get(ticket.status, set())
+        ):
             raise ValidationFailedError(
                 f"Cannot transition from {ticket.status} to {new_status}."
             )

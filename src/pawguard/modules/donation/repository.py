@@ -83,6 +83,14 @@ class DonationRepository:
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    async def get_donation_by_gateway_order_id(self, gateway_order_id: str) -> Donation | None:
+        stmt = (
+            select(Donation)
+            .options(selectinload(Donation.donor), selectinload(Donation.dog))
+            .where(Donation.gateway_order_id == gateway_order_id)
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
     async def get_donations_by_donor(self, donor_id: uuid.UUID) -> Sequence[Donation]:
         stmt = (
             select(Donation)
@@ -163,6 +171,16 @@ class DonationRepository:
             update(Donation)
             .where(Donation.id == donation_id)
             .values(status=status)
+            .returning(Donation)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def update_gateway_fields(self, donation_id: uuid.UUID, **kwargs: Any) -> Donation | None:
+        stmt = (
+            update(Donation)
+            .where(Donation.id == donation_id)
+            .values(**kwargs)
             .returning(Donation)
         )
         result = await self._session.execute(stmt)

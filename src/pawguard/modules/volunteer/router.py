@@ -1,4 +1,7 @@
-"""API router for the Volunteer Management module. Routers only validate and call services (RULE-004)."""
+"""API router for the Volunteer Management module.
+
+Routers only validate and call services (RULE-004).
+"""
 
 import uuid
 

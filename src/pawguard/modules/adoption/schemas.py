@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from pawguard.modules.adoption.models import AdoptionStatus
 from pawguard.modules.auth.schemas import UserProfile
@@ -54,8 +54,7 @@ class AdoptionApplicationResponse(BaseModel):
     dog: DogProfileResponse | None = None
     adopter: UserProfile | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AdoptionApplicationListQueryParams(BaseModel):

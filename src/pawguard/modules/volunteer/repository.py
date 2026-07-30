@@ -1,4 +1,7 @@
-"""Data access for the Volunteer Management module. Repositories never contain business decisions (RULE-002)."""
+"""Data access for the Volunteer Management module.
+
+Repositories never contain business decisions (RULE-002).
+"""
 
 import uuid
 from collections.abc import Sequence
@@ -189,7 +192,9 @@ class VolunteerRepository:
             p.deleted_at = now
         return len(profiles)
 
-    async def bulk_update_profile_status(self, ids: list[uuid.UUID], status: VolunteerStatus) -> int:
+    async def bulk_update_profile_status(
+        self, ids: list[uuid.UUID], status: VolunteerStatus
+    ) -> int:
         stmt = (
             select(VolunteerProfile)
             .where(VolunteerProfile.id.in_(ids), VolunteerProfile.deleted_at.is_(None))

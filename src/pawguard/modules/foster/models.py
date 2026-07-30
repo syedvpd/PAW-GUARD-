@@ -37,7 +37,8 @@ class FosterProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
         String(32), default=FosterStatus.APPLIED, nullable=False, index=True
     )
 
-    preferences: Mapped[str | None] = mapped_column(Text, nullable=True)  # e.g., "Pups, Medical Recovery, Behavior Modification"
+    # e.g., "Pups, Medical Recovery, Behavior Modification"
+    preferences: Mapped[str | None] = mapped_column(Text, nullable=True)
     max_capacity: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     active_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_available: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

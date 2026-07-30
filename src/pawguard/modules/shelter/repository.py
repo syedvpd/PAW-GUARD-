@@ -125,7 +125,10 @@ class ShelterRepository:
         if facility_type is not None:
             stmt = stmt.where(ShelterFacility.facility_type == facility_type)
 
-        valid_fields = {"name", "total_capacity", "status", "facility_type", "created_at", "updated_at"}
+        valid_fields = {
+            "name", "total_capacity", "status",
+            "facility_type", "created_at", "updated_at",
+        }
         stmt = apply_sorting(stmt, sort, valid_fields)
 
         count_stmt = select(func.count()).select_from(stmt.subquery())
@@ -211,7 +214,9 @@ class ShelterRepository:
         await self._session.flush()
         return len(facilities)
 
-    async def bulk_update_facility_status(self, ids: list[uuid.UUID], status: FacilityStatus) -> int:
+    async def bulk_update_facility_status(
+        self, ids: list[uuid.UUID], status: FacilityStatus
+    ) -> int:
         stmt = (
             update(ShelterFacility)
             .where(ShelterFacility.id.in_(ids), ShelterFacility.deleted_at.is_(None))

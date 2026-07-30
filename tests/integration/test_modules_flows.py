@@ -307,7 +307,7 @@ class TestEndToEndModuleFlows:
         }
         found_resp = await client.post("/api/v1/lost-found/found", json=found_payload, headers=headers)
         assert found_resp.status_code == 201
-        found_id = found_resp.json()["data"]["id"]
+        found_resp.json()["data"]["id"]
 
         # View matches
         matches_resp = await client.get(f"/api/v1/lost-found/lost/{lost_id}/matches", headers=headers)

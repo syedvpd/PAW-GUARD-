@@ -146,7 +146,11 @@ async def soft_delete_vehicle(
     current_user: CurrentUser = Depends(get_current_user),
     service: FleetService = Depends(get_fleet_service),
 ) -> ApiResponse[None]:
-    await service.soft_delete_vehicle(vehicle_id, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
+    await service.soft_delete_vehicle(
+        vehicle_id,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
     return ApiResponse(message="Vehicle deleted successfully.")
 
 
@@ -162,8 +166,15 @@ async def log_maintenance(
     current_user: CurrentUser = Depends(get_current_user),
     service: FleetService = Depends(get_fleet_service),
 ) -> ApiResponse[MaintenanceResponse]:
-    record = await service.log_maintenance(payload, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
-    return ApiResponse(data=MaintenanceResponse.model_validate(record), message="Maintenance logged.")
+    record = await service.log_maintenance(
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(
+        data=MaintenanceResponse.model_validate(record),
+        message="Maintenance logged.",
+    )
 
 
 @router.get(
@@ -220,7 +231,11 @@ async def bulk_delete_vehicles(
     current_user: CurrentUser = Depends(get_current_user),
     service: FleetService = Depends(get_fleet_service),
 ) -> ApiResponse[BulkDeleteResponse]:
-    deleted = await service.bulk_soft_delete(payload.ids, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
+    deleted = await service.bulk_soft_delete(
+        payload.ids,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
     return ApiResponse(
         data=BulkDeleteResponse(
             message=f"{deleted} vehicle(s) deleted.",

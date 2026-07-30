@@ -1,4 +1,7 @@
-"""MedicalService: owns all medical examinations, surgeries, prescriptions, and clearances behavior (RULE-003)."""
+"""MedicalService: owns all medical examinations, surgeries, prescriptions.
+
+(RULE-003) — clearances behaviour.
+"""
 
 import uuid
 from collections.abc import Sequence
@@ -33,12 +36,23 @@ from pawguard.services.audit_service import AuditService
 
 
 class MedicalService:
-    def __init__(self, repository: MedicalRepository, dog_repo: DogRepository, audit_service: AuditService | None = None) -> None:
+    def __init__(
+        self,
+        repository: MedicalRepository,
+        dog_repo: DogRepository,
+        audit_service: AuditService | None = None,
+    ) -> None:
         self._repo = repository
         self._dog_repo = dog_repo
         self._audit = audit_service
 
-    async def perform_clinical_exam(self, vet_id: uuid.UUID, payload: ClinicalExamCreate, actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> ClinicalExam:
+    async def perform_clinical_exam(
+        self,
+        vet_id: uuid.UUID,
+        payload: ClinicalExamCreate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> ClinicalExam:
         dog = await self._dog_repo.get_by_id(payload.dog_id)
         if dog is None:
             raise NotFoundError("Dog profile not found.")
@@ -65,7 +79,13 @@ class MedicalService:
             )
         return exam
 
-    async def record_treatment(self, vet_id: uuid.UUID, payload: MedicalTreatmentCreate, actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> MedicalTreatment:
+    async def record_treatment(
+        self,
+        vet_id: uuid.UUID,
+        payload: MedicalTreatmentCreate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> MedicalTreatment:
         dog = await self._dog_repo.get_by_id(payload.dog_id)
         if dog is None:
             raise NotFoundError("Dog profile not found.")
@@ -90,7 +110,13 @@ class MedicalService:
             )
         return treatment
 
-    async def administer_vaccine(self, vet_id: uuid.UUID, payload: VaccinationRecordCreate, actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> VaccinationRecord:
+    async def administer_vaccine(
+        self,
+        vet_id: uuid.UUID,
+        payload: VaccinationRecordCreate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> VaccinationRecord:
         dog = await self._dog_repo.get_by_id(payload.dog_id)
         if dog is None:
             raise NotFoundError("Dog profile not found.")
@@ -114,7 +140,13 @@ class MedicalService:
             )
         return rec
 
-    async def prescribe_medication(self, vet_id: uuid.UUID, payload: PrescriptionCreate, actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> Prescription:
+    async def prescribe_medication(
+        self,
+        vet_id: uuid.UUID,
+        payload: PrescriptionCreate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> Prescription:
         dog = await self._dog_repo.get_by_id(payload.dog_id)
         if dog is None:
             raise NotFoundError("Dog profile not found.")
@@ -140,7 +172,13 @@ class MedicalService:
             )
         return prescription
 
-    async def authorize_adoption_clearance(self, dog_id: uuid.UUID, roles: set[str], actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> bool:
+    async def authorize_adoption_clearance(
+        self,
+        dog_id: uuid.UUID,
+        roles: set[str],
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> bool:
         if not ("super_admin" in roles or "veterinarian" in roles):
             raise ForbiddenError("Adoption medical clearances require a veterinarian's authority.")
 
@@ -237,7 +275,12 @@ class MedicalService:
             meta=build_pagination_meta(total=total, params=page),
         )
 
-    async def soft_delete_exam(self, exam_id: uuid.UUID, actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> None:
+    async def soft_delete_exam(
+        self,
+        exam_id: uuid.UUID,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> None:
         exam = await self._get_exam_by_id(exam_id)
         if exam is None:
             raise NotFoundError("Clinical exam not found.")
@@ -252,7 +295,12 @@ class MedicalService:
                 metadata={"exam_id": str(exam_id)},
             )
 
-    async def soft_delete_treatment(self, treatment_id: uuid.UUID, actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> None:
+    async def soft_delete_treatment(
+        self,
+        treatment_id: uuid.UUID,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> None:
         treatment = await self._get_treatment_by_id(treatment_id)
         if treatment is None:
             raise NotFoundError("Medical treatment not found.")
@@ -267,7 +315,12 @@ class MedicalService:
                 metadata={"treatment_id": str(treatment_id)},
             )
 
-    async def soft_delete_vaccination(self, vaccination_id: uuid.UUID, actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> None:
+    async def soft_delete_vaccination(
+        self,
+        vaccination_id: uuid.UUID,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> None:
         vaccination = await self._get_vaccination_by_id(vaccination_id)
         if vaccination is None:
             raise NotFoundError("Vaccination record not found.")
@@ -282,7 +335,12 @@ class MedicalService:
                 metadata={"vaccination_id": str(vaccination_id)},
             )
 
-    async def soft_delete_prescription(self, prescription_id: uuid.UUID, actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> None:
+    async def soft_delete_prescription(
+        self,
+        prescription_id: uuid.UUID,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> None:
         prescription = await self._repo.get_prescription_by_id(prescription_id)
         if prescription is None:
             raise NotFoundError("Prescription not found.")
@@ -297,7 +355,13 @@ class MedicalService:
                 metadata={"prescription_id": str(prescription_id)},
             )
 
-    async def update_prescription(self, p_id: uuid.UUID, payload: PrescriptionUpdate, actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> Prescription:
+    async def update_prescription(
+        self,
+        p_id: uuid.UUID,
+        payload: PrescriptionUpdate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> Prescription:
         prescription = await self._repo.get_prescription_by_id(p_id)
         if prescription is None:
             raise NotFoundError("Prescription not found.")
@@ -316,7 +380,13 @@ class MedicalService:
             )
         return prescription
 
-    async def update_prescription_status(self, p_id: uuid.UUID, is_active: bool, actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> Prescription:
+    async def update_prescription_status(
+        self,
+        p_id: uuid.UUID,
+        is_active: bool,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> Prescription:
         prescription = await self._repo.get_prescription_by_id(p_id)
         if prescription is None:
             raise NotFoundError("Prescription not found.")
@@ -333,7 +403,13 @@ class MedicalService:
             )
         return prescription
 
-    async def bulk_update_prescription_status(self, ids: list[uuid.UUID], is_active: bool, actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> int:
+    async def bulk_update_prescription_status(
+        self,
+        ids: list[uuid.UUID],
+        is_active: bool,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> int:
         count = await self._repo.bulk_update_prescription_status(ids, is_active)
         if self._audit and actor_id:
             await self._audit.record(
@@ -341,11 +417,21 @@ class MedicalService:
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
-                metadata={"prescription_ids": [str(i) for i in ids], "is_active": is_active, "count": count},
+                metadata={
+                    "prescription_ids": [str(i) for i in ids],
+                    "is_active": is_active,
+                    "count": count,
+                },
             )
         return count
 
-    async def bulk_soft_delete(self, ids: list[uuid.UUID], entity_type: str, actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> int:
+    async def bulk_soft_delete(
+        self,
+        ids: list[uuid.UUID],
+        entity_type: str,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> int:
         from datetime import UTC, datetime
         count = 0
         for e_id in ids:
@@ -373,17 +459,41 @@ class MedicalService:
             )
         return count
 
-    async def _get_exam_by_id(self, exam_id: uuid.UUID) -> ClinicalExam | None:
+    async def _get_exam_by_id(
+        self, exam_id: uuid.UUID
+    ) -> ClinicalExam | None:
         from sqlalchemy import select
-        stmt = select(ClinicalExam).where(ClinicalExam.id == exam_id, ClinicalExam.deleted_at.is_(None))
-        return (await self._repo._session.execute(stmt)).scalar_one_or_none()
 
-    async def _get_treatment_by_id(self, treatment_id: uuid.UUID) -> MedicalTreatment | None:
-        from sqlalchemy import select
-        stmt = select(MedicalTreatment).where(MedicalTreatment.id == treatment_id, MedicalTreatment.deleted_at.is_(None))
-        return (await self._repo._session.execute(stmt)).scalar_one_or_none()
+        stmt = select(ClinicalExam).where(
+            ClinicalExam.id == exam_id,
+            ClinicalExam.deleted_at.is_(None),
+        )
+        return (
+            await self._repo._session.execute(stmt)
+        ).scalar_one_or_none()
 
-    async def _get_vaccination_by_id(self, vaccination_id: uuid.UUID) -> VaccinationRecord | None:
+    async def _get_treatment_by_id(
+        self, treatment_id: uuid.UUID
+    ) -> MedicalTreatment | None:
         from sqlalchemy import select
-        stmt = select(VaccinationRecord).where(VaccinationRecord.id == vaccination_id, VaccinationRecord.deleted_at.is_(None))
-        return (await self._repo._session.execute(stmt)).scalar_one_or_none()
+
+        stmt = select(MedicalTreatment).where(
+            MedicalTreatment.id == treatment_id,
+            MedicalTreatment.deleted_at.is_(None),
+        )
+        return (
+            await self._repo._session.execute(stmt)
+        ).scalar_one_or_none()
+
+    async def _get_vaccination_by_id(
+        self, vaccination_id: uuid.UUID
+    ) -> VaccinationRecord | None:
+        from sqlalchemy import select
+
+        stmt = select(VaccinationRecord).where(
+            VaccinationRecord.id == vaccination_id,
+            VaccinationRecord.deleted_at.is_(None),
+        )
+        return (
+            await self._repo._session.execute(stmt)
+        ).scalar_one_or_none()

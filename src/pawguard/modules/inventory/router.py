@@ -54,8 +54,14 @@ async def create_item(
     current_user: CurrentUser = Depends(get_current_user),
     service: InventoryService = Depends(get_inventory_service),
 ) -> ApiResponse[InventoryItemResponse]:
-    item = await service.create_item(payload, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
-    return ApiResponse(data=InventoryItemResponse.model_validate(item), message="Inventory item created.")
+    ip = request.client.host if request.client else None
+    item = await service.create_item(
+        payload, actor_id=current_user.id, ip_address=ip,
+    )
+    return ApiResponse(
+        data=InventoryItemResponse.model_validate(item),
+        message="Inventory item created.",
+    )
 
 
 @router.get(
@@ -102,10 +108,15 @@ async def record_movement(
     current_user: CurrentUser = Depends(get_current_user),
     service: InventoryService = Depends(get_inventory_service),
 ) -> ApiResponse[InventoryMovementResponse]:
+    ip = request.client.host if request.client else None
     movement = await service.record_movement(
-        current_user.id, payload, actor_id=current_user.id, ip_address=request.client.host if request.client else None,
+        current_user.id, payload,
+        actor_id=current_user.id, ip_address=ip,
     )
-    return ApiResponse(data=InventoryMovementResponse.model_validate(movement), message="Stock movement recorded.")
+    return ApiResponse(
+        data=InventoryMovementResponse.model_validate(movement),
+        message="Stock movement recorded.",
+    )
 
 
 @router.get(
@@ -141,10 +152,15 @@ async def create_requisition(
     current_user: CurrentUser = Depends(get_current_user),
     service: InventoryService = Depends(get_inventory_service),
 ) -> ApiResponse[RequisitionOrderResponse]:
+    ip = request.client.host if request.client else None
     req = await service.create_requisition(
-        current_user.id, payload, actor_id=current_user.id, ip_address=request.client.host if request.client else None,
+        current_user.id, payload,
+        actor_id=current_user.id, ip_address=ip,
     )
-    return ApiResponse(data=RequisitionOrderResponse.model_validate(req), message="Requisition submitted.")
+    return ApiResponse(
+        data=RequisitionOrderResponse.model_validate(req),
+        message="Requisition submitted.",
+    )
 
 
 @router.get(
@@ -177,10 +193,15 @@ async def update_requisition_status(
     current_user: CurrentUser = Depends(get_current_user),
     service: InventoryService = Depends(get_inventory_service),
 ) -> ApiResponse[RequisitionOrderResponse]:
+    ip = request.client.host if request.client else None
     req = await service.update_requisition_status(
-        current_user.id, req_id, payload.status, actor_id=current_user.id, ip_address=request.client.host if request.client else None,
+        current_user.id, req_id, payload.status,
+        actor_id=current_user.id, ip_address=ip,
     )
-    return ApiResponse(data=RequisitionOrderResponse.model_validate(req), message="Requisition status updated.")
+    return ApiResponse(
+        data=RequisitionOrderResponse.model_validate(req),
+        message="Requisition status updated.",
+    )
 
 
 @router.delete(
@@ -194,7 +215,10 @@ async def delete_item(
     current_user: CurrentUser = Depends(get_current_user),
     service: InventoryService = Depends(get_inventory_service),
 ) -> ApiResponse[None]:
-    await service.soft_delete_item(item_id, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
+    ip = request.client.host if request.client else None
+    await service.soft_delete_item(
+        item_id, actor_id=current_user.id, ip_address=ip,
+    )
     return ApiResponse(message="Inventory item deleted.")
 
 
@@ -209,8 +233,9 @@ async def bulk_delete_items(
     current_user: CurrentUser = Depends(get_current_user),
     service: InventoryService = Depends(get_inventory_service),
 ) -> BulkDeleteResponse:
+    ip = request.client.host if request.client else None
     deleted = await service.bulk_delete_items(
-        payload.ids, actor_id=current_user.id, ip_address=request.client.host if request.client else None,
+        payload.ids, actor_id=current_user.id, ip_address=ip,
     )
     return BulkDeleteResponse(
         message=f"{deleted} items deleted.",

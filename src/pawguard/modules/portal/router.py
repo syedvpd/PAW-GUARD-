@@ -56,8 +56,13 @@ def get_portal_service(
 
 # ── Public reads (no auth) ───────────────────────────────────────────────────
 
-@router.get("/stats", response_model=ApiResponse[PublicHeroStats])
-async def get_hero_stats(service: PortalService = Depends(get_portal_service)) -> ApiResponse[PublicHeroStats]:
+@router.get(
+    "/stats",
+    response_model=ApiResponse[PublicHeroStats],
+)
+async def get_hero_stats(
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[PublicHeroStats]:
     return ApiResponse(data=await service.get_hero_stats())
 
 
@@ -145,8 +150,16 @@ async def create_story(
     current_user: CurrentUser = Depends(get_current_user),
     service: PortalService = Depends(get_portal_service),
 ) -> ApiResponse[SuccessStoryResponse]:
-    story = await service.create_story(payload, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
-    return ApiResponse(data=SuccessStoryResponse.model_validate(story), message="Success story created.")
+    ip = request.client.host if request.client else None
+    story = await service.create_story(
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=SuccessStoryResponse.model_validate(story),
+        message="Success story created.",
+    )
 
 
 @router.put(
@@ -161,8 +174,17 @@ async def update_story(
     current_user: CurrentUser = Depends(get_current_user),
     service: PortalService = Depends(get_portal_service),
 ) -> ApiResponse[SuccessStoryResponse]:
-    story = await service.update_story(story_id, payload, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
-    return ApiResponse(data=SuccessStoryResponse.model_validate(story), message="Success story updated.")
+    ip = request.client.host if request.client else None
+    story = await service.update_story(
+        story_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=SuccessStoryResponse.model_validate(story),
+        message="Success story updated.",
+    )
 
 
 @router.post(
@@ -177,8 +199,16 @@ async def create_blog(
     current_user: CurrentUser = Depends(get_current_user),
     service: PortalService = Depends(get_portal_service),
 ) -> ApiResponse[BlogPostResponse]:
-    post = await service.create_blog(payload, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
-    return ApiResponse(data=BlogPostResponse.model_validate(post), message="Blog post created.")
+    ip = request.client.host if request.client else None
+    post = await service.create_blog(
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=BlogPostResponse.model_validate(post),
+        message="Blog post created.",
+    )
 
 
 @router.put(
@@ -193,8 +223,17 @@ async def update_blog(
     current_user: CurrentUser = Depends(get_current_user),
     service: PortalService = Depends(get_portal_service),
 ) -> ApiResponse[BlogPostResponse]:
-    post = await service.update_blog(post_id, payload, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
-    return ApiResponse(data=BlogPostResponse.model_validate(post), message="Blog post updated.")
+    ip = request.client.host if request.client else None
+    post = await service.update_blog(
+        post_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=BlogPostResponse.model_validate(post),
+        message="Blog post updated.",
+    )
 
 
 @router.post(
@@ -209,8 +248,16 @@ async def create_vet(
     current_user: CurrentUser = Depends(get_current_user),
     service: PortalService = Depends(get_portal_service),
 ) -> ApiResponse[VeterinaryPartnerResponse]:
-    partner = await service.create_vet(payload, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
-    return ApiResponse(data=VeterinaryPartnerResponse.model_validate(partner), message="Veterinary partner added.")
+    ip = request.client.host if request.client else None
+    partner = await service.create_vet(
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=VeterinaryPartnerResponse.model_validate(partner),
+        message="Veterinary partner added.",
+    )
 
 
 @router.put(
@@ -225,8 +272,17 @@ async def update_vet(
     current_user: CurrentUser = Depends(get_current_user),
     service: PortalService = Depends(get_portal_service),
 ) -> ApiResponse[VeterinaryPartnerResponse]:
-    partner = await service.update_vet(partner_id, payload, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
-    return ApiResponse(data=VeterinaryPartnerResponse.model_validate(partner), message="Veterinary partner updated.")
+    ip = request.client.host if request.client else None
+    partner = await service.update_vet(
+        partner_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=VeterinaryPartnerResponse.model_validate(partner),
+        message="Veterinary partner updated.",
+    )
 
 
 @router.post(
@@ -241,8 +297,16 @@ async def create_contact(
     current_user: CurrentUser = Depends(get_current_user),
     service: PortalService = Depends(get_portal_service),
 ) -> ApiResponse[ContactLocationResponse]:
-    location = await service.create_contact(payload, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
-    return ApiResponse(data=ContactLocationResponse.model_validate(location), message="Contact location added.")
+    ip = request.client.host if request.client else None
+    location = await service.create_contact(
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=ContactLocationResponse.model_validate(location),
+        message="Contact location added.",
+    )
 
 
 @router.put(
@@ -257,8 +321,17 @@ async def update_contact(
     current_user: CurrentUser = Depends(get_current_user),
     service: PortalService = Depends(get_portal_service),
 ) -> ApiResponse[ContactLocationResponse]:
-    location = await service.update_contact(location_id, payload, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
-    return ApiResponse(data=ContactLocationResponse.model_validate(location), message="Contact location updated.")
+    ip = request.client.host if request.client else None
+    location = await service.update_contact(
+        location_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=ContactLocationResponse.model_validate(location),
+        message="Contact location updated.",
+    )
 
 
 @router.post(
@@ -273,8 +346,16 @@ async def create_faq(
     current_user: CurrentUser = Depends(get_current_user),
     service: PortalService = Depends(get_portal_service),
 ) -> ApiResponse[FAQEntryResponse]:
-    entry = await service.create_faq(payload, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
-    return ApiResponse(data=FAQEntryResponse.model_validate(entry), message="FAQ entry created.")
+    ip = request.client.host if request.client else None
+    entry = await service.create_faq(
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=FAQEntryResponse.model_validate(entry),
+        message="FAQ entry created.",
+    )
 
 
 @router.put(
@@ -289,8 +370,17 @@ async def update_faq(
     current_user: CurrentUser = Depends(get_current_user),
     service: PortalService = Depends(get_portal_service),
 ) -> ApiResponse[FAQEntryResponse]:
-    entry = await service.update_faq(entry_id, payload, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
-    return ApiResponse(data=FAQEntryResponse.model_validate(entry), message="FAQ entry updated.")
+    ip = request.client.host if request.client else None
+    entry = await service.update_faq(
+        entry_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=FAQEntryResponse.model_validate(entry),
+        message="FAQ entry updated.",
+    )
 
 
 # ── Admin paginated list endpoints ────────────────────────────────────────────
@@ -383,8 +473,18 @@ async def upsert_setting(
     current_user: CurrentUser = Depends(get_current_user),
     service: PortalService = Depends(get_portal_service),
 ) -> ApiResponse[SystemSettingResponse]:
-    setting = await service.upsert_setting(key, payload.value, payload.description, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
-    return ApiResponse(data=SystemSettingResponse.model_validate(setting), message="Setting saved.")
+    ip = request.client.host if request.client else None
+    setting = await service.upsert_setting(
+        key,
+        payload.value,
+        payload.description,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=SystemSettingResponse.model_validate(setting),
+        message="Setting saved.",
+    )
 
 
 @router.get(
@@ -412,7 +512,12 @@ async def soft_delete_story(
     current_user: CurrentUser = Depends(get_current_user),
     service: PortalService = Depends(get_portal_service),
 ) -> ApiResponse[None]:
-    await service.soft_delete_story(story_id, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
+    ip = request.client.host if request.client else None
+    await service.soft_delete_story(
+        story_id,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
     return ApiResponse(message="Success story deleted.")
 
 
@@ -427,7 +532,12 @@ async def soft_delete_blog(
     current_user: CurrentUser = Depends(get_current_user),
     service: PortalService = Depends(get_portal_service),
 ) -> ApiResponse[None]:
-    await service.soft_delete_blog(post_id, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
+    ip = request.client.host if request.client else None
+    await service.soft_delete_blog(
+        post_id,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
     return ApiResponse(message="Blog post deleted.")
 
 
@@ -442,7 +552,12 @@ async def soft_delete_faq(
     current_user: CurrentUser = Depends(get_current_user),
     service: PortalService = Depends(get_portal_service),
 ) -> ApiResponse[None]:
-    await service.soft_delete_faq(entry_id, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
+    ip = request.client.host if request.client else None
+    await service.soft_delete_faq(
+        entry_id,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
     return ApiResponse(message="FAQ entry deleted.")
 
 
@@ -459,7 +574,12 @@ async def bulk_delete_stories(
     current_user: CurrentUser = Depends(get_current_user),
     service: PortalService = Depends(get_portal_service),
 ) -> BulkDeleteResponse:
-    deleted = await service.bulk_delete_stories(payload.ids, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
+    ip = request.client.host if request.client else None
+    deleted = await service.bulk_delete_stories(
+        payload.ids,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
     return BulkDeleteResponse(
         message=f"{deleted} success story(ies) deleted.",
         deleted_count=deleted,
@@ -477,8 +597,14 @@ async def bulk_update_story_status(
     current_user: CurrentUser = Depends(get_current_user),
     service: PortalService = Depends(get_portal_service),
 ) -> BulkStatusUpdateResponse:
+    ip = request.client.host if request.client else None
     status = ContentStatus(payload.status)
-    updated = await service.bulk_update_story_status(payload.ids, status, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
+    updated = await service.bulk_update_story_status(
+        payload.ids,
+        status,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
     return BulkStatusUpdateResponse(
         message=f"{updated} success story(ies) updated.",
         updated_count=updated,
@@ -496,7 +622,12 @@ async def bulk_delete_blogs(
     current_user: CurrentUser = Depends(get_current_user),
     service: PortalService = Depends(get_portal_service),
 ) -> BulkDeleteResponse:
-    deleted = await service.bulk_delete_blogs(payload.ids, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
+    ip = request.client.host if request.client else None
+    deleted = await service.bulk_delete_blogs(
+        payload.ids,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
     return BulkDeleteResponse(
         message=f"{deleted} blog post(s) deleted.",
         deleted_count=deleted,
@@ -514,8 +645,14 @@ async def bulk_update_blog_status(
     current_user: CurrentUser = Depends(get_current_user),
     service: PortalService = Depends(get_portal_service),
 ) -> BulkStatusUpdateResponse:
+    ip = request.client.host if request.client else None
     status = ContentStatus(payload.status)
-    updated = await service.bulk_update_blog_status(payload.ids, status, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
+    updated = await service.bulk_update_blog_status(
+        payload.ids,
+        status,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
     return BulkStatusUpdateResponse(
         message=f"{updated} blog post(s) updated.",
         updated_count=updated,
@@ -533,7 +670,12 @@ async def bulk_delete_faqs(
     current_user: CurrentUser = Depends(get_current_user),
     service: PortalService = Depends(get_portal_service),
 ) -> BulkDeleteResponse:
-    deleted = await service.bulk_delete_faqs(payload.ids, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
+    ip = request.client.host if request.client else None
+    deleted = await service.bulk_delete_faqs(
+        payload.ids,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
     return BulkDeleteResponse(
         message=f"{deleted} FAQ entry(ies) deleted.",
         deleted_count=deleted,
@@ -551,8 +693,16 @@ async def bulk_update_faq_status(
     current_user: CurrentUser = Depends(get_current_user),
     service: PortalService = Depends(get_portal_service),
 ) -> BulkStatusUpdateResponse:
-    is_published = payload.status.lower() == "true" or payload.status == "published"
-    updated = await service.bulk_update_faq_status(payload.ids, is_published, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
+    ip = request.client.host if request.client else None
+    is_published = (
+        payload.status.lower() == "true" or payload.status == "published"
+    )
+    updated = await service.bulk_update_faq_status(
+        payload.ids,
+        is_published,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
     return BulkStatusUpdateResponse(
         message=f"{updated} FAQ entry(ies) updated.",
         updated_count=updated,

@@ -69,5 +69,10 @@ class Donation(UUIDPkMixin, TimestampMixin, Base):
     transaction_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    payment_provider: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    gateway_order_id: Mapped[str | None] = mapped_column(String(128), unique=True, nullable=True)
+    gateway_payment_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    gateway_signature: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
     donor: Mapped["DonorProfile"] = relationship(back_populates="donations")
     dog: Mapped["DogProfile"] = relationship("DogProfile", lazy="joined")

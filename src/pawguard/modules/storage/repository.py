@@ -16,7 +16,10 @@ from pawguard.modules.storage.models import StoredFile
 
 class StorageRepository:
     SEARCH_FIELDS = ("original_filename", "folder", "mime_type")
-    SORTABLE_FIELDS = {"created_at", "updated_at", "uploaded_at", "original_filename", "file_size", "folder"}
+    SORTABLE_FIELDS = {
+        "created_at", "updated_at", "uploaded_at",
+        "original_filename", "file_size", "folder",
+    }
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session

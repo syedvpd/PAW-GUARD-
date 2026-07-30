@@ -1,4 +1,6 @@
-"""ShelterService: owns all shelter facilities, kennel allocations, sanitation tracking, and inter-facility transfers (RULE-003)."""
+"""ShelterService: owns shelter facilities, kennel allocations,
+sanitation tracking, and inter-facility transfers (RULE-003).
+"""
 
 import uuid
 from collections.abc import Sequence
@@ -37,12 +39,22 @@ from pawguard.services.audit_service import AuditService
 
 
 class ShelterService:
-    def __init__(self, repository: ShelterRepository, dog_repo: DogRepository, audit_service: AuditService | None = None) -> None:
+    def __init__(
+        self,
+        repository: ShelterRepository,
+        dog_repo: DogRepository,
+        audit_service: AuditService | None = None,
+    ) -> None:
         self._repo = repository
         self._dog_repo = dog_repo
         self._audit = audit_service
 
-    async def create_facility(self, payload: ShelterFacilityCreate, actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> ShelterFacility:
+    async def create_facility(
+        self,
+        payload: ShelterFacilityCreate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> ShelterFacility:
         facility = ShelterFacility(
             name=payload.name,
             address=payload.address,
@@ -60,7 +72,13 @@ class ShelterService:
             )
         return facility
 
-    async def create_section(self, facility_id: uuid.UUID, payload: ShelterSectionCreate, actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> ShelterSection:
+    async def create_section(
+        self,
+        facility_id: uuid.UUID,
+        payload: ShelterSectionCreate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> ShelterSection:
         facility = await self._repo.get_facility(facility_id)
         if facility is None:
             raise NotFoundError("Shelter facility not found.")
@@ -77,11 +95,20 @@ class ShelterService:
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
-                metadata={"facility_id": str(facility_id), "section_id": str(section.id)},
+                metadata={
+                    "facility_id": str(facility_id),
+                    "section_id": str(section.id),
+                },
             )
         return section
 
-    async def create_kennel(self, section_id: uuid.UUID, payload: KennelCreate, actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> Kennel:
+    async def create_kennel(
+        self,
+        section_id: uuid.UUID,
+        payload: KennelCreate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> Kennel:
         section = await self._repo.get_section(section_id)
         if section is None:
             raise NotFoundError("Shelter section not found.")
@@ -89,7 +116,10 @@ class ShelterService:
         # Business Rule check: ensure adding this kennel doesn't exceed section capacity cap
         existing = await self._repo.list_kennels_by_section(section_id)
         if len(existing) >= section.capacity:
-            raise ConflictError(f"Cannot add kennel. Section capacity limit ({section.capacity}) reached.")
+            raise ConflictError(
+                f"Cannot add kennel. Section capacity limit "
+                f"({section.capacity}) reached."
+            )
 
         kennel = Kennel(
             section_id=section_id,
@@ -104,11 +134,20 @@ class ShelterService:
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
-                metadata={"section_id": str(section_id), "kennel_id": str(kennel.id)},
+                metadata={
+                    "section_id": str(section_id),
+                    "kennel_id": str(kennel.id),
+                },
             )
         return kennel
 
-    async def assign_dog_to_kennel(self, dog_id: uuid.UUID, kennel_id: uuid.UUID, actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> bool:
+    async def assign_dog_to_kennel(
+        self,
+        dog_id: uuid.UUID,
+        kennel_id: uuid.UUID,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> bool:
         dog = await self._dog_repo.get_by_id(dog_id)
         if dog is None:
             raise NotFoundError("Dog profile not found.")
@@ -118,8 +157,15 @@ class ShelterService:
             raise NotFoundError("Kennel not found.")
 
         # Business Validation: check sanitation state & availability
-        if kennel.sanitation_state in (KennelSanitationState.NEEDS_CLEANING, KennelSanitationState.OUT_OF_SERVICE):
-            raise ConflictError(f"Cannot assign dog. Kennel is currently {kennel.sanitation_state}.")
+        bad_states = (
+            KennelSanitationState.NEEDS_CLEANING,
+            KennelSanitationState.OUT_OF_SERVICE,
+        )
+        if kennel.sanitation_state in bad_states:
+            raise ConflictError(
+                f"Cannot assign dog. Kennel is currently "
+                f"{kennel.sanitation_state}."
+            )
 
         section = await self._repo.get_section(kennel.section_id)
         if section is None:
@@ -136,11 +182,20 @@ class ShelterService:
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
-                metadata={"dog_id": str(dog_id), "kennel_id": str(kennel_id)},
+                metadata={
+                    "dog_id": str(dog_id),
+                    "kennel_id": str(kennel_id),
+                },
             )
         return True
 
-    async def update_kennel_sanitation(self, kennel_id: uuid.UUID, status: KennelSanitationState, actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> Kennel:
+    async def update_kennel_sanitation(
+        self,
+        kennel_id: uuid.UUID,
+        status: KennelSanitationState,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> Kennel:
         kennel = await self._repo.get_kennel(kennel_id)
         if kennel is None:
             raise NotFoundError("Kennel not found.")
@@ -153,11 +208,20 @@ class ShelterService:
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
-                metadata={"kennel_id": str(kennel_id), "new_status": status.value},
+                metadata={
+                    "kennel_id": str(kennel_id),
+                    "new_status": status.value,
+                },
             )
         return kennel
 
-    async def request_transfer(self, user_id: uuid.UUID, payload: FacilityTransferCreate, actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> FacilityTransfer:
+    async def request_transfer(
+        self,
+        user_id: uuid.UUID,
+        payload: FacilityTransferCreate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> FacilityTransfer:
         dog = await self._dog_repo.get_by_id(payload.dog_id)
         if dog is None:
             raise NotFoundError("Dog profile not found.")
@@ -182,11 +246,19 @@ class ShelterService:
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
-                metadata={"transfer_id": str(transfer.id), "dog_id": str(payload.dog_id)},
+                metadata={
+                    "transfer_id": str(transfer.id),
+                    "dog_id": str(payload.dog_id),
+                },
             )
         return transfer
 
-    async def confirm_transfer(self, transfer_id: uuid.UUID, actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> FacilityTransfer:
+    async def confirm_transfer(
+        self,
+        transfer_id: uuid.UUID,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> FacilityTransfer:
         transfer = await self._repo.get_transfer(transfer_id)
         if transfer is None:
             raise NotFoundError("Facility transfer request not found.")
@@ -210,11 +282,20 @@ class ShelterService:
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
-                metadata={"transfer_id": str(transfer_id), "dog_id": str(transfer.dog_id)},
+                metadata={
+                    "transfer_id": str(transfer_id),
+                    "dog_id": str(transfer.dog_id),
+                },
             )
         return transfer
 
-    async def submit_daily_care_log(self, user_id: uuid.UUID, payload: DailyCareLogCreate, actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> DailyCareLog:
+    async def submit_daily_care_log(
+        self,
+        user_id: uuid.UUID,
+        payload: DailyCareLogCreate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> DailyCareLog:
         dog = await self._dog_repo.get_by_id(payload.dog_id)
         if dog is None:
             raise NotFoundError("Dog profile not found.")
@@ -234,7 +315,10 @@ class ShelterService:
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
-                metadata={"care_log_id": str(care_log.id), "dog_id": str(payload.dog_id)},
+                metadata={
+                    "care_log_id": str(care_log.id),
+                    "dog_id": str(payload.dog_id),
+                },
             )
         return care_log
 
@@ -301,7 +385,11 @@ class ShelterService:
         if not deleted:
             raise NotFoundError("Shelter facility not found.")
 
-    async def update_facility_status(self, facility_id: uuid.UUID, status: FacilityStatus) -> ShelterFacility:
+    async def update_facility_status(
+        self,
+        facility_id: uuid.UUID,
+        status: FacilityStatus,
+    ) -> ShelterFacility:
         facility = await self._repo.get_facility(facility_id)
         if facility is None:
             raise NotFoundError("Shelter facility not found.")
@@ -313,5 +401,9 @@ class ShelterService:
     async def bulk_delete_facilities(self, ids: list[uuid.UUID]) -> int:
         return await self._repo.bulk_delete_facilities(ids)
 
-    async def bulk_update_facility_status(self, ids: list[uuid.UUID], status: FacilityStatus) -> int:
+    async def bulk_update_facility_status(
+        self,
+        ids: list[uuid.UUID],
+        status: FacilityStatus,
+    ) -> int:
         return await self._repo.bulk_update_facility_status(ids, status)

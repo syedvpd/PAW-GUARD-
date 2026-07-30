@@ -108,7 +108,9 @@ async def delete_notification(
     service: NotificationService = Depends(get_notification_service),
 ) -> ApiResponse[None]:
     await service.delete_notification(
-        notification_id, user_id=current_user.id, actor_id=current_user.id, ip_address=request.client.host if request.client else None,
+        notification_id, user_id=current_user.id,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
     )
     return ApiResponse(message="Notification deleted.")
 
@@ -125,7 +127,8 @@ async def bulk_delete_notifications(
     service: NotificationService = Depends(get_notification_service),
 ) -> ApiResponse[BulkDeleteResponse]:
     deleted = await service.bulk_delete(
-        payload.ids, actor_id=current_user.id, ip_address=request.client.host if request.client else None,
+        payload.ids, actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
     )
     return ApiResponse(
         data=BulkDeleteResponse(
@@ -155,7 +158,9 @@ async def send_notification(
         if user is not None:
             user_email = user.email
     notification = await service.send_notification(
-        payload, user_email=user_email, actor_id=current_user.id, ip_address=request.client.host if request.client else None,
+        payload, user_email=user_email,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
     )
     return ApiResponse(
         data=NotificationResponse.model_validate(notification),
@@ -200,7 +205,8 @@ async def broadcast_notification(
     service: NotificationService = Depends(get_notification_service),
 ) -> ApiResponse[list[NotificationResponse]]:
     notifications = await service.broadcast(
-        payload, user_ids, actor_id=current_user.id, ip_address=request.client.host if request.client else None,
+        payload, user_ids, actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
     )
     return ApiResponse(
         data=[NotificationResponse.model_validate(n) for n in notifications],

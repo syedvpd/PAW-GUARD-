@@ -1,4 +1,7 @@
-"""Data access for the Medical, Surgical & Veterinary Suite module. Repositories never contain business decisions."""
+"""Data access for the Medical, Surgical & Veterinary Suite module.
+
+Repositories never contain business decisions.
+"""
 
 import uuid
 from collections.abc import Sequence

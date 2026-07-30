@@ -1,4 +1,7 @@
-"""API router for the Foster Management module. Routers only validate and call services (RULE-004)."""
+"""API router for the Foster Management module.
+
+Routers only validate and call services (RULE-004).
+"""
 
 import uuid
 
@@ -33,7 +36,10 @@ from pawguard.services.audit_service import AuditService
 router = APIRouter(prefix="/fosters", tags=["fosters"])
 
 
-def get_foster_service(db: AsyncSession = Depends(get_db), audit: AuditService = Depends(get_audit_service)) -> FosterService:
+def get_foster_service(
+    db: AsyncSession = Depends(get_db),
+    audit: AuditService = Depends(get_audit_service),
+) -> FosterService:
     repo = FosterRepository(db)
     dog_repo = DogRepository(db)
     return FosterService(repo, dog_repo, audit_service=audit)
@@ -50,7 +56,13 @@ async def apply_to_foster(
     current_user: CurrentUser = Depends(get_current_user),
     service: FosterService = Depends(get_foster_service),
 ) -> ApiResponse[FosterProfileResponse]:
-    profile = await service.apply_to_foster(current_user.id, payload, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
+    ip = request.client.host if request.client else None
+    profile = await service.apply_to_foster(
+        current_user.id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
     return ApiResponse(
         data=FosterProfileResponse.model_validate(profile),
         message="Foster application submitted successfully.",
@@ -69,7 +81,13 @@ async def update_profile(
     current_user: CurrentUser = Depends(get_current_user),
     service: FosterService = Depends(get_foster_service),
 ) -> ApiResponse[FosterProfileResponse]:
-    profile = await service.update_profile(profile_id, payload, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
+    ip = request.client.host if request.client else None
+    profile = await service.update_profile(
+        profile_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
     return ApiResponse(
         data=FosterProfileResponse.model_validate(profile),
         message="Foster profile updated successfully.",
@@ -88,7 +106,12 @@ async def soft_delete_profile(
     current_user: CurrentUser = Depends(get_current_user),
     service: FosterService = Depends(get_foster_service),
 ) -> ApiResponse[None]:
-    await service.soft_delete_profile(profile_id, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
+    ip = request.client.host if request.client else None
+    await service.soft_delete_profile(
+        profile_id,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
     return ApiResponse(message="Foster profile deleted successfully.")
 
 
@@ -105,7 +128,13 @@ async def place_dog(
     current_user: CurrentUser = Depends(get_current_user),
     service: FosterService = Depends(get_foster_service),
 ) -> ApiResponse[FosterPlacementResponse]:
-    placement = await service.place_dog(profile_id, payload, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
+    ip = request.client.host if request.client else None
+    placement = await service.place_dog(
+        profile_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
     return ApiResponse(
         data=FosterPlacementResponse.model_validate(placement),
         message="Dog placed in foster home successfully.",
@@ -124,7 +153,13 @@ async def return_dog(
     current_user: CurrentUser = Depends(get_current_user),
     service: FosterService = Depends(get_foster_service),
 ) -> ApiResponse[FosterPlacementResponse]:
-    placement = await service.return_dog(placement_id, notes=payload.notes, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
+    ip = request.client.host if request.client else None
+    placement = await service.return_dog(
+        placement_id,
+        notes=payload.notes,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
     return ApiResponse(
         data=FosterPlacementResponse.model_validate(placement),
         message="Dog returned to shelter facility.",
@@ -164,7 +199,12 @@ async def bulk_delete_profiles(
     current_user: CurrentUser = Depends(get_current_user),
     service: FosterService = Depends(get_foster_service),
 ) -> ApiResponse[BulkDeleteResponse]:
-    deleted = await service.bulk_soft_delete(payload.ids, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
+    ip = request.client.host if request.client else None
+    deleted = await service.bulk_soft_delete(
+        payload.ids,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
     return ApiResponse(
         data=BulkDeleteResponse(
             message=f"{deleted} foster profile(s) deleted.",

@@ -220,3 +220,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Generated reports
+src/pawguard/modules/generated_reports/

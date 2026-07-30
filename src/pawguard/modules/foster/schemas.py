@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from pawguard.modules.auth.schemas import UserProfile
 from pawguard.modules.dog.schemas import DogProfileResponse
@@ -37,8 +37,7 @@ class FosterProfileResponse(BaseModel):
     updated_at: datetime
     user: UserProfile | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class FosterPlacementCreate(BaseModel):
@@ -57,8 +56,7 @@ class FosterPlacementResponse(BaseModel):
     created_at: datetime
     dog: DogProfileResponse | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class FosterReturnRequest(BaseModel):

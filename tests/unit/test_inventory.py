@@ -76,12 +76,12 @@ class TestInventoryService:
             quantity=50.0, unit="kg", reorder_threshold=10.0,
         )
         mock_repo.get_item.return_value = item
-        movement_id = uuid.uuid4()
+        uuid.uuid4()
         mock_repo.create_movement.return_value = None
         payload = InventoryMovementCreate(
             item_id=item_id, movement_type=MovementType.CHECK_IN, quantity=20.0,
         )
-        result = await service.record_movement(uuid.uuid4(), payload, actor_id=uuid.uuid4())
+        await service.record_movement(uuid.uuid4(), payload, actor_id=uuid.uuid4())
         assert item.quantity == 70.0
 
     @pytest.mark.asyncio
@@ -95,7 +95,7 @@ class TestInventoryService:
         payload = InventoryMovementCreate(
             item_id=item_id, movement_type=MovementType.CHECK_OUT, quantity=10.0,
         )
-        result = await service.record_movement(uuid.uuid4(), payload, actor_id=uuid.uuid4())
+        await service.record_movement(uuid.uuid4(), payload, actor_id=uuid.uuid4())
         assert item.quantity == 40.0
 
     @pytest.mark.asyncio
@@ -109,7 +109,7 @@ class TestInventoryService:
         payload = InventoryMovementCreate(
             item_id=item_id, movement_type=MovementType.ADJUSTMENT, quantity=30.0,
         )
-        result = await service.record_movement(uuid.uuid4(), payload, actor_id=uuid.uuid4())
+        await service.record_movement(uuid.uuid4(), payload, actor_id=uuid.uuid4())
         assert item.quantity == 30.0
 
     @pytest.mark.asyncio

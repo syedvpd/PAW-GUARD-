@@ -1,4 +1,7 @@
-"""Data access for the Inventory module. Repositories never contain business decisions (RULE-002)."""
+"""Data access for the Inventory module.
+
+Repositories never contain business decisions (RULE-002).
+"""
 
 import uuid
 from collections.abc import Sequence
@@ -28,7 +31,10 @@ class InventoryRepository:
         return item
 
     async def get_item(self, item_id: uuid.UUID) -> InventoryItem | None:
-        stmt = select(InventoryItem).where(InventoryItem.id == item_id, InventoryItem.deleted_at.is_(None))
+        stmt = select(InventoryItem).where(
+            InventoryItem.id == item_id,
+            InventoryItem.deleted_at.is_(None),
+        )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def get_item_by_name(self, name: str) -> InventoryItem | None:
@@ -44,8 +50,14 @@ class InventoryRepository:
         await self._session.flush()
         return movement
 
-    async def list_movements_by_item(self, item_id: uuid.UUID) -> Sequence[InventoryMovement]:
-        stmt = select(InventoryMovement).where(InventoryMovement.item_id == item_id).order_by(InventoryMovement.created_at.desc())
+    async def list_movements_by_item(
+        self, item_id: uuid.UUID,
+    ) -> Sequence[InventoryMovement]:
+        stmt = (
+            select(InventoryMovement)
+            .where(InventoryMovement.item_id == item_id)
+            .order_by(InventoryMovement.created_at.desc())
+        )
         return (await self._session.execute(stmt)).scalars().all()
 
     async def create_requisition(self, req: RequisitionOrder) -> RequisitionOrder:
@@ -161,7 +173,11 @@ class InventoryRepository:
         await self._session.flush()
         return len(items)
 
-    async def bulk_update_requisition_status(self, ids: list[uuid.UUID], status: RequisitionStatus) -> int:
+    async def bulk_update_requisition_status(
+        self,
+        ids: list[uuid.UUID],
+        status: RequisitionStatus,
+    ) -> int:
         stmt = (
             update(RequisitionOrder)
             .where(RequisitionOrder.id.in_(ids))

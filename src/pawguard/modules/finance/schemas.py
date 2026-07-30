@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from pawguard.modules.finance.models import (
     AccountCategory,
@@ -44,8 +44,7 @@ class ChartOfAccountsResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class FinancialTransactionCreate(BaseModel):
@@ -82,8 +81,7 @@ class FinancialTransactionResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class GeneralLedgerEntryResponse(BaseModel):
@@ -96,8 +94,7 @@ class GeneralLedgerEntryResponse(BaseModel):
     description: str | None
     account: ChartOfAccountsResponse | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class RecurringTransactionCreate(BaseModel):
@@ -140,8 +137,7 @@ class RecurringTransactionResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class BudgetCreate(BaseModel):
@@ -177,8 +173,7 @@ class BudgetResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class BudgetItemResponse(BaseModel):
@@ -189,8 +184,7 @@ class BudgetItemResponse(BaseModel):
     spent_amount: Decimal
     account: ChartOfAccountsResponse | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class FinanceSummary(BaseModel):

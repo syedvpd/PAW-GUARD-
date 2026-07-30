@@ -35,7 +35,9 @@ class NotificationService:
         self._audit = audit_service
 
     async def create_notification(
-        self, payload: NotificationCreate, actor_id: uuid.UUID | None = None, ip_address: str | None = None
+        self, payload: NotificationCreate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
     ) -> Notification:
         notification = Notification(
             user_id=payload.user_id,
@@ -57,7 +59,10 @@ class NotificationService:
         return result
 
     async def broadcast(
-        self, payload: BroadcastCreate, user_ids: list[uuid.UUID], actor_id: uuid.UUID | None = None, ip_address: str | None = None
+        self, payload: BroadcastCreate,
+        user_ids: list[uuid.UUID],
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
     ) -> list[Notification]:
         notifications = [
             Notification(
@@ -121,7 +126,10 @@ class NotificationService:
         return await self._repo.count_unread(user_id)
 
     async def delete_notification(
-        self, notification_id: uuid.UUID, user_id: uuid.UUID | None = None, actor_id: uuid.UUID | None = None, ip_address: str | None = None
+        self, notification_id: uuid.UUID,
+        user_id: uuid.UUID | None = None,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
     ) -> None:
         if user_id is not None:
             notification = await self._repo.get(notification_id)
@@ -131,11 +139,18 @@ class NotificationService:
         if result is None:
             raise NotFoundError("Notification not found.")
 
-    async def bulk_delete(self, ids: list[uuid.UUID], actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> int:
+    async def bulk_delete(
+        self, ids: list[uuid.UUID],
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> int:
         return await self._repo.bulk_soft_delete(ids)
 
     async def send_notification(
-        self, payload: NotificationSend, user_email: str | None = None, actor_id: uuid.UUID | None = None, ip_address: str | None = None
+        self, payload: NotificationSend,
+        user_email: str | None = None,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
     ) -> Notification:
         notification = Notification(
             user_id=payload.user_id,

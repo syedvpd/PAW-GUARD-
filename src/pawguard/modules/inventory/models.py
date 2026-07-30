@@ -39,9 +39,13 @@ class InventoryItem(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
 
     name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     category: Mapped[ItemCategory] = mapped_column(String(64), nullable=False, index=True)
-    quantity: Mapped[float] = mapped_column(Numeric(10, 2, asdecimal=False), default=0.0, nullable=False)
+    quantity: Mapped[float] = mapped_column(
+        Numeric(10, 2, asdecimal=False), default=0.0, nullable=False,
+    )
     unit: Mapped[str] = mapped_column(String(32), nullable=False)  # vial, kg, pack, etc.
-    reorder_threshold: Mapped[float] = mapped_column(Numeric(10, 2, asdecimal=False), default=10.0, nullable=False)
+    reorder_threshold: Mapped[float] = mapped_column(
+        Numeric(10, 2, asdecimal=False), default=10.0, nullable=False,
+    )
     expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
 

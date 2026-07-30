@@ -1,4 +1,7 @@
-"""InventoryService: owns all stock levels, check-in/check-out logs, reorder threshold alerts, and requisition flows (RULE-003)."""
+"""InventoryService: owns stock levels, movement logs, and requisition flows.
+
+Adheres to RULE-003.
+"""
 
 import uuid
 from collections.abc import Sequence
@@ -29,12 +32,19 @@ from pawguard.services.audit_service import AuditService
 
 
 class InventoryService:
-    def __init__(self, repository: InventoryRepository, audit_service: AuditService | None = None) -> None:
+    def __init__(
+        self,
+        repository: InventoryRepository,
+        audit_service: AuditService | None = None,
+    ) -> None:
         self._repo = repository
         self._audit = audit_service
 
     async def create_item(
-        self, payload: InventoryItemCreate, actor_id: uuid.UUID | None = None, ip_address: str | None = None
+        self,
+        payload: InventoryItemCreate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
     ) -> InventoryItem:
         existing = await self._repo.get_item_by_name(payload.name)
         if existing is not None:
@@ -61,7 +71,11 @@ class InventoryService:
         return result
 
     async def record_movement(
-        self, user_id: uuid.UUID, payload: InventoryMovementCreate, actor_id: uuid.UUID | None = None, ip_address: str | None = None
+        self,
+        user_id: uuid.UUID,
+        payload: InventoryMovementCreate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
     ) -> InventoryMovement:
         item = await self._repo.get_item(payload.item_id)
         if item is None:
@@ -72,7 +86,9 @@ class InventoryService:
         if payload.movement_type == MovementType.CHECK_OUT:
             if item.quantity < qty_change:
                 raise ConflictError(
-                    f"Insufficient stock for '{item.name}'. Available: {item.quantity} {item.unit}, Requested: {qty_change}"
+                    f"Insufficient stock for '{item.name}'. "
+                    f"Available: {item.quantity} {item.unit}, "
+                    f"Requested: {qty_change}"
                 )
             item.quantity -= qty_change
         elif payload.movement_type == MovementType.CHECK_IN:
@@ -105,7 +121,11 @@ class InventoryService:
         return movement
 
     async def create_requisition(
-        self, user_id: uuid.UUID, payload: RequisitionOrderCreate, actor_id: uuid.UUID | None = None, ip_address: str | None = None
+        self,
+        user_id: uuid.UUID,
+        payload: RequisitionOrderCreate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
     ) -> RequisitionOrder:
         item = await self._repo.get_item(payload.item_id)
         if item is None:
@@ -120,7 +140,12 @@ class InventoryService:
         return await self._repo.create_requisition(req)
 
     async def update_requisition_status(
-        self, user_id: uuid.UUID, req_id: uuid.UUID, status: RequisitionStatus, actor_id: uuid.UUID | None = None, ip_address: str | None = None
+        self,
+        user_id: uuid.UUID,
+        req_id: uuid.UUID,
+        status: RequisitionStatus,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
     ) -> RequisitionOrder:
         req = await self._repo.get_requisition(req_id)
         if req is None:
@@ -216,7 +241,12 @@ class InventoryService:
             meta=build_pagination_meta(total=total, params=page_params),
         )
 
-    async def soft_delete_item(self, item_id: uuid.UUID, actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> None:
+    async def soft_delete_item(
+        self,
+        item_id: uuid.UUID,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> None:
         deleted = await self._repo.soft_delete_item(item_id)
         if not deleted:
             raise NotFoundError("Inventory item not found.")
@@ -230,7 +260,12 @@ class InventoryService:
                 metadata={"item_id": str(item_id)},
             )
 
-    async def bulk_delete_items(self, ids: list[uuid.UUID], actor_id: uuid.UUID | None = None, ip_address: str | None = None) -> int:
+    async def bulk_delete_items(
+        self,
+        ids: list[uuid.UUID],
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> int:
         count = await self._repo.bulk_delete_items(ids)
         await self._repo._session.flush()
         if self._audit and actor_id:
@@ -243,5 +278,9 @@ class InventoryService:
             )
         return count
 
-    async def bulk_update_requisition_status(self, ids: list[uuid.UUID], status: RequisitionStatus) -> int:
+    async def bulk_update_requisition_status(
+        self,
+        ids: list[uuid.UUID],
+        status: RequisitionStatus,
+    ) -> int:
         return await self._repo.bulk_update_requisition_status(ids, status)

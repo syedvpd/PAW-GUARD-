@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from pawguard.modules.rescue.models import RescueStatus
 
@@ -52,8 +52,7 @@ class RescueDispatchResponse(BaseModel):
     failure_reason: str | None
     notes: str | None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class RescueReportCreate(BaseModel):
@@ -69,8 +68,7 @@ class RescueReportResponse(BaseModel):
     photos: list[str] | None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class RescueRequestResponse(BaseModel):
@@ -94,5 +92,4 @@ class RescueRequestResponse(BaseModel):
     dispatch: RescueDispatchResponse | None = None
     reports: list[RescueReportResponse] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
