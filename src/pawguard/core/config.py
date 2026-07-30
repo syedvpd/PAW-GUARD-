@@ -3,7 +3,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import computed_field
+from pydantic import AliasChoices, Field, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from pawguard.core.constants import Environment
@@ -73,7 +73,10 @@ class Settings(BaseSettings):
     # --- Payments ---
     # Provider is swappable: implement PaymentGateway and register it in
     # core/payments/__init__.py, then flip this one setting.
-    payment_provider: str = "razorpay"
+    payment_provider: str = Field(
+        default="razorpay", validation_alias=AliasChoices("PAYMENT_GATEWAY", "PAYMENT_PROVIDER")
+    )
+    payment_currency: str = Field(default="INR", validation_alias=AliasChoices("PAYMENT_CURRENCY"))
     razorpay_key_id: str = ""
     razorpay_key_secret: str = ""
     razorpay_webhook_secret: str = ""

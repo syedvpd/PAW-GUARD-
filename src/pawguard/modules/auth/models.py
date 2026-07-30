@@ -174,8 +174,15 @@ class User(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     roles: Mapped[list["Role"]] = relationship(secondary="user_roles", back_populates="users")
-    sessions: Mapped[list["UserSession"]] = relationship(back_populates="user")
-    oauth_accounts: Mapped[list["OAuthAccount"]] = relationship(back_populates="user")
+    # passive_deletes: these FKs are ON DELETE CASCADE at the DB level: let
+    # postgres remove the children instead of the ORM issuing per-row
+    # UPDATE ... SET user_id = NULL (which fails - user_id is NOT NULL).
+    sessions: Mapped[list["UserSession"]] = relationship(
+        back_populates="user", passive_deletes=True
+    )
+    oauth_accounts: Mapped[list["OAuthAccount"]] = relationship(
+        back_populates="user", passive_deletes=True
+    )
 
     __table_args__ = (Index("ix_users_email_lower", "email"),)
 

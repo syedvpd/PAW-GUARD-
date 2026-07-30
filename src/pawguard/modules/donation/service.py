@@ -111,7 +111,9 @@ class DonationService:
         )
         await self._repo.create_donation(donation)
 
-        receipt = f"donation-{donation.id}"
+        # Razorpay caps `receipt` at 40 chars; a bare UUID (36 chars) fits, a
+        # prefixed one doesn't.
+        receipt = str(donation.id)
         try:
             order = await self._gateway.create_order(
                 amount=payload.amount,

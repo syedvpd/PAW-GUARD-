@@ -5,9 +5,14 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from pawguard.core.config import get_settings
 from pawguard.modules.auth.schemas import UserProfile
 from pawguard.modules.dog.schemas import DogProfileResponse
 from pawguard.modules.donation.models import DonationStatus, DonationType
+
+
+def _default_currency() -> str:
+    return get_settings().payment_currency
 
 
 class DonorProfileCreate(BaseModel):
@@ -35,7 +40,9 @@ class DonorProfileResponse(BaseModel):
 class DonationCreate(BaseModel):
     dog_id: uuid.UUID | None = None
     amount: float = Field(..., ge=1.0)
-    currency: str = Field("USD", min_length=3, max_length=3)
+    currency: str = Field(
+        default_factory=_default_currency, min_length=3, max_length=3
+    )
     donation_type: DonationType = DonationType.ONE_TIME
     notes: str | None = None
 

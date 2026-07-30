@@ -16,6 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
+from sqlalchemy import or_ as sa_or
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -33,24 +34,24 @@ TEST_PASSWORD = "PawGuard@2026"
 # those at the schema layer, so accounts on those domains can never log in
 # through the API even though they exist in the database.
 TEST_ACCOUNTS: list[tuple[str, str, str]] = [
-    ("super_admin", "super.admin@pawguard-qa.com", "Super Administrator"),
-    ("rescue_centre_admin", "rescue.admin@pawguard-qa.com", "Rescue Centre Admin"),
-    ("rescue_coordinator", "rescue.coordinator@pawguard-qa.com", "Rescue Coordinator"),
-    ("rescue_agent", "rescue.agent@pawguard-qa.com", "Rescue Agent"),
-    ("veterinarian", "vet@pawguard-qa.com", "Dr. Veterinarian"),
-    ("shelter_manager", "shelter.manager@pawguard-qa.com", "Shelter Manager"),
-    ("adoption_coordinator", "adoption.coordinator@pawguard-qa.com", "Adoption Coordinator"),
-    ("foster_coordinator", "foster.coordinator@pawguard-qa.com", "Foster Coordinator"),
-    ("volunteer_coordinator", "volunteer.coordinator@pawguard-qa.com", "Volunteer Coordinator"),
-    ("inventory_manager", "inventory.manager@pawguard-qa.com", "Inventory Manager"),
-    ("finance_user", "finance.user@pawguard-qa.com", "Finance User"),
-    ("volunteer", "volunteer@pawguard-qa.com", "Test Volunteer"),
-    ("foster_family", "foster.family@pawguard-qa.com", "Test Foster Family"),
-    ("donor", "donor@pawguard-qa.com", "Test Donor"),
-    ("general_public", "public.user@pawguard-qa.com", "Test Public User"),
+    ("super_admin", "super.admin@pawguard.com", "Super Administrator"),
+    ("rescue_centre_admin", "rescue.admin@pawguard.com", "Rescue Centre Admin"),
+    ("rescue_coordinator", "rescue.coordinator@pawguard.com", "Rescue Coordinator"),
+    ("rescue_agent", "rescue.agent@pawguard.com", "Rescue Agent"),
+    ("veterinarian", "vet@pawguard.com", "Dr. Veterinarian"),
+    ("shelter_manager", "shelter.manager@pawguard.com", "Shelter Manager"),
+    ("adoption_coordinator", "adoption.coordinator@pawguard.com", "Adoption Coordinator"),
+    ("foster_coordinator", "foster.coordinator@pawguard.com", "Foster Coordinator"),
+    ("volunteer_coordinator", "volunteer.coordinator@pawguard.com", "Volunteer Coordinator"),
+    ("inventory_manager", "inventory.manager@pawguard.com", "Inventory Manager"),
+    ("finance_user", "finance.user@pawguard.com", "Finance User"),
+    ("volunteer", "volunteer@pawguard.com", "Test Volunteer"),
+    ("foster_family", "foster.family@pawguard.com", "Test Foster Family"),
+    ("donor", "donor@pawguard.com", "Test Donor"),
+    ("general_public", "public.user@pawguard.com", "Test Public User"),
 ]
 
-LEGACY_EMAIL_DOMAIN = "@pawguard.test"
+LEGACY_EMAIL_DOMAINS = ("@pawguard.test", "@pawguard-qa.com")
 
 
 async def seed_db(label: str, database_url: str) -> None:
@@ -66,13 +67,10 @@ async def seed_db(label: str, database_url: str) -> None:
     hashed = hash_password(TEST_PASSWORD)
 
     async with session_factory() as session:
-        legacy = (
-            await session.execute(
-                select(User).where(User.email.like(f"%{LEGACY_EMAIL_DOMAIN}"))
-            )
-        ).scalars().all()
+        legacy_filter = sa_or(*(User.email.like(f"%{d}") for d in LEGACY_EMAIL_DOMAINS))
+        legacy = (await session.execute(select(User).where(legacy_filter))).scalars().all()
         for user in legacy:
-            print(f"  [CLEANUP] removing unusable legacy account {user.email}")
+            print(f"  [CLEANUP] removing legacy account {user.email}")
             await session.delete(user)
         if legacy:
             await session.commit()
