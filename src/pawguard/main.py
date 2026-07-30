@@ -4,6 +4,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from sqlalchemy import text
@@ -79,6 +80,10 @@ def create_app() -> FastAPI:
     register_exception_handlers(app)
 
     app.include_router(api_v1_router, prefix=settings.api_v1_prefix)
+
+    @app.get("/", include_in_schema=False)
+    async def redirect_to_docs() -> RedirectResponse:
+        return RedirectResponse(url="/docs")
 
     @app.get("/health", response_model=ApiResponse[dict[str, str]])
     async def health() -> ApiResponse[dict[str, str]]:
