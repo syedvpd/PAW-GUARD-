@@ -1,20 +1,16 @@
 """Integration tests for end-to-end flows of all core modules."""
 
-import uuid
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from sqlalchemy.orm import selectinload
 
-from pawguard.modules.auth.models import Role, User
-from pawguard.modules.rescue.models import RescueStatus
-from pawguard.modules.dog.models import DogStatus
 from pawguard.modules.adoption.models import AdoptionStatus
-from pawguard.modules.volunteer.models import VolunteerStatus
-from pawguard.modules.foster.models import FosterStatus
-from pawguard.modules.lost_found.models import MatchStatus, ReportStatus
+from pawguard.modules.auth.models import Role, User
+from pawguard.modules.dog.models import DogStatus
+from pawguard.modules.lost_found.models import MatchStatus
+from pawguard.modules.rescue.models import RescueStatus
 
 REGISTER_PAYLOAD = {
     "email": "flowuser@example.com",

@@ -1,11 +1,21 @@
 """Data access for the Inventory module. Repositories never contain business decisions (RULE-002)."""
 
 import uuid
-from typing import Sequence
-from sqlalchemy import select
+from collections.abc import Sequence
+
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from pawguard.modules.inventory.models import InventoryItem, InventoryMovement, RequisitionOrder
+from pawguard.core.pagination import PageParams
+from pawguard.core.search import SortParams, apply_sorting, build_search_filter
+from pawguard.modules.inventory.models import (
+    InventoryItem,
+    InventoryMovement,
+    ItemCategory,
+    MovementType,
+    RequisitionOrder,
+    RequisitionStatus,
+)
 
 
 class InventoryRepository:
@@ -18,7 +28,7 @@ class InventoryRepository:
         return item
 
     async def get_item(self, item_id: uuid.UUID) -> InventoryItem | None:
-        stmt = select(InventoryItem).where(InventoryItem.id == item_id)
+        stmt = select(InventoryItem).where(InventoryItem.id == item_id, InventoryItem.deleted_at.is_(None))
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def get_item_by_name(self, name: str) -> InventoryItem | None:
@@ -50,3 +60,113 @@ class InventoryRepository:
     async def list_requisitions(self) -> Sequence[RequisitionOrder]:
         stmt = select(RequisitionOrder).order_by(RequisitionOrder.created_at.desc())
         return (await self._session.execute(stmt)).scalars().all()
+
+    async def list_items_paginated(
+        self,
+        page_params: PageParams,
+        sort: SortParams,
+        search_term: str | None = None,
+        category: ItemCategory | None = None,
+    ) -> tuple[Sequence[InventoryItem], int]:
+        stmt = select(InventoryItem).where(InventoryItem.deleted_at.is_(None))
+
+        search_filter = build_search_filter(InventoryItem, search_term, ("name", "category"))
+        if search_filter is not None:
+            stmt = stmt.where(search_filter)
+
+        if category is not None:
+            stmt = stmt.where(InventoryItem.category == category)
+
+        valid_fields = {"name", "quantity", "category", "created_at", "updated_at", "expiry_date"}
+        stmt = apply_sorting(stmt, sort, valid_fields)
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = (await self._session.execute(count_stmt)).scalar_one()
+
+        stmt = stmt.offset(page_params.offset).limit(page_params.limit)
+        results = (await self._session.execute(stmt)).scalars().all()
+
+        return results, total
+
+    async def list_movements_paginated(
+        self,
+        page_params: PageParams,
+        sort: SortParams,
+        item_id: uuid.UUID | None = None,
+        movement_type: MovementType | None = None,
+    ) -> tuple[Sequence[InventoryMovement], int]:
+        stmt = select(InventoryMovement)
+
+        if item_id is not None:
+            stmt = stmt.where(InventoryMovement.item_id == item_id)
+        if movement_type is not None:
+            stmt = stmt.where(InventoryMovement.movement_type == movement_type)
+
+        valid_fields = {"created_at", "quantity", "movement_type"}
+        stmt = apply_sorting(stmt, sort, valid_fields)
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = (await self._session.execute(count_stmt)).scalar_one()
+
+        stmt = stmt.offset(page_params.offset).limit(page_params.limit)
+        results = (await self._session.execute(stmt)).scalars().all()
+
+        return results, total
+
+    async def list_requisitions_paginated(
+        self,
+        page_params: PageParams,
+        sort: SortParams,
+        status: RequisitionStatus | None = None,
+    ) -> tuple[Sequence[RequisitionOrder], int]:
+        stmt = select(RequisitionOrder)
+
+        if status is not None:
+            stmt = stmt.where(RequisitionOrder.status == status)
+
+        valid_fields = {"created_at", "status", "quantity", "updated_at"}
+        stmt = apply_sorting(stmt, sort, valid_fields)
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = (await self._session.execute(count_stmt)).scalar_one()
+
+        stmt = stmt.offset(page_params.offset).limit(page_params.limit)
+        results = (await self._session.execute(stmt)).scalars().all()
+
+        return results, total
+
+    async def soft_delete_item(self, item_id: uuid.UUID) -> bool:
+        from datetime import UTC, datetime
+        stmt = (
+            select(InventoryItem)
+            .where(InventoryItem.id == item_id, InventoryItem.deleted_at.is_(None))
+        )
+        item = (await self._session.execute(stmt)).scalar_one_or_none()
+        if item is None:
+            return False
+        item.deleted_at = datetime.now(UTC)
+        await self._session.flush()
+        return True
+
+    async def bulk_delete_items(self, ids: list[uuid.UUID]) -> int:
+        from datetime import UTC, datetime
+        now = datetime.now(UTC)
+        stmt = (
+            select(InventoryItem)
+            .where(InventoryItem.id.in_(ids), InventoryItem.deleted_at.is_(None))
+        )
+        items = (await self._session.execute(stmt)).scalars().all()
+        for item in items:
+            item.deleted_at = now
+        await self._session.flush()
+        return len(items)
+
+    async def bulk_update_requisition_status(self, ids: list[uuid.UUID], status: RequisitionStatus) -> int:
+        stmt = (
+            update(RequisitionOrder)
+            .where(RequisitionOrder.id.in_(ids))
+            .values(status=status)
+        )
+        result = await self._session.execute(stmt)
+        await self._session.flush()
+        return result.rowcount  # type: ignore[attr-defined,no-any-return]

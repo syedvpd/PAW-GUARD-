@@ -1,13 +1,21 @@
-"""Data access for the Shelter & Capacity Management module. Repositories never contain business decisions (RULE-002)."""
+"""Data access for the Shelter & Capacity Management module.
+
+Repositories never contain business decisions (RULE-002).
+"""
 
 import uuid
-from typing import Sequence
-from sqlalchemy import select
+from collections.abc import Sequence
+
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from pawguard.core.pagination import PageParams
+from pawguard.core.search import SortParams, apply_sorting, build_search_filter
 from pawguard.modules.shelter.models import (
     DailyCareLog,
+    FacilityStatus,
     FacilityTransfer,
+    FacilityType,
     Kennel,
     ShelterFacility,
     ShelterSection,
@@ -24,11 +32,18 @@ class ShelterRepository:
         return facility
 
     async def get_facility(self, facility_id: uuid.UUID) -> ShelterFacility | None:
-        stmt = select(ShelterFacility).where(ShelterFacility.id == facility_id, ShelterFacility.deleted_at.is_(None))
+        stmt = (
+            select(ShelterFacility)
+            .where(ShelterFacility.id == facility_id, ShelterFacility.deleted_at.is_(None))
+        )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def list_facilities(self) -> Sequence[ShelterFacility]:
-        stmt = select(ShelterFacility).where(ShelterFacility.deleted_at.is_(None)).order_by(ShelterFacility.name.asc())
+        stmt = (
+            select(ShelterFacility)
+            .where(ShelterFacility.deleted_at.is_(None))
+            .order_by(ShelterFacility.name.asc())
+        )
         return (await self._session.execute(stmt)).scalars().all()
 
     async def create_section(self, section: ShelterSection) -> ShelterSection:
@@ -41,7 +56,11 @@ class ShelterRepository:
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def list_sections_by_facility(self, facility_id: uuid.UUID) -> Sequence[ShelterSection]:
-        stmt = select(ShelterSection).where(ShelterSection.facility_id == facility_id).order_by(ShelterSection.name.asc())
+        stmt = (
+            select(ShelterSection)
+            .where(ShelterSection.facility_id == facility_id)
+            .order_by(ShelterSection.name.asc())
+        )
         return (await self._session.execute(stmt)).scalars().all()
 
     async def create_kennel(self, kennel: Kennel) -> Kennel:
@@ -54,7 +73,11 @@ class ShelterRepository:
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def list_kennels_by_section(self, section_id: uuid.UUID) -> Sequence[Kennel]:
-        stmt = select(Kennel).where(Kennel.section_id == section_id).order_by(Kennel.identifier.asc())
+        stmt = (
+            select(Kennel)
+            .where(Kennel.section_id == section_id)
+            .order_by(Kennel.identifier.asc())
+        )
         return (await self._session.execute(stmt)).scalars().all()
 
     async def create_transfer(self, transfer: FacilityTransfer) -> FacilityTransfer:
@@ -76,5 +99,124 @@ class ShelterRepository:
         return care_log
 
     async def list_care_logs_by_dog(self, dog_id: uuid.UUID) -> Sequence[DailyCareLog]:
-        stmt = select(DailyCareLog).where(DailyCareLog.dog_id == dog_id).order_by(DailyCareLog.feed_time.desc())
+        stmt = (
+            select(DailyCareLog)
+            .where(DailyCareLog.dog_id == dog_id)
+            .order_by(DailyCareLog.feed_time.desc())
+        )
         return (await self._session.execute(stmt)).scalars().all()
+
+    async def list_facilities_paginated(
+        self,
+        page_params: PageParams,
+        sort: SortParams,
+        search_term: str | None = None,
+        status: FacilityStatus | None = None,
+        facility_type: FacilityType | None = None,
+    ) -> tuple[Sequence[ShelterFacility], int]:
+        stmt = select(ShelterFacility).where(ShelterFacility.deleted_at.is_(None))
+
+        search_filter = build_search_filter(ShelterFacility, search_term, ("name", "address"))
+        if search_filter is not None:
+            stmt = stmt.where(search_filter)
+
+        if status is not None:
+            stmt = stmt.where(ShelterFacility.status == status)
+        if facility_type is not None:
+            stmt = stmt.where(ShelterFacility.facility_type == facility_type)
+
+        valid_fields = {"name", "total_capacity", "status", "facility_type", "created_at", "updated_at"}
+        stmt = apply_sorting(stmt, sort, valid_fields)
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = (await self._session.execute(count_stmt)).scalar_one()
+
+        stmt = stmt.offset(page_params.offset).limit(page_params.limit)
+        results = (await self._session.execute(stmt)).scalars().all()
+
+        return results, total
+
+    async def list_sections_paginated(
+        self,
+        page_params: PageParams,
+        sort: SortParams,
+        facility_id: uuid.UUID | None = None,
+        search_term: str | None = None,
+    ) -> tuple[Sequence[ShelterSection], int]:
+        stmt = select(ShelterSection)
+
+        if facility_id is not None:
+            stmt = stmt.where(ShelterSection.facility_id == facility_id)
+
+        search_filter = build_search_filter(ShelterSection, search_term, ("name",))
+        if search_filter is not None:
+            stmt = stmt.where(search_filter)
+
+        valid_fields = {"name", "capacity", "created_at"}
+        stmt = apply_sorting(stmt, sort, valid_fields)
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = (await self._session.execute(count_stmt)).scalar_one()
+
+        stmt = stmt.offset(page_params.offset).limit(page_params.limit)
+        results = (await self._session.execute(stmt)).scalars().all()
+
+        return results, total
+
+    async def list_kennels_paginated(
+        self,
+        page_params: PageParams,
+        sort: SortParams,
+        section_id: uuid.UUID | None = None,
+    ) -> tuple[Sequence[Kennel], int]:
+        stmt = select(Kennel)
+
+        if section_id is not None:
+            stmt = stmt.where(Kennel.section_id == section_id)
+
+        valid_fields = {"identifier", "capacity", "sanitation_state", "created_at"}
+        stmt = apply_sorting(stmt, sort, valid_fields)
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = (await self._session.execute(count_stmt)).scalar_one()
+
+        stmt = stmt.offset(page_params.offset).limit(page_params.limit)
+        results = (await self._session.execute(stmt)).scalars().all()
+
+        return results, total
+
+    async def soft_delete_facility(self, facility_id: uuid.UUID) -> bool:
+        from datetime import UTC, datetime
+        stmt = (
+            select(ShelterFacility)
+            .where(ShelterFacility.id == facility_id, ShelterFacility.deleted_at.is_(None))
+        )
+        facility = (await self._session.execute(stmt)).scalar_one_or_none()
+        if facility is None:
+            return False
+        facility.deleted_at = datetime.now(UTC)
+        await self._session.flush()
+        return True
+
+    async def bulk_delete_facilities(self, ids: list[uuid.UUID]) -> int:
+        from datetime import UTC, datetime
+        now = datetime.now(UTC)
+        stmt = (
+            select(ShelterFacility)
+            .where(ShelterFacility.id.in_(ids), ShelterFacility.deleted_at.is_(None))
+        )
+        facilities = (await self._session.execute(stmt)).scalars().all()
+        for f in facilities:
+            f.deleted_at = now
+        await self._session.flush()
+        return len(facilities)
+
+    async def bulk_update_facility_status(self, ids: list[uuid.UUID], status: FacilityStatus) -> int:
+        stmt = (
+            update(ShelterFacility)
+            .where(ShelterFacility.id.in_(ids), ShelterFacility.deleted_at.is_(None))
+            .values(status=status)
+        )
+        result = await self._session.execute(stmt)
+        await self._session.flush()
+        return result.rowcount  # type: ignore[attr-defined,no-any-return]

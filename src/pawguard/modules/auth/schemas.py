@@ -2,7 +2,6 @@
 
 import uuid
 from datetime import datetime
-
 from typing import Any
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
@@ -121,6 +120,11 @@ class MFALoginVerifyRequest(BaseModel):
     device: DeviceContext = DeviceContext()
 
 
+class UserProfileUpdate(BaseModel):
+    full_name: str | None = None
+    phone: str | None = None
+
+
 class UserProfile(BaseModel):
     id: uuid.UUID
     email: str
@@ -134,7 +138,7 @@ class UserProfile(BaseModel):
     def serialize_roles(cls, v: Any) -> list[str]:
         if isinstance(v, list):
             return [r.name if hasattr(r, "name") else str(r) for r in v]
-        return v
+        return list(v) if isinstance(v, (list, tuple)) else []
 
     model_config = {"from_attributes": True}
 
@@ -150,3 +154,35 @@ class SessionInfo(BaseModel):
     is_current: bool = False
 
     model_config = {"from_attributes": True}
+
+
+# ── OAuth / Social Login ──────────────────────────────────────────────────────
+
+
+class OAuthLoginRequest(BaseModel):
+    provider: str = Field(min_length=1, max_length=32)
+    provider_token: str
+    device: DeviceContext = DeviceContext()
+
+
+class OAuthCallbackResponse(BaseModel):
+    """Returned when a new account is created via OAuth."""
+
+    is_new_user: bool = False
+
+
+class OAuthAccountInfo(BaseModel):
+    id: uuid.UUID
+    provider: str
+    provider_user_id: str
+    provider_email: str | None
+    display_name: str | None
+    picture_url: str | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class OAuthLinkRequest(BaseModel):
+    provider: str = Field(min_length=1, max_length=32)
+    provider_token: str

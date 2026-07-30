@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 from pawguard.modules.dog.models import DogStatus
@@ -12,7 +13,7 @@ class DogProfileCreate(BaseModel):
     microchip_id: str | None = Field(None, max_length=64)
     name: str = Field(..., min_length=1, max_length=255)
     breed: str = Field("indie_mix", max_length=128)
-    gender: str = Field(..., min_length=4, max_length=16)  # male / female
+    gender: str = Field(..., min_length=4, max_length=16)
     is_spayed_neutered: bool = False
     estimated_age: str | None = Field(None, max_length=64)
     weight: float | None = Field(None, ge=0.0)
@@ -41,6 +42,10 @@ class DogProfileUpdate(BaseModel):
     is_quarantine_passed: bool | None = None
 
 
+class DogStatusUpdate(BaseModel):
+    status: DogStatus = Field(..., description="New status for the dog")
+
+
 class DogProfileResponse(BaseModel):
     id: uuid.UUID
     registration_number: str
@@ -64,3 +69,12 @@ class DogProfileResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class DogListQueryParams(BaseModel):
+    search: str | None = Field(None, description="Search by name, breed, registration number")
+    status: DogStatus | None = None
+    is_adoptable: bool | None = None
+    breed: str | None = None
+    gender: str | None = None
+    temperament: str | None = None

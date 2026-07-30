@@ -10,7 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from pawguard.core.config import get_settings
 from pawguard.modules.auth import permission_codes as pc
@@ -40,6 +40,9 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
             pc.DONATION_READ, pc.DONATION_MANAGE,
             pc.PUBLIC_READ, pc.PUBLIC_CREATE,
             pc.AUDIT_READ,
+            pc.GRIEVANCE_CREATE, pc.GRIEVANCE_READ,
+            pc.GRIEVANCE_UPDATE, pc.GRIEVANCE_ASSIGN, pc.GRIEVANCE_COMMENT,
+            pc.NOTIFICATION_READ, pc.NOTIFICATION_MANAGE,
         ],
     ),
     (
@@ -60,6 +63,9 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
             pc.DONATION_READ,
             pc.PUBLIC_READ, pc.PUBLIC_CREATE,
             pc.AUDIT_READ,
+            pc.GRIEVANCE_READ, pc.GRIEVANCE_UPDATE,
+            pc.GRIEVANCE_ASSIGN, pc.GRIEVANCE_COMMENT,
+            pc.NOTIFICATION_READ,
         ],
     ),
     (
@@ -210,7 +216,7 @@ async def seed_db(label: str, database_url: str) -> None:
             await engine.dispose()
             return
 
-        permissions_cache = {}
+        permissions_cache: dict[str, Permission] = {}
 
         for role_name, description, is_system, permission_codes in ROLE_DEFINITIONS:
             role_perms = []
@@ -221,11 +227,13 @@ async def seed_db(label: str, database_url: str) -> None:
                     perm_result = await session.execute(
                         select(Permission).where(Permission.code == code)
                     )
-                    perm = perm_result.scalar_one_or_none()
-                    if perm is None:
+                    perm_db = perm_result.scalar_one_or_none()
+                    if perm_db is None:
                         perm = Permission(code=code, description=code)
                         session.add(perm)
                         await session.flush()
+                    else:
+                        perm = perm_db
                     permissions_cache[code] = perm
                 role_perms.append(perm)
 

@@ -1,18 +1,27 @@
 """RescueService: owns all rescue business behavior (RULE-003)."""
 
-import random
+import secrets
 import uuid
+from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import Sequence
 
 from pawguard.core.exceptions import ConflictError, NotFoundError
+from pawguard.core.pagination import PageParams, build_pagination_meta
+from pawguard.core.responses import PaginatedResponse
+from pawguard.core.search import SortParams
+from pawguard.modules.auth.models import AuthAuditEventType
 from pawguard.modules.rescue.models import RescueDispatch, RescueReport, RescueRequest, RescueStatus
 from pawguard.modules.rescue.repository import RescueRepository
+from pawguard.modules.rescue.schemas import RescueRequestResponse
+from pawguard.services.audit_service import AuditService
 
 
 class RescueService:
-    def __init__(self, repository: RescueRepository) -> None:
+    def __init__(
+        self, repository: RescueRepository, audit_service: AuditService | None = None
+    ) -> None:
         self._repo = repository
+        self._audit = audit_service
 
     async def report_incident(
         self,
@@ -28,10 +37,12 @@ class RescueService:
         animal_count: int = 1,
         physical_condition: str,
         behavioral_indicators: str | None = None,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
     ) -> RescueRequest:
         # Generate ticket number (e.g. RES-YYYYMMDD-XXXX)
         date_str = datetime.now(UTC).strftime("%Y%m%d")
-        rand_suffix = "".join(random.choices("0123456789", k=4))
+        rand_suffix = "".join(secrets.choice("0123456789") for _ in range(4))
         ticket_number = f"RES-{date_str}-{rand_suffix}"
 
         request = RescueRequest(
@@ -53,9 +64,31 @@ class RescueService:
         res = await self._repo.get_request_by_id(request.id)
         if res is None:
             raise NotFoundError("Failed to fetch newly created rescue request.")
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.RESCUE_REPORTED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "rescue_id": str(res.id),
+                    "ticket_number": ticket_number,
+                    "is_anonymous": is_anonymous,
+                },
+            )
+
         return res
 
-    async def verify_request(self, request_id: uuid.UUID, *, approve: bool, rationale: str | None = None) -> RescueRequest:
+    async def verify_request(
+        self,
+        request_id: uuid.UUID,
+        *,
+        approve: bool,
+        rationale: str | None = None,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> RescueRequest:
         request = await self._repo.get_request_by_id(request_id)
         if request is None:
             raise NotFoundError("Rescue request not found.")
@@ -69,6 +102,25 @@ class RescueService:
             request.status = RescueStatus.REJECTED
             request.rejection_rationale = rationale
 
+        await self._repo._session.flush()
+
+        if self._audit and actor_id:
+            event = (
+                AuthAuditEventType.RESCUE_VERIFIED if approve
+                else AuthAuditEventType.RESCUE_REJECTED
+            )
+            await self._audit.record(
+                event_type=event,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "rescue_id": str(request_id),
+                    "new_status": request.status.value,
+                    "rationale": rationale,
+                },
+            )
+
         return request
 
     async def dispatch_team(
@@ -79,6 +131,8 @@ class RescueService:
         vehicle_id: str | None = None,
         equipment_details: str | None = None,
         notes: str | None = None,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
     ) -> RescueRequest:
         request = await self._repo.get_request_by_id(request_id)
         if request is None:
@@ -107,6 +161,20 @@ class RescueService:
         res = await self._repo.get_request_by_id(request_id)
         if res is None:
             raise NotFoundError("Rescue request not found after dispatch.")
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.RESCUE_DISPATCHED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "rescue_id": str(request_id),
+                    "assigned_driver_id": str(assigned_driver_id) if assigned_driver_id else None,
+                    "vehicle_id": vehicle_id,
+                },
+            )
+
         return res
 
     async def update_dispatch_status(
@@ -118,6 +186,8 @@ class RescueService:
         notes: str | None = None,
         photos: list[str] | None = None,
         failure_reason: str | None = None,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
     ) -> RescueRequest:
         request = await self._repo.get_request_by_id(request_id)
         if request is None:
@@ -127,6 +197,7 @@ class RescueService:
         if dispatch is None:
             raise NotFoundError("Dispatch record not found for this request.")
 
+        old_status = request.status
         now = datetime.now(UTC)
 
         if status == RescueStatus.LOCATED:
@@ -137,7 +208,9 @@ class RescueService:
 
         elif status == RescueStatus.RESCUED:
             if request.status not in (RescueStatus.DISPATCHED, RescueStatus.LOCATED):
-                raise ConflictError("Animal must be in DISPATCHED or LOCATED status to mark RESCUED.")
+                raise ConflictError(
+                    "Animal must be in DISPATCHED or LOCATED status to mark RESCUED."
+                )
             dispatch.rescued_at = now
             request.status = RescueStatus.RESCUED
 
@@ -169,6 +242,21 @@ class RescueService:
         res = await self._repo.get_request_by_id(request_id)
         if res is None:
             raise NotFoundError("Rescue request not found after status update.")
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.RESCUE_STATUS_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "rescue_id": str(request_id),
+                    "old_status": old_status.value,
+                    "new_status": status.value,
+                    "failure_reason": failure_reason,
+                },
+            )
+
         return res
 
     async def get_request(self, request_id: uuid.UUID) -> RescueRequest:
@@ -179,3 +267,93 @@ class RescueService:
 
     async def list_requests(self, status: RescueStatus | None = None) -> Sequence[RescueRequest]:
         return await self._repo.list_requests(status)
+
+    async def list_requests_paginated(
+        self,
+        page: PageParams,
+        sort: SortParams,
+        search_term: str | None = None,
+        status: RescueStatus | None = None,
+    ) -> PaginatedResponse[RescueRequestResponse]:
+        results, total = await self._repo.list_paginated(
+            page=page, sort=sort, search_term=search_term, status=status
+        )
+        return PaginatedResponse(
+            data=[RescueRequestResponse.model_validate(r) for r in results],
+            meta=build_pagination_meta(total=total, params=page),
+        )
+
+    async def soft_delete_request(
+        self,
+        request_id: uuid.UUID,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> None:
+        request = await self._repo.get_request_by_id(request_id)
+        if request is None:
+            raise NotFoundError("Rescue request not found.")
+        request.deleted_at = datetime.now(UTC)
+
+        await self._repo._session.flush()
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.RESCUE_DELETED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"rescue_id": str(request_id), "ticket_number": request.ticket_number},
+            )
+
+    async def bulk_update_status(
+        self,
+        ids: list[uuid.UUID],
+        status: RescueStatus,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> int:
+        updated = await self._repo.bulk_update_status(ids, status)
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.BULK_RESCUE_STATUS_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "rescue_ids": [str(i) for i in ids],
+                    "status": status.value,
+                    "count": updated,
+                },
+            )
+
+        return updated
+
+    async def bulk_soft_delete(
+        self,
+        ids: list[uuid.UUID],
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> int:
+        count = 0
+        for request_id in ids:
+            request = await self._repo.get_request_by_id(request_id)
+            if request is not None:
+                request.deleted_at = datetime.now(UTC)
+                count += 1
+
+        await self._repo._session.flush()
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.BULK_RESCUE_DELETED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"rescue_ids": [str(i) for i in ids], "count": count},
+            )
+
+        return count

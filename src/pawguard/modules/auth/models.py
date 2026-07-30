@@ -30,7 +30,82 @@ class AuthAuditEventType(StrEnum):
     MFA_ENROLLED = "mfa_enrolled"
     MFA_VERIFIED = "mfa_verified"
     MFA_FAILED = "mfa_failed"
+    MFA_DISABLED = "mfa_disabled"
     SESSION_REVOKED = "session_revoked"
+    GRIEVANCE_UPDATED = "grievance_updated"
+    GRIEVANCE_ASSIGNED = "grievance_assigned"
+    DOG_REGISTERED = "dog_registered"
+    DOG_UPDATED = "dog_updated"
+    DOG_STATUS_CHANGED = "dog_status_changed"
+    DOG_DELETED = "dog_deleted"
+    BULK_DOG_STATUS_UPDATED = "bulk_dog_status_updated"
+    BULK_DOG_DELETED = "bulk_dog_deleted"
+    RESCUE_REPORTED = "rescue_reported"
+    RESCUE_VERIFIED = "rescue_verified"
+    RESCUE_REJECTED = "rescue_rejected"
+    RESCUE_DISPATCHED = "rescue_dispatched"
+    RESCUE_STATUS_UPDATED = "rescue_status_updated"
+    RESCUE_DELETED = "rescue_deleted"
+    BULK_RESCUE_STATUS_UPDATED = "bulk_rescue_status_updated"
+    BULK_RESCUE_DELETED = "bulk_rescue_deleted"
+    ADOPTION_SUBMITTED = "adoption_submitted"
+    ADOPTION_UPDATED = "adoption_updated"
+    ADOPTION_STATUS_CHANGED = "adoption_status_changed"
+    ADOPTION_DELETED = "adoption_deleted"
+    BULK_ADOPTION_STATUS_UPDATED = "bulk_adoption_status_updated"
+    BULK_ADOPTION_DELETED = "bulk_adoption_deleted"
+    SHELTER_CREATED = "shelter_created"
+    SHELTER_UPDATED = "shelter_updated"
+    KENNEL_ASSIGNED = "kennel_assigned"
+    KENNEL_SANITATION_UPDATED = "kennel_sanitation_updated"
+    TRANSFER_REQUESTED = "transfer_requested"
+    TRANSFER_CONFIRMED = "transfer_confirmed"
+    CARE_LOG_SUBMITTED = "care_log_submitted"
+    MEDICAL_RECORD_CREATED = "medical_record_created"
+    MEDICAL_RECORD_UPDATED = "medical_record_updated"
+    MEDICAL_RECORD_DELETED = "medical_record_deleted"
+    VACCINATION_RECORDED = "vaccination_recorded"
+    FLEET_VEHICLE_CREATED = "fleet_vehicle_created"
+    FLEET_VEHICLE_UPDATED = "fleet_vehicle_updated"
+    FLEET_VEHICLE_DELETED = "fleet_vehicle_deleted"
+    FOSTER_APPLICATION_SUBMITTED = "foster_application_submitted"
+    FOSTER_APPLICATION_UPDATED = "foster_application_updated"
+    FOSTER_PLACEMENT_CREATED = "foster_placement_created"
+    FOSTER_PLACEMENT_ENDED = "foster_placement_ended"
+    FOSTER_DELETED = "foster_deleted"
+    INVENTORY_ITEM_CREATED = "inventory_item_created"
+    INVENTORY_ITEM_UPDATED = "inventory_item_updated"
+    INVENTORY_ITEM_DELETED = "inventory_item_deleted"
+    INVENTORY_STOCK_ADJUSTED = "inventory_stock_adjusted"
+    LOST_FOUND_REPORTED = "lost_found_reported"
+    LOST_FOUND_UPDATED = "lost_found_updated"
+    LOST_FOUND_RESOLVED = "lost_found_resolved"
+    LOST_FOUND_DELETED = "lost_found_deleted"
+    NOTIFICATION_SENT = "notification_sent"
+    PORTAL_POST_CREATED = "portal_post_created"
+    PORTAL_POST_UPDATED = "portal_post_updated"
+    PORTAL_POST_DELETED = "portal_post_deleted"
+    VOLUNTEER_APPLICATION_SUBMITTED = "volunteer_application_submitted"
+    VOLUNTEER_APPLICATION_UPDATED = "volunteer_application_updated"
+    VOLUNTEER_SHIFT_CREATED = "volunteer_shift_created"
+    VOLUNTEER_SHIFT_UPDATED = "volunteer_shift_updated"
+    VOLUNTEER_DELETED = "volunteer_deleted"
+    DONATION_RECEIVED = "donation_received"
+    DONATION_REFUNDED = "donation_refunded"
+    DONATION_RECEIPT_ISSUED = "donation_receipt_issued"
+    SETTINGS_UPDATED = "settings_updated"
+    REGISTERED = "registered"
+    ACCOUNT_LOCKED = "account_locked"
+    PROFILE_UPDATED = "profile_updated"
+    OAUTH_LOGIN = "oauth_login"
+    OAUTH_LINKED = "oauth_linked"
+    OAUTH_UNLINKED = "oauth_unlinked"
+    ADMIN_USER_CREATED = "admin_user_created"
+    ADMIN_USER_UPDATED = "admin_user_updated"
+    ADMIN_USER_DELETED = "admin_user_deleted"
+    ADMIN_ROLE_CREATED = "admin_role_created"
+    ADMIN_ROLE_UPDATED = "admin_role_updated"
+    ADMIN_ROLE_DELETED = "admin_role_deleted"
 
 
 class Role(UUIDPkMixin, TimestampMixin, Base):
@@ -100,6 +175,7 @@ class User(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
 
     roles: Mapped[list["Role"]] = relationship(secondary="user_roles", back_populates="users")
     sessions: Mapped[list["UserSession"]] = relationship(back_populates="user")
+    oauth_accounts: Mapped[list["OAuthAccount"]] = relationship(back_populates="user")
 
     __table_args__ = (Index("ix_users_email_lower", "email"),)
 
@@ -201,6 +277,35 @@ class EmailVerificationToken(UUIDPkMixin, Base):
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class OAuthProvider(StrEnum):
+    GOOGLE = "google"
+    APPLE = "apple"
+    FACEBOOK = "facebook"
+    MICROSOFT = "microsoft"
+
+
+class OAuthAccount(UUIDPkMixin, TimestampMixin, Base):
+    __tablename__ = "oauth_accounts"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    provider_user_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    provider_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    picture_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
+    user: Mapped["User"] = relationship(back_populates="oauth_accounts")
+
+    __table_args__ = (
+        Index("ix_oauth_accounts_provider", "provider", "provider_user_id", unique=True),
     )
 
 

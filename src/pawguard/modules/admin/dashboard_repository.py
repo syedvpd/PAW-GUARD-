@@ -1,13 +1,28 @@
-"""DashboardRepository: handles data access for admin dashboard metrics."""
+"""DashboardRepository: data access for admin dashboard metrics (RULE-002)."""
 
-from sqlalchemy import select, func
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
-from pawguard.db.session import AsyncSessionLocal
-from pawguard.modules.auth.models import User, Role, RefreshToken
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
+from pawguard.modules.auth.models import AuthAuditLog, User, UserSession
+from pawguard.modules.dog.models import DogProfile, DogStatus
+from pawguard.modules.donation.models import Donation, DonationStatus
+from pawguard.modules.foster.models import FosterPlacement, FosterProfile
+from pawguard.modules.grievance.models import GrievanceStatus, GrievanceTicket, ServiceFeedback
+from pawguard.modules.inventory.models import InventoryItem
+from pawguard.modules.lost_found.models import FoundReport, LostReport
+from pawguard.modules.medical.models import ClinicalExam, MedicalTreatment, VaccinationRecord
+from pawguard.modules.notifications.models import Notification
+from pawguard.modules.rescue.models import RescueRequest, RescueStatus
+from pawguard.modules.shelter.models import ShelterFacility
+from pawguard.modules.volunteer.models import ShiftAttendance, VolunteerProfile
 
 
 class DashboardRepository:
-    def __init__(self, session: AsyncSessionLocal) -> None:
+    def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
     async def get_total_users_count(self) -> int:
@@ -15,13 +30,334 @@ class DashboardRepository:
         return result.scalar_one()
 
     async def get_active_users_count(self) -> int:
-        result = await self._session.execute(select(func.count()).select_from(User).where(User.is_active == True))
-        return result.scalar_one()
+        stmt = select(func.count()).select_from(User).where(User.is_active.is_(True))
+        return (await self._session.execute(stmt)).scalar_one()
+
+    async def get_verified_users_count(self) -> int:
+        stmt = select(func.count()).select_from(User).where(User.is_verified.is_(True))
+        return (await self._session.execute(stmt)).scalar_one()
 
     async def get_total_roles_count(self) -> int:
-        result = await self._session.execute(select(func.count(Role.id)))
+        result = await self._session.execute(select(func.count(UserSession.id)))
         return result.scalar_one()
 
     async def get_active_sessions_count(self) -> int:
-        result = await self._session.execute(select(func.count(RefreshToken.id)).where(RefreshToken.is_revoked == False))
+        stmt = select(func.count(UserSession.id)).where(UserSession.is_active.is_(True))
+        result = await self._session.execute(stmt)
         return result.scalar_one()
+
+    async def count_rescues_by_status(self) -> dict[str, int]:
+        stmt = select(RescueRequest.status, func.count(RescueRequest.id))
+        stmt = stmt.where(RescueRequest.deleted_at.is_(None)).group_by(RescueRequest.status)
+        rows = (await self._session.execute(stmt)).all()
+        return {r.status: r.count for r in rows}  # type: ignore[misc]
+
+    async def count_dogs_by_status(self) -> dict[str, int]:
+        stmt = select(DogProfile.status, func.count(DogProfile.id))
+        stmt = stmt.where(DogProfile.deleted_at.is_(None)).group_by(DogProfile.status)
+        rows = (await self._session.execute(stmt)).all()
+        return {r.status: r.count for r in rows}  # type: ignore[misc]
+
+    async def count_adoptions_by_status(self) -> dict[str, int]:
+        stmt = select(AdoptionApplication.status, func.count(AdoptionApplication.id))
+        stmt = stmt.where(AdoptionApplication.deleted_at.is_(None))
+        stmt = stmt.group_by(AdoptionApplication.status)
+        rows = (await self._session.execute(stmt)).all()
+        return {r.status: r.count for r in rows}  # type: ignore[misc]
+
+    async def count_volunteers_by_status(self) -> dict[str, int]:
+        stmt = select(VolunteerProfile.status, func.count(VolunteerProfile.id))
+        stmt = stmt.where(VolunteerProfile.deleted_at.is_(None)).group_by(VolunteerProfile.status)
+        rows = (await self._session.execute(stmt)).all()
+        return {r.status: r.count for r in rows}  # type: ignore[misc]
+
+    async def count_grievances_by_status(self) -> dict[str, int]:
+        stmt = select(GrievanceTicket.status, func.count(GrievanceTicket.id))
+        stmt = stmt.where(GrievanceTicket.is_deleted.is_(False)).group_by(GrievanceTicket.status)
+        rows = (await self._session.execute(stmt)).all()
+        return {r.status: r.count for r in rows}  # type: ignore[misc]
+
+    async def get_donation_totals(self) -> dict[str, Any]:
+        stmt = select(
+            func.count(Donation.id),
+            func.coalesce(
+                func.sum(Donation.amount).filter(Donation.status == DonationStatus.SUCCESS), 0
+            ),
+        )
+        total_count, total_amount = (await self._session.execute(stmt)).one()
+        return {"total_donations": total_count, "total_raised": float(total_amount)}
+
+    async def get_recent_donations(self, days: int = 30) -> dict[str, Any]:
+        since = datetime.now(UTC) - timedelta(days=days)
+        stmt = select(
+            func.count(Donation.id),
+            func.coalesce(
+                func.sum(Donation.amount).filter(Donation.status == DonationStatus.SUCCESS), 0
+            ),
+        ).where(Donation.created_at >= since)
+        count, amount = (await self._session.execute(stmt)).one()
+        return {"donation_count": count, "amount_raised": float(amount)}
+
+    async def get_adoption_rate(self) -> float:
+        total_stmt = select(func.count(DogProfile.id)).where(DogProfile.deleted_at.is_(None))
+        total = (await self._session.execute(total_stmt)).scalar_one()
+        if total == 0:
+            return 0.0
+        adopted = (await self._session.execute(
+            select(func.count(DogProfile.id)).where(
+                DogProfile.deleted_at.is_(None), DogProfile.status == DogStatus.ADOPTED
+            )
+        )).scalar_one()
+        return round(adopted / total * 100, 1)
+
+    async def get_shelter_occupancy(self) -> dict[str, Any]:
+        total_capacity = (await self._session.execute(
+            select(func.coalesce(func.sum(ShelterFacility.total_capacity), 0))
+        )).scalar_one()
+        dogs_in_shelter = (await self._session.execute(
+            select(func.count(DogProfile.id)).where(
+                DogProfile.deleted_at.is_(None),
+                DogProfile.status.in_([DogStatus.SHELTER, DogStatus.CLINIC]),
+            )
+        )).scalar_one()
+        occupancy_pct = round(dogs_in_shelter / total_capacity * 100, 1) if total_capacity else 0.0
+        return {
+            "capacity": total_capacity,
+            "occupied": dogs_in_shelter,
+            "occupancy_pct": occupancy_pct,
+        }
+
+    async def get_inventory_alerts(self) -> list[dict[str, Any]]:
+        stmt = select(InventoryItem).where(
+            InventoryItem.quantity <= InventoryItem.reorder_threshold
+        ).order_by(InventoryItem.quantity.asc())
+        items = (await self._session.execute(stmt)).scalars().all()
+        return [
+            {
+                "id": str(i.id),
+                "name": i.name,
+                "category": i.category,
+                "quantity": i.quantity,
+                "reorder_threshold": i.reorder_threshold,
+            }
+            for i in items
+        ]
+
+    async def count_expiring_inventory(self, days: int = 30) -> int:
+        from datetime import date, timedelta
+        threshold = date.today() + timedelta(days=days)
+        stmt = select(func.count(InventoryItem.id)).where(
+            InventoryItem.expiry_date.isnot(None),
+            InventoryItem.expiry_date <= threshold,
+        )
+        return (await self._session.execute(stmt)).scalar_one()
+
+    async def get_recent_activity(self, limit: int = 20) -> list[dict[str, Any]]:
+        stmt = select(AuthAuditLog).order_by(AuthAuditLog.created_at.desc()).limit(limit)
+        entries = (await self._session.execute(stmt)).scalars().all()
+        return [
+            {
+                "id": str(e.id),
+                "user_id": str(e.user_id) if e.user_id else None,
+                "event_type": e.event_type,
+                "ip_address": e.ip_address,
+                "created_at": e.created_at.isoformat() if e.created_at else None,
+            }
+            for e in entries
+        ]
+
+    async def get_rescue_kpis(self) -> dict[str, Any]:
+        total = (await self._session.execute(
+            select(func.count(RescueRequest.id)).where(RescueRequest.deleted_at.is_(None))
+        )).scalar_one()
+        resolved = (await self._session.execute(
+            select(func.count(RescueRequest.id)).where(
+                RescueRequest.deleted_at.is_(None),
+                RescueRequest.status == RescueStatus.ADMITTED,
+            )
+        )).scalar_one()
+        rejection_rate = 0.0
+        if total > 0:
+            rejected = (await self._session.execute(
+                select(func.count(RescueRequest.id)).where(
+                    RescueRequest.deleted_at.is_(None),
+                    RescueRequest.status == RescueStatus.REJECTED,
+                )
+            )).scalar_one()
+            rejection_rate = round(rejected / total * 100, 1)
+        avg_response = await self._get_avg_rescue_response_time()
+        return {
+            "total_rescues": total,
+            "admitted": resolved,
+            "rejection_rate_pct": rejection_rate,
+            "avg_response_time_minutes": round(avg_response, 1) if avg_response else None,
+        }
+
+    async def _get_avg_rescue_response_time(self) -> float | None:
+        from pawguard.modules.rescue.models import RescueDispatch
+        stmt = select(
+            func.avg(
+                func.extract("epoch", RescueDispatch.located_at - RescueDispatch.dispatched_at) / 60
+            )
+        ).where(
+            RescueDispatch.located_at.isnot(None),
+            RescueDispatch.dispatched_at.isnot(None),
+        )
+        result = (await self._session.execute(stmt)).scalar()
+        return float(result) if result is not None else None
+
+    async def get_medical_stats(self) -> dict[str, Any]:
+        exams = (await self._session.execute(
+            select(func.count(ClinicalExam.id))
+        )).scalar_one()
+        treatments = (await self._session.execute(
+            select(func.count(MedicalTreatment.id))
+        )).scalar_one()
+        vaccinations = (await self._session.execute(
+            select(func.count(VaccinationRecord.id))
+        )).scalar_one()
+        return {
+            "total_exams": exams,
+            "total_treatments": treatments,
+            "total_vaccinations": vaccinations,
+        }
+
+    async def get_volunteer_hours(self) -> float:
+        result = await self._session.execute(
+            select(func.coalesce(func.sum(ShiftAttendance.hours_logged), 0))
+        )
+        return float(result.scalar_one() or 0.0)
+
+    async def get_active_fosters(self) -> int:
+        stmt = select(func.count(FosterPlacement.id)).where(FosterPlacement.is_active.is_(True))
+        return (await self._session.execute(stmt)).scalar_one()
+
+    async def get_open_grievances(self) -> int:
+        stmt = select(func.count(GrievanceTicket.id)).where(
+            GrievanceTicket.is_deleted.is_(False),
+            GrievanceTicket.status.in_(
+                [
+                    GrievanceStatus.OPEN,
+                    GrievanceStatus.INVESTIGATING,
+                    GrievanceStatus.AWAITING_RESPONSE,
+                ]
+            ),
+        )
+        return (await self._session.execute(stmt)).scalar_one()
+
+    async def get_unread_notifications_count(self) -> int:
+        stmt = select(func.count(Notification.id)).where(Notification.is_read.is_(False))
+        return (await self._session.execute(stmt)).scalar_one()
+
+    async def get_active_lost_found(self) -> dict[str, Any]:
+        lost_stmt = select(func.count(LostReport.id)).where(
+            LostReport.deleted_at.is_(None), LostReport.status == "active"
+        )
+        found_stmt = select(func.count(FoundReport.id)).where(
+            FoundReport.deleted_at.is_(None), FoundReport.status == "active"
+        )
+        lost = (await self._session.execute(lost_stmt)).scalar_one()
+        found = (await self._session.execute(found_stmt)).scalar_one()
+        return {"active_lost": lost, "active_found": found}
+
+    async def get_foster_stats(self) -> dict[str, Any]:
+        total_profiles = (await self._session.execute(
+            select(func.count(FosterProfile.id)).where(FosterProfile.deleted_at.is_(None))
+        )).scalar_one()
+        available = (await self._session.execute(
+            select(func.count(FosterProfile.id)).where(
+                FosterProfile.deleted_at.is_(None), FosterProfile.is_available.is_(True)
+            )
+        )).scalar_one()
+        active = await self.get_active_fosters()
+        return {
+            "total_fosters": total_profiles,
+            "available": available,
+            "active_placements": active,
+        }
+
+    async def get_monthly_adoption_trend(self, months: int = 6) -> list[dict[str, Any]]:
+        from sqlalchemy import extract
+        since = datetime.now(UTC) - timedelta(days=months * 30)
+        stmt = select(
+            extract("year", AdoptionApplication.created_at).label("year"),
+            extract("month", AdoptionApplication.created_at).label("month"),
+            func.count(AdoptionApplication.id),
+        ).where(
+            AdoptionApplication.deleted_at.is_(None),
+            AdoptionApplication.created_at >= since,
+        ).group_by("year", "month").order_by("year", "month")
+        rows = (await self._session.execute(stmt)).all()
+        return [
+            {"year": int(r.year), "month": int(r.month), "count": r.count}
+            for r in rows
+        ]
+
+    async def get_monthly_rescue_trend(self, months: int = 6) -> list[dict[str, Any]]:
+        from sqlalchemy import extract
+        since = datetime.now(UTC) - timedelta(days=months * 30)
+        stmt = select(
+            extract("year", RescueRequest.created_at).label("year"),
+            extract("month", RescueRequest.created_at).label("month"),
+            func.count(RescueRequest.id),
+        ).where(
+            RescueRequest.deleted_at.is_(None),
+            RescueRequest.created_at >= since,
+        ).group_by("year", "month").order_by("year", "month")
+        rows = (await self._session.execute(stmt)).all()
+        return [
+            {"year": int(r.year), "month": int(r.month), "count": r.count}
+            for r in rows
+        ]
+
+    async def get_monthly_donation_trend(self, months: int = 6) -> list[dict[str, Any]]:
+        from sqlalchemy import extract
+        since = datetime.now(UTC) - timedelta(days=months * 30)
+        stmt = select(
+            extract("year", Donation.created_at).label("year"),
+            extract("month", Donation.created_at).label("month"),
+            func.count(Donation.id),
+            func.coalesce(
+                func.sum(Donation.amount).filter(Donation.status == DonationStatus.SUCCESS), 0
+            ),
+        ).where(
+            Donation.created_at >= since,
+        ).group_by("year", "month").order_by("year", "month")
+        rows = (await self._session.execute(stmt)).all()
+        return [
+            {"year": int(r.year), "month": int(r.month), "count": r.count, "amount": float(r[3])}
+            for r in rows
+        ]
+
+    async def get_dog_breed_distribution(self) -> list[dict[str, Any]]:
+        stmt = select(DogProfile.breed, func.count(DogProfile.id)).where(
+            DogProfile.deleted_at.is_(None)
+        ).group_by(DogProfile.breed).order_by(func.count(DogProfile.id).desc())
+        rows = (await self._session.execute(stmt)).all()
+        return [{"breed": r.breed, "count": r.count} for r in rows]
+
+    async def get_feedback_summary(self) -> dict[str, Any]:
+        total = (await self._session.execute(
+            select(func.count(ServiceFeedback.id)).where(ServiceFeedback.is_deleted.is_(False))
+        )).scalar_one()
+        avg_rating = (await self._session.execute(
+            select(func.coalesce(func.avg(ServiceFeedback.rating), 0))
+        )).scalar_one()
+        return {"total_feedback": total, "average_rating": round(float(avg_rating), 1)}
+
+    async def get_total_dogs_count(self) -> int:
+        stmt = select(func.count(DogProfile.id)).where(DogProfile.deleted_at.is_(None))
+        return (await self._session.execute(stmt)).scalar_one()
+
+    async def get_adoptable_dogs_count(self) -> int:
+        stmt = select(func.count(DogProfile.id)).where(
+            DogProfile.deleted_at.is_(None), DogProfile.is_adoptable.is_(True)
+        )
+        return (await self._session.execute(stmt)).scalar_one()
+
+    async def get_pending_adoptions_count(self) -> int:
+        stmt = select(func.count(AdoptionApplication.id)).where(
+            AdoptionApplication.deleted_at.is_(None),
+            AdoptionApplication.status == AdoptionStatus.SUBMITTED,
+        )
+        return (await self._session.execute(stmt)).scalar_one()

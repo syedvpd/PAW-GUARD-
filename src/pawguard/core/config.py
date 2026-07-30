@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     allowed_hosts: str = "localhost,127.0.0.1"
     cors_origins: str = "http://localhost:3000"
+    max_request_body_size: int = 10_485_760  # 10 MB
 
     # --- Database ---
     database_url: str = "postgresql+asyncpg://pawguard:pawguard@localhost:5432/pawguard"

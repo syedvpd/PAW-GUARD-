@@ -11,6 +11,7 @@ from pawguard.modules.auth.models import (
     AuthAuditLog,
     EmailVerificationToken,
     MFADevice,
+    OAuthAccount,
     PasswordResetToken,
     Permission,
     RefreshToken,
@@ -291,6 +292,40 @@ class UserRoleRepository:
         await self._session.flush()
 
 
+class OAuthAccountRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_by_provider(
+        self, provider: str, provider_user_id: str
+    ) -> OAuthAccount | None:
+        stmt = select(OAuthAccount).where(
+            OAuthAccount.provider == provider,
+            OAuthAccount.provider_user_id == provider_user_id,
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def get_for_user(self, user_id: uuid.UUID) -> list[OAuthAccount]:
+        stmt = (
+            select(OAuthAccount)
+            .where(OAuthAccount.user_id == user_id)
+            .order_by(OAuthAccount.provider)
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
+
+    async def create(self, account: OAuthAccount) -> OAuthAccount:
+        self._session.add(account)
+        await self._session.flush()
+        return account
+
+    async def delete(self, account_id: uuid.UUID) -> None:
+        stmt = select(OAuthAccount).where(OAuthAccount.id == account_id)
+        account = (await self._session.execute(stmt)).scalar_one_or_none()
+        if account is not None:
+            await self._session.delete(account)
+            await self._session.flush()
+
+
 class AuthAuditLogRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -299,3 +334,23 @@ class AuthAuditLogRepository:
         self._session.add(entry)
         await self._session.flush()
         return entry
+
+    async def list(
+        self,
+        *,
+        skip: int = 0,
+        limit: int = 50,
+        event_type: str | None = None,
+        user_id: uuid.UUID | None = None,
+    ) -> list[AuthAuditLog]:
+        stmt = select(AuthAuditLog)
+        if event_type:
+            stmt = stmt.where(AuthAuditLog.event_type == event_type)
+        if user_id:
+            stmt = stmt.where(AuthAuditLog.user_id == user_id)
+        stmt = stmt.order_by(AuthAuditLog.created_at.desc()).offset(skip).limit(limit)
+        return list((await self._session.execute(stmt)).scalars().all())
+
+    async def get_by_id(self, entry_id: uuid.UUID) -> AuthAuditLog | None:
+        stmt = select(AuthAuditLog).where(AuthAuditLog.id == entry_id)
+        return (await self._session.execute(stmt)).scalar_one_or_none()

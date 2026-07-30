@@ -13,3 +13,11 @@ async def send_email_verification_email_job(
     ctx: dict[str, Any], *, to: str, verify_url: str
 ) -> None:
     EmailService().send_email_verification_email(to=to, verify_url=verify_url)
+
+
+async def send_notification_email_job(
+    ctx: dict[str, Any], *, to: str, subject: str, body: str
+) -> None:
+    email_service = EmailService()
+    html = f"<html><body><p>{body}</p></body></html>"
+    email_service.send(to=to, subject=subject, html_body=html)

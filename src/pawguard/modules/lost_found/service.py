@@ -2,20 +2,43 @@
 
 import math
 import uuid
-from datetime import UTC, datetime
-from typing import Sequence
+from collections.abc import Sequence
 
 from pawguard.core.exceptions import NotFoundError
-from pawguard.modules.lost_found.models import FoundReport, LostReport, MatchStatus, ReportMatch, ReportStatus
+from pawguard.core.pagination import PageParams, build_pagination_meta
+from pawguard.core.responses import PaginatedResponse
+from pawguard.core.search import SortParams
+from pawguard.modules.auth.models import AuthAuditEventType
+from pawguard.modules.lost_found.models import (
+    FoundReport,
+    LostReport,
+    MatchStatus,
+    ReportMatch,
+    ReportStatus,
+    Species,
+)
 from pawguard.modules.lost_found.repository import LostFoundRepository
-from pawguard.modules.lost_found.schemas import FoundReportCreate, LostReportCreate
+from pawguard.modules.lost_found.schemas import (
+    FoundReportCreate,
+    FoundReportResponse,
+    LostReportCreate,
+    LostReportResponse,
+    ReportMatchResponse,
+)
+from pawguard.services.audit_service import AuditService
 
 
 class LostFoundService:
-    def __init__(self, repository: LostFoundRepository) -> None:
+    def __init__(
+        self, repository: LostFoundRepository, audit_service: AuditService | None = None,
+    ) -> None:
         self._repo = repository
+        self._audit = audit_service
 
-    async def report_lost_pet(self, user_id: uuid.UUID, payload: LostReportCreate) -> LostReport:
+    async def report_lost_pet(
+        self, user_id: uuid.UUID, payload: LostReportCreate,
+        actor_id: uuid.UUID | None = None, ip_address: str | None = None,
+    ) -> LostReport:
         report = LostReport(
             user_id=user_id,
             pet_name=payload.pet_name,
@@ -30,13 +53,22 @@ class LostFoundService:
             photo_url=payload.photo_url,
         )
         await self._repo.create_lost_report(report)
-
-        # Run cross matching trigger
+        await self._repo._session.flush()
         await self._run_matching_for_lost(report)
-
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.LOST_FOUND_REPORTED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"report_id": str(report.id), "type": "lost"},
+            )
         return report
 
-    async def report_found_pet(self, user_id: uuid.UUID, payload: FoundReportCreate) -> FoundReport:
+    async def report_found_pet(
+        self, user_id: uuid.UUID, payload: FoundReportCreate,
+        actor_id: uuid.UUID | None = None, ip_address: str | None = None,
+    ) -> FoundReport:
         report = FoundReport(
             user_id=user_id,
             breed_observed=payload.breed_observed.lower(),
@@ -49,24 +81,52 @@ class LostFoundService:
             photo_url=payload.photo_url,
         )
         await self._repo.create_found_report(report)
-
-        # Run cross matching trigger
+        await self._repo._session.flush()
         await self._run_matching_for_found(report)
-
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.LOST_FOUND_REPORTED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"report_id": str(report.id), "type": "found"},
+            )
         return report
 
-    async def resolve_lost_report(self, report_id: uuid.UUID) -> LostReport:
+    async def resolve_lost_report(
+        self, report_id: uuid.UUID, actor_id: uuid.UUID | None = None, ip_address: str | None = None
+    ) -> LostReport:
         report = await self._repo.get_lost_report_by_id(report_id)
         if report is None:
             raise NotFoundError("Lost report not found.")
         report.status = ReportStatus.RESOLVED
+        await self._repo._session.flush()
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.LOST_FOUND_RESOLVED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"report_id": str(report_id), "type": "lost"},
+            )
         return report
 
-    async def resolve_found_report(self, report_id: uuid.UUID) -> FoundReport:
+    async def resolve_found_report(
+        self, report_id: uuid.UUID, actor_id: uuid.UUID | None = None, ip_address: str | None = None
+    ) -> FoundReport:
         report = await self._repo.get_found_report_by_id(report_id)
         if report is None:
             raise NotFoundError("Found report not found.")
         report.status = ReportStatus.RESOLVED
+        await self._repo._session.flush()
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.LOST_FOUND_RESOLVED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"report_id": str(report_id), "type": "found"},
+            )
         return report
 
     async def get_matches_for_lost(self, report_id: uuid.UUID) -> Sequence[ReportMatch]:
@@ -74,6 +134,115 @@ class LostFoundService:
 
     async def get_matches_for_found(self, report_id: uuid.UUID) -> Sequence[ReportMatch]:
         return await self._repo.list_matches_for_found_report(report_id)
+
+    async def list_lost_reports_paginated(
+        self,
+        page_params: PageParams,
+        sort: SortParams,
+        search_term: str | None = None,
+        status: ReportStatus | None = None,
+        species: Species | None = None,
+    ) -> PaginatedResponse[LostReportResponse]:
+        reports, total = await self._repo.list_lost_reports_paginated(
+            page_params, sort, search_term=search_term, status=status, species=species,
+        )
+        return PaginatedResponse(
+            data=list(reports),
+            meta=build_pagination_meta(total=total, params=page_params),
+        )
+
+    async def list_found_reports_paginated(
+        self,
+        page_params: PageParams,
+        sort: SortParams,
+        search_term: str | None = None,
+        status: ReportStatus | None = None,
+        species: Species | None = None,
+    ) -> PaginatedResponse[FoundReportResponse]:
+        reports, total = await self._repo.list_found_reports_paginated(
+            page_params, sort, search_term=search_term, status=status, species=species,
+        )
+        return PaginatedResponse(
+            data=list(reports),
+            meta=build_pagination_meta(total=total, params=page_params),
+        )
+
+    async def list_matches_paginated(
+        self,
+        page_params: PageParams,
+        sort: SortParams,
+        lost_report_id: uuid.UUID | None = None,
+        found_report_id: uuid.UUID | None = None,
+    ) -> PaginatedResponse[ReportMatchResponse]:
+        matches, total = await self._repo.list_matches_paginated(
+            page_params, sort, lost_report_id=lost_report_id, found_report_id=found_report_id,
+        )
+        return PaginatedResponse(
+            data=list(matches),
+            meta=build_pagination_meta(total=total, params=page_params),
+        )
+
+    async def soft_delete_lost_report(
+        self, report_id: uuid.UUID, actor_id: uuid.UUID | None = None, ip_address: str | None = None
+    ) -> None:
+        deleted = await self._repo.soft_delete_lost_report(report_id)
+        if not deleted:
+            raise NotFoundError("Lost report not found.")
+        await self._repo._session.flush()
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.LOST_FOUND_DELETED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"report_id": str(report_id), "type": "lost"},
+            )
+
+    async def soft_delete_found_report(
+        self, report_id: uuid.UUID, actor_id: uuid.UUID | None = None, ip_address: str | None = None
+    ) -> None:
+        deleted = await self._repo.soft_delete_found_report(report_id)
+        if not deleted:
+            raise NotFoundError("Found report not found.")
+        await self._repo._session.flush()
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.LOST_FOUND_DELETED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"report_id": str(report_id), "type": "found"},
+            )
+
+    async def bulk_delete_lost_reports(
+        self, ids: list[uuid.UUID], actor_id: uuid.UUID | None = None, ip_address: str | None = None
+    ) -> int:
+        count = await self._repo.bulk_delete_lost_reports(ids)
+        await self._repo._session.flush()
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.LOST_FOUND_DELETED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"report_ids": [str(i) for i in ids], "count": count, "type": "lost"},
+            )
+        return count
+
+    async def bulk_delete_found_reports(
+        self, ids: list[uuid.UUID], actor_id: uuid.UUID | None = None, ip_address: str | None = None
+    ) -> int:
+        count = await self._repo.bulk_delete_found_reports(ids)
+        await self._repo._session.flush()
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.LOST_FOUND_DELETED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"report_ids": [str(i) for i in ids], "count": count, "type": "found"},
+            )
+        return count
 
     async def update_match_status(self, match_id: uuid.UUID, status: MatchStatus) -> ReportMatch:
         match = await self._repo.get_match_by_id(match_id)
@@ -87,7 +256,7 @@ class LostFoundService:
     def _calculate_distance_km(
         self, lat1: float | None, lon1: float | None, lat2: float | None, lon2: float | None
     ) -> float:
-        if None in (lat1, lon1, lat2, lon2):
+        if lat1 is None or lon1 is None or lat2 is None or lon2 is None:
             return 999.0  # unknown distance
 
         # Haversine formula

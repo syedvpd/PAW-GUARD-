@@ -1,4 +1,4 @@
-"""Cross-cutting HTTP middleware: request ID, timing/logging, security headers."""
+"""Cross-cutting HTTP middleware: request ID, timing/logging, security headers, body size."""
 
 import time
 import uuid
@@ -9,8 +9,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
+from pawguard.core.config import get_settings
 from pawguard.core.constants import REQUEST_ID_HEADER
 from pawguard.core.logging import get_logger
+from pawguard.core.metrics import increment_counter, observe_histogram
 
 logger = get_logger(__name__)
 
@@ -40,6 +42,14 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         latency_ms = round((time.perf_counter() - start) * 1000, 2)
 
         user_id = getattr(request.state, "user_id", None)
+        labels = {
+            "method": request.method,
+            "path": request.url.path,
+            "status": str(response.status_code),
+        }
+        increment_counter("http_requests_total", labels)
+        observe_histogram("http_request_duration_ms", latency_ms, labels)
+
         logger.info(
             "request_completed",
             method=request.method,
@@ -62,4 +72,34 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
         response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data:; "
+            "font-src 'self'; "
+            "connect-src 'self'; "
+            "frame-ancestors 'none'; "
+            "form-action 'self'; "
+            "base-uri 'self'"
+        )
+        if request.url.path.startswith(("/api/", "/auth/")):
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
         return response
+
+
+class RequestBodySizeMiddleware(BaseHTTPMiddleware):
+    """Rejects requests with body exceeding the configured max size."""
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        content_length = request.headers.get("content-length")
+        if content_length:
+            size = int(content_length)
+            max_size = get_settings().max_request_body_size
+            if size > max_size:
+                from starlette.responses import JSONResponse
+                return JSONResponse(
+                    status_code=413,
+                    content={"success": False, "error": "Request body too large."},
+                )
+        return await call_next(request)

@@ -39,7 +39,9 @@ class RescueRequest(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     longitude: Mapped[float | None] = mapped_column(Numeric(9, 6), nullable=True)
 
     animal_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
-    physical_condition: Mapped[str] = mapped_column(String(64), nullable=False)  # Critical, Injured, Sick, Malnourished, Stray
+    physical_condition: Mapped[str] = mapped_column(
+        String(64), nullable=False
+    )  # Critical, Injured, Sick, Malnourished, Stray
     behavioral_indicators: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     status: Mapped[RescueStatus] = mapped_column(
@@ -77,7 +79,9 @@ class RescueDispatch(UUIDPkMixin, TimestampMixin, Base):
     rescued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     admitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    failure_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)  # Fled, Inaccessible, False Report, etc.
+    failure_reason: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )  # Fled, Inaccessible, False Report, etc.
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     rescue_request: Mapped["RescueRequest"] = relationship(back_populates="dispatch")

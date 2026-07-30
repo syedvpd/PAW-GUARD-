@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime
+
 from pydantic import BaseModel, EmailStr, Field
 
 from pawguard.modules.rescue.models import RescueStatus
@@ -19,7 +20,9 @@ class RescueRequestCreate(BaseModel):
     longitude: float | None = Field(None, ge=-180.0, le=180.0)
 
     animal_count: int = Field(1, ge=1)
-    physical_condition: str = Field(..., min_length=1, max_length=64)  # e.g. "Critical/Life Threatening", "Injured", etc.
+    physical_condition: str = Field(
+        ..., min_length=1, max_length=64
+    )  # e.g. "Critical/Life Threatening", "Injured", etc.
     behavioral_indicators: str | None = None
 
 
@@ -55,7 +58,7 @@ class RescueDispatchResponse(BaseModel):
 
 class RescueReportCreate(BaseModel):
     notes: str | None = None
-    photos: list[str] | None = Field(None, max_items=5)
+    photos: list[str] | None = Field(None, max_length=5)
 
 
 class RescueReportResponse(BaseModel):

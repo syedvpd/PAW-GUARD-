@@ -3,6 +3,7 @@
 import uuid
 from datetime import datetime
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
@@ -10,6 +11,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pawguard.db.base import Base
 from pawguard.db.mixins import SoftDeleteMixin, TimestampMixin, UUIDPkMixin
+
+if TYPE_CHECKING:
+    from pawguard.modules.auth.models import User
+    from pawguard.modules.dog.models import DogProfile
 
 
 class AdoptionStatus(StrEnum):
@@ -43,7 +48,9 @@ class AdoptionApplication(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     pet_care_experience: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     vetting_officer_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    home_inspection_scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    home_inspection_scheduled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     home_inspection_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     adoption_agreement_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

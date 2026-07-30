@@ -1,15 +1,23 @@
 """Data access for the Foster Management module. Repositories never contain business decisions (RULE-002)."""
 
 import uuid
-from typing import Sequence
-from sqlalchemy import select
+from collections.abc import Sequence
+
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from pawguard.core.pagination import PageParams
+from pawguard.core.search import SortParams, apply_sorting, build_search_filter
 from pawguard.modules.foster.models import FosterPlacement, FosterProfile, FosterStatus
 
 
 class FosterRepository:
+    PROFILE_SEARCH_FIELDS = ("preferences", "notes")
+    PROFILE_SORTABLE_FIELDS = {
+        "status", "max_capacity", "active_count", "is_available", "created_at", "updated_at",
+    }
+
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
@@ -34,16 +42,48 @@ class FosterRepository:
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
-    async def list_profiles(self, status: FosterStatus | None = None) -> Sequence[FosterProfile]:
+    async def paginate_profiles(
+        self,
+        page: PageParams,
+        sort: SortParams,
+        search_term: str | None = None,
+        status: FosterStatus | None = None,
+        is_available: bool | None = None,
+    ) -> tuple[Sequence[FosterProfile], int]:
         stmt = (
             select(FosterProfile)
             .options(selectinload(FosterProfile.user))
             .where(FosterProfile.deleted_at.is_(None))
-            .order_by(FosterProfile.created_at.desc())
         )
+
+        search_filter = build_search_filter(FosterProfile, search_term, self.PROFILE_SEARCH_FIELDS)
+        if search_filter is not None:
+            stmt = stmt.where(search_filter)
+
         if status is not None:
             stmt = stmt.where(FosterProfile.status == status)
-        return (await self._session.execute(stmt)).scalars().all()
+        if is_available is not None:
+            stmt = stmt.where(FosterProfile.is_available == is_available)
+
+        stmt = apply_sorting(stmt, sort, self.PROFILE_SORTABLE_FIELDS)
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = (await self._session.execute(count_stmt)).scalar_one()
+
+        stmt = stmt.offset(page.offset).limit(page.limit)
+        results = (await self._session.execute(stmt)).scalars().all()
+
+        return results, total
+
+    async def soft_delete_profile(self, profile_id: uuid.UUID) -> bool:
+        from datetime import UTC, datetime
+        stmt = (
+            update(FosterProfile)
+            .where(FosterProfile.id == profile_id, FosterProfile.deleted_at.is_(None))
+            .values(deleted_at=datetime.now(UTC))
+        )
+        result = await self._session.execute(stmt)
+        return result.rowcount > 0  # type: ignore[attr-defined,no-any-return]
 
     async def create_placement(self, placement: FosterPlacement) -> FosterPlacement:
         self._session.add(placement)
@@ -59,3 +99,20 @@ class FosterRepository:
             FosterPlacement.dog_id == dog_id, FosterPlacement.is_active.is_(True)
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def list_profiles_by_ids(self, ids: list[uuid.UUID]) -> Sequence[FosterProfile]:
+        stmt = (
+            select(FosterProfile)
+            .where(FosterProfile.id.in_(ids), FosterProfile.deleted_at.is_(None))
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def bulk_soft_delete_profiles(self, ids: list[uuid.UUID]) -> int:
+        from datetime import UTC, datetime
+        stmt = (
+            update(FosterProfile)
+            .where(FosterProfile.id.in_(ids), FosterProfile.deleted_at.is_(None))
+            .values(deleted_at=datetime.now(UTC))
+        )
+        result = await self._session.execute(stmt)
+        return result.rowcount  # type: ignore[attr-defined,no-any-return]

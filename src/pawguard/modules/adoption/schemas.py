@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 from pawguard.modules.adoption.models import AdoptionStatus
@@ -25,6 +26,10 @@ class AdoptionApplicationUpdate(BaseModel):
     home_inspection_scheduled_at: datetime | None = None
     home_inspection_notes: str | None = None
     adoption_agreement_url: str | None = None
+
+
+class AdoptionStatusUpdate(BaseModel):
+    status: AdoptionStatus = Field(..., description="New status for the adoption application")
 
 
 class AdoptionApplicationResponse(BaseModel):
@@ -51,3 +56,10 @@ class AdoptionApplicationResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class AdoptionApplicationListQueryParams(BaseModel):
+    search: str | None = Field(None, description="Search by adopter name, dog name, notes")
+    status: AdoptionStatus | None = None
+    dog_id: uuid.UUID | None = None
+    adopter_id: uuid.UUID | None = None

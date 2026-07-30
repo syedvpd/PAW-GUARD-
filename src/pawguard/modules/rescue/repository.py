@@ -1,17 +1,36 @@
-"""Data access for the Emergency Rescue module. Repositories never contain business decisions (RULE-002)."""
+"""Data access for the Emergency Rescue module."""
 
 import uuid
-from typing import Sequence
-from sqlalchemy import select
+from collections.abc import Sequence
+from typing import Any
+
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from pawguard.core.pagination import PageParams
+from pawguard.core.search import SortParams, apply_sorting, build_search_filter
 from pawguard.modules.rescue.models import RescueDispatch, RescueReport, RescueRequest, RescueStatus
 
 
 class RescueRepository:
+    SEARCH_FIELDS = ("ticket_number", "reporter_name", "reporter_phone", "location_address")
+    SORTABLE_FIELDS = {
+        "ticket_number", "reporter_name", "status", "created_at", "updated_at", "animal_count"
+    }
+
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    def _base_stmt(self) -> Any:
+        return (
+            select(RescueRequest)
+            .options(
+                selectinload(RescueRequest.dispatch),
+                selectinload(RescueRequest.reports),
+            )
+            .where(RescueRequest.deleted_at.is_(None))
+        )
 
     async def create_request(self, request: RescueRequest) -> RescueRequest:
         self._session.add(request)
@@ -19,40 +38,68 @@ class RescueRepository:
         return request
 
     async def get_request_by_id(self, request_id: uuid.UUID) -> RescueRequest | None:
-        stmt = (
-            select(RescueRequest)
-            .options(
-                selectinload(RescueRequest.dispatch),
-                selectinload(RescueRequest.reports)
-            )
-            .where(RescueRequest.id == request_id, RescueRequest.deleted_at.is_(None))
-        )
+        stmt = self._base_stmt().where(RescueRequest.id == request_id)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def get_request_by_ticket(self, ticket_number: str) -> RescueRequest | None:
-        stmt = (
-            select(RescueRequest)
-            .options(
-                selectinload(RescueRequest.dispatch),
-                selectinload(RescueRequest.reports)
-            )
-            .where(RescueRequest.ticket_number == ticket_number, RescueRequest.deleted_at.is_(None))
-        )
+        stmt = self._base_stmt().where(RescueRequest.ticket_number == ticket_number)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def list_requests(self, status: RescueStatus | None = None) -> Sequence[RescueRequest]:
-        stmt = (
-            select(RescueRequest)
-            .options(
-                selectinload(RescueRequest.dispatch),
-                selectinload(RescueRequest.reports)
-            )
-            .where(RescueRequest.deleted_at.is_(None))
-            .order_by(RescueRequest.created_at.desc())
-        )
+        stmt = self._base_stmt().order_by(RescueRequest.created_at.desc())
         if status is not None:
             stmt = stmt.where(RescueRequest.status == status)
         return (await self._session.execute(stmt)).scalars().all()
+
+    async def list_paginated(
+        self,
+        page: PageParams,
+        sort: SortParams,
+        search_term: str | None = None,
+        status: RescueStatus | None = None,
+    ) -> tuple[Sequence[RescueRequest], int]:
+        stmt = self._base_stmt()
+
+        search_filter = build_search_filter(RescueRequest, search_term, self.SEARCH_FIELDS)
+        if search_filter is not None:
+            stmt = stmt.where(search_filter)
+
+        if status is not None:
+            stmt = stmt.where(RescueRequest.status == status)
+
+        stmt = apply_sorting(stmt, sort, self.SORTABLE_FIELDS)
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = (await self._session.execute(count_stmt)).scalar_one()
+
+        stmt = stmt.offset(page.offset).limit(page.limit)
+        results = (await self._session.execute(stmt)).scalars().all()
+
+        return results, total
+
+    async def list_by_ids(self, ids: list[uuid.UUID]) -> Sequence[RescueRequest]:
+        stmt = self._base_stmt().where(RescueRequest.id.in_(ids))
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def count_by_status(self) -> dict[str, int]:
+        stmt = (
+            select(RescueRequest.status, func.count())
+            .where(RescueRequest.deleted_at.is_(None))
+            .group_by(RescueRequest.status)
+        )
+        rows = (await self._session.execute(stmt)).all()
+        return {row[0]: row[1] for row in rows}
+
+    async def bulk_update_status(self, ids: list[uuid.UUID], status: RescueStatus) -> int:
+        from sqlalchemy import update
+
+        stmt = (
+            update(RescueRequest)
+            .where(RescueRequest.id.in_(ids), RescueRequest.deleted_at.is_(None))
+            .values(status=status)
+        )
+        result = await self._session.execute(stmt)
+        return result.rowcount  # type: ignore[attr-defined,no-any-return]
 
     async def create_dispatch(self, dispatch: RescueDispatch) -> RescueDispatch:
         self._session.add(dispatch)

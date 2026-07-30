@@ -2,7 +2,8 @@
 
 import uuid
 from datetime import date, datetime
-from pydantic import BaseModel, Field, ConfigDict
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from pawguard.modules.inventory.models import ItemCategory, MovementType, RequisitionStatus
 
@@ -64,3 +65,16 @@ class RequisitionOrderResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class InventoryItemUpdate(BaseModel):
+    name: str | None = Field(None, min_length=1, max_length=255)
+    category: ItemCategory | None = None
+    quantity: float | None = Field(None, ge=0.0)
+    unit: str | None = Field(None, min_length=1, max_length=32)
+    reorder_threshold: float | None = Field(None, ge=0.0)
+    expiry_date: date | None = None
+
+
+class RequisitionStatusUpdate(BaseModel):
+    status: RequisitionStatus

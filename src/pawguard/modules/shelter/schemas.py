@@ -2,9 +2,15 @@
 
 import uuid
 from datetime import datetime
-from pydantic import BaseModel, Field, ConfigDict
 
-from pawguard.modules.shelter.models import KennelSanitationState, TransferStatus
+from pydantic import BaseModel, ConfigDict, Field
+
+from pawguard.modules.shelter.models import (
+    FacilityStatus,
+    FacilityType,
+    KennelSanitationState,
+    TransferStatus,
+)
 
 
 class ShelterFacilityCreate(BaseModel):
@@ -12,6 +18,15 @@ class ShelterFacilityCreate(BaseModel):
     address: str = Field(..., min_length=1)
     phone: str = Field(..., min_length=1, max_length=32)
     total_capacity: int = Field(50, ge=1)
+    facility_type: FacilityType = Field(FacilityType.SHELTER)
+
+
+class ShelterFacilityUpdate(BaseModel):
+    name: str | None = Field(None, min_length=1, max_length=255)
+    address: str | None = Field(None, min_length=1)
+    phone: str | None = Field(None, min_length=1, max_length=32)
+    total_capacity: int | None = Field(None, ge=1)
+    facility_type: FacilityType | None = None
 
 
 class ShelterFacilityResponse(BaseModel):
@@ -20,10 +35,16 @@ class ShelterFacilityResponse(BaseModel):
     address: str
     phone: str
     total_capacity: int
+    status: FacilityStatus
+    facility_type: FacilityType
     created_at: datetime
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class FacilityStatusUpdate(BaseModel):
+    status: FacilityStatus
 
 
 class ShelterSectionCreate(BaseModel):

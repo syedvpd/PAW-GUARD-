@@ -1,15 +1,20 @@
 """API router for the Foster Management module. Routers only validate and call services (RULE-004)."""
 
 import uuid
-from typing import Sequence
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from pawguard.core.responses import ApiResponse
+from pawguard.core.bulk import (
+    BulkDeleteRequest,
+    BulkDeleteResponse,
+)
+from pawguard.core.pagination import PageParams, page_params
+from pawguard.core.responses import ApiResponse, PaginatedResponse
+from pawguard.core.search import SortParams, sort_params
 from pawguard.db.session import get_db
-from pawguard.modules.auth.dependencies import get_current_user, CurrentUser
-from pawguard.modules.auth.models import User
+from pawguard.modules.auth.audit import get_audit_service
+from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.rbac import require_permission
 from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.foster.models import FosterStatus
@@ -23,14 +28,15 @@ from pawguard.modules.foster.schemas import (
     FosterReturnRequest,
 )
 from pawguard.modules.foster.service import FosterService
+from pawguard.services.audit_service import AuditService
 
 router = APIRouter(prefix="/fosters", tags=["fosters"])
 
 
-def get_foster_service(db: AsyncSession = Depends(get_db)) -> FosterService:
+def get_foster_service(db: AsyncSession = Depends(get_db), audit: AuditService = Depends(get_audit_service)) -> FosterService:
     repo = FosterRepository(db)
     dog_repo = DogRepository(db)
-    return FosterService(repo, dog_repo)
+    return FosterService(repo, dog_repo, audit_service=audit)
 
 
 @router.post(
@@ -40,10 +46,11 @@ def get_foster_service(db: AsyncSession = Depends(get_db)) -> FosterService:
 )
 async def apply_to_foster(
     payload: FosterProfileCreate,
+    request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: FosterService = Depends(get_foster_service),
 ) -> ApiResponse[FosterProfileResponse]:
-    profile = await service.apply_to_foster(current_user.id, payload)
+    profile = await service.apply_to_foster(current_user.id, payload, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
     return ApiResponse(
         data=FosterProfileResponse.model_validate(profile),
         message="Foster application submitted successfully.",
@@ -58,13 +65,31 @@ async def apply_to_foster(
 async def update_profile(
     profile_id: uuid.UUID,
     payload: FosterProfileUpdate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     service: FosterService = Depends(get_foster_service),
 ) -> ApiResponse[FosterProfileResponse]:
-    profile = await service.update_profile(profile_id, payload)
+    profile = await service.update_profile(profile_id, payload, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
     return ApiResponse(
         data=FosterProfileResponse.model_validate(profile),
         message="Foster profile updated successfully.",
     )
+
+
+@router.delete(
+    "/{profile_id}",
+    response_model=ApiResponse[None],
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(require_permission("foster:update"))],
+)
+async def soft_delete_profile(
+    profile_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FosterService = Depends(get_foster_service),
+) -> ApiResponse[None]:
+    await service.soft_delete_profile(profile_id, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
+    return ApiResponse(message="Foster profile deleted successfully.")
 
 
 @router.post(
@@ -76,9 +101,11 @@ async def update_profile(
 async def place_dog(
     profile_id: uuid.UUID,
     payload: FosterPlacementCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     service: FosterService = Depends(get_foster_service),
 ) -> ApiResponse[FosterPlacementResponse]:
-    placement = await service.place_dog(profile_id, payload)
+    placement = await service.place_dog(profile_id, payload, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
     return ApiResponse(
         data=FosterPlacementResponse.model_validate(placement),
         message="Dog placed in foster home successfully.",
@@ -93,9 +120,11 @@ async def place_dog(
 async def return_dog(
     placement_id: uuid.UUID,
     payload: FosterReturnRequest,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     service: FosterService = Depends(get_foster_service),
 ) -> ApiResponse[FosterPlacementResponse]:
-    placement = await service.return_dog(placement_id, notes=payload.notes)
+    placement = await service.return_dog(placement_id, notes=payload.notes, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
     return ApiResponse(
         data=FosterPlacementResponse.model_validate(placement),
         message="Dog returned to shelter facility.",
@@ -104,12 +133,41 @@ async def return_dog(
 
 @router.get(
     "",
-    response_model=ApiResponse[list[FosterProfileResponse]],
+    response_model=PaginatedResponse[FosterProfileResponse],
     dependencies=[Depends(require_permission("foster:read"))],
 )
 async def list_profiles(
-    status: FosterStatus | None = None,
+    page: PageParams = Depends(page_params),
+    sort: SortParams = Depends(sort_params),
+    search: str | None = Query(None, description="Search by preferences, notes"),
+    status: FosterStatus | None = Query(None, description="Filter by status"),
+    is_available: bool | None = Query(None, description="Filter by availability"),
     service: FosterService = Depends(get_foster_service),
-) -> ApiResponse[list[FosterProfileResponse]]:
-    profiles = await service.list_profiles(status)
-    return ApiResponse(data=[FosterProfileResponse.model_validate(p) for p in profiles])
+) -> PaginatedResponse[FosterProfileResponse]:
+    return await service.list_profiles_paginated(
+        page=page,
+        sort=sort,
+        search_term=search,
+        status=status,
+        is_available=is_available,
+    )
+
+
+@router.post(
+    "/bulk/delete",
+    response_model=ApiResponse[BulkDeleteResponse],
+    dependencies=[Depends(require_permission("foster:update"))],
+)
+async def bulk_delete_profiles(
+    payload: BulkDeleteRequest,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FosterService = Depends(get_foster_service),
+) -> ApiResponse[BulkDeleteResponse]:
+    deleted = await service.bulk_soft_delete(payload.ids, actor_id=current_user.id, ip_address=request.client.host if request.client else None)
+    return ApiResponse(
+        data=BulkDeleteResponse(
+            message=f"{deleted} foster profile(s) deleted.",
+            deleted_count=deleted,
+        ),
+    )

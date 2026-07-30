@@ -44,6 +44,7 @@ SHELTER_TRANSFER = "shelter:transfer"
 # ── Medical / Veterinary ─────────────────────────────────────────────────────
 MEDICAL_CREATE = "medical:create"
 MEDICAL_READ = "medical:read"
+MEDICAL_WRITE = "medical:write"
 MEDICAL_UPDATE = "medical:update"
 MEDICAL_CLEARANCE = "medical:clearance"
 MEDICAL_DELETE = "medical:delete"
@@ -76,6 +77,27 @@ INVENTORY_DELETE = "inventory:delete"
 FINANCE_READ = "finance:read"
 FINANCE_CREATE = "finance:create"
 FINANCE_RECONCILE = "finance:reconcile"
+FINANCE_UPDATE = "finance:update"
+FINANCE_DELETE = "finance:delete"
+FINANCE_EXPORT = "finance:export"
+
+# ── Reports ──────────────────────────────────────────────────────────────────
+REPORTS_READ = "reports:read"
+REPORTS_CREATE = "reports:create"
+REPORTS_EXPORT_PDF = "reports:export_pdf"
+REPORTS_EXPORT_CSV = "reports:export_csv"
+REPORTS_EXPORT_EXCEL = "reports:export_excel"
+
+# ── Role Dashboards ──────────────────────────────────────────────────────────
+DASHBOARD_RESCUE = "dashboard:rescue"
+DASHBOARD_SHELTER = "dashboard:shelter"
+DASHBOARD_MEDICAL = "dashboard:medical"
+DASHBOARD_ADOPTION = "dashboard:adoption"
+DASHBOARD_FOSTER = "dashboard:foster"
+DASHBOARD_VOLUNTEER = "dashboard:volunteer"
+DASHBOARD_INVENTORY = "dashboard:inventory"
+DASHBOARD_FINANCE = "dashboard:finance"
+DASHBOARD_DONOR = "dashboard:donor"
 
 # ── Donation / Sponsorship ───────────────────────────────────────────────────
 DONATION_READ = "donation:read"
@@ -87,3 +109,18 @@ PUBLIC_CREATE = "public:create"
 
 # ── Audit ────────────────────────────────────────────────────────────────────
 AUDIT_READ = "audit:read"
+
+# ── Grievance ─────────────────────────────────────────────────────────────────
+GRIEVANCE_CREATE = "grievance:create"
+GRIEVANCE_READ = "grievance:read"
+GRIEVANCE_UPDATE = "grievance:update"
+GRIEVANCE_ASSIGN = "grievance:assign"
+GRIEVANCE_COMMENT = "grievance:comment"
+
+# ── Notifications ─────────────────────────────────────────────────────────────
+NOTIFICATION_READ = "notification:read"
+NOTIFICATION_MANAGE = "notification:manage"
+
+# ── OAuth / Social Login ──────────────────────────────────────────────────────
+OAUTH_LINK = "oauth:link"
+OAUTH_UNLINK = "oauth:unlink"

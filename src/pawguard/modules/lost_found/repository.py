@@ -1,12 +1,21 @@
-"""Data access for the Lost & Found module. Repositories never contain business decisions (RULE-002)."""
+"""Data access for the Lost & Found module. Repositories never contain business decisions."""
 
 import uuid
-from typing import Sequence
-from sqlalchemy import select
+from collections.abc import Sequence
+
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from pawguard.modules.lost_found.models import FoundReport, LostReport, ReportMatch, ReportStatus
+from pawguard.core.pagination import PageParams
+from pawguard.core.search import SortParams, apply_sorting, build_search_filter
+from pawguard.modules.lost_found.models import (
+    FoundReport,
+    LostReport,
+    ReportMatch,
+    ReportStatus,
+    Species,
+)
 
 
 class LostFoundRepository:
@@ -74,7 +83,9 @@ class LostFoundRepository:
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
-    async def list_matches_for_lost_report(self, lost_report_id: uuid.UUID) -> Sequence[ReportMatch]:
+    async def list_matches_for_lost_report(
+        self, lost_report_id: uuid.UUID,
+    ) -> Sequence[ReportMatch]:
         stmt = (
             select(ReportMatch)
             .options(selectinload(ReportMatch.found_report))
@@ -83,7 +94,9 @@ class LostFoundRepository:
         )
         return (await self._session.execute(stmt)).scalars().all()
 
-    async def list_matches_for_found_report(self, found_report_id: uuid.UUID) -> Sequence[ReportMatch]:
+    async def list_matches_for_found_report(
+        self, found_report_id: uuid.UUID,
+    ) -> Sequence[ReportMatch]:
         stmt = (
             select(ReportMatch)
             .options(selectinload(ReportMatch.lost_report))
@@ -91,3 +104,155 @@ class LostFoundRepository:
             .order_by(ReportMatch.confidence_score.desc())
         )
         return (await self._session.execute(stmt)).scalars().all()
+
+    async def list_lost_reports_paginated(
+        self,
+        page_params: PageParams,
+        sort: SortParams,
+        search_term: str | None = None,
+        status: ReportStatus | None = None,
+        species: Species | None = None,
+    ) -> tuple[Sequence[LostReport], int]:
+        stmt = (
+            select(LostReport)
+            .options(selectinload(LostReport.user))
+            .where(LostReport.deleted_at.is_(None))
+        )
+
+        search_filter = build_search_filter(
+            LostReport, search_term, ("pet_name", "breed", "color", "location_address"),
+        )
+        if search_filter is not None:
+            stmt = stmt.where(search_filter)
+
+        if status is not None:
+            stmt = stmt.where(LostReport.status == status)
+        if species is not None:
+            stmt = stmt.where(LostReport.species == species)
+
+        valid_fields = {"created_at", "lost_at", "pet_name", "breed", "status"}
+        stmt = apply_sorting(stmt, sort, valid_fields)
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = (await self._session.execute(count_stmt)).scalar_one()
+
+        stmt = stmt.offset(page_params.offset).limit(page_params.limit)
+        results = (await self._session.execute(stmt)).scalars().all()
+
+        return results, total
+
+    async def list_found_reports_paginated(
+        self,
+        page_params: PageParams,
+        sort: SortParams,
+        search_term: str | None = None,
+        status: ReportStatus | None = None,
+        species: Species | None = None,
+    ) -> tuple[Sequence[FoundReport], int]:
+        stmt = (
+            select(FoundReport)
+            .options(selectinload(FoundReport.user))
+            .where(FoundReport.deleted_at.is_(None))
+        )
+
+        search_filter = build_search_filter(
+            FoundReport, search_term, ("breed_observed", "color_observed", "location_address"),
+        )
+        if search_filter is not None:
+            stmt = stmt.where(search_filter)
+
+        if status is not None:
+            stmt = stmt.where(FoundReport.status == status)
+        if species is not None:
+            stmt = stmt.where(FoundReport.species == species)
+
+        valid_fields = {"created_at", "found_at", "status"}
+        stmt = apply_sorting(stmt, sort, valid_fields)
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = (await self._session.execute(count_stmt)).scalar_one()
+
+        stmt = stmt.offset(page_params.offset).limit(page_params.limit)
+        results = (await self._session.execute(stmt)).scalars().all()
+
+        return results, total
+
+    async def list_matches_paginated(
+        self,
+        page_params: PageParams,
+        sort: SortParams,
+        lost_report_id: uuid.UUID | None = None,
+        found_report_id: uuid.UUID | None = None,
+    ) -> tuple[Sequence[ReportMatch], int]:
+        stmt = select(ReportMatch).options(
+            selectinload(ReportMatch.lost_report),
+            selectinload(ReportMatch.found_report),
+        )
+
+        if lost_report_id is not None:
+            stmt = stmt.where(ReportMatch.lost_report_id == lost_report_id)
+        if found_report_id is not None:
+            stmt = stmt.where(ReportMatch.found_report_id == found_report_id)
+
+        valid_fields = {"created_at", "confidence_score", "status"}
+        stmt = apply_sorting(stmt, sort, valid_fields)
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = (await self._session.execute(count_stmt)).scalar_one()
+
+        stmt = stmt.offset(page_params.offset).limit(page_params.limit)
+        results = (await self._session.execute(stmt)).scalars().all()
+
+        return results, total
+
+    async def soft_delete_lost_report(self, report_id: uuid.UUID) -> bool:
+        from datetime import UTC, datetime
+        stmt = (
+            select(LostReport)
+            .where(LostReport.id == report_id, LostReport.deleted_at.is_(None))
+        )
+        report = (await self._session.execute(stmt)).scalar_one_or_none()
+        if report is None:
+            return False
+        report.deleted_at = datetime.now(UTC)
+        await self._session.flush()
+        return True
+
+    async def soft_delete_found_report(self, report_id: uuid.UUID) -> bool:
+        from datetime import UTC, datetime
+        stmt = (
+            select(FoundReport)
+            .where(FoundReport.id == report_id, FoundReport.deleted_at.is_(None))
+        )
+        report = (await self._session.execute(stmt)).scalar_one_or_none()
+        if report is None:
+            return False
+        report.deleted_at = datetime.now(UTC)
+        await self._session.flush()
+        return True
+
+    async def bulk_delete_lost_reports(self, ids: list[uuid.UUID]) -> int:
+        from datetime import UTC, datetime
+        now = datetime.now(UTC)
+        stmt = (
+            select(LostReport)
+            .where(LostReport.id.in_(ids), LostReport.deleted_at.is_(None))
+        )
+        reports = (await self._session.execute(stmt)).scalars().all()
+        for r in reports:
+            r.deleted_at = now
+        await self._session.flush()
+        return len(reports)
+
+    async def bulk_delete_found_reports(self, ids: list[uuid.UUID]) -> int:
+        from datetime import UTC, datetime
+        now = datetime.now(UTC)
+        stmt = (
+            select(FoundReport)
+            .where(FoundReport.id.in_(ids), FoundReport.deleted_at.is_(None))
+        )
+        reports = (await self._session.execute(stmt)).scalars().all()
+        for r in reports:
+            r.deleted_at = now
+        await self._session.flush()
+        return len(reports)

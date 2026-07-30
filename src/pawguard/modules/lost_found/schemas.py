@@ -2,13 +2,15 @@
 
 import uuid
 from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 from pawguard.modules.auth.schemas import UserProfile
-from pawguard.modules.lost_found.models import MatchStatus, ReportStatus
+from pawguard.modules.lost_found.models import MatchStatus, ReportStatus, Species
 
 
 class LostReportCreate(BaseModel):
+    species: Species = Field(Species.DOG)
     pet_name: str = Field(..., min_length=1, max_length=255)
     breed: str = Field(..., min_length=1, max_length=128)
     color: str = Field(..., min_length=1, max_length=64)
@@ -23,6 +25,7 @@ class LostReportCreate(BaseModel):
 class LostReportResponse(BaseModel):
     id: uuid.UUID
     user_id: uuid.UUID
+    species: Species
     pet_name: str
     breed: str
     color: str
@@ -41,6 +44,7 @@ class LostReportResponse(BaseModel):
 
 
 class FoundReportCreate(BaseModel):
+    species: Species = Field(Species.DOG)
     breed_observed: str = Field(..., min_length=1, max_length=128)
     color_observed: str = Field(..., min_length=1, max_length=64)
     location_address: str = Field(..., min_length=1)
@@ -53,6 +57,7 @@ class FoundReportCreate(BaseModel):
 class FoundReportResponse(BaseModel):
     id: uuid.UUID
     user_id: uuid.UUID
+    species: Species
     breed_observed: str
     color_observed: str
     location_address: str

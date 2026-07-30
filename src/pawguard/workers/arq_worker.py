@@ -8,6 +8,7 @@ from pawguard.core.config import get_settings
 from pawguard.core.logging import configure_logging
 from pawguard.workers.jobs.email_jobs import (
     send_email_verification_email_job,
+    send_notification_email_job,
     send_password_reset_email_job,
 )
 
@@ -19,6 +20,10 @@ async def startup(ctx: dict[str, object]) -> None:
 
 
 class WorkerSettings:
-    functions: list[Any] = [send_password_reset_email_job, send_email_verification_email_job]
+    functions: list[Any] = [
+        send_password_reset_email_job,
+        send_email_verification_email_job,
+        send_notification_email_job,
+    ]
     on_startup = startup
     redis_settings = RedisSettings.from_dsn(settings.redis_url)

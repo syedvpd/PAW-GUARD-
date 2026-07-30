@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 from pawguard.modules.auth.schemas import UserProfile
@@ -10,6 +11,11 @@ from pawguard.modules.donation.models import DonationStatus, DonationType
 
 
 class DonorProfileCreate(BaseModel):
+    tax_identifier: str | None = Field(None, max_length=64)
+    notes: str | None = None
+
+
+class DonorProfileUpdate(BaseModel):
     tax_identifier: str | None = Field(None, max_length=64)
     notes: str | None = None
 
@@ -33,6 +39,10 @@ class DonationCreate(BaseModel):
     currency: str = Field("USD", min_length=3, max_length=3)
     donation_type: DonationType = DonationType.ONE_TIME
     notes: str | None = None
+
+
+class DonationStatusUpdate(BaseModel):
+    status: DonationStatus = Field(..., description="New status for the donation")
 
 
 class DonationResponse(BaseModel):

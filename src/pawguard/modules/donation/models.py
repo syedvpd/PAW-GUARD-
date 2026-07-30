@@ -2,6 +2,7 @@
 
 import uuid
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from sqlalchemy import ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
@@ -9,6 +10,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pawguard.db.base import Base
 from pawguard.db.mixins import SoftDeleteMixin, TimestampMixin, UUIDPkMixin
+
+if TYPE_CHECKING:
+    from pawguard.modules.auth.models import User
+    from pawguard.modules.dog.models import DogProfile
 
 
 class DonationType(StrEnum):

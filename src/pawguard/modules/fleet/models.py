@@ -3,12 +3,13 @@
 import uuid
 from datetime import date, datetime
 from enum import StrEnum
+
 from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from pawguard.db.base import Base
-from pawguard.db.mixins import TimestampMixin, UUIDPkMixin
+from pawguard.db.mixins import SoftDeleteMixin, TimestampMixin, UUIDPkMixin
 
 
 class VehicleStatus(StrEnum):
@@ -17,7 +18,7 @@ class VehicleStatus(StrEnum):
     OUT_OF_SERVICE = "out_of_service"
 
 
-class Vehicle(UUIDPkMixin, TimestampMixin, Base):
+class Vehicle(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "vehicles"
 
     make_model: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -46,7 +47,8 @@ class FleetMaintenance(UUIDPkMixin, TimestampMixin, Base):
 class EquipmentCheckout(UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "equipment_checkouts"
 
-    equipment_name: Mapped[str] = mapped_column(String(255), nullable=False)  # Net Gun, Trap, Crate, etc.
+    # Net Gun, Trap, Crate, etc.
+    equipment_name: Mapped[str] = mapped_column(String(255), nullable=False)
     assigned_to_agent_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

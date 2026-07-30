@@ -1,0 +1,84 @@
+"""Pydantic schemas for grievance/feedback module."""
+
+import uuid
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from pawguard.modules.grievance.models import GrievanceStatus
+
+
+class GrievanceCreate(BaseModel):
+    reporter_name: str = Field(..., min_length=1, max_length=255)
+    reporter_phone: str = Field(..., min_length=5, max_length=32)
+    reporter_email: str | None = Field(None, max_length=255)
+    complaint_type: str = Field(..., min_length=1, max_length=128)
+    details: str = Field(..., min_length=1)
+
+
+class GrievanceUpdate(BaseModel):
+    status: GrievanceStatus | None = None
+    assigned_to_admin_id: uuid.UUID | None = None
+    resolution_notes: str | None = None
+
+
+class GrievanceResponse(BaseModel):
+    id: uuid.UUID
+    reporter_name: str
+    reporter_phone: str
+    reporter_email: str | None
+    complaint_type: str
+    details: str
+    status: GrievanceStatus
+    assigned_to_admin_id: uuid.UUID | None
+    resolution_notes: str | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class GrievanceListFilter(BaseModel):
+    status: GrievanceStatus | None = None
+    complaint_type: str | None = None
+    assigned_to_admin_id: uuid.UUID | None = None
+    search: str | None = None
+
+
+class GrievanceAssign(BaseModel):
+    assigned_to_admin_id: uuid.UUID
+
+
+class CommentCreate(BaseModel):
+    body: str = Field(..., min_length=1)
+    is_internal: bool = False
+
+
+class CommentResponse(BaseModel):
+    id: uuid.UUID
+    ticket_id: uuid.UUID
+    author_id: uuid.UUID | None
+    body: str
+    is_internal: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ServiceFeedbackCreate(BaseModel):
+    rescue_case_id: uuid.UUID | None = None
+    adoption_application_id: uuid.UUID | None = None
+    rating: int = Field(..., ge=1, le=5)
+    comments: str | None = None
+
+
+class ServiceFeedbackResponse(BaseModel):
+    id: uuid.UUID
+    rescue_case_id: uuid.UUID | None
+    adoption_application_id: uuid.UUID | None
+    rating: int
+    comments: str | None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

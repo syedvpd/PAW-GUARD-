@@ -2,7 +2,8 @@
 
 import uuid
 from datetime import datetime
-from pydantic import BaseModel, Field, ConfigDict
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ClinicalExamCreate(BaseModel):
@@ -83,6 +84,19 @@ class PrescriptionCreate(BaseModel):
     route: str = Field(..., min_length=1, max_length=64)
     start_at: datetime
     end_at: datetime
+
+
+class PrescriptionUpdate(BaseModel):
+    drug_name: str | None = Field(None, min_length=1, max_length=128)
+    dosage: str | None = Field(None, min_length=1, max_length=128)
+    route: str | None = Field(None, min_length=1, max_length=64)
+    start_at: datetime | None = None
+    end_at: datetime | None = None
+    is_active: bool | None = None
+
+
+class PrescriptionStatusUpdate(BaseModel):
+    is_active: bool = Field(..., description="Set prescription active or inactive")
 
 
 class PrescriptionResponse(BaseModel):
