@@ -27,23 +27,30 @@ TEST_PASSWORD = "PawGuard@2026"
 
 # (role_name, login email, display name) — role_name must match
 # scripts/seed_roles_and_permissions.py ROLE_DEFINITIONS.
+#
+# NOTE: the domain must NOT be a reserved TLD (.test, .example, .invalid,
+# .localhost per RFC 2606) — pydantic's EmailStr/email-validator rejects
+# those at the schema layer, so accounts on those domains can never log in
+# through the API even though they exist in the database.
 TEST_ACCOUNTS: list[tuple[str, str, str]] = [
-    ("super_admin", "super.admin@pawguard.test", "Super Administrator"),
-    ("rescue_centre_admin", "rescue.admin@pawguard.test", "Rescue Centre Admin"),
-    ("rescue_coordinator", "rescue.coordinator@pawguard.test", "Rescue Coordinator"),
-    ("rescue_agent", "rescue.agent@pawguard.test", "Rescue Agent"),
-    ("veterinarian", "vet@pawguard.test", "Dr. Veterinarian"),
-    ("shelter_manager", "shelter.manager@pawguard.test", "Shelter Manager"),
-    ("adoption_coordinator", "adoption.coordinator@pawguard.test", "Adoption Coordinator"),
-    ("foster_coordinator", "foster.coordinator@pawguard.test", "Foster Coordinator"),
-    ("volunteer_coordinator", "volunteer.coordinator@pawguard.test", "Volunteer Coordinator"),
-    ("inventory_manager", "inventory.manager@pawguard.test", "Inventory Manager"),
-    ("finance_user", "finance.user@pawguard.test", "Finance User"),
-    ("volunteer", "volunteer@pawguard.test", "Test Volunteer"),
-    ("foster_family", "foster.family@pawguard.test", "Test Foster Family"),
-    ("donor", "donor@pawguard.test", "Test Donor"),
-    ("general_public", "public.user@pawguard.test", "Test Public User"),
+    ("super_admin", "super.admin@pawguard-qa.com", "Super Administrator"),
+    ("rescue_centre_admin", "rescue.admin@pawguard-qa.com", "Rescue Centre Admin"),
+    ("rescue_coordinator", "rescue.coordinator@pawguard-qa.com", "Rescue Coordinator"),
+    ("rescue_agent", "rescue.agent@pawguard-qa.com", "Rescue Agent"),
+    ("veterinarian", "vet@pawguard-qa.com", "Dr. Veterinarian"),
+    ("shelter_manager", "shelter.manager@pawguard-qa.com", "Shelter Manager"),
+    ("adoption_coordinator", "adoption.coordinator@pawguard-qa.com", "Adoption Coordinator"),
+    ("foster_coordinator", "foster.coordinator@pawguard-qa.com", "Foster Coordinator"),
+    ("volunteer_coordinator", "volunteer.coordinator@pawguard-qa.com", "Volunteer Coordinator"),
+    ("inventory_manager", "inventory.manager@pawguard-qa.com", "Inventory Manager"),
+    ("finance_user", "finance.user@pawguard-qa.com", "Finance User"),
+    ("volunteer", "volunteer@pawguard-qa.com", "Test Volunteer"),
+    ("foster_family", "foster.family@pawguard-qa.com", "Test Foster Family"),
+    ("donor", "donor@pawguard-qa.com", "Test Donor"),
+    ("general_public", "public.user@pawguard-qa.com", "Test Public User"),
 ]
+
+LEGACY_EMAIL_DOMAIN = "@pawguard.test"
 
 
 async def seed_db(label: str, database_url: str) -> None:
@@ -59,6 +66,17 @@ async def seed_db(label: str, database_url: str) -> None:
     hashed = hash_password(TEST_PASSWORD)
 
     async with session_factory() as session:
+        legacy = (
+            await session.execute(
+                select(User).where(User.email.like(f"%{LEGACY_EMAIL_DOMAIN}"))
+            )
+        ).scalars().all()
+        for user in legacy:
+            print(f"  [CLEANUP] removing unusable legacy account {user.email}")
+            await session.delete(user)
+        if legacy:
+            await session.commit()
+
         roles_by_name: dict[str, Role] = {}
         for role_name, _, _ in TEST_ACCOUNTS:
             if role_name in roles_by_name:
