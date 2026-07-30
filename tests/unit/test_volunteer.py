@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from pawguard.core.exceptions import ConflictError, NotFoundError
+from pawguard.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from pawguard.modules.volunteer.models import (
     ShiftAttendance,
     VolunteerProfile,
@@ -129,7 +129,7 @@ class TestVolunteerService:
     async def test_join_shift(self, service, mock_repo):
         shift_id = uuid.uuid4()
         now = datetime.now(UTC)
-        mock_repo.get_shift_by_id.return_value = VolunteerShift(
+        mock_repo.get_shift_by_id_for_update.return_value = VolunteerShift(
             id=shift_id, role_name="Walking", start_at=now, end_at=now, capacity=5,
         )
         mock_repo.get_attendance_by_shift_and_volunteer.return_value = None
@@ -145,7 +145,7 @@ class TestVolunteerService:
     async def test_join_shift_full(self, service, mock_repo):
         shift_id = uuid.uuid4()
         now = datetime.now(UTC)
-        mock_repo.get_shift_by_id.return_value = VolunteerShift(
+        mock_repo.get_shift_by_id_for_update.return_value = VolunteerShift(
             id=shift_id, role_name="Walking", start_at=now, end_at=now, capacity=1,
         )
         mock_repo.get_attendance_by_shift_and_volunteer.return_value = None
@@ -160,7 +160,7 @@ class TestVolunteerService:
         shift_id = uuid.uuid4()
         volunteer_id = uuid.uuid4()
         now = datetime.now(UTC)
-        mock_repo.get_shift_by_id.return_value = VolunteerShift(
+        mock_repo.get_shift_by_id_for_update.return_value = VolunteerShift(
             id=shift_id, role_name="Walking", start_at=now, end_at=now, capacity=5,
         )
         mock_repo.get_attendance_by_shift_and_volunteer.return_value = ShiftAttendance(
@@ -172,52 +172,89 @@ class TestVolunteerService:
     @pytest.mark.asyncio
     async def test_check_in(self, service, mock_repo):
         att_id = uuid.uuid4()
-        attendance = ShiftAttendance(id=att_id, shift_id=uuid.uuid4(), volunteer_id=uuid.uuid4())
+        user_id = uuid.uuid4()
+        volunteer_id = uuid.uuid4()
+        attendance = ShiftAttendance(id=att_id, shift_id=uuid.uuid4(), volunteer_id=volunteer_id)
         mock_repo.get_attendance_by_id.return_value = attendance
-        result = await service.check_in(att_id)
+        mock_repo.get_profile_by_user_id.return_value = VolunteerProfile(
+            id=volunteer_id, user_id=user_id, status=VolunteerStatus.ACTIVE,
+        )
+        result = await service.check_in(att_id, user_id)
         assert result.check_in_at is not None
 
     @pytest.mark.asyncio
+    async def test_check_in_wrong_owner_forbidden(self, service, mock_repo):
+        att_id = uuid.uuid4()
+        user_id = uuid.uuid4()
+        attendance = ShiftAttendance(id=att_id, shift_id=uuid.uuid4(), volunteer_id=uuid.uuid4())
+        mock_repo.get_attendance_by_id.return_value = attendance
+        mock_repo.get_profile_by_user_id.return_value = VolunteerProfile(
+            id=uuid.uuid4(), user_id=user_id, status=VolunteerStatus.ACTIVE,
+        )
+        with pytest.raises(ForbiddenError):
+            await service.check_in(att_id, user_id)
+
+    @pytest.mark.asyncio
     async def test_check_in_already_checked(self, service, mock_repo):
+        user_id = uuid.uuid4()
+        volunteer_id = uuid.uuid4()
         attendance = ShiftAttendance(
-            id=uuid.uuid4(), shift_id=uuid.uuid4(), volunteer_id=uuid.uuid4(),
+            id=uuid.uuid4(), shift_id=uuid.uuid4(), volunteer_id=volunteer_id,
             check_in_at=datetime.now(UTC),
         )
         mock_repo.get_attendance_by_id.return_value = attendance
+        mock_repo.get_profile_by_user_id.return_value = VolunteerProfile(
+            id=volunteer_id, user_id=user_id, status=VolunteerStatus.ACTIVE,
+        )
         with pytest.raises(ConflictError, match="Already checked in"):
-            await service.check_in(uuid.uuid4())
+            await service.check_in(uuid.uuid4(), user_id)
 
     @pytest.mark.asyncio
     async def test_check_out(self, service, mock_repo):
         att_id = uuid.uuid4()
+        user_id = uuid.uuid4()
+        volunteer_id = uuid.uuid4()
         check_in = datetime.now(UTC)
         attendance = ShiftAttendance(
-            id=att_id, shift_id=uuid.uuid4(), volunteer_id=uuid.uuid4(),
+            id=att_id, shift_id=uuid.uuid4(), volunteer_id=volunteer_id,
             check_in_at=check_in,
         )
         mock_repo.get_attendance_by_id.return_value = attendance
-        result = await service.check_out(att_id)
+        mock_repo.get_profile_by_user_id.return_value = VolunteerProfile(
+            id=volunteer_id, user_id=user_id, status=VolunteerStatus.ACTIVE,
+        )
+        result = await service.check_out(att_id, user_id)
         assert result.check_out_at is not None
         assert result.hours_logged is not None
 
     @pytest.mark.asyncio
     async def test_check_out_without_check_in(self, service, mock_repo):
+        user_id = uuid.uuid4()
+        volunteer_id = uuid.uuid4()
         attendance = ShiftAttendance(
-            id=uuid.uuid4(), shift_id=uuid.uuid4(), volunteer_id=uuid.uuid4(),
+            id=uuid.uuid4(), shift_id=uuid.uuid4(), volunteer_id=volunteer_id,
         )
         mock_repo.get_attendance_by_id.return_value = attendance
+        mock_repo.get_profile_by_user_id.return_value = VolunteerProfile(
+            id=volunteer_id, user_id=user_id, status=VolunteerStatus.ACTIVE,
+        )
         with pytest.raises(ConflictError, match="check in before"):
-            await service.check_out(uuid.uuid4())
+            await service.check_out(uuid.uuid4(), user_id)
 
     @pytest.mark.asyncio
     async def test_check_out_already_checked(self, service, mock_repo):
+        user_id = uuid.uuid4()
+        volunteer_id = uuid.uuid4()
         attendance = ShiftAttendance(
-            id=uuid.uuid4(), shift_id=uuid.uuid4(), volunteer_id=uuid.uuid4(),
+            id=uuid.uuid4(), shift_id=uuid.uuid4(), volunteer_id=volunteer_id,
             check_in_at=datetime.now(UTC), check_out_at=datetime.now(UTC),
         )
         mock_repo.get_attendance_by_id.return_value = attendance
+        mock_repo.get_profile_by_user_id.return_value = VolunteerProfile(
+            id=volunteer_id, user_id=user_id, status=VolunteerStatus.ACTIVE,
+        )
         with pytest.raises(ConflictError, match="Already checked out"):
-            await service.check_out(uuid.uuid4())
+            await service.check_out(uuid.uuid4(), user_id)
 
     @pytest.mark.asyncio
     async def test_soft_delete_profile(self, service, mock_repo):

@@ -11,6 +11,7 @@ from pawguard.modules.rescue.models import RescueStatus
 class RescueRequestCreate(BaseModel):
     reporter_name: str = Field(..., min_length=1, max_length=255)
     reporter_phone: str = Field(..., min_length=1, max_length=32)
+    reporter_alternate_phone: str | None = Field(None, max_length=32)
     reporter_email: EmailStr | None = None
     is_anonymous: bool = False
 
@@ -76,6 +77,7 @@ class RescueRequestResponse(BaseModel):
     ticket_number: str
     reporter_name: str
     reporter_phone: str
+    reporter_alternate_phone: str | None
     reporter_email: str | None
     is_anonymous: bool
     location_address: str

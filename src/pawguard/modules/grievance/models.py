@@ -1,14 +1,18 @@
 """ORM models for the Complaints, Feedback & Service Assurance module."""
 
 import uuid
+from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from pawguard.db.base import Base
 from pawguard.db.mixins import TimestampMixin, UUIDPkMixin
+
+# Default response-SLA window (PRR 3.14: "mandatory response SLAs").
+DEFAULT_SLA_HOURS = 72
 
 
 class GrievanceStatus(StrEnum):
@@ -35,6 +39,17 @@ class GrievanceTicket(UUIDPkMixin, TimestampMixin, Base):
     )
     resolution_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # SLA / escalation tracking (PRR 3.14).
+    sla_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    first_responded_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    escalation_level: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    escalated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    escalated_to_admin_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
 
 class GrievanceComment(UUIDPkMixin, TimestampMixin, Base):

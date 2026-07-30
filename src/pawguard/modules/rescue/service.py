@@ -5,11 +5,13 @@ import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
 
-from pawguard.core.exceptions import ConflictError, NotFoundError
+from pawguard.core.exceptions import ConflictError, NotFoundError, ValidationFailedError
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
 from pawguard.modules.auth.models import AuthAuditEventType
+from pawguard.modules.dog.models import DogProfile, DogStatus
+from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.rescue.models import RescueDispatch, RescueReport, RescueRequest, RescueStatus
 from pawguard.modules.rescue.repository import RescueRepository
 from pawguard.modules.rescue.schemas import RescueRequestResponse
@@ -18,16 +20,21 @@ from pawguard.services.audit_service import AuditService
 
 class RescueService:
     def __init__(
-        self, repository: RescueRepository, audit_service: AuditService | None = None
+        self,
+        repository: RescueRepository,
+        audit_service: AuditService | None = None,
+        dog_repo: DogRepository | None = None,
     ) -> None:
         self._repo = repository
         self._audit = audit_service
+        self._dog_repo = dog_repo
 
     async def report_incident(
         self,
         *,
         reporter_name: str,
         reporter_phone: str,
+        reporter_alternate_phone: str | None = None,
         reporter_email: str | None = None,
         is_anonymous: bool = False,
         location_address: str,
@@ -49,6 +56,7 @@ class RescueService:
             ticket_number=ticket_number,
             reporter_name=reporter_name,
             reporter_phone=reporter_phone,
+            reporter_alternate_phone=reporter_alternate_phone,
             reporter_email=reporter_email,
             is_anonymous=is_anonymous,
             location_address=location_address,
@@ -99,10 +107,15 @@ class RescueService:
         if approve:
             request.status = RescueStatus.VERIFIED
         else:
+            if not rationale or not rationale.strip():
+                raise ValidationFailedError(
+                    "A rejection rationale is required when rejecting a rescue request."
+                )
             request.status = RescueStatus.REJECTED
             request.rejection_rationale = rationale
 
         await self._repo._session.flush()
+        await self._repo._session.refresh(request)
 
         if self._audit and actor_id:
             event = (
@@ -230,6 +243,36 @@ class RescueService:
             await self._repo.create_report(report)
             request.reports.append(report)
 
+            # ADMITTED must create the internal Dog Profile automatically
+            # (PRR 3.2) rather than relying on staff to remember a separate
+            # POST /dogs call.
+            if self._dog_repo is not None:
+                year_str = now.strftime("%Y")
+                rand_suffix = "".join(secrets.choice("0123456789") for _ in range(4))
+                dog = DogProfile(
+                    registration_number=f"DOG-{year_str}-{rand_suffix}",
+                    rescue_case_id=request_id,
+                    name=f"Unnamed ({request.ticket_number})",
+                    breed="indie_mix",
+                    gender="unknown",
+                    status=DogStatus.RESCUED,
+                    is_adoptable=False,
+                )
+                await self._dog_repo.create(dog)
+                if self._audit and actor_id:
+                    await self._audit.record(
+                        event_type=AuthAuditEventType.DOG_REGISTERED,
+                        actor_id=actor_id,
+                        ip_address=ip_address or "",
+                        user_agent="",
+                        metadata={
+                            "dog_id": str(dog.id),
+                            "registration_number": dog.registration_number,
+                            "rescue_id": str(request_id),
+                            "auto_created": True,
+                        },
+                    )
+
         elif status == RescueStatus.REJECTED:  # representing a failed rescue
             dispatch.failed_at = now
             dispatch.failure_reason = failure_reason or "Failed rescue"
@@ -253,6 +296,7 @@ class RescueService:
                     "rescue_id": str(request_id),
                     "old_status": str(old_status),
                     "new_status": str(request.status),
+                    "requested_status": status.value,
                     "failure_reason": failure_reason,
                 },
             )

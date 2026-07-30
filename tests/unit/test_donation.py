@@ -16,6 +16,7 @@ from pawguard.modules.donation.models import Donation, DonationStatus, DonationT
 from pawguard.modules.donation.repository import DonationRepository
 from pawguard.modules.donation.schemas import DonationCreate, DonorProfileCreate
 from pawguard.modules.donation.service import DonationService
+from pawguard.services.audit_service import AuditService
 
 
 def _make_donation(**kw):
@@ -38,8 +39,12 @@ class TestDonationService:
         return AsyncMock(spec=DogRepository)
 
     @pytest.fixture
-    def service(self, mock_repo, mock_dog_repo):
-        return DonationService(mock_repo, mock_dog_repo)
+    def mock_audit(self):
+        return AsyncMock(spec=AuditService)
+
+    @pytest.fixture
+    def service(self, mock_repo, mock_dog_repo, mock_audit):
+        return DonationService(mock_repo, mock_dog_repo, audit_service=mock_audit)
 
     @pytest.mark.asyncio
     async def test_register_donor(self, service, mock_repo):
@@ -90,9 +95,48 @@ class TestDonationService:
             transaction_id="TXN-ABC123",
         )
         payload = DonationCreate(amount=100.0, currency="USD", donation_type=DonationType.ONE_TIME)
-        result = await service.make_donation(user_id, payload)
+        result = await service.make_donation(user_id, payload, actor_id=uuid.uuid4())
         assert result.amount == 100.0
         assert result.status == DonationStatus.SUCCESS
+
+    @pytest.mark.asyncio
+    async def test_make_donation_records_audit(self, service, mock_repo, mock_dog_repo, mock_audit):
+        user_id = uuid.uuid4()
+        actor_id = uuid.uuid4()
+        donor_id = uuid.uuid4()
+        mock_repo.get_donor_by_user_id.return_value = DonorProfile(id=donor_id, user_id=user_id)
+        donation_id = uuid.uuid4()
+        mock_repo.get_donation_by_id.return_value = Donation(
+            id=donation_id, donor_id=donor_id, amount=100.0, currency="USD",
+            donation_type=DonationType.ONE_TIME, status=DonationStatus.SUCCESS,
+            transaction_id="TXN-ABC123",
+        )
+        payload = DonationCreate(amount=100.0, currency="USD", donation_type=DonationType.ONE_TIME)
+        await service.make_donation(user_id, payload, actor_id=actor_id)
+        mock_audit.record.assert_awaited_once()
+        assert mock_audit.record.call_args.kwargs["actor_id"] == actor_id
+
+    @pytest.mark.asyncio
+    async def test_update_donation_status_records_audit(self, service, mock_repo, mock_audit):
+        donation_id = uuid.uuid4()
+        actor_id = uuid.uuid4()
+        mock_repo.get_donation_by_id.return_value = _make_donation(
+            id=donation_id, status=DonationStatus.PENDING,
+        )
+        mock_repo.update_donation_status.return_value = _make_donation(
+            id=donation_id, status=DonationStatus.FAILED,
+        )
+        await service.update_donation_status(donation_id, DonationStatus.FAILED, actor_id=actor_id)
+        mock_audit.record.assert_awaited_once()
+        assert mock_audit.record.call_args.kwargs["metadata"]["new_status"] == "failed"
+
+    @pytest.mark.asyncio
+    async def test_soft_delete_donor_records_audit(self, service, mock_repo, mock_audit):
+        donor_id = uuid.uuid4()
+        actor_id = uuid.uuid4()
+        mock_repo.get_donor_by_id.return_value = DonorProfile(id=donor_id, user_id=uuid.uuid4())
+        await service.soft_delete_donor(donor_id, actor_id=actor_id)
+        mock_audit.record.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_make_donation_with_dog(self, service, mock_repo, mock_dog_repo):

@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from pawguard.core.exceptions import NotFoundError
+from pawguard.core.exceptions import ForbiddenError, NotFoundError
 from pawguard.core.pagination import PageParams
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
@@ -78,9 +78,33 @@ class TestDogService:
             gender="male", status=DogStatus.SHELTER, is_adoptable=False,
         )
         mock_repo.get_by_id.return_value = dog
-        payload = DogProfileUpdate(name="Updated", is_adoptable=True)
+        payload = DogProfileUpdate(name="Updated")
         result = await service.update_dog(dog_id, payload, actor_id=uuid.uuid4())
         assert result.name == "Updated"
+
+    @pytest.mark.asyncio
+    async def test_update_dog_cannot_grant_is_adoptable(self, service, mock_repo):
+        dog_id = uuid.uuid4()
+        dog = _make_dog(
+            id=dog_id, registration_number="DOG-2026-0002", name="Old", breed="Mix",
+            gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+        )
+        mock_repo.get_by_id.return_value = dog
+        payload = DogProfileUpdate(is_adoptable=True)
+        with pytest.raises(ForbiddenError, match="medical clearance"):
+            await service.update_dog(dog_id, payload, actor_id=uuid.uuid4())
+
+    @pytest.mark.asyncio
+    async def test_register_dog_ignores_is_adoptable_payload(self, service, mock_repo, mock_audit):
+        dog_id = uuid.uuid4()
+        mock_repo.create.return_value = DogProfile(
+            id=dog_id, registration_number="DOG-2026-1234", name="Buddy", breed="Labrador",
+            gender="male", status=DogStatus.RESCUED, is_adoptable=False,
+        )
+        payload = DogProfileCreate(name="Buddy", breed="Labrador", gender="male", is_adoptable=True)
+        await service.register_dog(payload, actor_id=uuid.uuid4())
+        created_dog = mock_repo.create.call_args[0][0]
+        assert created_dog.is_adoptable is False
 
     @pytest.mark.asyncio
     async def test_update_dog_not_found(self, service, mock_repo):

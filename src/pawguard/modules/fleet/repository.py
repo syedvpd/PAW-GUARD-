@@ -8,7 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.pagination import PageParams
 from pawguard.core.search import SortParams, apply_sorting, build_search_filter
-from pawguard.modules.fleet.models import FleetMaintenance, Vehicle, VehicleStatus
+from pawguard.modules.fleet.models import (
+    EquipmentCheckout,
+    FleetMaintenance,
+    Vehicle,
+    VehicleStatus,
+)
 
 
 class FleetRepository:
@@ -18,6 +23,10 @@ class FleetRepository:
     }
     MAINTENANCE_SORTABLE_FIELDS = {
         "service_date", "cost", "created_at",
+    }
+    EQUIPMENT_SEARCH_FIELDS = ("equipment_name", "notes")
+    EQUIPMENT_SORTABLE_FIELDS = {
+        "equipment_name", "checked_out_at", "returned_at", "created_at",
     }
 
     def __init__(self, session: AsyncSession) -> None:
@@ -137,3 +146,39 @@ class FleetRepository:
         )
         result = await self._session.execute(stmt)
         return result.rowcount  # type: ignore[attr-defined,no-any-return]
+
+    async def create_equipment_checkout(self, record: EquipmentCheckout) -> EquipmentCheckout:
+        self._session.add(record)
+        await self._session.flush()
+        return record
+
+    async def get_equipment_checkout(self, checkout_id: uuid.UUID) -> EquipmentCheckout | None:
+        stmt = select(EquipmentCheckout).where(EquipmentCheckout.id == checkout_id)
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def paginate_equipment_checkouts(
+        self,
+        page: PageParams,
+        sort: SortParams,
+        search_term: str | None = None,
+        outstanding_only: bool = False,
+    ) -> tuple[Sequence[EquipmentCheckout], int]:
+        stmt = select(EquipmentCheckout)
+
+        search_filter = build_search_filter(
+            EquipmentCheckout, search_term, self.EQUIPMENT_SEARCH_FIELDS
+        )
+        if search_filter is not None:
+            stmt = stmt.where(search_filter)
+
+        if outstanding_only:
+            stmt = stmt.where(EquipmentCheckout.returned_at.is_(None))
+
+        stmt = apply_sorting(stmt, sort, self.EQUIPMENT_SORTABLE_FIELDS)
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = (await self._session.execute(count_stmt)).scalar_one()
+
+        stmt = stmt.offset(page.offset).limit(page.limit)
+        results = (await self._session.execute(stmt)).scalars().all()
+        return results, total

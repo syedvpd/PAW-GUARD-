@@ -7,6 +7,7 @@ from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.payments import PaymentGateway, PaymentGatewayError, WebhookEvent
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
+from pawguard.modules.auth.models import AuthAuditEventType
 from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.donation.models import Donation, DonationStatus, DonorProfile
 from pawguard.modules.donation.repository import DonationRepository
@@ -18,6 +19,7 @@ from pawguard.modules.donation.schemas import (
     DonorProfileResponse,
     DonorProfileUpdate,
 )
+from pawguard.services.audit_service import AuditService
 
 
 class DonationService:
@@ -26,10 +28,12 @@ class DonationService:
         repository: DonationRepository,
         dog_repo: DogRepository,
         payment_gateway: PaymentGateway | None = None,
+        audit_service: AuditService | None = None,
     ) -> None:
         self._repo = repository
         self._dog_repo = dog_repo
         self._gateway = payment_gateway
+        self._audit = audit_service
 
     async def register_donor(self, user_id: uuid.UUID, payload: DonorProfileCreate) -> DonorProfile:
         existing = await self._repo.get_donor_by_user_id(user_id)
@@ -50,7 +54,14 @@ class DonationService:
             await self._repo.create_donor_profile(donor)
         return donor
 
-    async def make_donation(self, user_id: uuid.UUID, payload: DonationCreate) -> Donation:
+    async def make_donation(
+        self,
+        user_id: uuid.UUID,
+        payload: DonationCreate,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> Donation:
         donor = await self.get_or_create_donor(user_id)
 
         if payload.dog_id is not None:
@@ -74,6 +85,21 @@ class DonationService:
         res = await self._repo.get_donation_by_id(donation.id)
         if res is None:
             raise NotFoundError("Failed to fetch newly created donation record.")
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.DONATION_RECEIVED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "donation_id": str(res.id),
+                    "donor_id": str(donor.id),
+                    "amount": str(payload.amount),
+                    "currency": payload.currency,
+                    "manual": True,
+                },
+            )
         return res
 
     async def get_donation(self, donation_id: uuid.UUID) -> Donation:
@@ -142,6 +168,9 @@ class DonationService:
         gateway_order_id: str,
         gateway_payment_id: str,
         gateway_signature: str,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
     ) -> Donation:
         if self._gateway is None:
             raise ValidationFailedError("Online payments are not configured for this deployment.")
@@ -180,6 +209,21 @@ class DonationService:
         res = await self._repo.get_donation_by_id(updated.id)
         if res is None:
             raise NotFoundError("Donation record not found.")
+
+        if self._audit:
+            await self._audit.record(
+                event_type=AuthAuditEventType.DONATION_RECEIVED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "donation_id": str(res.id),
+                    "amount": str(res.amount),
+                    "currency": res.currency,
+                    "gateway_payment_id": gateway_payment_id,
+                    "verified_online": True,
+                },
+            )
         return res
 
     async def handle_gateway_webhook(self, payload: bytes, signature: str) -> None:
@@ -204,8 +248,32 @@ class DonationService:
                 gateway_payment_id=event.payment_id,
                 transaction_id=tx_id,
             )
+            if self._audit:
+                await self._audit.record(
+                    event_type=AuthAuditEventType.DONATION_RECEIVED,
+                    actor_id=None,
+                    ip_address="",
+                    user_agent="",
+                    metadata={
+                        "donation_id": str(donation.id),
+                        "gateway_payment_id": event.payment_id,
+                        "source": "webhook",
+                    },
+                )
         elif event.event_type == "payment.failed":
             await self._repo.update_gateway_fields(donation.id, status=DonationStatus.FAILED)
+            if self._audit:
+                await self._audit.record(
+                    event_type=AuthAuditEventType.DONATION_STATUS_CHANGED,
+                    actor_id=None,
+                    ip_address="",
+                    user_agent="",
+                    metadata={
+                        "donation_id": str(donation.id),
+                        "new_status": DonationStatus.FAILED.value,
+                        "source": "webhook",
+                    },
+                )
 
     async def list_donations_for_user(self, user_id: uuid.UUID) -> list[Donation]:
         donor = await self._repo.get_donor_by_user_id(user_id)
@@ -213,7 +281,14 @@ class DonationService:
             return []
         return list(await self._repo.get_donations_by_donor(donor.id))
 
-    async def update_donor(self, donor_id: uuid.UUID, payload: DonorProfileUpdate) -> DonorProfile:
+    async def update_donor(
+        self,
+        donor_id: uuid.UUID,
+        payload: DonorProfileUpdate,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> DonorProfile:
         donor = await self._repo.get_donor_by_id(donor_id)
         if donor is None:
             raise NotFoundError("Donor profile not found.")
@@ -223,24 +298,64 @@ class DonationService:
         )
         if updated is None:
             raise NotFoundError("Donor profile not found after update.")
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.DONOR_PROFILE_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"donor_id": str(donor_id)},
+            )
         return updated
 
     async def update_donation_status(
-        self, donation_id: uuid.UUID, status: DonationStatus
+        self,
+        donation_id: uuid.UUID,
+        status: DonationStatus,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
     ) -> Donation:
         donation = await self._repo.get_donation_by_id(donation_id)
         if donation is None:
             raise NotFoundError("Donation record not found.")
+        old_status = donation.status
         updated = await self._repo.update_donation_status(donation_id, status)
         if updated is None:
             raise NotFoundError("Failed to update donation status.")
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.DONATION_STATUS_CHANGED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "donation_id": str(donation_id),
+                    "old_status": old_status.value if hasattr(old_status, "value") else old_status,
+                    "new_status": status.value,
+                },
+            )
         return updated
 
-    async def soft_delete_donor(self, donor_id: uuid.UUID) -> None:
+    async def soft_delete_donor(
+        self,
+        donor_id: uuid.UUID,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> None:
         donor = await self._repo.get_donor_by_id(donor_id)
         if donor is None:
             raise NotFoundError("Donor profile not found.")
         await self._repo.soft_delete_donor(donor_id)
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.DONOR_PROFILE_DELETED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"donor_id": str(donor_id)},
+            )
 
     async def list_donations_paginated(
         self,
@@ -286,11 +401,39 @@ class DonationService:
         self,
         ids: list[uuid.UUID],
         status: DonationStatus,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
     ) -> int:
-        return await self._repo.bulk_update_donation_status(ids, status)
+        count = await self._repo.bulk_update_donation_status(ids, status)
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.DONATION_STATUS_CHANGED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "donation_ids": [str(i) for i in ids],
+                    "new_status": status.value,
+                    "count": count,
+                },
+            )
+        return count
 
     async def bulk_soft_delete(
         self,
         ids: list[uuid.UUID],
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
     ) -> int:
-        return await self._repo.bulk_soft_delete_donors(ids)
+        count = await self._repo.bulk_soft_delete_donors(ids)
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.DONOR_PROFILE_DELETED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"donor_ids": [str(i) for i in ids], "count": count},
+            )
+        return count

@@ -1,15 +1,24 @@
 """FleetService: owns vehicle fleet business behaviour (RULE-003)."""
 
 import uuid
+from datetime import UTC, datetime
 
 from pawguard.core.exceptions import ConflictError, NotFoundError
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
 from pawguard.modules.auth.models import AuthAuditEventType
-from pawguard.modules.fleet.models import FleetMaintenance, Vehicle, VehicleStatus
+from pawguard.modules.fleet.models import (
+    EquipmentCheckout,
+    FleetMaintenance,
+    Vehicle,
+    VehicleStatus,
+)
 from pawguard.modules.fleet.repository import FleetRepository
 from pawguard.modules.fleet.schemas import (
+    EquipmentCheckoutCreate,
+    EquipmentCheckoutResponse,
+    EquipmentReturnRequest,
     MaintenanceCreate,
     MaintenanceResponse,
     VehicleCreate,
@@ -214,3 +223,81 @@ class FleetService:
                 metadata={"vehicle_ids": [str(i) for i in ids], "count": count},
             )
         return count
+
+    async def checkout_equipment(
+        self,
+        payload: EquipmentCheckoutCreate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> EquipmentCheckout:
+        if payload.assigned_to_vehicle_id is not None:
+            vehicle = await self._repo.get_vehicle(payload.assigned_to_vehicle_id)
+            if vehicle is None:
+                raise NotFoundError("Vehicle not found.")
+        record = await self._repo.create_equipment_checkout(
+            EquipmentCheckout(
+                **payload.model_dump(),
+                checked_out_at=datetime.now(UTC),
+            )
+        )
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.FLEET_EQUIPMENT_CHECKED_OUT,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "checkout_id": str(record.id),
+                    "equipment_name": record.equipment_name,
+                },
+            )
+        return record
+
+    async def return_equipment(
+        self,
+        checkout_id: uuid.UUID,
+        payload: EquipmentReturnRequest,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> EquipmentCheckout:
+        record = await self._repo.get_equipment_checkout(checkout_id)
+        if record is None:
+            raise NotFoundError("Equipment checkout record not found.")
+        if record.returned_at is not None:
+            raise ConflictError("Equipment has already been returned.")
+        record.returned_at = datetime.now(UTC)
+        if payload.notes:
+            record.notes = payload.notes
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.FLEET_EQUIPMENT_RETURNED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"checkout_id": str(checkout_id)},
+            )
+        return record
+
+    async def get_equipment_checkout(self, checkout_id: uuid.UUID) -> EquipmentCheckout:
+        record = await self._repo.get_equipment_checkout(checkout_id)
+        if record is None:
+            raise NotFoundError("Equipment checkout record not found.")
+        return record
+
+    async def list_equipment_checkouts_paginated(
+        self,
+        page: PageParams,
+        sort: SortParams,
+        search_term: str | None = None,
+        outstanding_only: bool = False,
+    ) -> PaginatedResponse[EquipmentCheckoutResponse]:
+        results, total = await self._repo.paginate_equipment_checkouts(
+            page=page,
+            sort=sort,
+            search_term=search_term,
+            outstanding_only=outstanding_only,
+        )
+        return PaginatedResponse(
+            data=[EquipmentCheckoutResponse.model_validate(r) for r in results],
+            meta=build_pagination_meta(total=total, params=page),
+        )

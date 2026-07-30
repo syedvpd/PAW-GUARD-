@@ -47,10 +47,10 @@ async def check_inventory_low_stock(ctx: dict[str, object]) -> None:
 
 
 async def check_inventory_expiry(ctx: dict[str, object]) -> None:
-    """Alert when inventory items expire within 30 days."""
+    """Alert when inventory items expire within 60 days (PRR 3.12)."""
     from datetime import date as date_type
 
-    cutoff = date_type.today() + timedelta(days=30)
+    cutoff = date_type.today() + timedelta(days=60)
 
     async with AsyncSessionLocal() as session:
         result = await session.execute(

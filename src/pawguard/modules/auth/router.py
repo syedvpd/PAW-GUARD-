@@ -63,6 +63,22 @@ register_rate_limiter = RateLimiter(key_prefix="register", limit=5, window_secon
 login_rate_limiter = RateLimiter(key_prefix="login", limit=10, window_seconds=60)
 refresh_rate_limiter = RateLimiter(key_prefix="refresh", limit=30, window_seconds=60)
 reset_rate_limiter = RateLimiter(key_prefix="password_reset", limit=5, window_seconds=3600)
+# Short numeric codes (TOTP/backup codes) are brute-forceable without a tight throttle.
+mfa_verify_rate_limiter = RateLimiter(key_prefix="mfa_verify", limit=10, window_seconds=300)
+mfa_enroll_confirm_rate_limiter = RateLimiter(
+    key_prefix="mfa_enroll_confirm", limit=10, window_seconds=300
+)
+mfa_disable_rate_limiter = RateLimiter(key_prefix="mfa_disable", limit=10, window_seconds=300)
+password_change_rate_limiter = RateLimiter(
+    key_prefix="password_change", limit=10, window_seconds=300
+)
+reset_confirm_rate_limiter = RateLimiter(
+    key_prefix="password_reset_confirm", limit=10, window_seconds=300
+)
+email_verify_confirm_rate_limiter = RateLimiter(
+    key_prefix="email_verify_confirm", limit=10, window_seconds=300
+)
+oauth_login_rate_limiter = RateLimiter(key_prefix="oauth_login", limit=10, window_seconds=60)
 
 
 def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
@@ -204,7 +220,11 @@ async def login(
     return ApiResponse(data=_to_login_response(result, include_refresh_in_body=not is_web))
 
 
-@router.post("/mfa/verify", response_model=ApiResponse[LoginResponse])
+@router.post(
+    "/mfa/verify",
+    response_model=ApiResponse[LoginResponse],
+    dependencies=[Depends(mfa_verify_rate_limiter)],
+)
 async def verify_mfa_login(
     payload: MFALoginVerifyRequest,
     request: Request,
@@ -356,7 +376,11 @@ async def revoke_session(
     return ApiResponse(message="Session revoked.")
 
 
-@router.post("/password/change", response_model=ApiResponse[None])
+@router.post(
+    "/password/change",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(password_change_rate_limiter)],
+)
 async def change_password(
     payload: ChangePasswordRequest,
     request: Request,
@@ -396,7 +420,11 @@ async def request_password_reset(
     return ApiResponse(message="If that email exists, a reset link has been sent.")
 
 
-@router.post("/password/reset/confirm", response_model=ApiResponse[None])
+@router.post(
+    "/password/reset/confirm",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(reset_confirm_rate_limiter)],
+)
 async def confirm_password_reset(
     payload: PasswordResetConfirmRequest,
     request: Request,
@@ -410,7 +438,11 @@ async def confirm_password_reset(
     return ApiResponse(message="Password has been reset.")
 
 
-@router.post("/email/verify/confirm", response_model=ApiResponse[None])
+@router.post(
+    "/email/verify/confirm",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(email_verify_confirm_rate_limiter)],
+)
 async def confirm_email_verification(
     payload: EmailVerificationConfirmRequest,
     request: Request,
@@ -443,7 +475,11 @@ async def enroll_mfa(
     return ApiResponse(data=MFAEnrollResponse(secret=secret, provisioning_uri=uri))
 
 
-@router.post("/mfa/enroll/confirm", response_model=ApiResponse[None])
+@router.post(
+    "/mfa/enroll/confirm",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(mfa_enroll_confirm_rate_limiter)],
+)
 async def confirm_mfa_enrollment(
     payload: MFAVerifyRequest,
     request: Request,
@@ -456,7 +492,11 @@ async def confirm_mfa_enrollment(
     return ApiResponse(message="MFA enabled.")
 
 
-@router.post("/mfa/disable", response_model=ApiResponse[None])
+@router.post(
+    "/mfa/disable",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(mfa_disable_rate_limiter)],
+)
 async def disable_mfa(
     request: Request,
     current: CurrentUser = Depends(get_current_user),
@@ -469,7 +509,11 @@ async def disable_mfa(
 # ── OAuth / Social Login ──────────────────────────────────────────────────────
 
 
-@router.post("/oauth/login", response_model=ApiResponse[LoginResponse])
+@router.post(
+    "/oauth/login",
+    response_model=ApiResponse[LoginResponse],
+    dependencies=[Depends(oauth_login_rate_limiter)],
+)
 async def oauth_login(
     payload: OAuthLoginRequest,
     request: Request,

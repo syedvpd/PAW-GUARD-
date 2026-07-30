@@ -20,7 +20,7 @@ class DogProfileCreate(BaseModel):
     color: str | None = Field(None, max_length=64)
     temperament: str | None = Field(None, max_length=64)
     shelter_facility_id: uuid.UUID | None = None
-    kennel_id: str | None = Field(None, max_length=64)
+    kennel_id: uuid.UUID | None = None
     is_adoptable: bool = False
     is_quarantine_passed: bool = False
 
@@ -37,7 +37,7 @@ class DogProfileUpdate(BaseModel):
     temperament: str | None = None
     status: DogStatus | None = None
     shelter_facility_id: uuid.UUID | None = None
-    kennel_id: str | None = None
+    kennel_id: uuid.UUID | None = None
     is_adoptable: bool | None = None
     is_quarantine_passed: bool | None = None
 
@@ -61,7 +61,7 @@ class DogProfileResponse(BaseModel):
     temperament: str | None
     status: DogStatus
     shelter_facility_id: uuid.UUID | None
-    kennel_id: str | None
+    kennel_id: uuid.UUID | None
     is_adoptable: bool
     is_quarantine_passed: bool
     created_at: datetime

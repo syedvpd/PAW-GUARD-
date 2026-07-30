@@ -4,7 +4,7 @@ import secrets
 import uuid
 from datetime import UTC, datetime
 
-from pawguard.core.exceptions import NotFoundError
+from pawguard.core.exceptions import ForbiddenError, NotFoundError
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
@@ -48,7 +48,10 @@ class DogService:
             status=DogStatus.RESCUED,
             shelter_facility_id=payload.shelter_facility_id,
             kennel_id=payload.kennel_id,
-            is_adoptable=payload.is_adoptable,
+            # is_adoptable is never set from client input: a dog can only be
+            # marked adoptable via the vet-authorized medical clearance flow
+            # (POST /medical/clearance/{dog_id}), never at registration.
+            is_adoptable=False,
             is_quarantine_passed=payload.is_quarantine_passed,
         )
         dog = await self._repo.create(dog)
@@ -83,6 +86,11 @@ class DogService:
             raise NotFoundError("Dog profile not found.")
 
         update_data = payload.model_dump(exclude_unset=True)
+        if update_data.get("is_adoptable") is True and not dog.is_adoptable:
+            raise ForbiddenError(
+                "is_adoptable can only be granted via the veterinarian-authorized "
+                "medical clearance endpoint (POST /medical/clearance/{dog_id})."
+            )
         for key, value in update_data.items():
             setattr(dog, key, value)
 

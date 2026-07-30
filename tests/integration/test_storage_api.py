@@ -85,7 +85,7 @@ class TestStorageAPI:
 
     async def test_get_file(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
-        payload = {"original_filename": "file.txt", "mime_type": "text/plain", "file_size": 1000, "folder": "profiles"}
+        payload = {"original_filename": "file.pdf", "mime_type": "application/pdf", "file_size": 1000, "folder": "profiles"}
         create_resp = await client.post("/api/v1/storage/upload-url", json=payload, headers=headers)
         file_id = create_resp.json()["data"]["file_id"]
         resp = await client.get(f"/api/v1/storage/{file_id}", headers=headers)
@@ -112,7 +112,7 @@ class TestStorageAPI:
 
     async def test_delete_file(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
-        payload = {"original_filename": "delete_me.txt", "mime_type": "text/plain", "file_size": 500, "folder": "shelters"}
+        payload = {"original_filename": "delete_me.pdf", "mime_type": "application/pdf", "file_size": 500, "folder": "shelters"}
         create_resp = await client.post("/api/v1/storage/upload-url", json=payload, headers=headers)
         file_id = create_resp.json()["data"]["file_id"]
         resp = await client.delete(f"/api/v1/storage/{file_id}", headers=headers)

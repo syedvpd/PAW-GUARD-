@@ -15,6 +15,10 @@ class VolunteerProfileCreate(BaseModel):
     skills: str | None = None
     availability: str | None = Field(None, max_length=255)
     notes: str | None = None
+    # Self-reported at application time. background_check_completed is staff-
+    # verified and deliberately not settable here - see VolunteerProfileUpdate.
+    medical_conditions: str | None = None
+    animal_handling_experience: str | None = None
 
 
 class VolunteerProfileUpdate(BaseModel):
@@ -24,6 +28,10 @@ class VolunteerProfileUpdate(BaseModel):
     skills: str | None = None
     availability: str | None = None
     notes: str | None = None
+    medical_conditions: str | None = None
+    animal_handling_experience: str | None = None
+    background_check_completed: bool | None = None
+    background_check_notes: str | None = None
 
 
 class VolunteerProfileResponse(BaseModel):
@@ -35,6 +43,10 @@ class VolunteerProfileResponse(BaseModel):
     skills: str | None
     availability: str | None
     notes: str | None
+    medical_conditions: str | None
+    animal_handling_experience: str | None
+    background_check_completed: bool
+    background_check_notes: str | None
     created_at: datetime
     updated_at: datetime
     user: UserProfile | None = None

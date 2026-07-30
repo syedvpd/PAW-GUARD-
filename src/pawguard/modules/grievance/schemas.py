@@ -32,10 +32,20 @@ class GrievanceResponse(BaseModel):
     status: GrievanceStatus
     assigned_to_admin_id: uuid.UUID | None
     resolution_notes: str | None
+    sla_due_at: datetime | None
+    first_responded_at: datetime | None
+    escalation_level: int
+    escalated_at: datetime | None
+    escalated_to_admin_id: uuid.UUID | None
     created_at: datetime
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class GrievanceEscalate(BaseModel):
+    escalated_to_admin_id: uuid.UUID
+    reason: str | None = None
 
 
 class GrievanceListFilter(BaseModel):

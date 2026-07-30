@@ -95,6 +95,10 @@ class FacilityTransferResponse(BaseModel):
     transferred_by: uuid.UUID
     status: TransferStatus
     notes: str | None
+    sender_confirmed_at: datetime | None
+    sender_confirmed_by: uuid.UUID | None
+    receiver_confirmed_at: datetime | None
+    receiver_confirmed_by: uuid.UUID | None
     created_at: datetime
     updated_at: datetime
 

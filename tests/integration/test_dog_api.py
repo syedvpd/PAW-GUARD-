@@ -61,7 +61,9 @@ class TestDogAPI:
         data = resp.json()["data"]
         assert data["name"] == "Rex"
         assert data["status"] == DogStatus.RESCUED.value
-        assert data["is_adoptable"] is True
+        # is_adoptable is always forced False at registration; it can only be
+        # granted via the vet-authorized medical clearance endpoint.
+        assert data["is_adoptable"] is False
 
     async def test_register_dog_validation_error(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)

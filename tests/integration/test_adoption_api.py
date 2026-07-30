@@ -46,7 +46,11 @@ class TestAdoptionAPI:
     async def _create_dog(self, client: AsyncClient, headers: dict) -> str:
         payload = {"name": "AdoptDog", "breed": "Lab", "gender": "male", "estimated_age": "2y", "weight": 20, "color": "black", "temperament": "calm", "is_adoptable": True, "is_quarantine_passed": True}
         resp = await client.post("/api/v1/dogs", json=payload, headers=headers)
-        return resp.json()["data"]["id"]
+        dog_id = resp.json()["data"]["id"]
+        # is_adoptable is forced False at registration; grant vet clearance
+        # so downstream adoption-flow tests can apply for this dog.
+        await client.post(f"/api/v1/medical/clearance/{dog_id}", headers=headers)
+        return dog_id
 
     async def test_apply_for_adoption(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
@@ -109,8 +113,11 @@ class TestAdoptionAPI:
         payload = {"dog_id": dog_id, "residential_status": "rented", "has_landlord_approval": True, "has_yard_fence": False, "household_members_count": 1}
         create_resp = await client.post("/api/v1/adoptions", json=payload, headers=headers)
         app_id = create_resp.json()["data"]["id"]
-        update_payload = {"status": "approved"}
-        resp = await client.put(f"/api/v1/adoptions/{app_id}", json=update_payload, headers=headers)
+        # Status is a state machine now (submitted -> vetting -> home_check ->
+        # approved); walk through the pipeline instead of jumping directly.
+        await client.put(f"/api/v1/adoptions/{app_id}", json={"status": "vetting"}, headers=headers)
+        await client.put(f"/api/v1/adoptions/{app_id}", json={"status": "home_check"}, headers=headers)
+        resp = await client.put(f"/api/v1/adoptions/{app_id}", json={"status": "approved"}, headers=headers)
         assert resp.status_code == 200
         assert resp.json()["data"]["status"] == AdoptionStatus.APPROVED.value
 

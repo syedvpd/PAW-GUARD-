@@ -136,6 +136,7 @@ class TestShelterService:
         mock_repo.get_section.return_value = ShelterSection(
             id=section_id, facility_id=facility_id, name="Gen", capacity=10,
         )
+        mock_dog_repo.count_by_kennel.return_value = 0
         result = await service.assign_dog_to_kennel(dog_id, kennel_id, actor_id=uuid.uuid4())
         assert result is True
 
@@ -152,6 +153,22 @@ class TestShelterService:
         )
         with pytest.raises(ConflictError, match="Cannot assign"):
             await service.assign_dog_to_kennel(uuid.uuid4(), kennel_id)
+
+    @pytest.mark.asyncio
+    async def test_assign_dog_to_kennel_at_capacity(self, service, mock_repo, mock_dog_repo):
+        dog_id = uuid.uuid4()
+        kennel_id = uuid.uuid4()
+        mock_dog_repo.get_by_id.return_value = DogProfile(
+            id=dog_id, registration_number="DOG-001", name="Rex", breed="Mix",
+            gender="male", status=DogStatus.RESCUED, is_adoptable=False,
+        )
+        mock_repo.get_kennel.return_value = Kennel(
+            id=kennel_id, section_id=uuid.uuid4(), identifier="K-01", capacity=1,
+            sanitation_state=KennelSanitationState.CLEAN,
+        )
+        mock_dog_repo.count_by_kennel.return_value = 1
+        with pytest.raises(ConflictError, match="at capacity"):
+            await service.assign_dog_to_kennel(dog_id, kennel_id)
 
     @pytest.mark.asyncio
     async def test_update_kennel_sanitation(self, service, mock_repo):
@@ -192,7 +209,7 @@ class TestShelterService:
         assert result.status == TransferStatus.PENDING
 
     @pytest.mark.asyncio
-    async def test_confirm_transfer(self, service, mock_repo, mock_dog_repo):
+    async def test_confirm_transfer_requires_both_sides(self, service, mock_repo, mock_dog_repo):
         transfer_id = uuid.uuid4()
         dog_id = uuid.uuid4()
         to_fac_id = uuid.uuid4()
@@ -207,9 +224,36 @@ class TestShelterService:
             gender="male", status=DogStatus.SHELTER, is_adoptable=False,
         )
         mock_dog_repo.get_by_id.return_value = dog
-        result = await service.confirm_transfer(transfer_id, actor_id=uuid.uuid4())
+
+        sender_id = uuid.uuid4()
+        receiver_id = uuid.uuid4()
+
+        # Sender confirms alone: not enough to complete the transfer.
+        result = await service.confirm_transfer_sender(transfer_id, actor_id=sender_id)
+        assert result.status == TransferStatus.PENDING
+        assert result.sender_confirmed_at is not None
+        assert dog.shelter_facility_id != to_fac_id
+
+        # Receiver confirms: now both sides are in, transfer completes.
+        result = await service.confirm_transfer_receiver(transfer_id, actor_id=receiver_id)
         assert result.status == TransferStatus.COMPLETED
         assert dog.shelter_facility_id == to_fac_id
+
+    @pytest.mark.asyncio
+    async def test_confirm_transfer_same_actor_both_sides_rejected(
+        self, service, mock_repo, mock_dog_repo
+    ):
+        transfer_id = uuid.uuid4()
+        actor_id = uuid.uuid4()
+        transfer = FacilityTransfer(
+            id=transfer_id, dog_id=uuid.uuid4(), from_facility_id=uuid.uuid4(),
+            to_facility_id=uuid.uuid4(), transferred_by=uuid.uuid4(),
+            status=TransferStatus.PENDING,
+        )
+        mock_repo.get_transfer.return_value = transfer
+        await service.confirm_transfer_sender(transfer_id, actor_id=actor_id)
+        with pytest.raises(ConflictError, match="cannot confirm both"):
+            await service.confirm_transfer_receiver(transfer_id, actor_id=actor_id)
 
     @pytest.mark.asyncio
     async def test_confirm_transfer_already_processed(self, service, mock_repo):
@@ -220,7 +264,7 @@ class TestShelterService:
         )
         mock_repo.get_transfer.return_value = transfer
         with pytest.raises(ConflictError, match="already been processed"):
-            await service.confirm_transfer(uuid.uuid4())
+            await service.confirm_transfer_sender(uuid.uuid4())
 
     @pytest.mark.asyncio
     async def test_submit_daily_care_log(self, service, mock_repo, mock_dog_repo):

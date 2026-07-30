@@ -3,7 +3,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from pawguard.core.exceptions import ConflictError, NotFoundError
+from pawguard.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginationMeta
 from pawguard.core.search import SortParams
@@ -39,6 +39,8 @@ class VolunteerService:
             skills=payload.skills,
             availability=payload.availability,
             notes=payload.notes,
+            medical_conditions=payload.medical_conditions,
+            animal_handling_experience=payload.animal_handling_experience,
             status=VolunteerStatus.APPLIED,
         )
         await self._repo.create_profile(profile)
@@ -121,7 +123,10 @@ class VolunteerService:
         return list(shifts), meta
 
     async def join_shift(self, shift_id: uuid.UUID, volunteer_id: uuid.UUID) -> ShiftAttendance:
-        shift = await self._repo.get_shift_by_id(shift_id)
+        # Lock the shift row first: this serializes concurrent joins near
+        # capacity so the check-then-act below can't race (mirrors the same
+        # fix already applied to kennel assignment and adoption approval).
+        shift = await self._repo.get_shift_by_id_for_update(shift_id)
         if shift is None:
             raise NotFoundError("Volunteer shift not found.")
 
@@ -150,10 +155,16 @@ class VolunteerService:
         meta = build_pagination_meta(total=total, params=page_params or PageParams())
         return list(records), meta
 
-    async def check_in(self, attendance_id: uuid.UUID) -> ShiftAttendance:
+    async def check_in(
+        self, attendance_id: uuid.UUID, requesting_user_id: uuid.UUID
+    ) -> ShiftAttendance:
         attendance = await self._repo.get_attendance_by_id(attendance_id)
         if attendance is None:
             raise NotFoundError("Attendance record not found.")
+
+        profile = await self.get_profile_by_user(requesting_user_id)
+        if attendance.volunteer_id != profile.id:
+            raise ForbiddenError("You can only check in for your own shifts.")
 
         if attendance.check_in_at is not None:
             raise ConflictError("Already checked in for this shift.")
@@ -161,10 +172,16 @@ class VolunteerService:
         attendance.check_in_at = datetime.now(UTC)
         return attendance
 
-    async def check_out(self, attendance_id: uuid.UUID) -> ShiftAttendance:
+    async def check_out(
+        self, attendance_id: uuid.UUID, requesting_user_id: uuid.UUID
+    ) -> ShiftAttendance:
         attendance = await self._repo.get_attendance_by_id(attendance_id)
         if attendance is None:
             raise NotFoundError("Attendance record not found.")
+
+        profile = await self.get_profile_by_user(requesting_user_id)
+        if attendance.volunteer_id != profile.id:
+            raise ForbiddenError("You can only check out of your own shifts.")
 
         if attendance.check_in_at is None:
             raise ConflictError("Must check in before checking out.")
