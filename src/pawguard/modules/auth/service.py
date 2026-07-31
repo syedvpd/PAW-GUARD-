@@ -23,6 +23,7 @@ from pawguard.core.security import (
     generate_opaque_token,
     hash_opaque_token,
     hash_password,
+    needs_rehash,
     verify_password,
 )
 from pawguard.modules.auth.exceptions import (
@@ -163,6 +164,14 @@ class AuthService:
                 user_agent=ctx.user_agent,
             )
             raise InvalidCredentialsError("Invalid email or password.")
+
+        if await asyncio.to_thread(needs_rehash, user.hashed_password):
+            # Argon2 embeds its cost params in the hash string itself, so
+            # tuning _password_hasher only speeds up new hashes - existing
+            # users' hashes stay slow to verify until rehashed. Do it
+            # opportunistically here, piggybacking on the user-row UPDATE
+            # this request is already making (no extra round trip).
+            user.hashed_password = await asyncio.to_thread(hash_password, password)
 
         if user.locked_until and user.locked_until > datetime.now(UTC):
             raise AccountLockedError("Account is temporarily locked due to failed login attempts.")
