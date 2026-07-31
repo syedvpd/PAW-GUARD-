@@ -1,7 +1,7 @@
 """DonationService: owns donor registers, contributions, and sponsorships (RULE-003)."""
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from logging import getLogger
 
 from pawguard.core.config import get_settings
@@ -445,8 +445,8 @@ class DonationService:
         search_term: str | None = None,
         donation_type: str | None = None,
         status: DonationStatus | None = None,
-        date_from: str | None = None,
-        date_to: str | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
     ) -> PaginatedResponse[DonationResponse]:
         results, total = await self._repo.paginate_donations(
             page=page,

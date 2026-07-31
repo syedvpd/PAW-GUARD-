@@ -5,6 +5,7 @@ Routers only validate and call services (RULE-004).
 
 import contextlib
 import uuid
+from datetime import date
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -238,8 +239,8 @@ async def list_all_donations(
     search: str | None = Query(None, description="Search by transaction_id, notes"),
     donation_type: DonationType | None = Query(None, description="Filter by donation type"),
     status: DonationStatus | None = Query(None, description="Filter by status"),
-    date_from: str | None = Query(None, description="Filter from date (ISO format)"),
-    date_to: str | None = Query(None, description="Filter to date (ISO format)"),
+    date_from: date | None = Query(None, description="Filter from date (ISO format)"),
+    date_to: date | None = Query(None, description="Filter to date (ISO format)"),
     service: DonationService = Depends(get_donation_service),
 ) -> PaginatedResponse[DonationResponse]:
     return await service.list_donations_paginated(

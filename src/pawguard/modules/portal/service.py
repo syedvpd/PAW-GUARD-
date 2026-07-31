@@ -96,6 +96,11 @@ class PortalService:
         if payload.status is not None:
             self._apply_publish(payload.status, story)
         await self._session.flush()
+        # updated_at has onupdate=func.now() (server-computed) - after
+        # flush() it's expired, and reading it during response
+        # serialization triggers an implicit refresh that's unsafe outside
+        # an explicit awaited context on an AsyncSession (MissingGreenlet).
+        await self._session.refresh(story)
         return story
 
     async def get_story(
@@ -205,6 +210,7 @@ class PortalService:
         if payload.status is not None:
             self._apply_publish(payload.status, post)
         await self._session.flush()
+        await self._session.refresh(post)
         if self._audit and actor_id:
             await self._audit.record(
                 event_type=(
@@ -313,6 +319,7 @@ class PortalService:
         ).items():
             setattr(partner, field, value)
         await self._session.flush()
+        await self._session.refresh(partner)
         return partner
 
     async def list_vets(
@@ -357,6 +364,7 @@ class PortalService:
         ).items():
             setattr(location, field, value)
         await self._session.flush()
+        await self._session.refresh(location)
         return location
 
     async def list_contacts(self) -> list[ContactLocation]:
@@ -389,6 +397,7 @@ class PortalService:
         ).items():
             setattr(entry, field, value)
         await self._session.flush()
+        await self._session.refresh(entry)
         return entry
 
     async def list_faqs(

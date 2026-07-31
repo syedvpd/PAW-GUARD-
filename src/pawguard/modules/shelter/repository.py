@@ -38,6 +38,12 @@ class ShelterRepository:
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    async def get_facility_by_name(self, name: str) -> ShelterFacility | None:
+        stmt = select(ShelterFacility).where(
+            ShelterFacility.name == name, ShelterFacility.deleted_at.is_(None)
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
     async def list_facilities(self) -> Sequence[ShelterFacility]:
         stmt = (
             select(ShelterFacility)

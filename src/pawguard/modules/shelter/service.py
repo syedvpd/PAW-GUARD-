@@ -55,11 +55,16 @@ class ShelterService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> ShelterFacility:
+        existing = await self._repo.get_facility_by_name(payload.name)
+        if existing is not None:
+            raise ConflictError(f"A shelter facility named '{payload.name}' already exists.")
+
         facility = ShelterFacility(
             name=payload.name,
             address=payload.address,
             phone=payload.phone,
             total_capacity=payload.total_capacity,
+            facility_type=payload.facility_type,
         )
         facility = await self._repo.create_facility(facility)
         if self._audit and actor_id:

@@ -58,6 +58,7 @@ class TestShelterService:
     @pytest.mark.asyncio
     async def test_create_facility(self, service, mock_repo):
         facility_id = uuid.uuid4()
+        mock_repo.get_facility_by_name.return_value = None
         mock_repo.create_facility.return_value = ShelterFacility(
             id=facility_id, name="Main Shelter", address="123 Street",
             phone="+1234567890", total_capacity=100,

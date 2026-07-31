@@ -668,17 +668,19 @@ class AuthService:
 
     @staticmethod
     async def _verify_oauth_token(provider: str, token: str) -> dict[str, str]:
-        import httpx
-
         try:
             return await AuthService._verify_oauth_token_unsafe(provider, token)
         except InvalidCredentialsError:
             raise
-        except (httpx.HTTPError, KeyError, ValueError) as exc:
-            # A malformed/garbage token, a provider outage, or an unexpected
-            # response shape must surface as a clean 401, not an unhandled
-            # 500 - this was crashing the endpoint entirely on any invalid
-            # token instead of rejecting it normally.
+        except Exception as exc:
+            # A malformed/garbage token, a provider outage, a network error,
+            # or an unexpected response shape must surface as a clean 401,
+            # not an unhandled 500 - narrowing this to specific exception
+            # types (httpx.HTTPError, KeyError, ValueError) still let a 500
+            # through live, presumably from some other transport/SSL error
+            # shape on the hosting environment's network path to the
+            # provider. There's no legitimate reason for this helper to ever
+            # raise anything other than "the token didn't verify."
             raise InvalidCredentialsError(f"Could not verify {provider} token.") from exc
 
     @staticmethod
@@ -794,7 +796,15 @@ class AdminService:
             actor_id=None,
             metadata={"role_name": name, "permission_codes": permission_codes},
         )
-        return role
+        # Re-fetch with permissions eager-loaded: set_permissions() writes
+        # the RolePermission association directly rather than through the
+        # ORM relationship, and role.permissions was never loaded on this
+        # freshly-created object either way - RoleResponse reads it to build
+        # permission_codes, and an unloaded/stale relationship read on an
+        # AsyncSession raises MissingGreenlet instead of a lazy round-trip.
+        refreshed = await self._roles.get_by_id(role.id)
+        assert refreshed is not None
+        return refreshed
 
     async def update_role(
         self,
@@ -819,6 +829,13 @@ class AdminService:
             actor_id=None,
             metadata={"role_id": str(role_id), "role_name": role.name},
         )
+        if permission_codes is not None:
+            # role.permissions was loaded before set_permissions() bypassed
+            # the ORM relationship to write RolePermission rows directly, so
+            # the in-memory collection is now stale.
+            refreshed = await self._roles.get_by_id(role.id)
+            assert refreshed is not None
+            return refreshed
         return role
 
     async def delete_role(self, role_id: uuid.UUID) -> None:

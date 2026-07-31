@@ -115,8 +115,8 @@ class DonationRepository:
         search_term: str | None = None,
         donation_type: str | None = None,
         status: DonationStatus | None = None,
-        date_from: str | None = None,
-        date_to: str | None = None,
+        date_from: date_type | None = None,
+        date_to: date_type | None = None,
     ) -> tuple[Sequence[Donation], int]:
         stmt = (
             select(Donation)

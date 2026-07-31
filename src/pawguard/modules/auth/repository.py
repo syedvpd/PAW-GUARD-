@@ -210,7 +210,11 @@ class RoleRepository:
         self._session = session
 
     async def get_by_id(self, role_id: uuid.UUID) -> Role | None:
-        stmt = select(Role).where(Role.id == role_id)
+        # Eager-load permissions: RoleResponse always reads role.permissions
+        # to build permission_codes, and accessing an unloaded relationship
+        # outside an explicit awaited context raises MissingGreenlet on an
+        # AsyncSession instead of a lazy DB round-trip.
+        stmt = select(Role).options(selectinload(Role.permissions)).where(Role.id == role_id)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def get_by_name(self, name: str) -> Role | None:
