@@ -10,15 +10,19 @@ from pawguard.modules.volunteer.models import VolunteerStatus
 
 
 class VolunteerProfileCreate(BaseModel):
-    emergency_contact_name: str = Field(..., min_length=1, max_length=255)
-    emergency_contact_phone: str = Field(..., min_length=1, max_length=32)
-    skills: str | None = None
-    availability: str | None = Field(None, max_length=255)
-    notes: str | None = None
+    emergency_contact_name: str = Field(..., min_length=1, max_length=255, examples=["Jane Doe"])
+    emergency_contact_phone: str = Field(
+        ..., min_length=1, max_length=32, examples=["+1-555-0100"]
+    )
+    skills: str | None = Field(None, examples=["Grooming, Transport, Photography"])
+    availability: str | None = Field(None, max_length=255, examples=["Weekends, Evenings"])
+    notes: str | None = Field(None, examples=["Available for emergency call-outs on weekends."])
     # Self-reported at application time. background_check_completed is staff-
     # verified and deliberately not settable here - see VolunteerProfileUpdate.
-    medical_conditions: str | None = None
-    animal_handling_experience: str | None = None
+    medical_conditions: str | None = Field(None, examples=["None"])
+    animal_handling_experience: str | None = Field(
+        None, examples=["3 years volunteering at a local shelter, comfortable with large breeds."]
+    )
 
 
 class VolunteerProfileUpdate(BaseModel):

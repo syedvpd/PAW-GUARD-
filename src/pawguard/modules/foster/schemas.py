@@ -41,9 +41,9 @@ class FosterProgressLogResponse(BaseModel):
 
 
 class FosterProfileCreate(BaseModel):
-    preferences: str | None = None
-    max_capacity: int = Field(1, ge=1)
-    notes: str | None = None
+    preferences: str | None = Field(None, examples=["Puppies, Medical Recovery"])
+    max_capacity: int = Field(1, ge=1, examples=[2])
+    notes: str | None = Field(None, examples=["Fenced backyard, prior fostering experience."])
 
 
 class FosterProfileUpdate(BaseModel):

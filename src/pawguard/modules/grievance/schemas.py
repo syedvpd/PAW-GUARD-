@@ -9,11 +9,14 @@ from pawguard.modules.grievance.models import GrievanceStatus
 
 
 class GrievanceCreate(BaseModel):
-    reporter_name: str = Field(..., min_length=1, max_length=255)
-    reporter_phone: str = Field(..., min_length=5, max_length=32)
-    reporter_email: str | None = Field(None, max_length=255)
-    complaint_type: str = Field(..., min_length=1, max_length=128)
-    details: str = Field(..., min_length=1)
+    reporter_name: str = Field(..., min_length=1, max_length=255, examples=["Priya Nair"])
+    reporter_phone: str = Field(..., min_length=5, max_length=32, examples=["+1-555-0177"])
+    reporter_email: str | None = Field(None, max_length=255, examples=["priya.nair@example.com"])
+    complaint_type: str = Field(..., min_length=1, max_length=128, examples=["Rescue Delay"])
+    details: str = Field(
+        ..., min_length=1,
+        examples=["Reported an injured dog at 9am but the team arrived after 6 hours."],
+    )
 
 
 class GrievanceUpdate(BaseModel):

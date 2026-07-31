@@ -11,15 +11,15 @@ from pawguard.modules.lost_found.models import MatchStatus, ReportStatus, Specie
 
 class LostReportCreate(BaseModel):
     species: Species = Field(Species.DOG)
-    pet_name: str = Field(..., min_length=1, max_length=255)
-    breed: str = Field(..., min_length=1, max_length=128)
-    color: str = Field(..., min_length=1, max_length=64)
-    microchip_id: str | None = Field(None, max_length=64)
-    location_address: str = Field(..., min_length=1)
-    latitude: float | None = Field(None, ge=-90.0, le=90.0)
-    longitude: float | None = Field(None, ge=-180.0, le=180.0)
+    pet_name: str = Field(..., min_length=1, max_length=255, examples=["Buddy"])
+    breed: str = Field(..., min_length=1, max_length=128, examples=["Beagle Mix"])
+    color: str = Field(..., min_length=1, max_length=64, examples=["Tan/White"])
+    microchip_id: str | None = Field(None, max_length=64, examples=["985141002345678"])
+    location_address: str = Field(..., min_length=1, examples=["Jubilee Hills Sector 2"])
+    latitude: float | None = Field(None, ge=-90.0, le=90.0, examples=[17.4326])
+    longitude: float | None = Field(None, ge=-180.0, le=180.0, examples=[78.4071])
     lost_at: datetime
-    photo_url: str | None = Field(None, max_length=512)
+    photo_url: str | None = Field(None, max_length=512, examples=["https://example.com/buddy.jpg"])
 
 
 class LostReportResponse(BaseModel):
@@ -44,13 +44,13 @@ class LostReportResponse(BaseModel):
 
 class FoundReportCreate(BaseModel):
     species: Species = Field(Species.DOG)
-    breed_observed: str = Field(..., min_length=1, max_length=128)
-    color_observed: str = Field(..., min_length=1, max_length=64)
-    location_address: str = Field(..., min_length=1)
-    latitude: float | None = Field(None, ge=-90.0, le=90.0)
-    longitude: float | None = Field(None, ge=-180.0, le=180.0)
+    breed_observed: str = Field(..., min_length=1, max_length=128, examples=["Beagle Mix"])
+    color_observed: str = Field(..., min_length=1, max_length=64, examples=["Tan/White"])
+    location_address: str = Field(..., min_length=1, examples=["Jubilee Hills Sector 3"])
+    latitude: float | None = Field(None, ge=-90.0, le=90.0, examples=[17.4321])
+    longitude: float | None = Field(None, ge=-180.0, le=180.0, examples=[78.4055])
     found_at: datetime
-    photo_url: str | None = Field(None, max_length=512)
+    photo_url: str | None = Field(None, max_length=512, examples=["https://example.com/found.jpg"])
 
 
 class FoundReportResponse(BaseModel):

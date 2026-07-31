@@ -13,12 +13,18 @@ from pawguard.modules.dog.schemas import DogProfileResponse
 
 class AdoptionApplicationCreate(BaseModel):
     dog_id: uuid.UUID
-    residential_status: str = Field(..., min_length=3, max_length=32)  # owned, rented
+    residential_status: str = Field(
+        ..., min_length=3, max_length=32, examples=["owned"]
+    )  # owned, rented
     has_landlord_approval: bool = False
     has_yard_fence: bool = False
-    household_members_count: int = Field(1, ge=1)
-    existing_pets_medical_details: str | None = None
-    pet_care_experience: str | None = None
+    household_members_count: int = Field(1, ge=1, examples=[3])
+    existing_pets_medical_details: str | None = Field(
+        None, examples=["One neutered male cat, up to date on vaccinations."]
+    )
+    pet_care_experience: str | None = Field(
+        None, examples=["Owned a Labrador for 10 years prior to this application."]
+    )
 
 
 class AdoptionApplicationUpdate(BaseModel):

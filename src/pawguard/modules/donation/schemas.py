@@ -16,8 +16,8 @@ def _default_currency() -> str:
 
 
 class DonorProfileCreate(BaseModel):
-    tax_identifier: str | None = Field(None, max_length=64)
-    notes: str | None = None
+    tax_identifier: str | None = Field(None, max_length=64, examples=["ABCDE1234F"])
+    notes: str | None = Field(None, examples=["Prefers monthly recurring donations."])
 
 
 class DonorProfileUpdate(BaseModel):
@@ -39,12 +39,12 @@ class DonorProfileResponse(BaseModel):
 
 class DonationCreate(BaseModel):
     dog_id: uuid.UUID | None = None
-    amount: float = Field(..., ge=1.0)
+    amount: float = Field(..., ge=1.0, examples=[50.0])
     currency: str = Field(
-        default_factory=_default_currency, min_length=3, max_length=3
+        default_factory=_default_currency, min_length=3, max_length=3, examples=["USD"]
     )
     donation_type: DonationType = DonationType.ONE_TIME
-    notes: str | None = None
+    notes: str | None = Field(None, examples=["In memory of Rex."])
 
 
 class DonationStatusUpdate(BaseModel):

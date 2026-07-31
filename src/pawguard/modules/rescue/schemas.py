@@ -9,22 +9,22 @@ from pawguard.modules.rescue.models import RescueStatus
 
 
 class RescueRequestCreate(BaseModel):
-    reporter_name: str = Field(..., min_length=1, max_length=255)
-    reporter_phone: str = Field(..., min_length=1, max_length=32)
-    reporter_alternate_phone: str | None = Field(None, max_length=32)
-    reporter_email: EmailStr | None = None
+    reporter_name: str = Field(..., min_length=1, max_length=255, examples=["John Smith"])
+    reporter_phone: str = Field(..., min_length=1, max_length=32, examples=["+1-555-0123"])
+    reporter_alternate_phone: str | None = Field(None, max_length=32, examples=["+1-555-0199"])
+    reporter_email: EmailStr | None = Field(None, examples=["john.smith@example.com"])
     is_anonymous: bool = False
 
-    location_address: str = Field(..., min_length=1)
-    location_landmark: str | None = None
-    latitude: float | None = Field(None, ge=-90.0, le=90.0)
-    longitude: float | None = Field(None, ge=-180.0, le=180.0)
+    location_address: str = Field(..., min_length=1, examples=["123 Main Street, Sector 4"])
+    location_landmark: str | None = Field(None, examples=["Near Central Park entrance"])
+    latitude: float | None = Field(None, ge=-90.0, le=90.0, examples=[17.4482])
+    longitude: float | None = Field(None, ge=-180.0, le=180.0, examples=[78.3741])
 
-    animal_count: int = Field(1, ge=1)
+    animal_count: int = Field(1, ge=1, examples=[1])
     physical_condition: str = Field(
-        ..., min_length=1, max_length=64
+        ..., min_length=1, max_length=64, examples=["Injured/Fractured"]
     )  # e.g. "Critical/Life Threatening", "Injured", etc.
-    behavioral_indicators: str | None = None
+    behavioral_indicators: str | None = Field(None, examples=["Timid, appears malnourished"])
 
 
 class RescueRequestUpdate(BaseModel):
