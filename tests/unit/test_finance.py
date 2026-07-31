@@ -236,9 +236,26 @@ class TestFinanceService:
             start_date="2026-01-01",
             end_date="2026-12-31",
         )
+        mock_repo.get_budget_by_id.return_value = Budget(
+            id=uuid.uuid4(), name="Annual 2026", fiscal_year=2026,
+            start_date="2026-01-01", end_date="2026-12-31",
+            total_budget=0, total_spent=0,
+        )
         result = await service.create_budget(payload)
         assert result.name == "Annual 2026"
         mock_repo.create_budget.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_create_budget_not_found_after_create(self, service, mock_repo):
+        payload = BudgetCreate(
+            name="Annual 2026",
+            fiscal_year=2026,
+            start_date="2026-01-01",
+            end_date="2026-12-31",
+        )
+        mock_repo.get_budget_by_id.return_value = None
+        with pytest.raises(NotFoundError):
+            await service.create_budget(payload)
 
     @pytest.mark.asyncio
     async def test_get_budget(self, service, mock_repo):

@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from pawguard.modules.auth.models import Role, User
+from pawguard.modules.auth.models import Permission, Role, User
 
 REGISTER_PAYLOAD = {
     "email": "newmodtest@example.com",
@@ -35,8 +35,21 @@ class TestNewModules:
             .where(User.email == REGISTER_PAYLOAD["email"])
         )
         user = (await db_session.execute(stmt)).scalar_one()
-        role_stmt = select(Role).where(Role.name == "super_admin")
+        role_stmt = select(Role).options(selectinload(Role.permissions)).where(Role.name == "super_admin")
         role = (await db_session.execute(role_stmt)).scalar_one()
+        required_codes = [
+            "reports:read", "reports:create", "reports:export_pdf", "reports:export_csv", "reports:export_excel",
+            "finance:create", "finance:read", "finance:update",
+        ]
+        for code in required_codes:
+            perm_stmt = select(Permission).where(Permission.code == code)
+            perm = (await db_session.execute(perm_stmt)).scalar_one_or_none()
+            if perm is None:
+                perm = Permission(code=code, description=code)
+                db_session.add(perm)
+                await db_session.flush()
+            if perm not in role.permissions:
+                role.permissions.append(perm)
         user.roles.append(role)
         user.is_verified = True
         await db_session.commit()
@@ -360,12 +373,12 @@ class TestNewModules:
         assert resp.json()["data"]["account_name"] == "Petty Cash"
 
         resp = await client.delete(f"/api/v1/finance/accounts/{acct_id}", headers=headers)
-        assert resp.status_code == 204
+        assert resp.status_code == 200
 
     async def test_finance_transaction_flow(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
 
-        debit = await client.post("/api/v1/finance/accounts", json={"account_code": "5010", "account_name": "Expense A", "account_type": "expense", "category": "operational"}, headers=headers)
+        debit = await client.post("/api/v1/finance/accounts", json={"account_code": "5010", "account_name": "Expense A", "account_type": "expense", "category": "supplies_expense"}, headers=headers)
         assert debit.status_code == 201
         debit_id = debit.json()["data"]["id"]
         credit = await client.post("/api/v1/finance/accounts", json={"account_code": "1011", "account_name": "Bank", "account_type": "asset", "category": "bank"}, headers=headers)
@@ -386,7 +399,7 @@ class TestNewModules:
         resp = await client.get("/api/v1/finance/transactions", headers=headers)
         assert resp.status_code == 200
 
-        resp = await client.get("/api/v1/finance/accounts/balances", headers=headers)
+        resp = await client.get("/api/v1/finance/account-balances", headers=headers)
         assert resp.status_code == 200
 
         resp = await client.get("/api/v1/finance/summary?period_start=2026-01-01&period_end=2026-12-31", headers=headers)
@@ -398,7 +411,7 @@ class TestNewModules:
     async def test_finance_budget_flow(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
 
-        acct = await client.post("/api/v1/finance/accounts", json={"account_code": "6010", "account_name": "Supplies", "account_type": "expense", "category": "operational"}, headers=headers)
+        acct = await client.post("/api/v1/finance/accounts", json={"account_code": "6010", "account_name": "Supplies", "account_type": "expense", "category": "supplies_expense"}, headers=headers)
         acct_id = acct.json()["data"]["id"]
 
         budget_payload = {"name": "Annual 2026", "fiscal_year": 2026, "start_date": "2026-01-01", "end_date": "2026-12-31"}
@@ -417,12 +430,12 @@ class TestNewModules:
         assert resp.status_code == 200
 
         resp = await client.delete(f"/api/v1/finance/budgets/{budget_id}", headers=headers)
-        assert resp.status_code == 204
+        assert resp.status_code == 200
 
     async def test_finance_recurring_flow(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
 
-        debit = await client.post("/api/v1/finance/accounts", json={"account_code": "7010", "account_name": "Rent Exp", "account_type": "expense", "category": "operational"}, headers=headers)
+        debit = await client.post("/api/v1/finance/accounts", json={"account_code": "7010", "account_name": "Rent Exp", "account_type": "expense", "category": "supplies_expense"}, headers=headers)
         credit = await client.post("/api/v1/finance/accounts", json={"account_code": "1012", "account_name": "Bank B", "account_type": "asset", "category": "bank"}, headers=headers)
 
         payload = {

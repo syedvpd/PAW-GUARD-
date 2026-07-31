@@ -64,7 +64,7 @@ class PasswordPolicyService:
     async def get_active(self) -> PasswordPolicy:
         policy = await self._repo.get_active()
         if policy is None:
-            raise NotFoundError("No active password policy found.")
+            return PasswordPolicy()
         return policy
 
     async def update_policy(self, payload: PasswordPolicyUpdate) -> PasswordPolicy:

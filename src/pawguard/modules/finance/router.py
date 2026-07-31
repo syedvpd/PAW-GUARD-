@@ -361,6 +361,7 @@ async def get_budget(
 @router.post(
     "/budgets/{budget_id}/items",
     response_model=ApiResponse[BudgetResponse],
+    status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_permission("finance:update"))],
 )
 async def add_budget_item(

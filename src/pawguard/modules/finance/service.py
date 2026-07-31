@@ -5,6 +5,7 @@ from pawguard.core.exceptions import ConflictError, NotFoundError
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
+from pawguard.modules.auth.models import AuthAuditEventType
 from pawguard.modules.finance.models import (
     AccountCategory,
     AccountType,
@@ -62,7 +63,7 @@ class FinanceService:
         await self._repo.create_account(account)
         if self._audit and actor_id:
             await self._audit.record(
-                event_type="finance_account_created",
+                event_type=AuthAuditEventType.FINANCE_ACCOUNT_CREATED,
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
@@ -94,9 +95,10 @@ class FinanceService:
         for key, value in update_data.items():
             setattr(account, key, value)
         await self._repo._session.flush()
+        await self._repo._session.refresh(account)
         if self._audit and actor_id:
             await self._audit.record(
-                event_type="finance_account_updated",
+                event_type=AuthAuditEventType.FINANCE_ACCOUNT_UPDATED,
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
@@ -192,7 +194,7 @@ class FinanceService:
         await self._repo.create_ledger_entry(entry2)
         if self._audit and actor_id:
             await self._audit.record(
-                event_type="finance_transaction_created",
+                event_type=AuthAuditEventType.FINANCE_TRANSACTION_CREATED,
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
@@ -227,9 +229,10 @@ class FinanceService:
         if status == TransactionStatus.RECONCILED:
             tx.reconciled_at = datetime.now(UTC)
         await self._repo._session.flush()
+        await self._repo._session.refresh(tx)
         if self._audit and actor_id:
             await self._audit.record(
-                event_type="finance_transaction_status_updated",
+                event_type=AuthAuditEventType.FINANCE_TRANSACTION_STATUS_UPDATED,
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
@@ -338,7 +341,7 @@ class FinanceService:
             count += 1
         if self._audit and actor_id:
             await self._audit.record(
-                event_type="finance_donations_reconciled",
+                event_type=AuthAuditEventType.FINANCE_DONATIONS_RECONCILED,
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
@@ -370,7 +373,7 @@ class FinanceService:
         await self._repo._session.flush()
         if self._audit and actor_id:
             await self._audit.record(
-                event_type="finance_account_deleted",
+                event_type=AuthAuditEventType.FINANCE_ACCOUNT_DELETED,
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
@@ -391,7 +394,7 @@ class FinanceService:
         await self._repo._session.flush()
         if self._audit and actor_id:
             await self._audit.record(
-                event_type="finance_transaction_deleted",
+                event_type=AuthAuditEventType.FINANCE_TRANSACTION_DELETED,
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
@@ -415,9 +418,12 @@ class FinanceService:
             total_spent=0,
         )
         await self._repo.create_budget(budget)
+        budget = await self._repo.get_budget_by_id(budget.id)
+        if not budget:
+            raise NotFoundError("Budget not found.")
         if self._audit and actor_id:
             await self._audit.record(
-                event_type="finance_budget_created",
+                event_type=AuthAuditEventType.FINANCE_BUDGET_CREATED,
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
@@ -456,9 +462,12 @@ class FinanceService:
             + payload.allocated_amount
         )
         await self._repo._session.flush()
+        budget = await self._repo.get_budget_by_id(budget_id)
+        if not budget:
+            raise NotFoundError("Budget not found.")
         if self._audit and actor_id:
             await self._audit.record(
-                event_type="finance_budget_item_added",
+                event_type=AuthAuditEventType.FINANCE_BUDGET_ITEM_ADDED,
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
@@ -504,7 +513,7 @@ class FinanceService:
         await self._repo.create_recurring(rtx)
         if self._audit and actor_id:
             await self._audit.record(
-                event_type="finance_recurring_created",
+                event_type=AuthAuditEventType.FINANCE_RECURRING_CREATED,
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",

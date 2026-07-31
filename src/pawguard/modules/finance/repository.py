@@ -246,10 +246,12 @@ class FinanceRepository:
                 FinancialTransaction.deleted_at.is_(None),
             )
         )
+        income_total = income.scalar_one()
+        expenses_total = expenses.scalar_one()
         return {
-            "total_income": income.scalar_one(),
-            "total_expenses": expenses.scalar_one(),
-            "net_balance": income.scalar_one() - expenses.scalar_one(),
+            "total_income": income_total,
+            "total_expenses": expenses_total,
+            "net_balance": income_total - expenses_total,
             "pending_transactions": pending.scalar_one(),
             "unreconciled_count": unreconciled.scalar_one(),
             "total_donations_reconciled": donation_tx.scalar_one(),

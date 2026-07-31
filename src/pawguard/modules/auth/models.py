@@ -117,6 +117,16 @@ class AuthAuditEventType(StrEnum):
     ADMIN_ROLE_CREATED = "admin_role_created"
     ADMIN_ROLE_UPDATED = "admin_role_updated"
     ADMIN_ROLE_DELETED = "admin_role_deleted"
+    FINANCE_ACCOUNT_CREATED = "finance_account_created"
+    FINANCE_ACCOUNT_UPDATED = "finance_account_updated"
+    FINANCE_ACCOUNT_DELETED = "finance_account_deleted"
+    FINANCE_TRANSACTION_CREATED = "finance_transaction_created"
+    FINANCE_TRANSACTION_STATUS_UPDATED = "finance_transaction_status_updated"
+    FINANCE_TRANSACTION_DELETED = "finance_transaction_deleted"
+    FINANCE_DONATIONS_RECONCILED = "finance_donations_reconciled"
+    FINANCE_BUDGET_CREATED = "finance_budget_created"
+    FINANCE_BUDGET_ITEM_ADDED = "finance_budget_item_added"
+    FINANCE_RECURRING_CREATED = "finance_recurring_created"
 
 
 class Role(UUIDPkMixin, TimestampMixin, Base):

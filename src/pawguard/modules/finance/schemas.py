@@ -207,6 +207,8 @@ class AccountBalanceResponse(BaseModel):
     opening_balance: Decimal
     current_balance: Decimal
 
+    model_config = ConfigDict(from_attributes=True)
+
 
 class DonationReconciliationResponse(BaseModel):
     total_donations: int
