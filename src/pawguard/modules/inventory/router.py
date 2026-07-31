@@ -11,6 +11,7 @@ from pawguard.core.bulk import (
     BulkStatusUpdateRequest,
     BulkStatusUpdateResponse,
 )
+from pawguard.core.exceptions import parse_enum
 from pawguard.core.pagination import PageParams, page_params
 from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.core.search import SortParams, sort_params
@@ -253,7 +254,7 @@ async def bulk_update_requisition_status(
     service: InventoryService = Depends(get_inventory_service),
 ) -> BulkStatusUpdateResponse:
     updated = await service.bulk_update_requisition_status(
-        payload.ids, RequisitionStatus(payload.status),
+        payload.ids, parse_enum(RequisitionStatus, payload.status),
     )
     return BulkStatusUpdateResponse(
         message=f"{updated} requisitions updated.",

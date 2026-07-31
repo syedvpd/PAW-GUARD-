@@ -11,6 +11,7 @@ from pawguard.core.bulk import (
     BulkStatusUpdateRequest,
     BulkStatusUpdateResponse,
 )
+from pawguard.core.exceptions import parse_enum
 from pawguard.core.pagination import PageParams, page_params
 from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.db.session import get_db
@@ -312,7 +313,7 @@ async def bulk_update_ticket_status(
     payload: BulkStatusUpdateRequest,
     service: GrievanceService = Depends(get_grievance_service),
 ) -> BulkStatusUpdateResponse:
-    status = GrievanceStatus(payload.status)
+    status = parse_enum(GrievanceStatus, payload.status)
     updated = await service.bulk_update_ticket_status(payload.ids, status)
     return BulkStatusUpdateResponse(
         message=f"{updated} grievance ticket(s) updated.",

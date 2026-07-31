@@ -64,7 +64,12 @@ class PasswordPolicyService:
     async def get_active(self) -> PasswordPolicy:
         policy = await self._repo.get_active()
         if policy is None:
-            return PasswordPolicy()
+            # Auto-provision the default policy the first time it's read,
+            # rather than returning a transient, unpersisted PasswordPolicy()
+            # - its column defaults (min_length, etc.) are only applied by
+            # SQLAlchemy on flush/INSERT, so an unsaved instance has every
+            # field as None and fails response serialization with a 500.
+            policy = await self._repo.create(PasswordPolicy())
         return policy
 
     async def update_policy(self, payload: PasswordPolicyUpdate) -> PasswordPolicy:

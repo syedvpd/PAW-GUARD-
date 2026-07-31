@@ -15,7 +15,7 @@ from pawguard.core.bulk import (
     BulkStatusUpdateRequest,
     BulkStatusUpdateResponse,
 )
-from pawguard.core.exceptions import ValidationFailedError
+from pawguard.core.exceptions import ValidationFailedError, parse_enum
 from pawguard.core.pagination import PageParams, page_params
 from pawguard.core.payments import PaymentGatewayError, get_payment_gateway
 from pawguard.core.responses import ApiResponse, PaginatedResponse
@@ -334,7 +334,7 @@ async def bulk_update_donation_status(
 ) -> ApiResponse[BulkStatusUpdateResponse]:
     updated = await service.bulk_update_status(
         payload.ids,
-        DonationStatus(payload.status),
+        parse_enum(DonationStatus, payload.status),
         actor_id=current_user.id,
         ip_address=request.client.host if request.client else None,
     )

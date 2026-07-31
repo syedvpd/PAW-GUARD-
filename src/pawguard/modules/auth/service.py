@@ -670,6 +670,21 @@ class AuthService:
     async def _verify_oauth_token(provider: str, token: str) -> dict[str, str]:
         import httpx
 
+        try:
+            return await AuthService._verify_oauth_token_unsafe(provider, token)
+        except InvalidCredentialsError:
+            raise
+        except (httpx.HTTPError, KeyError, ValueError) as exc:
+            # A malformed/garbage token, a provider outage, or an unexpected
+            # response shape must surface as a clean 401, not an unhandled
+            # 500 - this was crashing the endpoint entirely on any invalid
+            # token instead of rejecting it normally.
+            raise InvalidCredentialsError(f"Could not verify {provider} token.") from exc
+
+    @staticmethod
+    async def _verify_oauth_token_unsafe(provider: str, token: str) -> dict[str, str]:
+        import httpx
+
         if provider == "google":
             async with httpx.AsyncClient() as client:
                 resp = await client.get(

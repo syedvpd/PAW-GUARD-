@@ -14,6 +14,7 @@ from pawguard.core.bulk import (
     BulkStatusUpdateRequest,
     BulkStatusUpdateResponse,
 )
+from pawguard.core.exceptions import parse_enum
 from pawguard.core.pagination import PageParams, page_params
 from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.core.search import SortParams, sort_params
@@ -237,7 +238,7 @@ async def bulk_update_profile_status(
     payload: BulkStatusUpdateRequest,
     service: VolunteerService = Depends(get_volunteer_service),
 ) -> BulkStatusUpdateResponse:
-    status = VolunteerStatus(payload.status)
+    status = parse_enum(VolunteerStatus, payload.status)
     updated = await service.bulk_update_profile_status(payload.ids, status)
     return BulkStatusUpdateResponse(
         message=f"{updated} volunteer profile(s) updated.",

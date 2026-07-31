@@ -11,6 +11,7 @@ from pawguard.core.bulk import (
     BulkStatusUpdateRequest,
     BulkStatusUpdateResponse,
 )
+from pawguard.core.exceptions import parse_enum
 from pawguard.core.pagination import PageParams, page_params
 from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.core.search import SortParams, sort_params
@@ -598,7 +599,7 @@ async def bulk_update_story_status(
     service: PortalService = Depends(get_portal_service),
 ) -> BulkStatusUpdateResponse:
     ip = request.client.host if request.client else None
-    status = ContentStatus(payload.status)
+    status = parse_enum(ContentStatus, payload.status)
     updated = await service.bulk_update_story_status(
         payload.ids,
         status,
@@ -646,7 +647,7 @@ async def bulk_update_blog_status(
     service: PortalService = Depends(get_portal_service),
 ) -> BulkStatusUpdateResponse:
     ip = request.client.host if request.client else None
-    status = ContentStatus(payload.status)
+    status = parse_enum(ContentStatus, payload.status)
     updated = await service.bulk_update_blog_status(
         payload.ids,
         status,

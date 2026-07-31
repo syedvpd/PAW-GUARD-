@@ -5,6 +5,7 @@ carries a stable machine-readable `code` and a safe client-facing `message`.
 """
 
 from collections.abc import Sequence
+from enum import StrEnum
 from typing import Any
 
 from fastapi import FastAPI, Request, status
@@ -58,6 +59,29 @@ class ForbiddenError(AppException):
 class TooManyRequestsError(AppException):
     status_code = status.HTTP_429_TOO_MANY_REQUESTS
     code = "TOO_MANY_REQUESTS"
+
+
+def parse_enum[EnumT: StrEnum](
+    enum_cls: type[EnumT], value: str, *, field_name: str = "status"
+) -> EnumT:
+    """Converts a raw string into a StrEnum member, raising a clean 422
+    instead of letting the constructor's bare ValueError fall through to
+    the generic 500 handler.
+
+    Bulk-status-update endpoints across most modules call e.g.
+    RescueStatus(payload.status) directly on a freeform BulkStatusUpdateRequest
+    string field - any value that isn't a real enum member (a typo, or a
+    status valid for a different module) crashed with an unhandled 500
+    instead of a validation error. Use this wherever a raw string from a
+    request needs to become a StrEnum.
+    """
+    try:
+        return enum_cls(value)
+    except ValueError as exc:
+        valid = ", ".join(m.value for m in enum_cls)
+        raise ValidationFailedError(
+            f"Invalid {field_name} '{value}'. Must be one of: {valid}."
+        ) from exc
 
 
 def _sanitize_errors(errors: Sequence[Any]) -> list[dict[str, Any]]:

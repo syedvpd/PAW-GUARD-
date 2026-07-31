@@ -14,7 +14,7 @@ from pawguard.core.bulk import (
     BulkStatusUpdateRequest,
     BulkStatusUpdateResponse,
 )
-from pawguard.core.exceptions import ForbiddenError
+from pawguard.core.exceptions import ForbiddenError, parse_enum
 from pawguard.core.pagination import PageParams, page_params
 from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.core.search import SortParams, sort_params
@@ -265,7 +265,7 @@ async def bulk_update_application_status(
 ) -> ApiResponse[BulkStatusUpdateResponse]:
     updated = await service.bulk_update_status(
         payload.ids,
-        AdoptionStatus(payload.status),
+        parse_enum(AdoptionStatus, payload.status),
         actor_id=current_user.id,
         ip_address=request.client.host if request.client else None,
     )
