@@ -630,6 +630,7 @@ class PortalService:
         if description is not None:
             existing.description = description
         await self._session.flush()
+        await self._session.refresh(existing)
         return existing
 
     async def get_setting(self, key: str) -> SystemSetting:
