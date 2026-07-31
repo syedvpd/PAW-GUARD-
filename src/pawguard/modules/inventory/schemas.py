@@ -15,6 +15,7 @@ class InventoryItemCreate(BaseModel):
     unit: str = Field(..., min_length=1, max_length=32)
     reorder_threshold: float = Field(10.0, ge=0.0)
     expiry_date: date | None = None
+    unit_cost: float = Field(0.0, ge=0.0)
 
 
 class InventoryItemResponse(BaseModel):
@@ -25,6 +26,7 @@ class InventoryItemResponse(BaseModel):
     unit: str
     reorder_threshold: float
     expiry_date: date | None
+    unit_cost: float
     created_at: datetime
     updated_at: datetime
 
@@ -36,6 +38,8 @@ class InventoryMovementCreate(BaseModel):
     movement_type: MovementType
     quantity: float = Field(..., gt=0.0)
     notes: str | None = None
+    reference_type: str | None = None
+    reference_id: uuid.UUID | None = None
 
 
 class InventoryMovementResponse(BaseModel):
@@ -45,6 +49,8 @@ class InventoryMovementResponse(BaseModel):
     movement_type: MovementType
     quantity: float
     notes: str | None
+    reference_type: str | None
+    reference_id: uuid.UUID | None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -74,6 +80,7 @@ class InventoryItemUpdate(BaseModel):
     unit: str | None = Field(None, min_length=1, max_length=32)
     reorder_threshold: float | None = Field(None, ge=0.0)
     expiry_date: date | None = None
+    unit_cost: float | None = Field(None, ge=0.0)
 
 
 class RequisitionStatusUpdate(BaseModel):

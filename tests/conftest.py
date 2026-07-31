@@ -20,8 +20,29 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.pool import NullPool
 
 from pawguard.core.config import get_settings
+from pawguard.db.base import Base
 from pawguard.db.session import get_db
 from pawguard.main import create_app
+from pawguard.modules.adoption import models as _adoption_models  # noqa: F401
+
+# Ensure all ORM models are loaded so Base.metadata.create_all sees every table.
+from pawguard.modules.auth import models as _auth_models  # noqa: F401
+from pawguard.modules.dog import models as _dog_models  # noqa: F401
+from pawguard.modules.donation import models as _donation_models  # noqa: F401
+from pawguard.modules.finance import models as _finance_models  # noqa: F401
+from pawguard.modules.fleet import models as _fleet_models  # noqa: F401
+from pawguard.modules.foster import models as _foster_models  # noqa: F401
+from pawguard.modules.grievance import models as _grievance_models  # noqa: F401
+from pawguard.modules.inventory import models as _inventory_models  # noqa: F401
+from pawguard.modules.lost_found import models as _lost_found_models  # noqa: F401
+from pawguard.modules.medical import models as _medical_models  # noqa: F401
+from pawguard.modules.notifications import models as _notifications_models  # noqa: F401
+from pawguard.modules.portal import models as _portal_models  # noqa: F401
+from pawguard.modules.rescue import models as _rescue_models  # noqa: F401
+from pawguard.modules.settings import models as _settings_models  # noqa: F401
+from pawguard.modules.shelter import models as _shelter_models  # noqa: F401
+from pawguard.modules.storage import models as _storage_models  # noqa: F401
+from pawguard.modules.volunteer import models as _volunteer_models  # noqa: F401
 from pawguard.redis.client import get_redis
 from pawguard.workers.pool import get_arq_pool
 
@@ -77,6 +98,10 @@ async def engine() -> AsyncGenerator[AsyncEngine]:
         poolclass=NullPool,
         connect_args={"statement_cache_size": 0},
     )
+    # Create all tables from ORM metadata (bypasses alembic env.py which uses
+    # asyncio.run() and therefore cannot be called inside a running loop).
+    async with eng.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     yield eng
     await eng.dispose()
 

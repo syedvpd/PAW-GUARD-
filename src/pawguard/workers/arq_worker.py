@@ -17,6 +17,7 @@ from pawguard.workers.jobs.scheduled_jobs import (
     check_inventory_low_stock,
     check_vaccination_renewals,
     post_adoption_followups,
+    process_sponsorship_charges,
 )
 
 settings = get_settings()
@@ -35,12 +36,14 @@ class WorkerSettings:
         check_inventory_expiry,
         check_vaccination_renewals,
         post_adoption_followups,
+        process_sponsorship_charges,
     ]
     cron_jobs = [
         cron(check_inventory_low_stock, hour={0, 12}, minute={0}),
         cron(check_inventory_expiry, hour={9}, minute={0}),
         cron(check_vaccination_renewals, hour={9}, minute={30}),
         cron(post_adoption_followups, hour={10}, minute={0}),
+        cron(process_sponsorship_charges, hour={8}, minute={0}),
     ]
     on_startup = startup
     redis_settings = RedisSettings.from_dsn(settings.redis_url)

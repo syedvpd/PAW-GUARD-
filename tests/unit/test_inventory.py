@@ -230,3 +230,36 @@ class TestInventoryService:
         mock_repo.soft_delete_item.return_value = False
         with pytest.raises(NotFoundError):
             await service.soft_delete_item(uuid.uuid4())
+
+    @pytest.mark.asyncio
+    async def test_create_item_with_unit_cost(self, service, mock_repo):
+        mock_repo.get_item_by_name.return_value = None
+        item_id = uuid.uuid4()
+        mock_repo.create_item.return_value = InventoryItem(
+            id=item_id, name="Bandages", category=ItemCategory.CONSUMABLE,
+            quantity=100.0, unit="pack", reorder_threshold=10.0, unit_cost=5.99,
+        )
+        payload = InventoryItemCreate(
+            name="Bandages", category=ItemCategory.CONSUMABLE,
+            quantity=100.0, unit="pack", unit_cost=5.99,
+        )
+        result = await service.create_item(payload, actor_id=uuid.uuid4())
+        assert result.unit_cost == 5.99
+
+    @pytest.mark.asyncio
+    async def test_record_movement_with_reference(self, service, mock_repo):
+        item_id = uuid.uuid4()
+        item = InventoryItem(
+            id=item_id, name="Food", category=ItemCategory.FOOD,
+            quantity=50.0, unit="kg", reorder_threshold=10.0,
+        )
+        mock_repo.get_item.return_value = item
+        mock_repo.create_movement.return_value = None
+        ref_id = uuid.uuid4()
+        payload = InventoryMovementCreate(
+            item_id=item_id, movement_type=MovementType.CHECK_IN, quantity=20.0,
+            reference_type="foster_supply", reference_id=ref_id,
+        )
+        result = await service.record_movement(uuid.uuid4(), payload, actor_id=uuid.uuid4())
+        assert result.reference_type == "foster_supply"
+        assert result.reference_id == ref_id

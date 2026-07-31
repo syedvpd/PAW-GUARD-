@@ -57,6 +57,7 @@ class InventoryService:
             unit=payload.unit,
             reorder_threshold=payload.reorder_threshold,
             expiry_date=payload.expiry_date,
+            unit_cost=payload.unit_cost,
         )
         result = await self._repo.create_item(item)
         await self._repo._session.flush()
@@ -102,6 +103,8 @@ class InventoryService:
             movement_type=payload.movement_type,
             quantity=qty_change,
             notes=payload.notes,
+            reference_type=payload.reference_type,
+            reference_id=payload.reference_id,
         )
         await self._repo.create_movement(movement)
         await self._repo._session.flush()

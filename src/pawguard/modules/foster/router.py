@@ -32,6 +32,8 @@ from pawguard.modules.foster.schemas import (
     FosterProgressLogCreate,
     FosterProgressLogResponse,
     FosterReturnRequest,
+    FosterSupplyDispatchCreate,
+    FosterSupplyDispatchResponse,
 )
 from pawguard.modules.foster.service import FosterService
 from pawguard.services.audit_service import AuditService
@@ -255,6 +257,47 @@ async def get_progress_logs(
     logs = await service.get_progress_logs(placement_id)
     return ApiResponse(
         data=[FosterProgressLogResponse.model_validate(log) for log in logs],
+    )
+
+
+@router.post(
+    "/placements/{placement_id}/supplies",
+    response_model=ApiResponse[FosterSupplyDispatchResponse],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("foster:approve"))],
+)
+async def log_supply_dispatch(
+    placement_id: uuid.UUID,
+    payload: FosterSupplyDispatchCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FosterService = Depends(get_foster_service),
+) -> ApiResponse[FosterSupplyDispatchResponse]:
+    ip = request.client.host if request.client else None
+    dispatch = await service.log_supply_dispatch(
+        placement_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=FosterSupplyDispatchResponse.model_validate(dispatch),
+        message="Supply dispatched successfully.",
+    )
+
+
+@router.get(
+    "/placements/{placement_id}/supplies",
+    response_model=ApiResponse[list[FosterSupplyDispatchResponse]],
+    dependencies=[Depends(require_permission("foster:read"))],
+)
+async def list_supply_dispatches(
+    placement_id: uuid.UUID,
+    service: FosterService = Depends(get_foster_service),
+) -> ApiResponse[list[FosterSupplyDispatchResponse]]:
+    dispatches = await service.list_supply_dispatches(placement_id)
+    return ApiResponse(
+        data=[FosterSupplyDispatchResponse.model_validate(d) for d in dispatches],
     )
 
 

@@ -4,14 +4,23 @@ These run periodically via ARQ's scheduled_jobs feature and are kept off
 the request path per TRANSACTION RULES.
 """
 
+import uuid
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import and_, select
 
 from pawguard.db.session import AsyncSessionLocal
 from pawguard.modules.adoption.models import AdoptionApplication
+from pawguard.modules.donation.models import (
+    Donation,
+    DonationStatus,
+    DonationType,
+)
+from pawguard.modules.donation.repository import DonationRepository
 from pawguard.modules.inventory.models import InventoryItem
 from pawguard.modules.medical.models import VaccinationRecord
+from pawguard.modules.notifications.repository import NotificationRepository
+from pawguard.modules.notifications.schemas import NotificationCreate
 from pawguard.modules.notifications.service import NotificationService
 
 
@@ -156,4 +165,56 @@ async def post_adoption_followups(ctx: dict[str, object]) -> None:
                     ),
                     notification_type="follow_up",
                 )
+        await session.commit()
+
+
+async def process_sponsorship_charges(ctx: dict[str, object]) -> None:
+    """Charge monthly sponsorships whose next_charge_date has arrived."""
+    from datetime import date as date_type
+
+    today = date_type.today()
+
+    async with AsyncSessionLocal() as session:
+        donation_repo = DonationRepository(session)
+        notification_repo = NotificationRepository(session)
+        notification_svc = NotificationService(repository=notification_repo)
+
+        sponsorships = await donation_repo.get_due_sponsorships(today)
+        if not sponsorships:
+            return
+
+        for sp in sponsorships:
+            tx_id = f"TXN-{uuid.uuid4().hex[:12].upper()}"
+            donation = Donation(
+                donor_id=sp.donor_id,
+                dog_id=sp.dog_id,
+                amount=sp.monthly_amount,
+                currency=sp.currency,
+                donation_type=DonationType.SPONSORSHIP,
+                status=DonationStatus.SUCCESS,
+                transaction_id=tx_id,
+                sponsorship_id=sp.id,
+            )
+            await donation_repo.create_donation(donation)
+
+            month = sp.next_charge_date.month + 1
+            year = sp.next_charge_date.year
+            if month > 12:
+                month = 1
+                year += 1
+            next_date = sp.next_charge_date.replace(year=year, month=month)
+            await donation_repo.advance_charge_date(sp.id, next_date)
+
+            if sp.donor and sp.donor.user_id:
+                n_payload = NotificationCreate(
+                    user_id=sp.donor.user_id,
+                    title="Monthly Sponsorship Charge",
+                    body=(
+                        f"Your monthly sponsorship of {sp.monthly_amount} {sp.currency} "
+                        f"for dog {sp.dog_id} has been processed successfully."
+                    ),
+                    notification_type="sponsorship_charge",
+                )
+                await notification_svc.create_notification(payload=n_payload)
+
         await session.commit()

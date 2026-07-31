@@ -18,6 +18,7 @@ from pawguard.modules.foster.models import (
     FosterPlacement,
     FosterProfile,
     FosterStatus,
+    SupplyItemType,
 )
 from pawguard.modules.foster.repository import FosterRepository
 from pawguard.modules.foster.schemas import (
@@ -25,6 +26,7 @@ from pawguard.modules.foster.schemas import (
     FosterProfileCreate,
     FosterProfileUpdate,
     FosterProgressLogCreate,
+    FosterSupplyDispatchCreate,
 )
 from pawguard.modules.foster.service import FosterService
 from pawguard.services.audit_service import AuditService
@@ -339,3 +341,51 @@ class TestFosterToAdopt:
         mock_dog_repo.get_by_id.return_value = dog
         with pytest.raises(ConflictError, match="already been adopted"):
             await service.convert_to_adoption(placement_id)
+
+
+class TestFosterSupplyDispatch:
+    @pytest.fixture
+    def mock_repo(self):
+        repo = AsyncMock(spec=FosterRepository)
+        repo._session = AsyncMock()
+        return repo
+
+    @pytest.fixture
+    def mock_dog_repo(self):
+        return AsyncMock(spec=DogRepository)
+
+    @pytest.fixture
+    def mock_adoption_repo(self):
+        return AsyncMock(spec=AdoptionRepository)
+
+    @pytest.fixture
+    def mock_audit(self):
+        return AsyncMock(spec=AuditService)
+
+    @pytest.fixture
+    def service(self, mock_repo, mock_dog_repo, mock_adoption_repo, mock_audit):
+        return FosterService(mock_repo, mock_dog_repo, mock_adoption_repo, mock_audit)
+
+    @pytest.mark.asyncio
+    async def test_log_supply_dispatch_success(self, service, mock_repo, mock_audit):
+        placement_id = uuid.uuid4()
+        placement = FosterPlacement(
+            id=placement_id, foster_id=uuid.uuid4(), dog_id=uuid.uuid4(),
+            is_active=True, placed_at=datetime.now(),
+        )
+        mock_repo.get_placement_by_id.return_value = placement
+        mock_repo.create_supply_dispatch.return_value = None
+        payload = FosterSupplyDispatchCreate(item_type=SupplyItemType.FOOD, quantity=2)
+        result = await service.log_supply_dispatch(
+            placement_id, payload, actor_id=uuid.uuid4(),
+        )
+        assert result.item_type == SupplyItemType.FOOD
+        assert result.quantity == 2
+
+    @pytest.mark.asyncio
+    async def test_log_supply_dispatch_placement_not_found(self, service, mock_repo):
+        mock_repo.get_placement_by_id.return_value = None
+        with pytest.raises(NotFoundError):
+            await service.log_supply_dispatch(
+                uuid.uuid4(), FosterSupplyDispatchCreate(item_type=SupplyItemType.FOOD),
+            )

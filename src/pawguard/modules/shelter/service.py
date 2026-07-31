@@ -284,7 +284,8 @@ class ShelterService:
         if getattr(transfer, f"{side}_confirmed_at") is not None:
             raise ConflictError(f"The {side} facility has already confirmed this transfer.")
         other_confirmed_by = getattr(transfer, f"{other_side}_confirmed_by")
-        if actor_id is not None and other_confirmed_by is not None and other_confirmed_by == actor_id:
+        same_actor = other_confirmed_by is not None and other_confirmed_by == actor_id
+        if actor_id is not None and same_actor:
             raise ConflictError(
                 "The same user cannot confirm both the sending and receiving side "
                 "of a transfer."

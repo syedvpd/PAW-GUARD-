@@ -72,6 +72,37 @@ class FosterPlacement(UUIDPkMixin, TimestampMixin, Base):
     progress_logs: Mapped[list["FosterProgressLog"]] = relationship(
         back_populates="placement", cascade="all, delete-orphan"
     )
+    supply_dispatches: Mapped[list["FosterSupplyDispatch"]] = relationship(
+        back_populates="placement", cascade="all, delete-orphan"
+    )
+
+
+class SupplyItemType(StrEnum):
+    FOOD = "food"
+    CRATE = "crate"
+    MEDICATION = "medication"
+    BEDDING = "bedding"
+    TOYS = "toys"
+    OTHER = "other"
+
+
+class FosterSupplyDispatch(UUIDPkMixin, TimestampMixin, Base):
+    __tablename__ = "foster_supply_dispatches"
+
+    placement_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("foster_placements.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    dispatched_by_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=False
+    )
+    item_type: Mapped[SupplyItemType] = mapped_column(String(32), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    quantity: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    dispatched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    placement: Mapped["FosterPlacement"] = relationship(back_populates="supply_dispatches")
 
 
 class FosterProgressLog(UUIDPkMixin, TimestampMixin, Base):

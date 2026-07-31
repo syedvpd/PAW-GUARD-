@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from pawguard.modules.auth.models import Role, User
+from pawguard.modules.auth.models import Permission, Role, User
 
 REGISTER_PAYLOAD = {
     "email": "notifapitest@example.com",
@@ -33,8 +33,16 @@ class TestNotificationAPI:
             .where(User.email == REGISTER_PAYLOAD["email"])
         )
         user = (await db_session.execute(stmt)).scalar_one()
-        role_stmt = select(Role).where(Role.name == "super_admin")
+        role_stmt = select(Role).options(selectinload(Role.permissions)).where(Role.name == "super_admin")
         role = (await db_session.execute(role_stmt)).scalar_one()
+        perm_stmt = select(Permission).where(Permission.code == "notification:manage")
+        perm = (await db_session.execute(perm_stmt)).scalar_one_or_none()
+        if perm is None:
+            perm = Permission(code="notification:manage", description="Manage notifications")
+            db_session.add(perm)
+            await db_session.flush()
+        if perm not in role.permissions:
+            role.permissions.append(perm)
         user.roles.append(role)
         user.is_verified = True
         await db_session.commit()
@@ -47,8 +55,8 @@ class TestNotificationAPI:
         resp = await client.get("/api/v1/notifications", headers=headers)
         assert resp.status_code == 200
         body = resp.json()
-        assert "items" in body
-        assert "total" in body
+        assert "data" in body
+        assert "total" in body["meta"]
 
     async def test_list_notifications_with_filters(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)

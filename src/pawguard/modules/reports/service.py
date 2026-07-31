@@ -210,17 +210,22 @@ class ReportService:
                 InventoryItem.category == filters["category"]
             )
         results = (await self._session.execute(stmt)).scalars().all()
+        total_value = sum(float(i.quantity * i.unit_cost) for i in results)
         return {
             "title": "Inventory Report",
             "headers": [
                 "ID", "Name", "Category", "Quantity",
-                "Unit", "Reorder Threshold",
+                "Unit", "Reorder Threshold", "Unit Cost", "Total Value",
             ],
             "rows": [
                 [str(i.id), i.name, i.category, float(i.quantity),
-                 i.unit, float(i.reorder_threshold)]
+                 i.unit, float(i.reorder_threshold),
+                 float(i.unit_cost), float(i.quantity * i.unit_cost)]
                 for i in results
-            ],
+            ] + (
+                [["", "", "", "", "", "", "TOTAL", f"{total_value:.2f}"]]
+                if results else []
+            ),
         }
 
     async def _rescue_report(

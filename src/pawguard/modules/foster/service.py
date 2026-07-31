@@ -17,6 +17,7 @@ from pawguard.modules.foster.models import (
     FosterProfile,
     FosterProgressLog,
     FosterStatus,
+    FosterSupplyDispatch,
 )
 from pawguard.modules.foster.repository import FosterRepository
 from pawguard.modules.foster.schemas import (
@@ -25,6 +26,7 @@ from pawguard.modules.foster.schemas import (
     FosterProfileResponse,
     FosterProfileUpdate,
     FosterProgressLogCreate,
+    FosterSupplyDispatchCreate,
 )
 from pawguard.services.audit_service import AuditService
 
@@ -287,6 +289,52 @@ class FosterService:
                 },
             )
         return log
+
+    async def log_supply_dispatch(
+        self,
+        placement_id: uuid.UUID,
+        payload: FosterSupplyDispatchCreate,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> FosterSupplyDispatch:
+        placement = await self._repo.get_placement_by_id(placement_id)
+        if placement is None:
+            raise NotFoundError("Foster placement not found.")
+
+        dispatch = FosterSupplyDispatch(
+            placement_id=placement_id,
+            dispatched_by_id=actor_id,
+            item_type=payload.item_type,
+            description=payload.description,
+            quantity=payload.quantity,
+            dispatched_at=datetime.now(UTC),
+        )
+        await self._repo.create_supply_dispatch(dispatch)
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.FOSTER_SUPPLY_DISPATCHED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "placement_id": str(placement_id),
+                    "dispatch_id": str(dispatch.id),
+                    "item_type": dispatch.item_type.value,
+                    "quantity": dispatch.quantity,
+                },
+            )
+        return dispatch
+
+    async def list_supply_dispatches(
+        self, placement_id: uuid.UUID
+    ) -> list[FosterSupplyDispatch]:
+        placement = await self._repo.get_placement_by_id(placement_id)
+        if placement is None:
+            raise NotFoundError("Foster placement not found.")
+        dispatches = await self._repo.get_supply_dispatches_for_placement(placement_id)
+        return list(dispatches)
 
     async def get_progress_logs(
         self, placement_id: uuid.UUID

@@ -63,5 +63,10 @@ class StorageService:
         body: bytes = response["Body"].read()
         return body
 
+    def put_object(self, *, object_key: str, content: bytes, content_type: str) -> None:
+        self._client.put_object(
+            Bucket=self._bucket, Key=object_key, Body=content, ContentType=content_type
+        )
+
     def delete_object(self, *, object_key: str) -> None:
         self._client.delete_object(Bucket=self._bucket, Key=object_key)

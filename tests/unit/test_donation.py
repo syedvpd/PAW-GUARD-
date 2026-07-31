@@ -10,13 +10,23 @@ from pawguard.core.exceptions import ConflictError, NotFoundError
 from pawguard.core.pagination import PageParams
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
+from pawguard.modules.auth.models import User
 from pawguard.modules.dog.models import DogProfile, DogStatus
 from pawguard.modules.dog.repository import DogRepository
-from pawguard.modules.donation.models import Donation, DonationStatus, DonationType, DonorProfile
+from pawguard.modules.donation.models import (
+    DogSponsorship,
+    Donation,
+    DonationStatus,
+    DonationType,
+    DonorProfile,
+    SponsorshipStatus,
+)
 from pawguard.modules.donation.repository import DonationRepository
-from pawguard.modules.donation.schemas import DonationCreate, DonorProfileCreate
+from pawguard.modules.donation.schemas import DonationCreate, DonorProfileCreate, SponsorshipCreate
 from pawguard.modules.donation.service import DonationService
+from pawguard.modules.notifications.service import NotificationService
 from pawguard.services.audit_service import AuditService
+from pawguard.services.storage_service import StorageService
 
 
 def _make_donation(**kw):
@@ -209,3 +219,153 @@ class TestDonationService:
         mock_repo.get_donation_by_id.return_value = None
         with pytest.raises(NotFoundError):
             await service.get_donation(uuid.uuid4())
+
+    @pytest.mark.asyncio
+    async def test_make_donation_generates_receipt(self, mock_repo, mock_dog_repo, mock_audit):
+        user_id = uuid.uuid4()
+        actor_id = uuid.uuid4()
+        donor_id = uuid.uuid4()
+        user = User(id=user_id, full_name="John Doe", email="john@example.com")
+        donor = DonorProfile(id=donor_id, user_id=user_id, user=user)
+        mock_repo.get_donor_by_user_id.return_value = donor
+        donation_id = uuid.uuid4()
+        now = datetime.now(UTC)
+        donation = Donation(
+            id=donation_id, donor_id=donor_id, donor=donor, amount=100.0,
+            currency="USD", donation_type=DonationType.ONE_TIME,
+            status=DonationStatus.SUCCESS, transaction_id="TXN-ABC123",
+            created_at=now,
+        )
+        mock_repo.create_donation.return_value = None
+        mock_repo.get_donation_by_id.return_value = donation
+        mock_repo._session = AsyncMock()
+
+        mock_storage = AsyncMock(spec=StorageService)
+        mock_storage.build_object_key.return_value = "documents/receipt_test.pdf"
+
+        svc = DonationService(
+            mock_repo, mock_dog_repo, audit_service=mock_audit,
+            storage_service=mock_storage,
+        )
+        payload = DonationCreate(amount=100.0, currency="USD", donation_type=DonationType.ONE_TIME)
+        result = await svc.make_donation(user_id, payload, actor_id=actor_id)
+        assert result.receipt_file_key == "documents/receipt_test.pdf"
+        mock_storage.put_object.assert_called_once()
+        call_kwargs = mock_storage.put_object.call_args.kwargs
+        assert call_kwargs["content_type"] == "application/pdf"
+        assert len(call_kwargs["content"]) > 0
+
+
+class TestSponsorshipService:
+    @pytest.fixture
+    def mock_repo(self):
+        return AsyncMock(spec=DonationRepository)
+
+    @pytest.fixture
+    def mock_dog_repo(self):
+        return AsyncMock(spec=DogRepository)
+
+    @pytest.fixture
+    def mock_audit(self):
+        return AsyncMock(spec=AuditService)
+
+    @pytest.fixture
+    def mock_notification_svc(self):
+        return AsyncMock(spec=NotificationService)
+
+    @pytest.fixture
+    def service(self, mock_repo, mock_dog_repo, mock_audit, mock_notification_svc):
+        return DonationService(
+            mock_repo, mock_dog_repo,
+            audit_service=mock_audit,
+            notification_service=mock_notification_svc,
+        )
+
+    @pytest.mark.asyncio
+    async def test_create_sponsorship_success(
+        self, service, mock_repo, mock_dog_repo, mock_audit
+    ):
+        user_id = uuid.uuid4()
+        donor_id = uuid.uuid4()
+        dog_id = uuid.uuid4()
+        actor_id = uuid.uuid4()
+
+        mock_repo.get_donor_by_user_id.return_value = DonorProfile(
+            id=donor_id, user_id=user_id,
+        )
+        mock_dog_repo.get_by_id.return_value = DogProfile(
+            id=dog_id, registration_number="DOG-001", name="Bella",
+            breed="Mix", gender="female", status=DogStatus.SHELTER,
+            is_adoptable=True,
+        )
+
+        sponsorship_id = uuid.uuid4()
+        mock_repo.create_sponsorship.return_value = DogSponsorship(
+            id=sponsorship_id, donor_id=donor_id, dog_id=dog_id,
+            monthly_amount=25.0, currency="USD",
+            status=SponsorshipStatus.ACTIVE,
+        )
+
+        payload = SponsorshipCreate(dog_id=dog_id, monthly_amount=25.0)
+        result = await service.create_sponsorship(
+            user_id, payload, actor_id=actor_id,
+        )
+
+        assert result.donor_id == donor_id
+        assert result.dog_id == dog_id
+        assert result.monthly_amount == 25.0
+        mock_repo.create_sponsorship.assert_awaited_once()
+        mock_audit.record.assert_awaited_once()
+        assert mock_audit.record.call_args.kwargs["event_type"].value == "sponsorship_created"
+
+    @pytest.mark.asyncio
+    async def test_cancel_sponsorship(self, service, mock_repo, mock_audit):
+        sponsorship_id = uuid.uuid4()
+        actor_id = uuid.uuid4()
+
+        mock_repo.get_sponsorship_by_id.return_value = DogSponsorship(
+            id=sponsorship_id, donor_id=uuid.uuid4(), dog_id=uuid.uuid4(),
+            monthly_amount=25.0, currency="USD",
+            status=SponsorshipStatus.ACTIVE,
+        )
+        mock_repo.cancel_sponsorship.return_value = DogSponsorship(
+            id=sponsorship_id, donor_id=uuid.uuid4(), dog_id=uuid.uuid4(),
+            monthly_amount=25.0, currency="USD",
+            status=SponsorshipStatus.CANCELLED,
+        )
+
+        result = await service.cancel_sponsorship(
+            sponsorship_id, actor_id=actor_id,
+        )
+
+        assert result.status == SponsorshipStatus.CANCELLED
+        mock_repo.cancel_sponsorship.assert_awaited_once()
+        mock_audit.record.assert_awaited_once()
+        assert mock_audit.record.call_args.kwargs["event_type"].value == "sponsorship_cancelled"
+
+    @pytest.mark.asyncio
+    async def test_pause_sponsorship(self, service, mock_repo, mock_audit):
+        sponsorship_id = uuid.uuid4()
+        actor_id = uuid.uuid4()
+
+        mock_repo.get_sponsorship_by_id.return_value = DogSponsorship(
+            id=sponsorship_id, donor_id=uuid.uuid4(), dog_id=uuid.uuid4(),
+            monthly_amount=25.0, currency="USD",
+            status=SponsorshipStatus.ACTIVE,
+        )
+        mock_repo.update_sponsorship_status.return_value = DogSponsorship(
+            id=sponsorship_id, donor_id=uuid.uuid4(), dog_id=uuid.uuid4(),
+            monthly_amount=25.0, currency="USD",
+            status=SponsorshipStatus.PAUSED,
+        )
+
+        result = await service.pause_sponsorship(
+            sponsorship_id, actor_id=actor_id,
+        )
+
+        assert result.status == SponsorshipStatus.PAUSED
+        mock_repo.update_sponsorship_status.assert_awaited_once_with(
+            sponsorship_id, SponsorshipStatus.PAUSED,
+        )
+        mock_audit.record.assert_awaited_once()
+        assert mock_audit.record.call_args.kwargs["event_type"].value == "sponsorship_paused"

@@ -25,7 +25,7 @@ from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.rbac import require_permission
 from pawguard.modules.dog.repository import DogRepository
-from pawguard.modules.donation.models import DonationStatus, DonationType
+from pawguard.modules.donation.models import DonationStatus, DonationType, SponsorshipStatus
 from pawguard.modules.donation.repository import DonationRepository
 from pawguard.modules.donation.schemas import (
     DonationCreate,
@@ -36,9 +36,16 @@ from pawguard.modules.donation.schemas import (
     DonorProfileCreate,
     DonorProfileResponse,
     DonorProfileUpdate,
+    SponsorshipCreate,
+    SponsorshipResponse,
+    SponsorshipStatusUpdate,
 )
 from pawguard.modules.donation.service import DonationService
+from pawguard.modules.notifications.repository import NotificationRepository
+from pawguard.modules.notifications.service import NotificationService
+from pawguard.modules.storage.schemas import DownloadUrlResponse
 from pawguard.services.audit_service import AuditService
+from pawguard.services.storage_service import StorageService
 
 router = APIRouter(prefix="/donations", tags=["donations"])
 
@@ -49,11 +56,18 @@ def get_donation_service(
 ) -> DonationService:
     repo = DonationRepository(db)
     dog_repo = DogRepository(db)
+    notification_repo = NotificationRepository(db)
+    notification_svc = NotificationService(repository=notification_repo)
+    storage_svc = StorageService()
     try:
         gateway = get_payment_gateway()
     except PaymentGatewayError:
         gateway = None
-    return DonationService(repo, dog_repo, gateway, audit_service=audit)
+    return DonationService(
+        repo, dog_repo, gateway, audit_service=audit,
+        notification_service=notification_svc,
+        storage_service=storage_svc,
+    )
 
 
 @router.post(
@@ -257,6 +271,34 @@ async def list_donors(
     )
 
 
+@router.get(
+    "/{donation_id}/receipt",
+    response_model=ApiResponse[DownloadUrlResponse],
+)
+async def get_donation_receipt(
+    donation_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: DonationService = Depends(get_donation_service),
+) -> ApiResponse[DownloadUrlResponse]:
+    donation = await service.get_donation(donation_id)
+    user_permissions = {p.code for r in current_user.user.roles for p in r.permissions}
+    if donation.donor_id != current_user.user.id and "donation:read" not in user_permissions:
+        from pawguard.core.exceptions import ForbiddenError
+        raise ForbiddenError("You do not have permission to view this receipt.")
+    if not donation.receipt_file_key:
+        from pawguard.core.exceptions import NotFoundError
+        raise NotFoundError("Receipt not yet generated for this donation.")
+    storage = StorageService()
+    download_url = storage.generate_presigned_download_url(object_key=donation.receipt_file_key)
+    return ApiResponse(
+        data=DownloadUrlResponse(
+            download_url=download_url,
+            object_key=donation.receipt_file_key,
+            file_id=donation.id,
+        ),
+    )
+
+
 @router.patch(
     "/{donation_id}/status",
     response_model=ApiResponse[DonationResponse],
@@ -325,3 +367,95 @@ async def bulk_delete_donors(
             deleted_count=deleted,
         ),
     )
+
+
+@router.post(
+    "/sponsorships",
+    response_model=ApiResponse[SponsorshipResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_sponsorship(
+    payload: SponsorshipCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: DonationService = Depends(get_donation_service),
+) -> ApiResponse[SponsorshipResponse]:
+    sponsorship = await service.create_sponsorship(
+        current_user.id, payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(
+        data=SponsorshipResponse.model_validate(sponsorship),
+        message="Sponsorship created successfully.",
+    )
+
+
+@router.patch(
+    "/sponsorships/{sponsorship_id}/status",
+    response_model=ApiResponse[SponsorshipResponse],
+)
+async def update_sponsorship_status(
+    sponsorship_id: uuid.UUID,
+    payload: SponsorshipStatusUpdate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: DonationService = Depends(get_donation_service),
+) -> ApiResponse[SponsorshipResponse]:
+    if payload.status == SponsorshipStatus.PAUSED:
+        sponsorship = await service.pause_sponsorship(
+            sponsorship_id, actor_id=current_user.id,
+            ip_address=request.client.host if request.client else None,
+        )
+        message = "Sponsorship paused successfully."
+    elif payload.status == SponsorshipStatus.CANCELLED:
+        sponsorship = await service.cancel_sponsorship(
+            sponsorship_id, actor_id=current_user.id,
+            ip_address=request.client.host if request.client else None,
+        )
+        message = "Sponsorship cancelled successfully."
+    else:
+        raise ValidationFailedError(
+            f"Cannot transition to {payload.status.value} via this endpoint."
+        )
+
+    return ApiResponse(
+        data=SponsorshipResponse.model_validate(sponsorship),
+        message=message,
+    )
+
+
+@router.get(
+    "/sponsorships/my",
+    response_model=ApiResponse[list[SponsorshipResponse]],
+)
+async def list_my_sponsorships(
+    current_user: CurrentUser = Depends(get_current_user),
+    service: DonationService = Depends(get_donation_service),
+) -> ApiResponse[list[SponsorshipResponse]]:
+    sponsorships = await service.list_sponsorships_for_donor(current_user.id)
+    return ApiResponse(data=[SponsorshipResponse.model_validate(s) for s in sponsorships])
+
+
+@router.get(
+    "/sponsorships",
+    response_model=ApiResponse[list[SponsorshipResponse]],
+    dependencies=[Depends(require_permission("donation:read"))],
+)
+async def list_all_sponsorships(
+    service: DonationService = Depends(get_donation_service),
+) -> ApiResponse[list[SponsorshipResponse]]:
+    sponsorships = await service.list_all_sponsorships()
+    return ApiResponse(data=[SponsorshipResponse.model_validate(s) for s in sponsorships])
+
+
+@router.get(
+    "/sponsorships/{sponsorship_id}",
+    response_model=ApiResponse[SponsorshipResponse],
+)
+async def get_sponsorship(
+    sponsorship_id: uuid.UUID,
+    service: DonationService = Depends(get_donation_service),
+) -> ApiResponse[SponsorshipResponse]:
+    sponsorship = await service.get_sponsorship(sponsorship_id)
+    return ApiResponse(data=SponsorshipResponse.model_validate(sponsorship))

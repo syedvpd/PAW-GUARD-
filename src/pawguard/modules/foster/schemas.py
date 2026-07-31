@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from pawguard.modules.auth.schemas import UserProfile
 from pawguard.modules.dog.schemas import DogProfileResponse
-from pawguard.modules.foster.models import FosterStatus
+from pawguard.modules.foster.models import FosterStatus, SupplyItemType
 
 
 class FosterProgressLogCreate(BaseModel):
@@ -91,4 +91,24 @@ class FosterPlacementResponse(BaseModel):
 
 class FosterReturnRequest(BaseModel):
     notes: str | None = None
+
+
+class FosterSupplyDispatchCreate(BaseModel):
+    item_type: SupplyItemType
+    description: str | None = None
+    quantity: int = Field(1, ge=1)
+
+
+class FosterSupplyDispatchResponse(BaseModel):
+    id: uuid.UUID
+    placement_id: uuid.UUID
+    dispatched_by_id: uuid.UUID
+    item_type: SupplyItemType
+    description: str | None
+    quantity: int
+    dispatched_at: datetime
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 

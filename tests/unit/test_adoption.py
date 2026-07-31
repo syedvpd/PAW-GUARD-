@@ -18,9 +18,11 @@ from pawguard.modules.adoption.schemas import (
     AdoptionScoreCreate,
 )
 from pawguard.modules.adoption.service import AdoptionService
+from pawguard.modules.auth.models import User
 from pawguard.modules.dog.models import DogProfile, DogStatus
 from pawguard.modules.dog.repository import DogRepository
 from pawguard.services.audit_service import AuditService
+from pawguard.services.storage_service import StorageService
 
 
 def _make_app(**kw):
@@ -238,6 +240,44 @@ class TestAdoptionService:
         mock_repo.get_by_id.return_value = None
         with pytest.raises(NotFoundError):
             await service.soft_delete_application(uuid.uuid4())
+
+    @pytest.mark.asyncio
+    async def test_approve_generates_agreement(self, mock_repo, mock_dog_repo, mock_audit):
+        app_id = uuid.uuid4()
+        dog_id = uuid.uuid4()
+        adopter_id = uuid.uuid4()
+        adopter = User(id=adopter_id, full_name="Jane Doe", email="jane@example.com")
+        dog = DogProfile(
+            id=dog_id, registration_number="DOG-001", name="Buddy",
+            breed="Lab", gender="male", status=DogStatus.SHELTER,
+            is_adoptable=True,
+        )
+        app = AdoptionApplication(
+            id=app_id, dog_id=dog_id, adopter_id=adopter_id,
+            dog=dog, adopter=adopter,
+            status=AdoptionStatus.HOME_CHECK, residential_status="owned",
+        )
+        mock_repo.get_by_id.side_effect = [app, app]
+        mock_repo.get_approved_application_for_dog.return_value = None
+        mock_repo._session = AsyncMock()
+        mock_dog_repo.get_by_id.return_value = dog
+        mock_dog_repo.get_by_id_for_update.return_value = dog
+
+        mock_storage = AsyncMock(spec=StorageService)
+        mock_storage.build_object_key.return_value = "documents/agreement_test.pdf"
+
+        svc = AdoptionService(
+            mock_repo, mock_dog_repo, audit_service=mock_audit,
+            storage_service=mock_storage,
+        )
+        result = await svc.update_application_status(
+            app_id, AdoptionStatus.APPROVED, actor_id=uuid.uuid4(),
+        )
+        assert result.adoption_agreement_url == "documents/agreement_test.pdf"
+        mock_storage.put_object.assert_called_once()
+        call_kwargs = mock_storage.put_object.call_args.kwargs
+        assert call_kwargs["content_type"] == "application/pdf"
+        assert len(call_kwargs["content"]) > 0
 
 
 class TestAdoptionScores:

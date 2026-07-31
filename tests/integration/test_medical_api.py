@@ -93,7 +93,7 @@ class TestMedicalAPI:
         resp = await client.get("/api/v1/medical/exams", headers=headers)
         assert resp.status_code == 200
         body = resp.json()
-        assert "items" in body
+        assert "data" in body
 
     async def test_list_treatments(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)

@@ -54,7 +54,6 @@ def get_rescue_service(
 async def report_incident(
     payload: RescueRequestCreate,
     request: Request,
-    current_user: CurrentUser = Depends(get_current_user),
     service: RescueService = Depends(get_rescue_service),
 ) -> ApiResponse[RescueRequestResponse]:
     request_obj = await service.report_incident(
@@ -70,7 +69,7 @@ async def report_incident(
         animal_count=payload.animal_count,
         physical_condition=payload.physical_condition,
         behavioral_indicators=payload.behavioral_indicators,
-        actor_id=current_user.id,
+        actor_id=None,
         ip_address=request.client.host if request.client else None,
     )
     return ApiResponse(

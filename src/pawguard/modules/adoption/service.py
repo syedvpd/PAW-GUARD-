@@ -2,9 +2,12 @@
 
 import uuid
 from datetime import UTC, datetime
+from logging import getLogger
 
+from pawguard.core.config import get_settings
 from pawguard.core.exceptions import ConflictError, NotFoundError, ValidationFailedError
 from pawguard.core.pagination import PageParams, build_pagination_meta
+from pawguard.core.pdf_generation import generate_adoption_agreement
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
 from pawguard.modules.adoption.models import AdoptionApplication, AdoptionScore, AdoptionStatus
@@ -18,7 +21,11 @@ from pawguard.modules.adoption.schemas import (
 from pawguard.modules.auth.models import AuthAuditEventType
 from pawguard.modules.dog.models import DogStatus
 from pawguard.modules.dog.repository import DogRepository
+from pawguard.modules.storage.models import FileFolder, StoredFile
 from pawguard.services.audit_service import AuditService
+from pawguard.services.storage_service import StorageService
+
+logger = getLogger(__name__)
 
 # Explicit state machine for the 6-phase vetting pipeline (PRR 3.7). REJECTED
 # is reachable from any pre-completion state (an application can be rejected
@@ -40,10 +47,70 @@ class AdoptionService:
         repository: AdoptionRepository,
         dog_repo: DogRepository,
         audit_service: AuditService | None = None,
+        storage_service: StorageService | None = None,
     ) -> None:
         self._repo = repository
         self._dog_repo = dog_repo
         self._audit = audit_service
+        self._storage = storage_service
+
+    async def _generate_agreement(self, application: AdoptionApplication) -> None:
+        if self._storage is None:
+            return
+        try:
+            adopter_name = (
+                application.adopter.full_name
+                if application.adopter
+                else "Adopter"
+            )
+            dog = application.dog
+            settings = get_settings()
+            pdf_bytes = generate_adoption_agreement(
+                adopter_name=adopter_name,
+                dog_name=dog.name if dog else "Dog",
+                dog_registration_number=dog.registration_number if dog else "",
+                dog_breed=dog.breed if dog else "",
+                fee_amount=0.0,
+                org_name=settings.org_name,
+                org_address=settings.org_address,
+            )
+            object_key = self._storage.build_object_key(
+                folder="documents", filename=f"agreement_{application.id}.pdf"
+            )
+            self._storage.put_object(
+                object_key=object_key,
+                content=pdf_bytes,
+                content_type="application/pdf",
+            )
+            stored = StoredFile(
+                object_key=object_key,
+                original_filename=f"adoption_agreement_{application.id}.pdf",
+                mime_type="application/pdf",
+                file_size=len(pdf_bytes),
+                folder=FileFolder.DOCUMENTS.value,
+                is_uploaded=True,
+                uploaded_at=datetime.now(UTC),
+                entity_type="adoption_application",
+                entity_id=application.id,
+            )
+            self._repo._session.add(stored)
+            application.adoption_agreement_url = object_key
+            await self._repo._session.flush()
+            if self._audit:
+                await self._audit.record(
+                    event_type=AuthAuditEventType.ADOPTION_AGREEMENT_GENERATED,
+                    actor_id=None,
+                    ip_address="",
+                    user_agent="",
+                    metadata={
+                        "adoption_id": str(application.id),
+                        "dog_id": str(application.dog_id),
+                    },
+                )
+        except Exception:
+            logger.warning(
+                "Failed to generate agreement for application %s", application.id, exc_info=True
+            )
 
     @staticmethod
     def _check_transition(old_status: AdoptionStatus, new_status: AdoptionStatus) -> None:
@@ -166,6 +233,9 @@ class AdoptionService:
                 metadata={"adoption_id": str(app_id), "changes": update_data},
             )
 
+        if res.status == AdoptionStatus.APPROVED and "status" in update_data:
+            await self._generate_agreement(res)
+
         return res
 
     async def update_application_status(
@@ -221,6 +291,9 @@ class AdoptionService:
                     "new_status": status.value,
                 },
             )
+
+        if status == AdoptionStatus.APPROVED and old_status != status:
+            await self._generate_agreement(res)
 
         return res
 

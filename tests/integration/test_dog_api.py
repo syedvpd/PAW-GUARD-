@@ -77,8 +77,8 @@ class TestDogAPI:
         resp = await client.get("/api/v1/dogs", headers=headers)
         assert resp.status_code == 200
         body = resp.json()
-        assert "items" in body
-        assert "total" in body
+        assert "data" in body
+        assert "total" in body["meta"]
 
     async def test_list_dogs_with_filters(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)

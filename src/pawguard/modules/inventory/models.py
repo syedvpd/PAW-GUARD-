@@ -47,6 +47,9 @@ class InventoryItem(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
         Numeric(10, 2, asdecimal=False), default=10.0, nullable=False,
     )
     expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    unit_cost: Mapped[float] = mapped_column(
+        Numeric(10, 2, asdecimal=False), default=0.0, nullable=False,
+    )
 
 
 class InventoryMovement(UUIDPkMixin, TimestampMixin, Base):
@@ -61,6 +64,8 @@ class InventoryMovement(UUIDPkMixin, TimestampMixin, Base):
     movement_type: Mapped[MovementType] = mapped_column(String(32), nullable=False)
     quantity: Mapped[float] = mapped_column(Numeric(10, 2, asdecimal=False), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reference_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    reference_id: Mapped[uuid.UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
 
 
 class RequisitionOrder(UUIDPkMixin, TimestampMixin, Base):

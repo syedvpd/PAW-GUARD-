@@ -1,15 +1,25 @@
 """DonationService: owns donor registers, contributions, and sponsorships (RULE-003)."""
 
 import uuid
+from datetime import UTC, datetime
+from logging import getLogger
 
+from pawguard.core.config import get_settings
 from pawguard.core.exceptions import ConflictError, NotFoundError, ValidationFailedError
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.payments import PaymentGateway, PaymentGatewayError, WebhookEvent
+from pawguard.core.pdf_generation import generate_tax_receipt
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
 from pawguard.modules.auth.models import AuthAuditEventType
 from pawguard.modules.dog.repository import DogRepository
-from pawguard.modules.donation.models import Donation, DonationStatus, DonorProfile
+from pawguard.modules.donation.models import (
+    DogSponsorship,
+    Donation,
+    DonationStatus,
+    DonorProfile,
+    SponsorshipStatus,
+)
 from pawguard.modules.donation.repository import DonationRepository
 from pawguard.modules.donation.schemas import (
     DonationCreate,
@@ -18,8 +28,14 @@ from pawguard.modules.donation.schemas import (
     DonorProfileCreate,
     DonorProfileResponse,
     DonorProfileUpdate,
+    SponsorshipCreate,
 )
+from pawguard.modules.notifications.service import NotificationService
+from pawguard.modules.storage.models import FileFolder, StoredFile
 from pawguard.services.audit_service import AuditService
+from pawguard.services.storage_service import StorageService
+
+logger = getLogger(__name__)
 
 
 class DonationService:
@@ -29,11 +45,71 @@ class DonationService:
         dog_repo: DogRepository,
         payment_gateway: PaymentGateway | None = None,
         audit_service: AuditService | None = None,
+        notification_service: NotificationService | None = None,
+        storage_service: StorageService | None = None,
     ) -> None:
         self._repo = repository
         self._dog_repo = dog_repo
         self._gateway = payment_gateway
         self._audit = audit_service
+        self._notification_svc = notification_service
+        self._storage = storage_service
+
+    async def _generate_receipt(self, donation: Donation) -> None:
+        if self._storage is None:
+            return
+        try:
+            donor_name = (
+                donation.donor.user.full_name
+                if donation.donor and donation.donor.user
+                else "Donor"
+            )
+            settings = get_settings()
+            pdf_bytes = generate_tax_receipt(
+                donor_name=donor_name,
+                amount=float(donation.amount),
+                currency=donation.currency,
+                transaction_id=donation.transaction_id or "",
+                donation_date=donation.created_at,
+                org_name=settings.org_name,
+                org_address=settings.org_address,
+            )
+            object_key = self._storage.build_object_key(
+                folder="documents", filename=f"receipt_{donation.id}.pdf"
+            )
+            self._storage.put_object(
+                object_key=object_key,
+                content=pdf_bytes,
+                content_type="application/pdf",
+            )
+            stored = StoredFile(
+                object_key=object_key,
+                original_filename=f"tax_receipt_{donation.id}.pdf",
+                mime_type="application/pdf",
+                file_size=len(pdf_bytes),
+                folder=FileFolder.DOCUMENTS.value,
+                is_uploaded=True,
+                uploaded_at=datetime.now(UTC),
+                entity_type="donation",
+                entity_id=donation.id,
+            )
+            self._repo._session.add(stored)
+            donation.receipt_file_key = object_key
+            await self._repo._session.flush()
+            if self._audit:
+                await self._audit.record(
+                    event_type=AuthAuditEventType.DONATION_RECEIPT_ISSUED,
+                    actor_id=None,
+                    ip_address="",
+                    user_agent="",
+                    metadata={
+                        "donation_id": str(donation.id),
+                        "amount": str(donation.amount),
+                        "currency": donation.currency,
+                    },
+                )
+        except Exception:
+            logger.warning("Failed to generate receipt for donation %s", donation.id, exc_info=True)
 
     async def register_donor(self, user_id: uuid.UUID, payload: DonorProfileCreate) -> DonorProfile:
         existing = await self._repo.get_donor_by_user_id(user_id)
@@ -100,6 +176,7 @@ class DonationService:
                     "manual": True,
                 },
             )
+        await self._generate_receipt(res)
         return res
 
     async def get_donation(self, donation_id: uuid.UUID) -> Donation:
@@ -224,6 +301,7 @@ class DonationService:
                     "verified_online": True,
                 },
             )
+        await self._generate_receipt(res)
         return res
 
     async def handle_gateway_webhook(self, payload: bytes, signature: str) -> None:
@@ -260,6 +338,9 @@ class DonationService:
                         "source": "webhook",
                     },
                 )
+            refreshed = await self._repo.get_donation_by_id(donation.id)
+            if refreshed is not None:
+                await self._generate_receipt(refreshed)
         elif event.event_type == "payment.failed":
             await self._repo.update_gateway_fields(donation.id, status=DonationStatus.FAILED)
             if self._audit:
@@ -437,3 +518,120 @@ class DonationService:
                 metadata={"donor_ids": [str(i) for i in ids], "count": count},
             )
         return count
+
+    async def create_sponsorship(
+        self,
+        user_id: uuid.UUID,
+        payload: SponsorshipCreate,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> DogSponsorship:
+        donor = await self.get_or_create_donor(user_id)
+
+        dog = await self._dog_repo.get_by_id(payload.dog_id)
+        if dog is None:
+            raise NotFoundError("Dog profile not found.")
+
+        now = datetime.now(UTC)
+        sponsorship = DogSponsorship(
+            donor_id=donor.id,
+            dog_id=payload.dog_id,
+            monthly_amount=payload.monthly_amount,
+            currency=payload.currency,
+            status=SponsorshipStatus.ACTIVE,
+            next_charge_date=now.date(),
+            started_at=now,
+        )
+        await self._repo.create_sponsorship(sponsorship)
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.SPONSORSHIP_CREATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "sponsorship_id": str(sponsorship.id),
+                    "donor_id": str(donor.id),
+                    "dog_id": str(payload.dog_id),
+                    "monthly_amount": str(payload.monthly_amount),
+                    "currency": payload.currency,
+                },
+            )
+        return sponsorship
+
+    async def pause_sponsorship(
+        self,
+        sponsorship_id: uuid.UUID,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> DogSponsorship:
+        sponsorship = await self._repo.get_sponsorship_by_id(sponsorship_id)
+        if sponsorship is None:
+            raise NotFoundError("Sponsorship not found.")
+        if sponsorship.status != SponsorshipStatus.ACTIVE:
+            raise ValidationFailedError("Only active sponsorships can be paused.")
+
+        updated = await self._repo.update_sponsorship_status(
+            sponsorship_id, SponsorshipStatus.PAUSED
+        )
+        if updated is None:
+            raise NotFoundError("Failed to update sponsorship status.")
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.SPONSORSHIP_PAUSED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"sponsorship_id": str(sponsorship_id)},
+            )
+        return updated
+
+    async def cancel_sponsorship(
+        self,
+        sponsorship_id: uuid.UUID,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> DogSponsorship:
+        sponsorship = await self._repo.get_sponsorship_by_id(sponsorship_id)
+        if sponsorship is None:
+            raise NotFoundError("Sponsorship not found.")
+
+        updated = await self._repo.cancel_sponsorship(
+            sponsorship_id, datetime.now(UTC),
+        )
+        if updated is None:
+            raise NotFoundError("Failed to cancel sponsorship.")
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.SPONSORSHIP_CANCELLED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"sponsorship_id": str(sponsorship_id)},
+            )
+        return updated
+
+    async def list_sponsorships_for_donor(
+        self, user_id: uuid.UUID
+    ) -> list[DogSponsorship]:
+        donor = await self._repo.get_donor_by_user_id(user_id)
+        if donor is None:
+            return []
+        return list(await self._repo.get_sponsorships_for_donor(donor.id))
+
+    async def list_all_sponsorships(self) -> list[DogSponsorship]:
+        return list(await self._repo.list_all_sponsorships())
+
+    async def get_sponsorship(
+        self, sponsorship_id: uuid.UUID
+    ) -> DogSponsorship:
+        sponsorship = await self._repo.get_sponsorship_by_id(sponsorship_id)
+        if sponsorship is None:
+            raise NotFoundError("Sponsorship not found.")
+        return sponsorship

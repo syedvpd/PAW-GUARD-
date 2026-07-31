@@ -34,7 +34,9 @@ from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.rbac import require_permission
 from pawguard.modules.dog.repository import DogRepository
+from pawguard.modules.storage.schemas import DownloadUrlResponse
 from pawguard.services.audit_service import AuditService
+from pawguard.services.storage_service import StorageService
 
 router = APIRouter(prefix="/adoptions", tags=["adoptions"])
 
@@ -45,7 +47,8 @@ def get_adoption_service(
 ) -> AdoptionService:
     repo = AdoptionRepository(db)
     dog_repo = DogRepository(db)
-    return AdoptionService(repo, dog_repo, audit_service=audit)
+    storage_svc = StorageService()
+    return AdoptionService(repo, dog_repo, audit_service=audit, storage_service=storage_svc)
 
 
 @router.post(
@@ -111,6 +114,34 @@ async def get_application(
         raise ForbiddenError("You do not have permission to view this application.")
 
     return ApiResponse(data=AdoptionApplicationResponse.model_validate(app))
+
+
+@router.get(
+    "/{app_id}/agreement",
+    response_model=ApiResponse[DownloadUrlResponse],
+)
+async def get_adoption_agreement(
+    app_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: AdoptionService = Depends(get_adoption_service),
+) -> ApiResponse[DownloadUrlResponse]:
+    app = await service.get_application(app_id)
+    user_permissions = {p.code for r in current_user.user.roles for p in r.permissions}
+    if app.adopter_id != current_user.user.id and "adoption:read" not in user_permissions:
+        from pawguard.core.exceptions import ForbiddenError
+        raise ForbiddenError("You do not have permission to view this agreement.")
+    if not app.adoption_agreement_url:
+        from pawguard.core.exceptions import NotFoundError
+        raise NotFoundError("Agreement not yet generated for this application.")
+    storage = StorageService()
+    download_url = storage.generate_presigned_download_url(object_key=app.adoption_agreement_url)
+    return ApiResponse(
+        data=DownloadUrlResponse(
+            download_url=download_url,
+            object_key=app.adoption_agreement_url,
+            file_id=app.id,
+        ),
+    )
 
 
 @router.put(

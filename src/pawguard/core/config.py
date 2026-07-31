@@ -94,6 +94,10 @@ class Settings(BaseSettings):
     refresh_rate_limit_per_minute: int = 30
     password_reset_rate_limit_per_hour: int = 5
 
+    # --- Organisation ---
+    org_name: str = "PawGuard Animal Rescue"
+    org_address: str = "123 Shelter Lane, Petville, PA 12345"
+
     # --- Payments ---
     # Provider is swappable: implement PaymentGateway and register it in
     # core/payments/__init__.py, then flip this one setting.

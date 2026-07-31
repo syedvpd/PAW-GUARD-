@@ -17,6 +17,7 @@ from pawguard.modules.foster.models import (
     FosterProfile,
     FosterProgressLog,
     FosterStatus,
+    FosterSupplyDispatch,
 )
 
 
@@ -137,6 +138,21 @@ class FosterRepository:
             select(FosterProgressLog)
             .where(FosterProgressLog.placement_id == placement_id)
             .order_by(FosterProgressLog.logged_at.desc())
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def create_supply_dispatch(self, dispatch: FosterSupplyDispatch) -> FosterSupplyDispatch:
+        self._session.add(dispatch)
+        await self._session.flush()
+        return dispatch
+
+    async def get_supply_dispatches_for_placement(
+        self, placement_id: uuid.UUID
+    ) -> Sequence[FosterSupplyDispatch]:
+        stmt = (
+            select(FosterSupplyDispatch)
+            .where(FosterSupplyDispatch.placement_id == placement_id)
+            .order_by(FosterSupplyDispatch.dispatched_at.desc())
         )
         return (await self._session.execute(stmt)).scalars().all()
 

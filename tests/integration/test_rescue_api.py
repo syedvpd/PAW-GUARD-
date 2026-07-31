@@ -137,21 +137,23 @@ class TestRescueAPI:
 
     async def test_fail_rescue(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
+        user_id = (await db_session.execute(select(User).where(User.email == REGISTER_PAYLOAD["email"]))).scalar_one().id
         report_payload = {"reporter_name": "Fail", "reporter_phone": "+777", "location_address": "Fail Rd", "physical_condition": "Stray"}
         r = await client.post("/api/v1/rescue/report", json=report_payload, headers=headers)
         cid = r.json()["data"]["id"]
         await client.post(f"/api/v1/rescue/{cid}/verify", json={"status": "verified"}, headers=headers)
+        await client.post(f"/api/v1/rescue/{cid}/dispatch", json={"assigned_driver_id": str(user_id), "vehicle_id": "VAN-006"}, headers=headers)
         resp = await client.post(f"/api/v1/rescue/{cid}/fail?failure_reason=Animal%20not%20found", headers=headers)
         assert resp.status_code == 200
-        assert resp.json()["data"]["status"] == RescueStatus.REJECTED.value
+        assert resp.json()["data"]["status"] == RescueStatus.VERIFIED.value
 
     async def test_list_rescue_requests(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
         resp = await client.get("/api/v1/rescue", headers=headers)
         assert resp.status_code == 200
         body = resp.json()
-        assert "items" in body
-        assert "total" in body
+        assert "data" in body
+        assert "total" in body["meta"]
 
     async def test_list_rescue_with_filters(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)

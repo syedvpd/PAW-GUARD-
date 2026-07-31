@@ -1,14 +1,14 @@
 """Pydantic schemas for the Donation Management module."""
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from pawguard.core.config import get_settings
 from pawguard.modules.auth.schemas import UserProfile
 from pawguard.modules.dog.schemas import DogProfileResponse
-from pawguard.modules.donation.models import DonationStatus, DonationType
+from pawguard.modules.donation.models import DonationStatus, DonationType, SponsorshipStatus
 
 
 def _default_currency() -> str:
@@ -62,6 +62,7 @@ class DonationResponse(BaseModel):
     transaction_id: str | None
     notes: str | None
     payment_provider: str | None
+    receipt_file_key: str | None
     created_at: datetime
     dog: DogProfileResponse | None = None
 
@@ -85,3 +86,30 @@ class DonationVerifyRequest(BaseModel):
     gateway_order_id: str
     gateway_payment_id: str
     gateway_signature: str
+
+
+class SponsorshipCreate(BaseModel):
+    dog_id: uuid.UUID
+    monthly_amount: float = Field(..., ge=1.0)
+    currency: str = Field(default_factory=_default_currency, min_length=3, max_length=3)
+
+
+class SponsorshipStatusUpdate(BaseModel):
+    status: SponsorshipStatus
+
+
+class SponsorshipResponse(BaseModel):
+    id: uuid.UUID
+    donor_id: uuid.UUID
+    dog_id: uuid.UUID
+    monthly_amount: float
+    currency: str
+    status: SponsorshipStatus
+    next_charge_date: date
+    started_at: datetime
+    cancelled_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+    dog: DogProfileResponse | None = None
+
+    model_config = ConfigDict(from_attributes=True)
