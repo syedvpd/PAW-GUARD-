@@ -65,7 +65,11 @@ class TestNewModules:
         assert resp.status_code == 201
         req_id = resp.json()["data"]["id"]
 
-        resp = await client.put(f"/api/v1/inventory/requisitions/{req_id}/status?status=approved", headers=headers)
+        resp = await client.put(
+            f"/api/v1/inventory/requisitions/{req_id}/status",
+            json={"status": "approved"},
+            headers=headers,
+        )
         assert resp.status_code == 200
 
     async def test_shelter_flow(self, client: AsyncClient, db_session: AsyncSession) -> None:

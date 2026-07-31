@@ -218,7 +218,7 @@ class RoleRepository:
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def list_all(self) -> list[Role]:
-        stmt = select(Role).order_by(Role.name)
+        stmt = select(Role).options(selectinload(Role.permissions)).order_by(Role.name)
         return list((await self._session.execute(stmt)).scalars().all())
 
     async def create(self, role: Role) -> Role:

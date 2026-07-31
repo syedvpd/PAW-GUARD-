@@ -75,15 +75,15 @@ async def shelter_dashboard(session: AsyncSession) -> dict[str, Any]:
         )
     )
     kennels = await session.execute(select(func.count(Kennel.id)))
+    total_dogs = dogs.scalar_one()
+    total_kennels = kennels.scalar_one()
     return {
         "total_facilities": facilities.scalar_one(),
-        "total_dogs": dogs.scalar_one(),
+        "total_dogs": total_dogs,
         "adoptable_dogs": adoptable.scalar_one(),
-        "total_kennels": kennels.scalar_one(),
+        "total_kennels": total_kennels,
         "occupancy_rate": (
-            round(dogs.scalar_one() / max(kennels.scalar_one(), 1) * 100, 1)
-            if kennels.scalar_one() > 0
-            else 0
+            round(total_dogs / total_kennels * 100, 1) if total_kennels > 0 else 0
         ),
     }
 
@@ -216,10 +216,12 @@ async def finance_dashboard(session: AsyncSession) -> dict[str, Any]:
             FinancialTransaction.deleted_at.is_(None),
         )
     )
+    total_income = float(income.scalar_one())
+    total_expenses = float(expense.scalar_one())
     return {
-        "total_income": float(income.scalar_one()),
-        "total_expenses": float(expense.scalar_one()),
-        "net_balance": float(income.scalar_one() - expense.scalar_one()),
+        "total_income": total_income,
+        "total_expenses": total_expenses,
+        "net_balance": total_income - total_expenses,
         "pending_transactions": pending_tx.scalar_one(),
     }
 

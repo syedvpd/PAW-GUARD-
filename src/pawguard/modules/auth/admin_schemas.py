@@ -2,8 +2,9 @@
 
 import uuid
 from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 # ── Role ─────────────────────────────────────────────────────────────────────
 
@@ -25,6 +26,23 @@ class RoleResponse(BaseModel):
     is_system: bool
     permission_codes: list[str] = []
     created_at: datetime
+
+    @model_validator(mode="before")
+    @classmethod
+    def _inject_permission_codes(cls, data: Any) -> Any:
+        # Role.permissions is an ORM relationship, not an attribute literally
+        # named permission_codes - from_attributes alone silently falls back
+        # to the [] default here, so every role would appear permission-less.
+        if hasattr(data, "permissions") and not isinstance(data, dict):
+            return {
+                "id": data.id,
+                "name": data.name,
+                "description": data.description,
+                "is_system": data.is_system,
+                "permission_codes": [p.code for p in data.permissions],
+                "created_at": data.created_at,
+            }
+        return data
 
     model_config = {"from_attributes": True}
 
@@ -66,5 +84,12 @@ class AdminUserResponse(BaseModel):
     roles: list[str]
     created_at: datetime
     updated_at: datetime
+
+    @field_validator("roles", mode="before")
+    @classmethod
+    def serialize_roles(cls, v: Any) -> list[str]:
+        if isinstance(v, list):
+            return [r.name if hasattr(r, "name") else str(r) for r in v]
+        return list(v) if isinstance(v, (list, tuple)) else []
 
     model_config = {"from_attributes": True}
