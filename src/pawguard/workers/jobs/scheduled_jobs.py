@@ -4,6 +4,7 @@ These run periodically via ARQ's scheduled_jobs feature and are kept off
 the request path per TRANSACTION RULES.
 """
 
+import calendar
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -202,7 +203,10 @@ async def process_sponsorship_charges(ctx: dict[str, object]) -> None:
             if month > 12:
                 month = 1
                 year += 1
-            next_date = sp.next_charge_date.replace(year=year, month=month)
+            # Clamp the day: e.g. a sponsorship charged on Jan 31 must land on
+            # Feb 28/29, not raise ValueError("day is out of range for month").
+            day = min(sp.next_charge_date.day, calendar.monthrange(year, month)[1])
+            next_date = sp.next_charge_date.replace(year=year, month=month, day=day)
             await donation_repo.advance_charge_date(sp.id, next_date)
 
             if sp.donor and sp.donor.user_id:

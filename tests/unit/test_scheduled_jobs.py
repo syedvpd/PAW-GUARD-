@@ -11,6 +11,7 @@ from pawguard.workers.jobs.scheduled_jobs import (
     check_inventory_low_stock,
     check_vaccination_renewals,
     post_adoption_followups,
+    process_sponsorship_charges,
 )
 
 
@@ -154,3 +155,42 @@ class TestScheduledJobs:
         assert mock_notif.create_notification.call_count >= 1
         call_kwargs = mock_notif.create_notification.call_args[1]
         assert "Day Post-Adoption Follow-Up" in call_kwargs["title"]
+
+    @pytest.mark.asyncio
+    @patch("pawguard.workers.jobs.scheduled_jobs.AsyncSessionLocal")
+    @patch("pawguard.workers.jobs.scheduled_jobs.NotificationService")
+    @patch("pawguard.workers.jobs.scheduled_jobs.DonationRepository")
+    async def test_process_sponsorship_charges_month_end_rollover(
+        self, mock_donation_repo_cls, mock_notif_cls, mock_session_factory
+    ):
+        """A sponsorship charged on the 31st must roll over to a shorter
+        month (e.g. Feb) without raising ValueError."""
+        from datetime import date as date_type
+
+        sponsorship = MagicMock()
+        sponsorship.id = uuid.uuid4()
+        sponsorship.donor_id = uuid.uuid4()
+        sponsorship.dog_id = uuid.uuid4()
+        sponsorship.monthly_amount = 25
+        sponsorship.currency = "USD"
+        sponsorship.next_charge_date = date_type(2026, 1, 31)
+        sponsorship.donor = MagicMock()
+        sponsorship.donor.user_id = uuid.uuid4()
+
+        mock_repo = AsyncMock()
+        mock_repo.get_due_sponsorships.return_value = [sponsorship]
+        mock_donation_repo_cls.return_value = mock_repo
+
+        mock_session = AsyncMock()
+        mock_session_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_notif = AsyncMock()
+        mock_notif_cls.return_value = mock_notif
+
+        await process_sponsorship_charges({})
+
+        mock_repo.create_donation.assert_called_once()
+        mock_repo.advance_charge_date.assert_called_once()
+        next_date = mock_repo.advance_charge_date.call_args[0][1]
+        assert next_date == date_type(2026, 2, 28)
