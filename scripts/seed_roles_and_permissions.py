@@ -43,6 +43,9 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
             pc.GRIEVANCE_CREATE, pc.GRIEVANCE_READ,
             pc.GRIEVANCE_UPDATE, pc.GRIEVANCE_ASSIGN, pc.GRIEVANCE_COMMENT,
             pc.NOTIFICATION_READ, pc.NOTIFICATION_MANAGE,
+            pc.DASHBOARD_RESCUE, pc.DASHBOARD_SHELTER, pc.DASHBOARD_MEDICAL,
+            pc.DASHBOARD_ADOPTION, pc.DASHBOARD_FOSTER, pc.DASHBOARD_VOLUNTEER,
+            pc.DASHBOARD_INVENTORY, pc.DASHBOARD_FINANCE, pc.DASHBOARD_DONOR,
         ],
     ),
     (
@@ -66,6 +69,9 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
             pc.GRIEVANCE_READ, pc.GRIEVANCE_UPDATE,
             pc.GRIEVANCE_ASSIGN, pc.GRIEVANCE_COMMENT,
             pc.NOTIFICATION_READ,
+            pc.DASHBOARD_RESCUE, pc.DASHBOARD_SHELTER, pc.DASHBOARD_MEDICAL,
+            pc.DASHBOARD_ADOPTION, pc.DASHBOARD_FOSTER, pc.DASHBOARD_VOLUNTEER,
+            pc.DASHBOARD_INVENTORY, pc.DASHBOARD_FINANCE, pc.DASHBOARD_DONOR,
         ],
     ),
     (
@@ -76,6 +82,7 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
             pc.RESCUE_CREATE, pc.RESCUE_READ, pc.RESCUE_UPDATE, pc.RESCUE_VERIFY, pc.RESCUE_DISPATCH,
             pc.VEHICLE_READ, pc.VEHICLE_ASSIGN,
             pc.PUBLIC_READ,
+            pc.DASHBOARD_RESCUE,
         ],
     ),
     (
@@ -86,6 +93,7 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
             pc.RESCUE_READ, pc.RESCUE_EXECUTE,
             pc.VEHICLE_READ,
             pc.PUBLIC_READ,
+            pc.DASHBOARD_RESCUE,
         ],
     ),
     (
@@ -98,6 +106,7 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
             pc.ADOPTION_READ,
             pc.INVENTORY_READ,
             pc.PUBLIC_READ,
+            pc.DASHBOARD_MEDICAL,
         ],
     ),
     (
@@ -111,6 +120,7 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
             pc.ADOPTION_READ,
             pc.INVENTORY_READ,
             pc.PUBLIC_READ,
+            pc.DASHBOARD_SHELTER,
         ],
     ),
     (
@@ -120,6 +130,7 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
         [
             pc.ADOPTION_READ, pc.ADOPTION_PROCESS, pc.ADOPTION_APPROVE, pc.ADOPTION_LOCK,
             pc.PUBLIC_READ,
+            pc.DASHBOARD_ADOPTION,
         ],
     ),
     (
@@ -130,6 +141,7 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
             pc.FOSTER_CREATE, pc.FOSTER_READ, pc.FOSTER_UPDATE, pc.FOSTER_APPROVE,
             pc.INVENTORY_READ,
             pc.PUBLIC_READ,
+            pc.DASHBOARD_FOSTER,
         ],
     ),
     (
@@ -139,6 +151,7 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
         [
             pc.VOLUNTEER_CREATE, pc.VOLUNTEER_READ, pc.VOLUNTEER_UPDATE, pc.VOLUNTEER_SCHEDULE,
             pc.PUBLIC_READ,
+            pc.DASHBOARD_VOLUNTEER,
         ],
     ),
     (
@@ -148,6 +161,7 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
         [
             pc.INVENTORY_CREATE, pc.INVENTORY_READ, pc.INVENTORY_UPDATE, pc.INVENTORY_DELETE,
             pc.PUBLIC_READ,
+            pc.DASHBOARD_INVENTORY,
         ],
     ),
     (
@@ -158,6 +172,7 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
             pc.FINANCE_READ, pc.FINANCE_CREATE, pc.FINANCE_RECONCILE,
             pc.DONATION_READ, pc.DONATION_MANAGE,
             pc.PUBLIC_READ,
+            pc.DASHBOARD_FINANCE,
         ],
     ),
     (
@@ -183,6 +198,7 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
         [
             pc.DONATION_READ,
             pc.PUBLIC_READ,
+            pc.DASHBOARD_DONOR,
         ],
     ),
     (
