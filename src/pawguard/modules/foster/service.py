@@ -10,6 +10,7 @@ from pawguard.core.search import SortParams
 from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
 from pawguard.modules.adoption.repository import AdoptionRepository
 from pawguard.modules.auth.models import AuthAuditEventType
+from pawguard.modules.auth.repository import RoleRepository, UserRoleRepository
 from pawguard.modules.dog.models import DogStatus
 from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.foster.models import (
@@ -43,6 +44,8 @@ class FosterService:
         self._dog_repo = dog_repo
         self._adoption_repo = adoption_repo or AdoptionRepository(repository._session)
         self._audit = audit_service
+        self._roles = RoleRepository(repository._session)
+        self._user_roles = UserRoleRepository(repository._session)
 
     async def apply_to_foster(
         self,
@@ -88,8 +91,18 @@ class FosterService:
             raise NotFoundError("Foster profile not found.")
 
         update_data = payload.model_dump(exclude_unset=True)
+        was_approved = profile.status == FosterStatus.APPROVED
         for key, value in update_data.items():
             setattr(profile, key, value)
+
+        # Coordinator approval (after the home inspection audit) is what
+        # actually unlocks self-service foster access - the "foster_family"
+        # role is granted here, not at application time, so an unvetted
+        # applicant can't self-escalate before being cleared.
+        if profile.status == FosterStatus.APPROVED and not was_approved:
+            role = await self._roles.get_by_name("foster_family")
+            if role is not None:
+                await self._user_roles.grant_role(profile.user_id, role.id)
 
         await self._repo._session.flush()
         res = await self._repo.get_profile_by_id(profile_id)

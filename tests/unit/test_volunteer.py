@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -80,6 +80,37 @@ class TestVolunteerService:
             await service.update_profile(uuid.uuid4(), VolunteerProfileUpdate())
 
     @pytest.mark.asyncio
+    async def test_approving_volunteer_grants_role(self, service, mock_repo):
+        profile_id = uuid.uuid4()
+        user_id = uuid.uuid4()
+        profile = VolunteerProfile(
+            id=profile_id, user_id=user_id, status=VolunteerStatus.APPLIED,
+            emergency_contact_name="A", emergency_contact_phone="+1",
+        )
+        mock_repo.get_profile_by_id.side_effect = [profile, profile]
+
+        volunteer_role = type("Role", (), {"id": uuid.uuid4(), "name": "volunteer"})()
+        with (
+            patch.object(service._roles, "get_by_name", AsyncMock(return_value=volunteer_role)),
+            patch.object(service._user_roles, "grant_role", AsyncMock()) as mock_grant,
+        ):
+            await service.update_profile(profile_id, VolunteerProfileUpdate(status=VolunteerStatus.ACTIVE))
+            mock_grant.assert_awaited_once_with(user_id, volunteer_role.id)
+
+    @pytest.mark.asyncio
+    async def test_updating_profile_without_activating_does_not_grant_role(self, service, mock_repo):
+        profile_id = uuid.uuid4()
+        profile = VolunteerProfile(
+            id=profile_id, user_id=uuid.uuid4(), status=VolunteerStatus.APPLIED,
+            emergency_contact_name="A", emergency_contact_phone="+1",
+        )
+        mock_repo.get_profile_by_id.side_effect = [profile, profile]
+
+        with patch.object(service._user_roles, "grant_role", AsyncMock()) as mock_grant:
+            await service.update_profile(profile_id, VolunteerProfileUpdate(skills="Grooming"))
+            mock_grant.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_get_profile(self, service, mock_repo):
         profile_id = uuid.uuid4()
         mock_repo.get_profile_by_id.return_value = VolunteerProfile(
@@ -128,7 +159,11 @@ class TestVolunteerService:
     @pytest.mark.asyncio
     async def test_join_shift(self, service, mock_repo):
         shift_id = uuid.uuid4()
+        volunteer_id = uuid.uuid4()
         now = datetime.now(UTC)
+        mock_repo.get_profile_by_id.return_value = VolunteerProfile(
+            id=volunteer_id, user_id=uuid.uuid4(), status=VolunteerStatus.ACTIVE,
+        )
         mock_repo.get_shift_by_id_for_update.return_value = VolunteerShift(
             id=shift_id, role_name="Walking", start_at=now, end_at=now, capacity=5,
         )
@@ -138,13 +173,27 @@ class TestVolunteerService:
         mock_repo.create_attendance.return_value = ShiftAttendance(
             id=att_id, shift_id=shift_id, volunteer_id=uuid.uuid4(),
         )
-        result = await service.join_shift(shift_id, uuid.uuid4())
+        result = await service.join_shift(shift_id, volunteer_id)
         assert result.shift_id == shift_id
+
+    @pytest.mark.asyncio
+    async def test_join_shift_not_approved_forbidden(self, service, mock_repo):
+        shift_id = uuid.uuid4()
+        volunteer_id = uuid.uuid4()
+        mock_repo.get_profile_by_id.return_value = VolunteerProfile(
+            id=volunteer_id, user_id=uuid.uuid4(), status=VolunteerStatus.APPLIED,
+        )
+        with pytest.raises(ForbiddenError, match="approved by a coordinator"):
+            await service.join_shift(shift_id, volunteer_id)
 
     @pytest.mark.asyncio
     async def test_join_shift_full(self, service, mock_repo):
         shift_id = uuid.uuid4()
+        volunteer_id = uuid.uuid4()
         now = datetime.now(UTC)
+        mock_repo.get_profile_by_id.return_value = VolunteerProfile(
+            id=volunteer_id, user_id=uuid.uuid4(), status=VolunteerStatus.ACTIVE,
+        )
         mock_repo.get_shift_by_id_for_update.return_value = VolunteerShift(
             id=shift_id, role_name="Walking", start_at=now, end_at=now, capacity=1,
         )
@@ -153,13 +202,16 @@ class TestVolunteerService:
             id=uuid.uuid4(), shift_id=shift_id, volunteer_id=uuid.uuid4(),
         )]
         with pytest.raises(ConflictError, match="maximum volunteer capacity"):
-            await service.join_shift(shift_id, uuid.uuid4())
+            await service.join_shift(shift_id, volunteer_id)
 
     @pytest.mark.asyncio
     async def test_join_shift_already_joined(self, service, mock_repo):
         shift_id = uuid.uuid4()
         volunteer_id = uuid.uuid4()
         now = datetime.now(UTC)
+        mock_repo.get_profile_by_id.return_value = VolunteerProfile(
+            id=volunteer_id, user_id=uuid.uuid4(), status=VolunteerStatus.ACTIVE,
+        )
         mock_repo.get_shift_by_id_for_update.return_value = VolunteerShift(
             id=shift_id, role_name="Walking", start_at=now, end_at=now, capacity=5,
         )

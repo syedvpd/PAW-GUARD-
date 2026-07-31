@@ -7,6 +7,7 @@ from pawguard.core.exceptions import ConflictError, ForbiddenError, NotFoundErro
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginationMeta
 from pawguard.core.search import SortParams
+from pawguard.modules.auth.repository import RoleRepository, UserRoleRepository
 from pawguard.modules.volunteer.models import (
     ShiftAttendance,
     VolunteerProfile,
@@ -24,6 +25,8 @@ from pawguard.modules.volunteer.schemas import (
 class VolunteerService:
     def __init__(self, repository: VolunteerRepository) -> None:
         self._repo = repository
+        self._roles = RoleRepository(repository._session)
+        self._user_roles = UserRoleRepository(repository._session)
 
     async def apply_to_volunteer(
         self, user_id: uuid.UUID, payload: VolunteerProfileCreate
@@ -57,8 +60,17 @@ class VolunteerService:
             raise NotFoundError("Volunteer profile not found.")
 
         update_data = payload.model_dump(exclude_unset=True)
+        was_active = profile.status == VolunteerStatus.ACTIVE
         for key, value in update_data.items():
             setattr(profile, key, value)
+
+        # Coordinator approval is what actually unlocks self-service
+        # volunteer access - the "volunteer" role is granted here, not at
+        # application time, so an unvetted applicant can't self-escalate.
+        if profile.status == VolunteerStatus.ACTIVE and not was_active:
+            role = await self._roles.get_by_name("volunteer")
+            if role is not None:
+                await self._user_roles.grant_role(profile.user_id, role.id)
 
         await self._repo._session.flush()
         res = await self._repo.get_profile_by_id(profile_id)
@@ -123,6 +135,15 @@ class VolunteerService:
         return list(shifts), meta
 
     async def join_shift(self, shift_id: uuid.UUID, volunteer_id: uuid.UUID) -> ShiftAttendance:
+        volunteer = await self._repo.get_profile_by_id(volunteer_id)
+        if volunteer is None:
+            raise NotFoundError("Volunteer profile not found.")
+        if volunteer.status != VolunteerStatus.ACTIVE:
+            raise ForbiddenError(
+                "Your volunteer application must be approved by a coordinator "
+                "before you can join shifts."
+            )
+
         # Lock the shift row first: this serializes concurrent joins near
         # capacity so the check-then-act below can't race (mirrors the same
         # fix already applied to kennel assignment and adoption approval).

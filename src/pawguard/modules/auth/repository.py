@@ -291,6 +291,25 @@ class UserRoleRepository:
             self._session.add(UserRole(user_id=user_id, role_id=rid))
         await self._session.flush()
 
+    async def grant_role(self, user_id: uuid.UUID, role_id: uuid.UUID) -> None:
+        """Additively grants a role, leaving the user's existing roles intact.
+
+        Used when a staff approval (volunteer/foster onboarding, etc.) should
+        unlock that module's self-service permissions without touching
+        whatever other roles the user already holds. Idempotent.
+        """
+        from pawguard.modules.auth.models import UserRole
+
+        existing = await self._session.execute(
+            select(UserRole).where(
+                UserRole.user_id == user_id, UserRole.role_id == role_id
+            )
+        )
+        if existing.scalar_one_or_none() is not None:
+            return
+        self._session.add(UserRole(user_id=user_id, role_id=role_id))
+        await self._session.flush()
+
 
 class OAuthAccountRepository:
     def __init__(self, session: AsyncSession) -> None:
