@@ -28,6 +28,7 @@ from pawguard.modules.auth.repository import (
     UserRoleRepository,
 )
 from pawguard.modules.auth.service import AdminService
+from pawguard.services.audit_service import AuditService
 
 admin_router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -38,6 +39,7 @@ def _get_admin_service(db: AsyncSession = Depends(get_db)) -> AdminService:
         role_repo=RoleRepository(db),
         permission_repo=PermissionRepository(db),
         user_role_repo=UserRoleRepository(db),
+        audit_service=AuditService(db),
     )
 
 

@@ -1,15 +1,25 @@
-"""API router for the Volunteer Management module. Routers only validate and call services (RULE-004)."""
+"""API router for the Volunteer Management module.
+
+Routers only validate and call services (RULE-004).
+"""
 
 import uuid
-from typing import Sequence
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from pawguard.core.responses import ApiResponse
+from pawguard.core.bulk import (
+    BulkDeleteRequest,
+    BulkDeleteResponse,
+    BulkStatusUpdateRequest,
+    BulkStatusUpdateResponse,
+)
+from pawguard.core.exceptions import parse_enum
+from pawguard.core.pagination import PageParams, page_params
+from pawguard.core.responses import ApiResponse, PaginatedResponse
+from pawguard.core.search import SortParams, sort_params
 from pawguard.db.session import get_db
-from pawguard.modules.auth.dependencies import get_current_user, CurrentUser
-from pawguard.modules.auth.models import User
+from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.rbac import require_permission
 from pawguard.modules.volunteer.models import VolunteerStatus
 from pawguard.modules.volunteer.repository import VolunteerRepository
@@ -105,9 +115,10 @@ async def join_shift(
 )
 async def check_in(
     attendance_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
     service: VolunteerService = Depends(get_volunteer_service),
 ) -> ApiResponse[ShiftAttendanceResponse]:
-    attendance = await service.check_in(attendance_id)
+    attendance = await service.check_in(attendance_id, current_user.id)
     return ApiResponse(
         data=ShiftAttendanceResponse.model_validate(attendance),
         message="Checked in for shift.",
@@ -120,9 +131,10 @@ async def check_in(
 )
 async def check_out(
     attendance_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
     service: VolunteerService = Depends(get_volunteer_service),
 ) -> ApiResponse[ShiftAttendanceResponse]:
-    attendance = await service.check_out(attendance_id)
+    attendance = await service.check_out(attendance_id, current_user.id)
     return ApiResponse(
         data=ShiftAttendanceResponse.model_validate(attendance),
         message="Checked out from shift.",
@@ -131,24 +143,104 @@ async def check_out(
 
 @router.get(
     "/shifts",
-    response_model=ApiResponse[list[VolunteerShiftResponse]],
+    response_model=PaginatedResponse[VolunteerShiftResponse],
     dependencies=[Depends(require_permission("public:read"))],
 )
 async def list_shifts(
+    params: PageParams = Depends(page_params),
+    role_name: str | None = Query(None, description="Filter by shift role"),
+    sort: SortParams = Depends(sort_params),
     service: VolunteerService = Depends(get_volunteer_service),
-) -> ApiResponse[list[VolunteerShiftResponse]]:
-    shifts = await service.list_shifts()
-    return ApiResponse(data=[VolunteerShiftResponse.model_validate(s) for s in shifts])
+) -> PaginatedResponse[VolunteerShiftResponse]:
+    shifts, meta = await service.list_shifts(page_params=params, role_name=role_name, sort=sort)
+    return PaginatedResponse(
+        data=[VolunteerShiftResponse.model_validate(s) for s in shifts],
+        meta=meta,
+    )
+
+
+@router.get(
+    "/shifts/{shift_id}/attendance",
+    response_model=PaginatedResponse[ShiftAttendanceResponse],
+    dependencies=[Depends(require_permission("volunteer:read"))],
+)
+async def list_shift_attendance(
+    shift_id: uuid.UUID,
+    params: PageParams = Depends(page_params),
+    service: VolunteerService = Depends(get_volunteer_service),
+) -> PaginatedResponse[ShiftAttendanceResponse]:
+    records, meta = await service.list_attendance(shift_id, page_params=params)
+    return PaginatedResponse(
+        data=[ShiftAttendanceResponse.model_validate(r) for r in records],
+        meta=meta,
+    )
 
 
 @router.get(
     "",
-    response_model=ApiResponse[list[VolunteerProfileResponse]],
+    response_model=PaginatedResponse[VolunteerProfileResponse],
     dependencies=[Depends(require_permission("volunteer:read"))],
 )
 async def list_profiles(
-    status: VolunteerStatus | None = None,
+    params: PageParams = Depends(page_params),
+    status: VolunteerStatus | None = Query(None, description="Filter by volunteer status"),
+    search: str | None = Query(None, description="Search by skills or availability"),
+    sort: SortParams = Depends(sort_params),
     service: VolunteerService = Depends(get_volunteer_service),
-) -> ApiResponse[list[VolunteerProfileResponse]]:
-    profiles = await service.list_profiles(status)
-    return ApiResponse(data=[VolunteerProfileResponse.model_validate(p) for p in profiles])
+) -> PaginatedResponse[VolunteerProfileResponse]:
+    profiles, meta = await service.list_profiles(
+        page_params=params,
+        status=status,
+        search=search,
+        sort=sort,
+    )
+    return PaginatedResponse(
+        data=[VolunteerProfileResponse.model_validate(p) for p in profiles],
+        meta=meta,
+    )
+
+
+@router.delete(
+    "/{profile_id}",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(require_permission("volunteer:update"))],
+)
+async def soft_delete_profile(
+    profile_id: uuid.UUID,
+    service: VolunteerService = Depends(get_volunteer_service),
+) -> ApiResponse[None]:
+    await service.soft_delete_profile(profile_id)
+    return ApiResponse(message="Volunteer profile deleted.")
+
+
+@router.post(
+    "/bulk/delete",
+    response_model=BulkDeleteResponse,
+    dependencies=[Depends(require_permission("volunteer:update"))],
+)
+async def bulk_delete_profiles(
+    payload: BulkDeleteRequest,
+    service: VolunteerService = Depends(get_volunteer_service),
+) -> BulkDeleteResponse:
+    deleted = await service.bulk_delete_profiles(payload.ids)
+    return BulkDeleteResponse(
+        message=f"{deleted} volunteer profile(s) deleted.",
+        deleted_count=deleted,
+    )
+
+
+@router.post(
+    "/bulk/status",
+    response_model=BulkStatusUpdateResponse,
+    dependencies=[Depends(require_permission("volunteer:update"))],
+)
+async def bulk_update_profile_status(
+    payload: BulkStatusUpdateRequest,
+    service: VolunteerService = Depends(get_volunteer_service),
+) -> BulkStatusUpdateResponse:
+    status = parse_enum(VolunteerStatus, payload.status)
+    updated = await service.bulk_update_profile_status(payload.ids, status)
+    return BulkStatusUpdateResponse(
+        message=f"{updated} volunteer profile(s) updated.",
+        updated_count=updated,
+    )

@@ -19,7 +19,10 @@ from argon2.exceptions import InvalidHash, VerificationError, VerifyMismatchErro
 
 from pawguard.core.config import get_settings
 
-_password_hasher = PasswordHasher()
+# OWASP-recommended low-cost Argon2id profile (19 MiB, t=2, p=1) instead of
+# argon2-cffi's default (64 MiB, t=3, p=4), which cost 500ms-1s+ per hash on
+# Render's shared/throttled CPU and dominated login-endpoint latency.
+_password_hasher = PasswordHasher(time_cost=2, memory_cost=19_456, parallelism=1)
 
 OPAQUE_TOKEN_BYTES = 48
 

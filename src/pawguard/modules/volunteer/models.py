@@ -3,13 +3,17 @@
 import uuid
 from datetime import datetime
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pawguard.db.base import Base
 from pawguard.db.mixins import SoftDeleteMixin, TimestampMixin, UUIDPkMixin
+
+if TYPE_CHECKING:
+    from pawguard.modules.auth.models import User
 
 
 class VolunteerStatus(StrEnum):
@@ -35,9 +39,20 @@ class VolunteerProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     emergency_contact_name: Mapped[str] = mapped_column(String(255), nullable=False)
     emergency_contact_phone: Mapped[str] = mapped_column(String(32), nullable=False)
 
-    skills: Mapped[str | None] = mapped_column(Text, nullable=True)  # comma separated e.g. "Grooming,Transport"
-    availability: Mapped[str | None] = mapped_column(String(255), nullable=True)  # "Weekends", "Evenings", etc.
+    # comma separated e.g. "Grooming,Transport,Photography,Training"
+    skills: Mapped[str | None] = mapped_column(Text, nullable=True)
+    availability: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )  # "Weekends", "Evenings", etc.
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Onboarding/skills matrix (PRR 3.9) - previously absent from the model.
+    background_check_completed: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    background_check_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    medical_conditions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    animal_handling_experience: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     user: Mapped["User"] = relationship("User", lazy="joined")
     attendances: Mapped[list["ShiftAttendance"]] = relationship(
@@ -48,8 +63,11 @@ class VolunteerProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
 class VolunteerShift(UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "volunteer_shifts"
 
-    shelter_facility_id: Mapped[uuid.UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
-    role_name: Mapped[str] = mapped_column(String(64), nullable=False)  # Feeding, Cleaning, Walking, Admin
+    shelter_facility_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=True
+    )
+    # Feeding, Cleaning, Walking, Admin
+    role_name: Mapped[str] = mapped_column(String(64), nullable=False)
     start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     capacity: Mapped[int] = mapped_column(Integer, default=5, nullable=False)

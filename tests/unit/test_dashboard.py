@@ -1,0 +1,68 @@
+"""Unit tests for DashboardRepository aggregation queries."""
+
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from pawguard.modules.admin.dashboard_repository import DashboardRepository
+
+
+class TestDashboardRepository:
+    @pytest.fixture
+    def mock_session(self):
+        session = AsyncMock()
+        session.execute = AsyncMock()
+        return session
+
+    @pytest.fixture
+    def repo(self, mock_session):
+        return DashboardRepository(mock_session)
+
+    async def test_get_total_users_count(self, repo, mock_session):
+        mock_result = MagicMock()
+        mock_result.scalar_one.return_value = 42
+        mock_session.execute.return_value = mock_result
+        count = await repo.get_total_users_count()
+        assert count == 42
+
+    async def test_get_active_users_count(self, repo, mock_session):
+        mock_result = MagicMock()
+        mock_result.scalar_one.return_value = 30
+        mock_session.execute.return_value = mock_result
+        count = await repo.get_active_users_count()
+        assert count == 30
+
+    async def test_get_shelter_occupancy(self, repo, mock_session):
+        mock_capacity = MagicMock()
+        mock_capacity.scalar_one.return_value = 100
+        mock_occupied = MagicMock()
+        mock_occupied.scalar_one.return_value = 60
+
+        call_count = 0
+
+        async def side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return mock_capacity
+            return mock_occupied
+
+        mock_session.execute = AsyncMock(side_effect=side_effect)
+        result = await repo.get_shelter_occupancy()
+        assert result["capacity"] == 100
+        assert result["occupied"] == 60
+        assert result["occupancy_pct"] == 60.0
+
+    async def test_get_inventory_alerts_no_alerts(self, repo, mock_session):
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        mock_session.execute.return_value = mock_result
+        alerts = await repo.get_inventory_alerts()
+        assert alerts == []
+
+    async def test_count_expiring_inventory(self, repo, mock_session):
+        mock_result = MagicMock()
+        mock_result.scalar_one.return_value = 5
+        mock_session.execute.return_value = mock_result
+        count = await repo.count_expiring_inventory(days=30)
+        assert count == 5

@@ -20,8 +20,8 @@ class AuditService:
         *,
         event_type: AuthAuditEventType,
         actor_id: uuid.UUID | None,
-        ip_address: str | None,
-        user_agent: str | None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> AuthAuditLog:
         entry = AuthAuditLog(

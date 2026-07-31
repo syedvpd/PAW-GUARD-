@@ -26,6 +26,10 @@ dependencies = [
     "orjson>=3.10.0",
     "email-validator>=2.2.0",
     "python-multipart>=0.0.17",
+    "reportlab>=4.2.0",
+    "openpyxl>=3.1.0",
+    "weasyprint>=62.3.0",
+    "razorpay>=2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -60,7 +64,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC", "S"]
 ignore = ["S101", "B008", "S105"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "S105", "S106"]
+"tests/**" = ["S101", "S105", "S106", "E501"]
 
 [tool.mypy]
 python_version = "3.13"

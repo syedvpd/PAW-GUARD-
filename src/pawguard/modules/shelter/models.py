@@ -3,12 +3,26 @@
 import uuid
 from datetime import datetime
 from enum import StrEnum
+
 from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from pawguard.db.base import Base
 from pawguard.db.mixins import SoftDeleteMixin, TimestampMixin, UUIDPkMixin
+
+
+class FacilityStatus(StrEnum):
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    MAINTENANCE = "maintenance"
+
+
+class FacilityType(StrEnum):
+    SHELTER = "shelter"
+    CLINIC = "clinic"
+    FOSTER_HOME = "foster_home"
+    PARTNER = "partner"
 
 
 class KennelSanitationState(StrEnum):
@@ -31,15 +45,25 @@ class ShelterFacility(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     address: Mapped[str] = mapped_column(Text, nullable=False)
     phone: Mapped[str] = mapped_column(String(32), nullable=False)
     total_capacity: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    status: Mapped[FacilityStatus] = mapped_column(
+        String(32), default=FacilityStatus.ACTIVE, nullable=False, index=True
+    )
+    facility_type: Mapped[FacilityType] = mapped_column(
+        String(32), default=FacilityType.SHELTER, nullable=False, index=True
+    )
 
 
 class ShelterSection(UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "shelter_sections"
 
     facility_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("shelter_facilities.id", ondelete="CASCADE"), nullable=False
+        PG_UUID(as_uuid=True),
+        ForeignKey("shelter_facilities.id", ondelete="CASCADE"),
+        nullable=False,
     )
-    name: Mapped[str] = mapped_column(String(128), nullable=False)  # Quarantine, Isolation, general, etc.
+    name: Mapped[str] = mapped_column(
+        String(128), nullable=False
+    )  # Quarantine, Isolation, general, etc.
     capacity: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
 
 
@@ -63,10 +87,14 @@ class FacilityTransfer(UUIDPkMixin, TimestampMixin, Base):
         PG_UUID(as_uuid=True), ForeignKey("dog_profiles.id", ondelete="CASCADE"), nullable=False
     )
     from_facility_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("shelter_facilities.id", ondelete="CASCADE"), nullable=False
+        PG_UUID(as_uuid=True),
+        ForeignKey("shelter_facilities.id", ondelete="CASCADE"),
+        nullable=False,
     )
     to_facility_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("shelter_facilities.id", ondelete="CASCADE"), nullable=False
+        PG_UUID(as_uuid=True),
+        ForeignKey("shelter_facilities.id", ondelete="CASCADE"),
+        nullable=False,
     )
     transferred_by: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
@@ -75,6 +103,21 @@ class FacilityTransfer(UUIDPkMixin, TimestampMixin, Base):
         String(32), default=TransferStatus.PENDING, nullable=False
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Dual confirmation: a transfer only completes once both the sending and
+    # the receiving facility have separately confirmed it (PRR 3.6).
+    sender_confirmed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    sender_confirmed_by: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    receiver_confirmed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    receiver_confirmed_by: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
 
 class DailyCareLog(UUIDPkMixin, TimestampMixin, Base):

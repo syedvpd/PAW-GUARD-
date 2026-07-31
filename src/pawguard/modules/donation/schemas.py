@@ -1,17 +1,28 @@
 """Pydantic schemas for the Donation Management module."""
 
 import uuid
-from datetime import datetime
-from pydantic import BaseModel, Field
+from datetime import date, datetime
 
+from pydantic import BaseModel, ConfigDict, Field
+
+from pawguard.core.config import get_settings
 from pawguard.modules.auth.schemas import UserProfile
 from pawguard.modules.dog.schemas import DogProfileResponse
-from pawguard.modules.donation.models import DonationStatus, DonationType
+from pawguard.modules.donation.models import DonationStatus, DonationType, SponsorshipStatus
+
+
+def _default_currency() -> str:
+    return get_settings().payment_currency
 
 
 class DonorProfileCreate(BaseModel):
-    tax_identifier: str | None = Field(None, max_length=64)
-    notes: str | None = None
+    tax_identifier: str | None = Field(None, max_length=64, examples=["ABCDE1234F"])
+    notes: str | None = Field(None, examples=["Prefers monthly recurring donations."])
+
+
+class DonorProfileUpdate(BaseModel):
+    tax_identifier: str | None = Field(None, max_length=64, examples=["ABCDE1234F"])
+    notes: str | None = Field(None, examples=["Updated preference: quarterly giving."])
 
 
 class DonorProfileResponse(BaseModel):
@@ -23,16 +34,23 @@ class DonorProfileResponse(BaseModel):
     updated_at: datetime
     user: UserProfile | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class DonationCreate(BaseModel):
     dog_id: uuid.UUID | None = None
-    amount: float = Field(..., ge=1.0)
-    currency: str = Field("USD", min_length=3, max_length=3)
+    amount: float = Field(..., ge=1.0, examples=[50.0])
+    currency: str = Field(
+        default_factory=_default_currency, min_length=3, max_length=3, examples=["USD"]
+    )
     donation_type: DonationType = DonationType.ONE_TIME
-    notes: str | None = None
+    notes: str | None = Field(None, examples=["In memory of Rex."])
+
+
+class DonationStatusUpdate(BaseModel):
+    status: DonationStatus = Field(
+        ..., description="New status for the donation", examples=["success"]
+    )
 
 
 class DonationResponse(BaseModel):
@@ -45,8 +63,57 @@ class DonationResponse(BaseModel):
     status: DonationStatus
     transaction_id: str | None
     notes: str | None
+    payment_provider: str | None
+    receipt_file_key: str | None
     created_at: datetime
     dog: DogProfileResponse | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DonationOrderResponse(BaseModel):
+    """Returned after initiating a donation - the client uses this to open the
+    provider's checkout (e.g. Razorpay Checkout.js) and complete payment."""
+
+    donation_id: uuid.UUID
+    provider: str
+    order_id: str
+    amount: float
+    currency: str
+    checkout_key: str
+
+
+class DonationVerifyRequest(BaseModel):
+    donation_id: uuid.UUID
+    gateway_order_id: str = Field(..., examples=["order_NqXJz9k8bYQm2c"])
+    gateway_payment_id: str = Field(..., examples=["pay_NqXK1a7fRZ3wLp"])
+    gateway_signature: str = Field(..., examples=["9f8c3e1a2b4d5e6f7a8b9c0d1e2f3a4b"])
+
+
+class SponsorshipCreate(BaseModel):
+    dog_id: uuid.UUID
+    monthly_amount: float = Field(..., ge=1.0, examples=[25.0])
+    currency: str = Field(
+        default_factory=_default_currency, min_length=3, max_length=3, examples=["USD"]
+    )
+
+
+class SponsorshipStatusUpdate(BaseModel):
+    status: SponsorshipStatus = Field(..., examples=["paused"])
+
+
+class SponsorshipResponse(BaseModel):
+    id: uuid.UUID
+    donor_id: uuid.UUID
+    dog_id: uuid.UUID
+    monthly_amount: float
+    currency: str
+    status: SponsorshipStatus
+    next_charge_date: date
+    started_at: datetime
+    cancelled_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+    dog: DogProfileResponse | None = None
+
+    model_config = ConfigDict(from_attributes=True)

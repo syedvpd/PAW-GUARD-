@@ -3,12 +3,13 @@
 import uuid
 from datetime import date, datetime
 from enum import StrEnum
+
 from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from pawguard.db.base import Base
-from pawguard.db.mixins import TimestampMixin, UUIDPkMixin
+from pawguard.db.mixins import SoftDeleteMixin, TimestampMixin, UUIDPkMixin
 
 
 class VehicleStatus(StrEnum):
@@ -17,7 +18,7 @@ class VehicleStatus(StrEnum):
     OUT_OF_SERVICE = "out_of_service"
 
 
-class Vehicle(UUIDPkMixin, TimestampMixin, Base):
+class Vehicle(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "vehicles"
 
     make_model: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -29,6 +30,11 @@ class Vehicle(UUIDPkMixin, TimestampMixin, Base):
     primary_driver_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+
+    insurance_provider: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    insurance_policy_number: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    insurance_expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    insurance_contact_phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
 
 class FleetMaintenance(UUIDPkMixin, TimestampMixin, Base):
@@ -46,7 +52,8 @@ class FleetMaintenance(UUIDPkMixin, TimestampMixin, Base):
 class EquipmentCheckout(UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "equipment_checkouts"
 
-    equipment_name: Mapped[str] = mapped_column(String(255), nullable=False)  # Net Gun, Trap, Crate, etc.
+    # Net Gun, Trap, Crate, etc.
+    equipment_name: Mapped[str] = mapped_column(String(255), nullable=False)
     assigned_to_agent_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
@@ -56,3 +63,22 @@ class EquipmentCheckout(UUIDPkMixin, TimestampMixin, Base):
     checked_out_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     returned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class FuelLog(UUIDPkMixin, TimestampMixin, Base):
+    __tablename__ = "fuel_logs"
+
+    vehicle_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("vehicles.id", ondelete="CASCADE"), nullable=False
+    )
+    filled_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    fuel_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    volume_litres: Mapped[float] = mapped_column(Numeric(8, 2), nullable=False)
+    cost: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    mileage_at_fill: Mapped[int] = mapped_column(Integer, nullable=False)
+    vendor: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    receipt_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    filled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

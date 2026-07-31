@@ -26,6 +26,7 @@ from pawguard.modules.auth.models import UserSession
 from pawguard.modules.auth.repository import (
     EmailVerificationTokenRepository,
     MFARepository,
+    OAuthAccountRepository,
     PasswordResetTokenRepository,
     RefreshTokenRepository,
     SessionRepository,
@@ -40,6 +41,9 @@ from pawguard.modules.auth.schemas import (
     MFALoginVerifyRequest,
     MFARequiredResponse,
     MFAVerifyRequest,
+    OAuthAccountInfo,
+    OAuthLinkRequest,
+    OAuthLoginRequest,
     PasswordResetConfirmRequest,
     PasswordResetRequest,
     RefreshRequest,
@@ -47,6 +51,7 @@ from pawguard.modules.auth.schemas import (
     RegisterRequest,
     SessionInfo,
     UserProfile,
+    UserProfileUpdate,
 )
 from pawguard.modules.auth.service import AuthenticatedTokens, AuthService, RequestContext
 from pawguard.services.audit_service import AuditService
@@ -54,9 +59,26 @@ from pawguard.workers.pool import get_arq_pool
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+register_rate_limiter = RateLimiter(key_prefix="register", limit=5, window_seconds=3600)
 login_rate_limiter = RateLimiter(key_prefix="login", limit=10, window_seconds=60)
 refresh_rate_limiter = RateLimiter(key_prefix="refresh", limit=30, window_seconds=60)
 reset_rate_limiter = RateLimiter(key_prefix="password_reset", limit=5, window_seconds=3600)
+# Short numeric codes (TOTP/backup codes) are brute-forceable without a tight throttle.
+mfa_verify_rate_limiter = RateLimiter(key_prefix="mfa_verify", limit=10, window_seconds=300)
+mfa_enroll_confirm_rate_limiter = RateLimiter(
+    key_prefix="mfa_enroll_confirm", limit=10, window_seconds=300
+)
+mfa_disable_rate_limiter = RateLimiter(key_prefix="mfa_disable", limit=10, window_seconds=300)
+password_change_rate_limiter = RateLimiter(
+    key_prefix="password_change", limit=10, window_seconds=300
+)
+reset_confirm_rate_limiter = RateLimiter(
+    key_prefix="password_reset_confirm", limit=10, window_seconds=300
+)
+email_verify_confirm_rate_limiter = RateLimiter(
+    key_prefix="email_verify_confirm", limit=10, window_seconds=300
+)
+oauth_login_rate_limiter = RateLimiter(key_prefix="oauth_login", limit=10, window_seconds=60)
 
 
 def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
@@ -67,6 +89,7 @@ def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
         mfa_repo=MFARepository(db),
         password_reset_repo=PasswordResetTokenRepository(db),
         email_verification_repo=EmailVerificationTokenRepository(db),
+        oauth_account_repo=OAuthAccountRepository(db),
         audit_service=AuditService(db),
     )
 
@@ -130,7 +153,10 @@ def _to_login_response(
 
 
 @router.post(
-    "/register", response_model=ApiResponse[UserProfile], status_code=status.HTTP_201_CREATED
+    "/register",
+    response_model=ApiResponse[UserProfile],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(register_rate_limiter)],
 )
 async def register(
     payload: RegisterRequest,
@@ -194,7 +220,11 @@ async def login(
     return ApiResponse(data=_to_login_response(result, include_refresh_in_body=not is_web))
 
 
-@router.post("/mfa/verify", response_model=ApiResponse[LoginResponse])
+@router.post(
+    "/mfa/verify",
+    response_model=ApiResponse[LoginResponse],
+    dependencies=[Depends(mfa_verify_rate_limiter)],
+)
 async def verify_mfa_login(
     payload: MFALoginVerifyRequest,
     request: Request,
@@ -295,6 +325,28 @@ async def get_me(current: CurrentUser = Depends(get_current_user)) -> ApiRespons
     )
 
 
+@router.put("/me", response_model=ApiResponse[UserProfile])
+async def update_profile(
+    payload: UserProfileUpdate,
+    current: CurrentUser = Depends(get_current_user),
+    auth_service: AuthService = Depends(get_auth_service),
+) -> ApiResponse[UserProfile]:
+    user = await auth_service.update_profile(
+        current.user.id, full_name=payload.full_name, phone=payload.phone
+    )
+    return ApiResponse(
+        data=UserProfile(
+            id=user.id,
+            email=user.email,
+            full_name=user.full_name,
+            is_verified=user.is_verified,
+            mfa_enabled=user.mfa_enabled,
+            roles=[r.name for r in user.roles],
+        ),
+        message="Profile updated.",
+    )
+
+
 @router.get("/sessions", response_model=ApiResponse[list[SessionInfo]])
 async def list_sessions(
     current: CurrentUser = Depends(get_current_user),
@@ -324,7 +376,11 @@ async def revoke_session(
     return ApiResponse(message="Session revoked.")
 
 
-@router.post("/password/change", response_model=ApiResponse[None])
+@router.post(
+    "/password/change",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(password_change_rate_limiter)],
+)
 async def change_password(
     payload: ChangePasswordRequest,
     request: Request,
@@ -364,7 +420,11 @@ async def request_password_reset(
     return ApiResponse(message="If that email exists, a reset link has been sent.")
 
 
-@router.post("/password/reset/confirm", response_model=ApiResponse[None])
+@router.post(
+    "/password/reset/confirm",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(reset_confirm_rate_limiter)],
+)
 async def confirm_password_reset(
     payload: PasswordResetConfirmRequest,
     request: Request,
@@ -378,7 +438,11 @@ async def confirm_password_reset(
     return ApiResponse(message="Password has been reset.")
 
 
-@router.post("/email/verify/confirm", response_model=ApiResponse[None])
+@router.post(
+    "/email/verify/confirm",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(email_verify_confirm_rate_limiter)],
+)
 async def confirm_email_verification(
     payload: EmailVerificationConfirmRequest,
     request: Request,
@@ -411,7 +475,11 @@ async def enroll_mfa(
     return ApiResponse(data=MFAEnrollResponse(secret=secret, provisioning_uri=uri))
 
 
-@router.post("/mfa/enroll/confirm", response_model=ApiResponse[None])
+@router.post(
+    "/mfa/enroll/confirm",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(mfa_enroll_confirm_rate_limiter)],
+)
 async def confirm_mfa_enrollment(
     payload: MFAVerifyRequest,
     request: Request,
@@ -422,3 +490,89 @@ async def confirm_mfa_enrollment(
         user=current.user, code=payload.code, ctx=_build_request_context(request)
     )
     return ApiResponse(message="MFA enabled.")
+
+
+@router.post(
+    "/mfa/disable",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(mfa_disable_rate_limiter)],
+)
+async def disable_mfa(
+    request: Request,
+    current: CurrentUser = Depends(get_current_user),
+    auth_service: AuthService = Depends(get_auth_service),
+) -> ApiResponse[None]:
+    await auth_service.disable_mfa(user=current.user, ctx=_build_request_context(request))
+    return ApiResponse(message="MFA disabled.")
+
+
+# ── OAuth / Social Login ──────────────────────────────────────────────────────
+
+
+@router.post(
+    "/oauth/login",
+    response_model=ApiResponse[LoginResponse],
+    dependencies=[Depends(oauth_login_rate_limiter)],
+)
+async def oauth_login(
+    payload: OAuthLoginRequest,
+    request: Request,
+    response: Response,
+    client_type: str | None = Header(default=None, alias=CLIENT_TYPE_HEADER),
+    auth_service: AuthService = Depends(get_auth_service),
+) -> ApiResponse[LoginResponse]:
+    tokens = await auth_service.oauth_login(
+        provider=payload.provider,
+        provider_token=payload.provider_token,
+        device=payload.device,
+        ctx=_build_request_context(request),
+    )
+    is_web = _is_web_client(client_type)
+    if is_web:
+        _set_auth_cookies(
+            response, access_token=tokens.access_token, refresh_token=tokens.refresh_token
+        )
+    return ApiResponse(data=_to_login_response(tokens, include_refresh_in_body=not is_web))
+
+
+@router.get("/oauth/accounts", response_model=ApiResponse[list[OAuthAccountInfo]])
+async def list_oauth_accounts(
+    current: CurrentUser = Depends(get_current_user),
+    auth_service: AuthService = Depends(get_auth_service),
+) -> ApiResponse[list[OAuthAccountInfo]]:
+    accounts = await auth_service.list_oauth_accounts(user_id=current.id)
+    return ApiResponse(
+        data=[OAuthAccountInfo.model_validate(a, from_attributes=True) for a in accounts]
+    )
+
+
+@router.post("/oauth/link", response_model=ApiResponse[OAuthAccountInfo])
+async def link_oauth_account(
+    payload: OAuthLinkRequest,
+    request: Request,
+    current: CurrentUser = Depends(get_current_user),
+    auth_service: AuthService = Depends(get_auth_service),
+) -> ApiResponse[OAuthAccountInfo]:
+    account = await auth_service.link_oauth_account(
+        user_id=current.id,
+        provider=payload.provider,
+        provider_token=payload.provider_token,
+        ctx=_build_request_context(request),
+    )
+    return ApiResponse(
+        data=OAuthAccountInfo.model_validate(account, from_attributes=True),
+        message=f"{payload.provider.capitalize()} account linked.",
+    )
+
+
+@router.delete("/oauth/accounts/{account_id}", response_model=ApiResponse[None])
+async def unlink_oauth_account(
+    account_id: uuid.UUID,
+    request: Request,
+    current: CurrentUser = Depends(get_current_user),
+    auth_service: AuthService = Depends(get_auth_service),
+) -> ApiResponse[None]:
+    await auth_service.unlink_oauth_account(
+        user_id=current.id, account_id=account_id, ctx=_build_request_context(request)
+    )
+    return ApiResponse(message="OAuth account unlinked.")

@@ -5,21 +5,22 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import RedirectResponse
 from sqlalchemy import text
-from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from pawguard.api.v1.router import api_v1_router
 from pawguard.core.config import get_settings
 from pawguard.core.exceptions import register_exception_handlers
 from pawguard.core.logging import configure_logging, get_logger
 from pawguard.core.middleware import (
+    RequestBodySizeMiddleware,
     RequestIDMiddleware,
     RequestLoggingMiddleware,
     SecurityHeadersMiddleware,
 )
 from pawguard.core.responses import ApiResponse
 from pawguard.db.session import engine
-from pawguard.modules.admin import admin_dashboard_router
 from pawguard.redis.client import ping_redis
 
 logger = get_logger(__name__)
@@ -47,8 +48,8 @@ async def _seed_roles() -> None:
         if exists is not None:
             return
 
-    from scripts.seed_roles_and_permissions import seed
-    await seed()
+    from scripts.seed_roles_and_permissions import seed_db
+    await seed_db("Startup", get_settings().database_url)
 
 
 def create_app() -> FastAPI:
@@ -72,13 +73,17 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts_list)
     app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(RequestBodySizeMiddleware)
     app.add_middleware(RequestLoggingMiddleware)
     app.add_middleware(RequestIDMiddleware)
 
     register_exception_handlers(app)
 
     app.include_router(api_v1_router, prefix=settings.api_v1_prefix)
-    app.include_router(admin_dashboard_router)
+
+    @app.get("/", include_in_schema=False)
+    async def redirect_to_docs() -> RedirectResponse:
+        return RedirectResponse(url="/docs")
 
     @app.get("/health", response_model=ApiResponse[dict[str, str]])
     async def health() -> ApiResponse[dict[str, str]]:

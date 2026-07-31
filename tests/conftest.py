@@ -77,6 +77,15 @@ async def engine() -> AsyncGenerator[AsyncEngine]:
         poolclass=NullPool,
         connect_args={"statement_cache_size": 0},
     )
+    # Schema must already be migrated (`alembic upgrade head`) before running
+    # these tests. Do NOT create tables from ORM metadata here: this database
+    # is shared with local dev (no separate test DB is configured), and
+    # Base.metadata.create_all only creates missing tables - it never adds
+    # new columns to existing ones, and it bypasses alembic_version tracking
+    # entirely. That previously desynced alembic_version from the real
+    # physical schema and left new columns (e.g. inventory_items.unit_cost)
+    # silently missing. If a required table doesn't exist, the fix is to add
+    # or run a migration, not to route around Alembic here.
     yield eng
     await eng.dispose()
 

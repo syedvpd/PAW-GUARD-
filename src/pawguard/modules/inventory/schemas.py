@@ -2,18 +2,20 @@
 
 import uuid
 from datetime import date, datetime
-from pydantic import BaseModel, Field, ConfigDict
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from pawguard.modules.inventory.models import ItemCategory, MovementType, RequisitionStatus
 
 
 class InventoryItemCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=255)
-    category: ItemCategory
-    quantity: float = Field(0.0, ge=0.0)
-    unit: str = Field(..., min_length=1, max_length=32)
-    reorder_threshold: float = Field(10.0, ge=0.0)
-    expiry_date: date | None = None
+    name: str = Field(..., min_length=1, max_length=255, examples=["Rabies Vaccine"])
+    category: ItemCategory = Field(..., examples=["vaccine"])
+    quantity: float = Field(0.0, ge=0.0, examples=[50.0])
+    unit: str = Field(..., min_length=1, max_length=32, examples=["vial"])
+    reorder_threshold: float = Field(10.0, ge=0.0, examples=[10.0])
+    expiry_date: date | None = Field(None, examples=["2027-03-01"])
+    unit_cost: float = Field(0.0, ge=0.0, examples=[4.50])
 
 
 class InventoryItemResponse(BaseModel):
@@ -24,6 +26,7 @@ class InventoryItemResponse(BaseModel):
     unit: str
     reorder_threshold: float
     expiry_date: date | None
+    unit_cost: float
     created_at: datetime
     updated_at: datetime
 
@@ -32,9 +35,11 @@ class InventoryItemResponse(BaseModel):
 
 class InventoryMovementCreate(BaseModel):
     item_id: uuid.UUID
-    movement_type: MovementType
-    quantity: float = Field(..., gt=0.0)
-    notes: str | None = None
+    movement_type: MovementType = Field(..., examples=["consumption"])
+    quantity: float = Field(..., gt=0.0, examples=[5.0])
+    notes: str | None = Field(None, examples=["Used during morning treatment rounds."])
+    reference_type: str | None = Field(None, examples=["medical_treatment"])
+    reference_id: uuid.UUID | None = None
 
 
 class InventoryMovementResponse(BaseModel):
@@ -44,6 +49,8 @@ class InventoryMovementResponse(BaseModel):
     movement_type: MovementType
     quantity: float
     notes: str | None
+    reference_type: str | None
+    reference_id: uuid.UUID | None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -51,7 +58,7 @@ class InventoryMovementResponse(BaseModel):
 
 class RequisitionOrderCreate(BaseModel):
     item_id: uuid.UUID
-    quantity: float = Field(..., gt=0.0)
+    quantity: float = Field(..., gt=0.0, examples=[100.0])
 
 
 class RequisitionOrderResponse(BaseModel):
@@ -64,3 +71,17 @@ class RequisitionOrderResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class InventoryItemUpdate(BaseModel):
+    name: str | None = Field(None, min_length=1, max_length=255, examples=["Rabies Vaccine"])
+    category: ItemCategory | None = Field(None, examples=["vaccine"])
+    quantity: float | None = Field(None, ge=0.0, examples=[45.0])
+    unit: str | None = Field(None, min_length=1, max_length=32, examples=["vial"])
+    reorder_threshold: float | None = Field(None, ge=0.0, examples=[15.0])
+    expiry_date: date | None = Field(None, examples=["2027-03-01"])
+    unit_cost: float | None = Field(None, ge=0.0, examples=[4.75])
+
+
+class RequisitionStatusUpdate(BaseModel):
+    status: RequisitionStatus = Field(..., examples=["approved"])

@@ -1,0 +1,140 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  PYTHON_VERSION: "3.13"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint (Ruff)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+
+      - name: Install dependencies
+        run: uv sync --only-dev
+
+      - name: Run Ruff
+        run: uv run ruff check src/ tests/
+
+  typecheck:
+    name: Type Check (MyPy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run MyPy
+        run: uv run mypy src/
+
+  security:
+    name: Security Audit (Bandit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+
+      - name: Install dependencies
+        run: uv sync --only-dev
+
+      - name: Run Bandit
+        run: uv run bandit -c pyproject.toml -r src/
+
+  test:
+    name: Tests (Pytest + Coverage)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: pawguard
+          POSTGRES_PASSWORD: pawguard
+          POSTGRES_DB: pawguard_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready -U pawguard
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run Alembic migrations
+        run: uv run alembic upgrade head
+        env:
+          DATABASE_URL: postgresql+asyncpg://pawguard:pawguard@localhost:5432/pawguard_test
+
+      - name: Run Pytest with coverage
+        run: uv run pytest --cov=src/ --cov-report=xml --cov-report=term-missing -v
+        env:
+          DATABASE_URL: postgresql+asyncpg://pawguard:pawguard@localhost:5432/pawguard_test
+          DATABASE_URL_FRONTEND: postgresql+asyncpg://pawguard:pawguard@localhost:5432/pawguard_test
+          REDIS_URL: redis://localhost:6379/0
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: ./coverage.xml
+          retention-days: 7
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false

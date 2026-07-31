@@ -2,17 +2,20 @@
 
 import uuid
 from datetime import datetime
-from pydantic import BaseModel, Field, ConfigDict
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ClinicalExamCreate(BaseModel):
     dog_id: uuid.UUID
-    body_condition_score: int = Field(..., ge=1, le=9)
-    dental_health: str | None = Field(None, max_length=64)
-    ocular_aural_notes: str | None = None
-    coat_condition: str | None = Field(None, max_length=128)
-    visible_injuries: str | None = None
-    triage_diagnosis: str = Field(..., min_length=1)
+    body_condition_score: int = Field(..., ge=1, le=9, examples=[5])
+    dental_health: str | None = Field(None, max_length=64, examples=["Mild tartar buildup"])
+    ocular_aural_notes: str | None = Field(None, examples=["Clear, no discharge."])
+    coat_condition: str | None = Field(
+        None, max_length=128, examples=["Slightly matted, otherwise healthy"]
+    )
+    visible_injuries: str | None = Field(None, examples=["Small laceration on left hind leg."])
+    triage_diagnosis: str = Field(..., min_length=1, examples=["Stable, mild dehydration"])
 
 
 class ClinicalExamResponse(BaseModel):
@@ -34,10 +37,12 @@ class ClinicalExamResponse(BaseModel):
 
 class MedicalTreatmentCreate(BaseModel):
     dog_id: uuid.UUID
-    treatment_type: str = Field(..., min_length=1, max_length=128)
-    description: str = Field(..., min_length=1)
-    anesthesia_log: str | None = None
-    post_op_notes: str | None = None
+    treatment_type: str = Field(..., min_length=1, max_length=128, examples=["Spay/Neuter Surgery"])
+    description: str = Field(
+        ..., min_length=1, examples=["Routine spay procedure, no complications."]
+    )
+    anesthesia_log: str | None = Field(None, examples=["Isoflurane, 45 minutes, stable vitals."])
+    post_op_notes: str | None = Field(None, examples=["Recovering well, monitor incision site."])
 
 
 class MedicalTreatmentResponse(BaseModel):
@@ -57,9 +62,9 @@ class MedicalTreatmentResponse(BaseModel):
 
 class VaccinationRecordCreate(BaseModel):
     dog_id: uuid.UUID
-    vaccine_name: str = Field(..., min_length=1, max_length=128)
-    next_due_at: datetime | None = None
-    lot_number: str | None = Field(None, max_length=64)
+    vaccine_name: str = Field(..., min_length=1, max_length=128, examples=["Rabies"])
+    next_due_at: datetime | None = Field(None, examples=["2027-07-22T00:00:00Z"])
+    lot_number: str | None = Field(None, max_length=64, examples=["LOT-48213"])
 
 
 class VaccinationRecordResponse(BaseModel):
@@ -78,11 +83,26 @@ class VaccinationRecordResponse(BaseModel):
 
 class PrescriptionCreate(BaseModel):
     dog_id: uuid.UUID
-    drug_name: str = Field(..., min_length=1, max_length=128)
-    dosage: str = Field(..., min_length=1, max_length=128)
-    route: str = Field(..., min_length=1, max_length=64)
-    start_at: datetime
-    end_at: datetime
+    drug_name: str = Field(..., min_length=1, max_length=128, examples=["Amoxicillin"])
+    dosage: str = Field(..., min_length=1, max_length=128, examples=["250mg twice daily"])
+    route: str = Field(..., min_length=1, max_length=64, examples=["Oral"])
+    start_at: datetime = Field(..., examples=["2026-07-22T08:00:00Z"])
+    end_at: datetime = Field(..., examples=["2026-07-29T08:00:00Z"])
+
+
+class PrescriptionUpdate(BaseModel):
+    drug_name: str | None = Field(None, min_length=1, max_length=128, examples=["Amoxicillin"])
+    dosage: str | None = Field(None, min_length=1, max_length=128, examples=["250mg twice daily"])
+    route: str | None = Field(None, min_length=1, max_length=64, examples=["Oral"])
+    start_at: datetime | None = Field(None, examples=["2026-07-22T08:00:00Z"])
+    end_at: datetime | None = Field(None, examples=["2026-07-29T08:00:00Z"])
+    is_active: bool | None = Field(None, examples=[True])
+
+
+class PrescriptionStatusUpdate(BaseModel):
+    is_active: bool = Field(
+        ..., description="Set prescription active or inactive", examples=[False]
+    )
 
 
 class PrescriptionResponse(BaseModel):

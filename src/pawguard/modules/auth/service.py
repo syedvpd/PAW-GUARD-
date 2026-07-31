@@ -5,6 +5,7 @@ Repositories never make business decisions (RULE-002) — locking policy, token 
 rules, and MFA gating all live here.
 """
 
+import asyncio
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -22,6 +23,7 @@ from pawguard.core.security import (
     generate_opaque_token,
     hash_opaque_token,
     hash_password,
+    needs_rehash,
     verify_password,
 )
 from pawguard.modules.auth.exceptions import (
@@ -40,6 +42,7 @@ from pawguard.modules.auth.models import (
     AuthAuditEventType,
     EmailVerificationToken,
     MFADevice,
+    OAuthAccount,
     PasswordResetToken,
     Permission,
     RefreshToken,
@@ -50,6 +53,7 @@ from pawguard.modules.auth.models import (
 from pawguard.modules.auth.repository import (
     EmailVerificationTokenRepository,
     MFARepository,
+    OAuthAccountRepository,
     PasswordResetTokenRepository,
     PermissionRepository,
     RefreshTokenRepository,
@@ -97,6 +101,7 @@ class AuthService:
         mfa_repo: MFARepository,
         password_reset_repo: PasswordResetTokenRepository,
         email_verification_repo: EmailVerificationTokenRepository,
+        oauth_account_repo: OAuthAccountRepository,
         audit_service: AuditService,
     ) -> None:
         self._users = user_repo
@@ -105,6 +110,7 @@ class AuthService:
         self._mfa = mfa_repo
         self._password_resets = password_reset_repo
         self._email_verifications = email_verification_repo
+        self._oauth_accounts = oauth_account_repo
         self._audit = audit_service
         self._settings = get_settings()
 
@@ -123,7 +129,7 @@ class AuthService:
             email=normalized_email,
             full_name=full_name,
             phone=phone,
-            hashed_password=hash_password(password),
+            hashed_password=await asyncio.to_thread(hash_password, password),
             is_active=True,
             is_verified=False,
         )
@@ -131,8 +137,11 @@ class AuthService:
             user.roles.append(role)
 
         await self._users.create(user)
-        # Re-fetch to populate eagerly-loaded relationships (e.g., roles).
         fresh = await self._users.get_by_id(user.id)
+        await self._audit.record(
+            event_type=AuthAuditEventType.REGISTERED,
+            actor_id=fresh.id if fresh else user.id,
+        )
         return fresh or user
 
     # --- Login ---
@@ -143,7 +152,9 @@ class AuthService:
         """Returns AuthenticatedTokens, or a pre-auth token (str) if MFA is required."""
         user = await self._users.get_by_email(email.lower())
 
-        if user is None or not verify_password(password, user.hashed_password):
+        if user is None or not await asyncio.to_thread(
+            verify_password, password, user.hashed_password
+        ):
             if user is not None:
                 await self._register_failed_attempt(user)
             await self._audit.record(
@@ -153,6 +164,14 @@ class AuthService:
                 user_agent=ctx.user_agent,
             )
             raise InvalidCredentialsError("Invalid email or password.")
+
+        if await asyncio.to_thread(needs_rehash, user.hashed_password):
+            # Argon2 embeds its cost params in the hash string itself, so
+            # tuning _password_hasher only speeds up new hashes - existing
+            # users' hashes stay slow to verify until rehashed. Do it
+            # opportunistically here, piggybacking on the user-row UPDATE
+            # this request is already making (no extra round trip).
+            user.hashed_password = await asyncio.to_thread(hash_password, password)
 
         if user.locked_until and user.locked_until > datetime.now(UTC):
             raise AccountLockedError("Account is temporarily locked due to failed login attempts.")
@@ -326,10 +345,10 @@ class AuthService:
         current_session_id: uuid.UUID,
         ctx: RequestContext,
     ) -> None:
-        if not verify_password(current_password, user.hashed_password):
+        if not await asyncio.to_thread(verify_password, current_password, user.hashed_password):
             raise InvalidCredentialsError("Current password is incorrect.")
 
-        user.hashed_password = hash_password(new_password)
+        user.hashed_password = await asyncio.to_thread(hash_password, new_password)
         await self._sessions.revoke_all_for_user(
             user.id, reason="password_changed", except_session_id=current_session_id
         )
@@ -374,7 +393,7 @@ class AuthService:
         if user is None:
             raise InvalidTokenError("Password reset token is invalid or expired.")
 
-        user.hashed_password = hash_password(new_password)
+        user.hashed_password = await asyncio.to_thread(hash_password, new_password)
         await self._password_resets.mark_used(token.id)
         await self._sessions.revoke_all_for_user(user.id, reason="password_reset")
         await self._audit.record(
@@ -518,10 +537,228 @@ class AuthService:
         user.failed_login_count += 1
         if user.failed_login_count >= MAX_FAILED_LOGIN_ATTEMPTS:
             user.locked_until = datetime.now(UTC) + timedelta(minutes=ACCOUNT_LOCKOUT_MINUTES)
+            await self._audit.record(
+                event_type=AuthAuditEventType.ACCOUNT_LOCKED,
+                actor_id=user.id,
+            )
 
     @staticmethod
     def _verify_totp(device: MFADevice, code: str) -> bool:
         return pyotp.totp.TOTP(device.secret_encrypted).verify(code, valid_window=1)
+
+    # --- MFA disable ---
+
+    async def disable_mfa(self, *, user: User, ctx: RequestContext) -> None:
+        device = await self._mfa.get_for_user(user.id)
+        if device is not None:
+            device.is_verified = False
+        user.mfa_enabled = False
+        await self._audit.record(
+            event_type=AuthAuditEventType.MFA_DISABLED,
+            actor_id=user.id,
+            ip_address=ctx.ip_address,
+            user_agent=ctx.user_agent,
+        )
+
+    # --- OAuth / Social Login ---
+
+    async def oauth_login(
+        self,
+        *,
+        provider: str,
+        provider_token: str,
+        device: DeviceContext,
+        ctx: RequestContext,
+    ) -> AuthenticatedTokens:
+        provider_data = await self._verify_oauth_token(provider, provider_token)
+        provider_user_id = provider_data["sub"]
+        provider_email = provider_data.get("email", "")
+
+        account = await self._oauth_accounts.get_by_provider(provider, provider_user_id)
+        if account is not None:
+            user = await self._users.get_by_id(account.user_id)
+        else:
+            normalized_email = provider_email.lower() if provider_email else ""
+            user = await self._users.get_by_email(normalized_email) if normalized_email else None
+            if user is None:
+                user = User(
+                    email=normalized_email or f"{provider_user_id}@{provider}.oauth",
+                    full_name=provider_data.get(
+                        "name", provider_data.get("email", provider_user_id)
+                    ),
+                    hashed_password=await asyncio.to_thread(
+                        hash_password, generate_opaque_token()
+                    ),
+                    is_active=True,
+                    is_verified=bool(provider_email),
+                )
+                role = await self._users.get_default_role()
+                if role is not None:
+                    user.roles.append(role)
+                await self._users.create(user)
+                user = await self._users.get_by_id(user.id)
+                assert user is not None
+                await self._audit.record(
+                    event_type=AuthAuditEventType.REGISTERED,
+                    actor_id=user.id,
+                    ip_address=ctx.ip_address,
+                    user_agent=ctx.user_agent,
+                )
+
+            assert user is not None
+            account = OAuthAccount(
+                user_id=user.id,
+                provider=provider,
+                provider_user_id=provider_user_id,
+                provider_email=provider_email,
+                display_name=provider_data.get("name"),
+                picture_url=provider_data.get("picture"),
+            )
+            await self._oauth_accounts.create(account)
+
+        if not user or not user.is_active:
+            raise AccountInactiveError("This account has been deactivated.")
+
+        session = await self._create_session(user_id=user.id, device=device, ctx=ctx)
+        tokens = await self._issue_tokens(user=user, session=session)
+        await self._audit.record(
+            event_type=AuthAuditEventType.OAUTH_LOGIN,
+            actor_id=user.id,
+            ip_address=ctx.ip_address,
+            user_agent=ctx.user_agent,
+        )
+        return tokens
+
+    async def link_oauth_account(
+        self,
+        *,
+        user_id: uuid.UUID,
+        provider: str,
+        provider_token: str,
+        ctx: RequestContext,
+    ) -> OAuthAccount:
+        provider_data = await self._verify_oauth_token(provider, provider_token)
+        provider_user_id = provider_data["sub"]
+
+        existing = await self._oauth_accounts.get_by_provider(provider, provider_user_id)
+        if existing is not None:
+            from pawguard.core.exceptions import ConflictError
+            raise ConflictError(f"This {provider} account is already linked to another user.")
+
+        account = OAuthAccount(
+            user_id=user_id,
+            provider=provider,
+            provider_user_id=provider_user_id,
+            provider_email=provider_data.get("email"),
+            display_name=provider_data.get("name"),
+            picture_url=provider_data.get("picture"),
+        )
+        await self._oauth_accounts.create(account)
+        await self._audit.record(
+            event_type=AuthAuditEventType.OAUTH_LINKED,
+            actor_id=user_id,
+            ip_address=ctx.ip_address,
+            user_agent=ctx.user_agent,
+        )
+        return account
+
+    async def unlink_oauth_account(
+        self, *, user_id: uuid.UUID, account_id: uuid.UUID, ctx: RequestContext
+    ) -> None:
+        accounts = await self._oauth_accounts.get_for_user(user_id)
+        account = next((a for a in accounts if a.id == account_id), None)
+        if account is None:
+            raise NotFoundError("OAuth account not found.")
+        await self._oauth_accounts.delete(account_id)
+        await self._audit.record(
+            event_type=AuthAuditEventType.OAUTH_UNLINKED,
+            actor_id=user_id,
+            ip_address=ctx.ip_address,
+            user_agent=ctx.user_agent,
+        )
+
+    async def list_oauth_accounts(self, *, user_id: uuid.UUID) -> list[OAuthAccount]:
+        return await self._oauth_accounts.get_for_user(user_id)
+
+    @staticmethod
+    async def _verify_oauth_token(provider: str, token: str) -> dict[str, str]:
+        try:
+            return await AuthService._verify_oauth_token_unsafe(provider, token)
+        except InvalidCredentialsError:
+            raise
+        except Exception as exc:
+            # A malformed/garbage token, a provider outage, a network error,
+            # or an unexpected response shape must surface as a clean 401,
+            # not an unhandled 500 - narrowing this to specific exception
+            # types (httpx.HTTPError, KeyError, ValueError) still let a 500
+            # through live, presumably from some other transport/SSL error
+            # shape on the hosting environment's network path to the
+            # provider. There's no legitimate reason for this helper to ever
+            # raise anything other than "the token didn't verify."
+            raise InvalidCredentialsError(f"Could not verify {provider} token.") from exc
+
+    @staticmethod
+    async def _verify_oauth_token_unsafe(provider: str, token: str) -> dict[str, str]:
+        import httpx
+
+        if provider == "google":
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"https://oauth2.googleapis.com/tokeninfo?id_token={token}",
+                    timeout=10,
+                )
+                if resp.status_code != 200:
+                    raise InvalidCredentialsError("Invalid Google token.")
+                data = resp.json()
+                if not data.get("email_verified") and not data.get("sub"):
+                    raise InvalidCredentialsError("Google email not verified.")
+                return {
+                    "sub": data["sub"],
+                    "email": data.get("email", ""),
+                    "name": data.get("name", ""),
+                    "picture": data.get("picture", ""),
+                }
+        elif provider == "apple":
+            import jwt as pyjwt
+            async with httpx.AsyncClient() as client:
+                resp = await client.get("https://appleid.apple.com/auth/keys", timeout=10)
+                if resp.status_code != 200:
+                    raise InvalidCredentialsError("Failed to fetch Apple public keys.")
+                keys = resp.json()["keys"]
+                header = pyjwt.get_unverified_header(token)
+                kid = header.get("kid")
+                matching_key = next((k for k in keys if k["kid"] == kid), None)
+                if matching_key is None:
+                    raise InvalidCredentialsError("Invalid Apple token (key not found).")
+                public_key = pyjwt.algorithms.RSAAlgorithm.from_jwk(matching_key)
+                payload = pyjwt.decode(
+                    token, public_key, algorithms=["RS256"],  # type: ignore[arg-type]
+                    options={"verify_aud": False},
+                )
+            return {
+                "sub": payload["sub"],
+                "email": payload.get("email", ""),
+                "name": f"{payload.get('given_name', '')} {payload.get('family_name', '')}".strip(),
+            }
+        else:
+            raise InvalidCredentialsError(f"Unsupported OAuth provider: {provider}")
+
+    async def update_profile(
+        self, user_id: uuid.UUID, *, full_name: str | None = None, phone: str | None = None
+    ) -> User:
+        user = await self._users.get_by_id(user_id)
+        if user is None:
+            raise NotFoundError(f"User {user_id} not found.")
+        if full_name is not None:
+            user.full_name = full_name
+        if phone is not None:
+            user.phone = phone
+        fresh = await self._users.get_by_id(user_id)
+        await self._audit.record(
+            event_type=AuthAuditEventType.PROFILE_UPDATED,
+            actor_id=user_id,
+        )
+        return fresh or user
 
 
 # ── Admin service ────────────────────────────────────────────────────────────
@@ -536,11 +773,13 @@ class AdminService:
         role_repo: RoleRepository,
         permission_repo: PermissionRepository,
         user_role_repo: UserRoleRepository,
+        audit_service: AuditService,
     ) -> None:
         self._users = user_repo
         self._roles = role_repo
         self._permissions = permission_repo
         self._user_roles = user_role_repo
+        self._audit = audit_service
 
     # ── Role management ──────────────────────────────────────────────────────
 
@@ -566,7 +805,20 @@ class AdminService:
         if permission_codes:
             perms = await self._permissions.get_by_codes(permission_codes)
             await self._roles.set_permissions(role.id, [p.id for p in perms])
-        return role
+        await self._audit.record(
+            event_type=AuthAuditEventType.ADMIN_ROLE_CREATED,
+            actor_id=None,
+            metadata={"role_name": name, "permission_codes": permission_codes},
+        )
+        # Re-fetch with permissions eager-loaded: set_permissions() writes
+        # the RolePermission association directly rather than through the
+        # ORM relationship, and role.permissions was never loaded on this
+        # freshly-created object either way - RoleResponse reads it to build
+        # permission_codes, and an unloaded/stale relationship read on an
+        # AsyncSession raises MissingGreenlet instead of a lazy round-trip.
+        refreshed = await self._roles.get_by_id(role.id)
+        assert refreshed is not None
+        return refreshed
 
     async def update_role(
         self,
@@ -586,6 +838,18 @@ class AdminService:
         if permission_codes is not None:
             perms = await self._permissions.get_by_codes(permission_codes)
             await self._roles.set_permissions(role.id, [p.id for p in perms])
+        await self._audit.record(
+            event_type=AuthAuditEventType.ADMIN_ROLE_UPDATED,
+            actor_id=None,
+            metadata={"role_id": str(role_id), "role_name": role.name},
+        )
+        if permission_codes is not None:
+            # role.permissions was loaded before set_permissions() bypassed
+            # the ORM relationship to write RolePermission rows directly, so
+            # the in-memory collection is now stale.
+            refreshed = await self._roles.get_by_id(role.id)
+            assert refreshed is not None
+            return refreshed
         return role
 
     async def delete_role(self, role_id: uuid.UUID) -> None:
@@ -595,6 +859,11 @@ class AdminService:
         if role.is_system:
             raise ForbiddenError("System roles cannot be deleted.")
         await self._roles.delete(role_id)
+        await self._audit.record(
+            event_type=AuthAuditEventType.ADMIN_ROLE_DELETED,
+            actor_id=None,
+            metadata={"role_id": str(role_id), "role_name": role.name},
+        )
 
     # ── Permission management ────────────────────────────────────────────────
 
@@ -631,7 +900,7 @@ class AdminService:
             email=normalized_email,
             full_name=full_name,
             phone=phone,
-            hashed_password=hash_password(password),
+            hashed_password=await asyncio.to_thread(hash_password, password),
             is_active=True,
             is_verified=False,
         )
@@ -647,6 +916,11 @@ class AdminService:
                 await self._user_roles.set_roles(user.id, role_ids)
 
         fresh = await self._users.get_by_id(user.id)
+        await self._audit.record(
+            event_type=AuthAuditEventType.ADMIN_USER_CREATED,
+            actor_id=None,
+            metadata={"user_id": str(user.id), "email": normalized_email, "role_names": role_names},
+        )
         return fresh or user
 
     async def update_user(
@@ -678,6 +952,11 @@ class AdminService:
             await self._user_roles.set_roles(user_id, role_ids)
 
         fresh = await self._users.get_by_id(user_id)
+        await self._audit.record(
+            event_type=AuthAuditEventType.ADMIN_USER_UPDATED,
+            actor_id=None,
+            metadata={"user_id": str(user_id)},
+        )
         return fresh or user
 
     async def delete_user(self, user_id: uuid.UUID) -> None:
@@ -685,6 +964,11 @@ class AdminService:
         if user is None:
             raise NotFoundError(f"User {user_id} not found.")
         user.deleted_at = datetime.now(UTC)
+        await self._audit.record(
+            event_type=AuthAuditEventType.ADMIN_USER_DELETED,
+            actor_id=None,
+            metadata={"user_id": str(user_id), "email": user.email},
+        )
 
     async def assign_roles(self, user_id: uuid.UUID, role_names: list[str]) -> User:
         return await self.update_user(user_id, role_names=role_names)

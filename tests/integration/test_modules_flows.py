@@ -1,20 +1,16 @@
 """Integration tests for end-to-end flows of all core modules."""
 
-import uuid
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from sqlalchemy.orm import selectinload
 
-from pawguard.modules.auth.models import Role, User
-from pawguard.modules.rescue.models import RescueStatus
-from pawguard.modules.dog.models import DogStatus
 from pawguard.modules.adoption.models import AdoptionStatus
-from pawguard.modules.volunteer.models import VolunteerStatus
-from pawguard.modules.foster.models import FosterStatus
-from pawguard.modules.lost_found.models import MatchStatus, ReportStatus
+from pawguard.modules.auth.models import Role, User
+from pawguard.modules.dog.models import DogStatus
+from pawguard.modules.lost_found.models import MatchStatus
+from pawguard.modules.rescue.models import RescueStatus
 
 REGISTER_PAYLOAD = {
     "email": "flowuser@example.com",
@@ -141,6 +137,15 @@ class TestEndToEndModuleFlows:
         dog_id = dog_data["id"]
         assert dog_data["name"] == "Barnaby"
         assert dog_data["status"] == DogStatus.RESCUED.value
+        # is_adoptable is always forced False at registration regardless of
+        # payload; it can only be granted via vet-authorized medical clearance.
+        assert dog_data["is_adoptable"] is False
+
+        # 4b. Medical clearance (required before a dog can be adopted)
+        clearance_resp = await client.post(
+            f"/api/v1/medical/clearance/{dog_id}", headers=headers
+        )
+        assert clearance_resp.status_code == 200
 
         # 5. Adoption Flow
         adopt_payload = {
@@ -158,21 +163,32 @@ class TestEndToEndModuleFlows:
         app_id = app_data["id"]
         assert app_data["status"] == AdoptionStatus.SUBMITTED.value
 
-        # Approve (locks adoptability)
-        approve_payload = {"status": "approved"}
-        approve_resp = await client.put(
-            f"/api/v1/adoptions/{app_id}", json=approve_payload, headers=headers
+        # Walk the vetting pipeline (submitted -> vetting -> home_check ->
+        # approved) - status is a state machine, no direct jumps allowed.
+        vetting_resp = await client.put(
+            f"/api/v1/adoptions/{app_id}", json={"status": "vetting"}, headers=headers
         )
-        assert approve_resp.status_code == 200
-        assert approve_resp.json()["data"]["status"] == AdoptionStatus.APPROVED.value
+        assert vetting_resp.status_code == 200
 
-        # Verify dog profile adoptable is locked
+        # Home inspection approval is where exclusivity locks the dog, per
+        # the PRR (not final approval).
+        home_check_resp = await client.put(
+            f"/api/v1/adoptions/{app_id}", json={"status": "home_check"}, headers=headers
+        )
+        assert home_check_resp.status_code == 200
         get_dog_resp = await client.get(f"/api/v1/dogs/{dog_id}", headers=headers)
         assert get_dog_resp.json()["data"]["is_adoptable"] is False
 
-        # Attempt secondary application (should fail/raise conflict)
+        # Attempt secondary application (should fail/raise conflict, since the
+        # dog is already locked at home_check)
         second_apply_resp = await client.post("/api/v1/adoptions", json=adopt_payload, headers=headers)
         assert second_apply_resp.status_code == 409
+
+        approve_resp = await client.put(
+            f"/api/v1/adoptions/{app_id}", json={"status": "approved"}, headers=headers
+        )
+        assert approve_resp.status_code == 200
+        assert approve_resp.json()["data"]["status"] == AdoptionStatus.APPROVED.value
 
         # Complete adoption
         complete_payload = {"status": "completed"}
@@ -311,7 +327,7 @@ class TestEndToEndModuleFlows:
         }
         found_resp = await client.post("/api/v1/lost-found/found", json=found_payload, headers=headers)
         assert found_resp.status_code == 201
-        found_id = found_resp.json()["data"]["id"]
+        found_resp.json()["data"]["id"]
 
         # View matches
         matches_resp = await client.get(f"/api/v1/lost-found/lost/{lost_id}/matches", headers=headers)

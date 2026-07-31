@@ -14,10 +14,16 @@ class StorageService:
     def __init__(self) -> None:
         settings = get_settings()
         self._bucket = settings.s3_bucket_name
+        # Path-style addressing is required for S3-compatible providers like
+        # Supabase Storage: virtual-hosted-style (bucket.endpoint) URLs won't
+        # resolve against their per-project subdomain.
         self._client = boto3.client(
             "s3",
             region_name=settings.s3_region,
-            config=Config(signature_version="s3v4"),
+            endpoint_url=settings.s3_endpoint_url or None,
+            aws_access_key_id=settings.aws_access_key_id or None,
+            aws_secret_access_key=settings.aws_secret_access_key or None,
+            config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
         )
 
     def build_object_key(self, *, folder: str, filename: str) -> str:
@@ -44,3 +50,23 @@ class StorageService:
             ExpiresIn=expires_in,
         )
         return url
+
+    def get_object_size(self, *, object_key: str) -> int:
+        response = self._client.head_object(Bucket=self._bucket, Key=object_key)
+        size: int = response["ContentLength"]
+        return size
+
+    def get_object_prefix_bytes(self, *, object_key: str, num_bytes: int = 4096) -> bytes:
+        response = self._client.get_object(
+            Bucket=self._bucket, Key=object_key, Range=f"bytes=0-{num_bytes - 1}"
+        )
+        body: bytes = response["Body"].read()
+        return body
+
+    def put_object(self, *, object_key: str, content: bytes, content_type: str) -> None:
+        self._client.put_object(
+            Bucket=self._bucket, Key=object_key, Body=content, ContentType=content_type
+        )
+
+    def delete_object(self, *, object_key: str) -> None:
+        self._client.delete_object(Bucket=self._bucket, Key=object_key)

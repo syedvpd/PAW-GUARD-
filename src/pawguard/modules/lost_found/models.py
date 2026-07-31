@@ -3,13 +3,25 @@
 import uuid
 from datetime import datetime
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pawguard.db.base import Base
 from pawguard.db.mixins import SoftDeleteMixin, TimestampMixin, UUIDPkMixin
+
+if TYPE_CHECKING:
+    from pawguard.modules.auth.models import User
+
+
+class Species(StrEnum):
+    DOG = "dog"
+    CAT = "cat"
+    BIRD = "bird"
+    RABBIT = "rabbit"
+    OTHER = "other"
 
 
 class ReportStatus(StrEnum):
@@ -29,6 +41,9 @@ class LostReport(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    species: Mapped[Species] = mapped_column(
+        String(32), default=Species.DOG, nullable=False, index=True
     )
     pet_name: Mapped[str] = mapped_column(String(255), nullable=False)
     breed: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -53,6 +68,9 @@ class FoundReport(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    species: Mapped[Species] = mapped_column(
+        String(32), default=Species.DOG, nullable=False, index=True
     )
     breed_observed: Mapped[str] = mapped_column(String(128), nullable=False)
     color_observed: Mapped[str] = mapped_column(String(64), nullable=False)
