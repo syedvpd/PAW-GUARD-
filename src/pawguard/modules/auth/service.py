@@ -5,6 +5,7 @@ Repositories never make business decisions (RULE-002) — locking policy, token 
 rules, and MFA gating all live here.
 """
 
+import asyncio
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -127,7 +128,7 @@ class AuthService:
             email=normalized_email,
             full_name=full_name,
             phone=phone,
-            hashed_password=hash_password(password),
+            hashed_password=await asyncio.to_thread(hash_password, password),
             is_active=True,
             is_verified=False,
         )
@@ -150,7 +151,9 @@ class AuthService:
         """Returns AuthenticatedTokens, or a pre-auth token (str) if MFA is required."""
         user = await self._users.get_by_email(email.lower())
 
-        if user is None or not verify_password(password, user.hashed_password):
+        if user is None or not await asyncio.to_thread(
+            verify_password, password, user.hashed_password
+        ):
             if user is not None:
                 await self._register_failed_attempt(user)
             await self._audit.record(
@@ -333,10 +336,10 @@ class AuthService:
         current_session_id: uuid.UUID,
         ctx: RequestContext,
     ) -> None:
-        if not verify_password(current_password, user.hashed_password):
+        if not await asyncio.to_thread(verify_password, current_password, user.hashed_password):
             raise InvalidCredentialsError("Current password is incorrect.")
 
-        user.hashed_password = hash_password(new_password)
+        user.hashed_password = await asyncio.to_thread(hash_password, new_password)
         await self._sessions.revoke_all_for_user(
             user.id, reason="password_changed", except_session_id=current_session_id
         )
@@ -381,7 +384,7 @@ class AuthService:
         if user is None:
             raise InvalidTokenError("Password reset token is invalid or expired.")
 
-        user.hashed_password = hash_password(new_password)
+        user.hashed_password = await asyncio.to_thread(hash_password, new_password)
         await self._password_resets.mark_used(token.id)
         await self._sessions.revoke_all_for_user(user.id, reason="password_reset")
         await self._audit.record(
@@ -574,7 +577,9 @@ class AuthService:
                     full_name=provider_data.get(
                         "name", provider_data.get("email", provider_user_id)
                     ),
-                    hashed_password=hash_password(generate_opaque_token()),
+                    hashed_password=await asyncio.to_thread(
+                        hash_password, generate_opaque_token()
+                    ),
                     is_active=True,
                     is_verified=bool(provider_email),
                 )
@@ -886,7 +891,7 @@ class AdminService:
             email=normalized_email,
             full_name=full_name,
             phone=phone,
-            hashed_password=hash_password(password),
+            hashed_password=await asyncio.to_thread(hash_password, password),
             is_active=True,
             is_verified=False,
         )
