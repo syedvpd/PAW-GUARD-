@@ -18,7 +18,7 @@ class LostReportCreate(BaseModel):
     location_address: str = Field(..., min_length=1, examples=["Jubilee Hills Sector 2"])
     latitude: float | None = Field(None, ge=-90.0, le=90.0, examples=[17.4326])
     longitude: float | None = Field(None, ge=-180.0, le=180.0, examples=[78.4071])
-    lost_at: datetime
+    lost_at: datetime = Field(..., examples=["2026-07-25T14:30:00Z"])
     photo_url: str | None = Field(None, max_length=512, examples=["https://example.com/buddy.jpg"])
 
 
@@ -49,7 +49,7 @@ class FoundReportCreate(BaseModel):
     location_address: str = Field(..., min_length=1, examples=["Jubilee Hills Sector 3"])
     latitude: float | None = Field(None, ge=-90.0, le=90.0, examples=[17.4321])
     longitude: float | None = Field(None, ge=-180.0, le=180.0, examples=[78.4055])
-    found_at: datetime
+    found_at: datetime = Field(..., examples=["2026-07-26T09:15:00Z"])
     photo_url: str | None = Field(None, max_length=512, examples=["https://example.com/found.jpg"])
 
 

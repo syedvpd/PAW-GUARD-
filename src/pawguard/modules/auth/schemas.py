@@ -24,16 +24,16 @@ def _validate_password_strength(value: str) -> str:
 
 
 class DeviceContext(BaseModel):
-    device_id: str | None = None
-    device_name: str | None = None
+    device_id: str | None = Field(None, examples=["a1b2c3d4-device-001"])
+    device_name: str | None = Field(None, examples=["Jane's iPhone 15"])
     device_type: DeviceType = DeviceType.UNKNOWN
 
 
 class RegisterRequest(BaseModel):
-    email: EmailStr
-    password: str
-    full_name: str = Field(min_length=1, max_length=255)
-    phone: str | None = None
+    email: EmailStr = Field(..., examples=["jane.doe@example.com"])
+    password: str = Field(..., examples=["StrongP@ssw0rd"])
+    full_name: str = Field(min_length=1, max_length=255, examples=["Jane Doe"])
+    phone: str | None = Field(None, examples=["+1-555-0100"])
 
     @field_validator("password")
     @classmethod
@@ -42,8 +42,8 @@ class RegisterRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
-    password: str
+    email: EmailStr = Field(..., examples=["jane.doe@example.com"])
+    password: str = Field(..., examples=["StrongP@ssw0rd"])
     device: DeviceContext = DeviceContext()
 
 
@@ -63,7 +63,7 @@ class MFARequiredResponse(BaseModel):
 
 
 class RefreshRequest(BaseModel):
-    refresh_token: str | None = None
+    refresh_token: str | None = Field(None, examples=["dGhpc2lzYXJlZnJlc2h0b2tlbg=="])
 
 
 class RefreshResponse(BaseModel):
@@ -74,12 +74,12 @@ class RefreshResponse(BaseModel):
 
 
 class LogoutRequest(BaseModel):
-    refresh_token: str | None = None
+    refresh_token: str | None = Field(None, examples=["dGhpc2lzYXJlZnJlc2h0b2tlbg=="])
 
 
 class ChangePasswordRequest(BaseModel):
-    current_password: str
-    new_password: str
+    current_password: str = Field(..., examples=["OldP@ssw0rd"])
+    new_password: str = Field(..., examples=["NewStr0ng!Pass"])
 
     @field_validator("new_password")
     @classmethod
@@ -88,12 +88,12 @@ class ChangePasswordRequest(BaseModel):
 
 
 class PasswordResetRequest(BaseModel):
-    email: EmailStr
+    email: EmailStr = Field(..., examples=["jane.doe@example.com"])
 
 
 class PasswordResetConfirmRequest(BaseModel):
-    token: str
-    new_password: str
+    token: str = Field(..., examples=["a1b2c3d4e5f6-reset-token"])
+    new_password: str = Field(..., examples=["NewStr0ng!Pass"])
 
     @field_validator("new_password")
     @classmethod
@@ -102,7 +102,7 @@ class PasswordResetConfirmRequest(BaseModel):
 
 
 class EmailVerificationConfirmRequest(BaseModel):
-    token: str
+    token: str = Field(..., examples=["a1b2c3d4e5f6-verify-token"])
 
 
 class MFAEnrollResponse(BaseModel):
@@ -111,18 +111,18 @@ class MFAEnrollResponse(BaseModel):
 
 
 class MFAVerifyRequest(BaseModel):
-    code: str = Field(min_length=6, max_length=6)
+    code: str = Field(min_length=6, max_length=6, examples=["482913"])
 
 
 class MFALoginVerifyRequest(BaseModel):
-    pre_auth_token: str
-    code: str = Field(min_length=6, max_length=6)
+    pre_auth_token: str = Field(..., examples=["a1b2c3d4e5f6-pre-auth"])
+    code: str = Field(min_length=6, max_length=6, examples=["482913"])
     device: DeviceContext = DeviceContext()
 
 
 class UserProfileUpdate(BaseModel):
-    full_name: str | None = None
-    phone: str | None = None
+    full_name: str | None = Field(None, examples=["Jane Doe"])
+    phone: str | None = Field(None, examples=["+1-555-0100"])
 
 
 class UserProfile(BaseModel):
@@ -160,8 +160,8 @@ class SessionInfo(BaseModel):
 
 
 class OAuthLoginRequest(BaseModel):
-    provider: str = Field(min_length=1, max_length=32)
-    provider_token: str
+    provider: str = Field(min_length=1, max_length=32, examples=["google"])
+    provider_token: str = Field(..., examples=["ya29.a0AfH6SMC...token"])
     device: DeviceContext = DeviceContext()
 
 
@@ -184,5 +184,5 @@ class OAuthAccountInfo(BaseModel):
 
 
 class OAuthLinkRequest(BaseModel):
-    provider: str = Field(min_length=1, max_length=32)
-    provider_token: str
+    provider: str = Field(min_length=1, max_length=32, examples=["google"])
+    provider_token: str = Field(..., examples=["ya29.a0AfH6SMC...token"])

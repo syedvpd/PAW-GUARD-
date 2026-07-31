@@ -24,11 +24,11 @@ class ReportType(StrEnum):
 
 
 class ReportRequest(BaseModel):
-    report_type: ReportType
+    report_type: ReportType = Field(..., examples=["adoption"])
     format: ReportFormat = ReportFormat.PDF
-    period_start: date | None = None
-    period_end: date | None = None
-    filters: dict[str, str] | None = None
+    period_start: date | None = Field(None, examples=["2026-01-01"])
+    period_end: date | None = Field(None, examples=["2026-07-31"])
+    filters: dict[str, str] | None = Field(None, examples=[{"status": "completed"}])
 
 
 class ReportResponse(BaseModel):

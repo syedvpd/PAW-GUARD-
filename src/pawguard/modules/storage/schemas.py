@@ -10,11 +10,13 @@ from pawguard.modules.storage.models import FileFolder
 
 
 class StoredFileCreate(BaseModel):
-    original_filename: str = Field(..., min_length=1, max_length=512)
-    mime_type: str = Field(..., min_length=1, max_length=128)
-    file_size: int = Field(..., gt=0, le=MAX_FILE_SIZE_BYTES)
-    folder: FileFolder
-    entity_type: str | None = Field(None, max_length=64)
+    original_filename: str = Field(
+        ..., min_length=1, max_length=512, examples=["barnaby_intake.jpg"]
+    )
+    mime_type: str = Field(..., min_length=1, max_length=128, examples=["image/jpeg"])
+    file_size: int = Field(..., gt=0, le=MAX_FILE_SIZE_BYTES, examples=[204800])
+    folder: FileFolder = Field(..., examples=["dogs"])
+    entity_type: str | None = Field(None, max_length=64, examples=["dog_profile"])
     entity_id: uuid.UUID | None = None
 
     @field_validator("mime_type")

@@ -10,15 +10,15 @@ from pawguard.modules.dog.models import DogStatus
 
 class DogProfileCreate(BaseModel):
     rescue_case_id: uuid.UUID | None = None
-    microchip_id: str | None = Field(None, max_length=64)
-    name: str = Field(..., min_length=1, max_length=255)
-    breed: str = Field("indie_mix", max_length=128)
-    gender: str = Field(..., min_length=4, max_length=16)
+    microchip_id: str | None = Field(None, max_length=64, examples=["985141002345678"])
+    name: str = Field(..., min_length=1, max_length=255, examples=["Barnaby"])
+    breed: str = Field("indie_mix", max_length=128, examples=["Indie Mix"])
+    gender: str = Field(..., min_length=4, max_length=16, examples=["male"])
     is_spayed_neutered: bool = False
-    estimated_age: str | None = Field(None, max_length=64)
-    weight: float | None = Field(None, ge=0.0)
-    color: str | None = Field(None, max_length=64)
-    temperament: str | None = Field(None, max_length=64)
+    estimated_age: str | None = Field(None, max_length=64, examples=["2 years"])
+    weight: float | None = Field(None, ge=0.0, examples=[16.4])
+    color: str | None = Field(None, max_length=64, examples=["Tan/White"])
+    temperament: str | None = Field(None, max_length=64, examples=["Friendly"])
     shelter_facility_id: uuid.UUID | None = None
     kennel_id: uuid.UUID | None = None
     is_adoptable: bool = False
@@ -26,24 +26,24 @@ class DogProfileCreate(BaseModel):
 
 
 class DogProfileUpdate(BaseModel):
-    microchip_id: str | None = None
-    name: str | None = None
-    breed: str | None = None
-    gender: str | None = None
-    is_spayed_neutered: bool | None = None
-    estimated_age: str | None = None
-    weight: float | None = None
-    color: str | None = None
-    temperament: str | None = None
-    status: DogStatus | None = None
+    microchip_id: str | None = Field(None, examples=["985141002345678"])
+    name: str | None = Field(None, examples=["Barnaby"])
+    breed: str | None = Field(None, examples=["Indie Mix"])
+    gender: str | None = Field(None, examples=["male"])
+    is_spayed_neutered: bool | None = Field(None, examples=[True])
+    estimated_age: str | None = Field(None, examples=["2 years"])
+    weight: float | None = Field(None, examples=[16.4])
+    color: str | None = Field(None, examples=["Tan/White"])
+    temperament: str | None = Field(None, examples=["Friendly"])
+    status: DogStatus | None = Field(None, examples=["shelter"])
     shelter_facility_id: uuid.UUID | None = None
     kennel_id: uuid.UUID | None = None
-    is_adoptable: bool | None = None
-    is_quarantine_passed: bool | None = None
+    is_adoptable: bool | None = Field(None, examples=[False])
+    is_quarantine_passed: bool | None = Field(None, examples=[True])
 
 
 class DogStatusUpdate(BaseModel):
-    status: DogStatus = Field(..., description="New status for the dog")
+    status: DogStatus = Field(..., description="New status for the dog", examples=["shelter"])
 
 
 class DogProfileResponse(BaseModel):

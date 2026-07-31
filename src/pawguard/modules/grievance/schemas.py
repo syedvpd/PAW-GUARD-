@@ -20,9 +20,11 @@ class GrievanceCreate(BaseModel):
 
 
 class GrievanceUpdate(BaseModel):
-    status: GrievanceStatus | None = None
+    status: GrievanceStatus | None = Field(None, examples=["investigating"])
     assigned_to_admin_id: uuid.UUID | None = None
-    resolution_notes: str | None = None
+    resolution_notes: str | None = Field(
+        None, examples=["Dispatch delay traced to a vehicle shortage; process updated."]
+    )
 
 
 class GrievanceResponse(BaseModel):
@@ -48,7 +50,7 @@ class GrievanceResponse(BaseModel):
 
 class GrievanceEscalate(BaseModel):
     escalated_to_admin_id: uuid.UUID
-    reason: str | None = None
+    reason: str | None = Field(None, examples=["SLA breached, needs senior review."])
 
 
 class GrievanceListFilter(BaseModel):
@@ -63,7 +65,7 @@ class GrievanceAssign(BaseModel):
 
 
 class CommentCreate(BaseModel):
-    body: str = Field(..., min_length=1)
+    body: str = Field(..., min_length=1, examples=["We've dispatched an agent to follow up."])
     is_internal: bool = False
 
 
@@ -82,8 +84,8 @@ class CommentResponse(BaseModel):
 class ServiceFeedbackCreate(BaseModel):
     rescue_case_id: uuid.UUID | None = None
     adoption_application_id: uuid.UUID | None = None
-    rating: int = Field(..., ge=1, le=5)
-    comments: str | None = None
+    rating: int = Field(..., ge=1, le=5, examples=[5])
+    comments: str | None = Field(None, examples=["The whole team was wonderful, thank you!"])
 
 
 class ServiceFeedbackResponse(BaseModel):

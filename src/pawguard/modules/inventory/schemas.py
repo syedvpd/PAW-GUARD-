@@ -9,13 +9,13 @@ from pawguard.modules.inventory.models import ItemCategory, MovementType, Requis
 
 
 class InventoryItemCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=255)
-    category: ItemCategory
-    quantity: float = Field(0.0, ge=0.0)
-    unit: str = Field(..., min_length=1, max_length=32)
-    reorder_threshold: float = Field(10.0, ge=0.0)
-    expiry_date: date | None = None
-    unit_cost: float = Field(0.0, ge=0.0)
+    name: str = Field(..., min_length=1, max_length=255, examples=["Rabies Vaccine"])
+    category: ItemCategory = Field(..., examples=["vaccine"])
+    quantity: float = Field(0.0, ge=0.0, examples=[50.0])
+    unit: str = Field(..., min_length=1, max_length=32, examples=["vial"])
+    reorder_threshold: float = Field(10.0, ge=0.0, examples=[10.0])
+    expiry_date: date | None = Field(None, examples=["2027-03-01"])
+    unit_cost: float = Field(0.0, ge=0.0, examples=[4.50])
 
 
 class InventoryItemResponse(BaseModel):
@@ -35,10 +35,10 @@ class InventoryItemResponse(BaseModel):
 
 class InventoryMovementCreate(BaseModel):
     item_id: uuid.UUID
-    movement_type: MovementType
-    quantity: float = Field(..., gt=0.0)
-    notes: str | None = None
-    reference_type: str | None = None
+    movement_type: MovementType = Field(..., examples=["consumption"])
+    quantity: float = Field(..., gt=0.0, examples=[5.0])
+    notes: str | None = Field(None, examples=["Used during morning treatment rounds."])
+    reference_type: str | None = Field(None, examples=["medical_treatment"])
     reference_id: uuid.UUID | None = None
 
 
@@ -58,7 +58,7 @@ class InventoryMovementResponse(BaseModel):
 
 class RequisitionOrderCreate(BaseModel):
     item_id: uuid.UUID
-    quantity: float = Field(..., gt=0.0)
+    quantity: float = Field(..., gt=0.0, examples=[100.0])
 
 
 class RequisitionOrderResponse(BaseModel):
@@ -74,14 +74,14 @@ class RequisitionOrderResponse(BaseModel):
 
 
 class InventoryItemUpdate(BaseModel):
-    name: str | None = Field(None, min_length=1, max_length=255)
-    category: ItemCategory | None = None
-    quantity: float | None = Field(None, ge=0.0)
-    unit: str | None = Field(None, min_length=1, max_length=32)
-    reorder_threshold: float | None = Field(None, ge=0.0)
-    expiry_date: date | None = None
-    unit_cost: float | None = Field(None, ge=0.0)
+    name: str | None = Field(None, min_length=1, max_length=255, examples=["Rabies Vaccine"])
+    category: ItemCategory | None = Field(None, examples=["vaccine"])
+    quantity: float | None = Field(None, ge=0.0, examples=[45.0])
+    unit: str | None = Field(None, min_length=1, max_length=32, examples=["vial"])
+    reorder_threshold: float | None = Field(None, ge=0.0, examples=[15.0])
+    expiry_date: date | None = Field(None, examples=["2027-03-01"])
+    unit_cost: float | None = Field(None, ge=0.0, examples=[4.75])
 
 
 class RequisitionStatusUpdate(BaseModel):
-    status: RequisitionStatus
+    status: RequisitionStatus = Field(..., examples=["approved"])

@@ -21,8 +21,8 @@ class DonorProfileCreate(BaseModel):
 
 
 class DonorProfileUpdate(BaseModel):
-    tax_identifier: str | None = Field(None, max_length=64)
-    notes: str | None = None
+    tax_identifier: str | None = Field(None, max_length=64, examples=["ABCDE1234F"])
+    notes: str | None = Field(None, examples=["Updated preference: quarterly giving."])
 
 
 class DonorProfileResponse(BaseModel):
@@ -48,7 +48,9 @@ class DonationCreate(BaseModel):
 
 
 class DonationStatusUpdate(BaseModel):
-    status: DonationStatus = Field(..., description="New status for the donation")
+    status: DonationStatus = Field(
+        ..., description="New status for the donation", examples=["success"]
+    )
 
 
 class DonationResponse(BaseModel):
@@ -83,19 +85,21 @@ class DonationOrderResponse(BaseModel):
 
 class DonationVerifyRequest(BaseModel):
     donation_id: uuid.UUID
-    gateway_order_id: str
-    gateway_payment_id: str
-    gateway_signature: str
+    gateway_order_id: str = Field(..., examples=["order_NqXJz9k8bYQm2c"])
+    gateway_payment_id: str = Field(..., examples=["pay_NqXK1a7fRZ3wLp"])
+    gateway_signature: str = Field(..., examples=["9f8c3e1a2b4d5e6f7a8b9c0d1e2f3a4b"])
 
 
 class SponsorshipCreate(BaseModel):
     dog_id: uuid.UUID
-    monthly_amount: float = Field(..., ge=1.0)
-    currency: str = Field(default_factory=_default_currency, min_length=3, max_length=3)
+    monthly_amount: float = Field(..., ge=1.0, examples=[25.0])
+    currency: str = Field(
+        default_factory=_default_currency, min_length=3, max_length=3, examples=["USD"]
+    )
 
 
 class SponsorshipStatusUpdate(BaseModel):
-    status: SponsorshipStatus
+    status: SponsorshipStatus = Field(..., examples=["paused"])
 
 
 class SponsorshipResponse(BaseModel):

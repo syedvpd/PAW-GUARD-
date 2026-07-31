@@ -9,27 +9,33 @@ from pawguard.modules.fleet.models import VehicleStatus
 
 
 class VehicleCreate(BaseModel):
-    make_model: str = Field(..., min_length=1, max_length=255)
-    license_plate: str = Field(..., min_length=1, max_length=64)
+    make_model: str = Field(..., min_length=1, max_length=255, examples=["Ford Transit 2022"])
+    license_plate: str = Field(..., min_length=1, max_length=64, examples=["RESCUE-01"])
     status: VehicleStatus = VehicleStatus.ACTIVE
-    mileage: int = Field(0, ge=0)
+    mileage: int = Field(0, ge=0, examples=[12500])
     primary_driver_id: uuid.UUID | None = None
 
 
 class VehicleUpdate(BaseModel):
-    make_model: str | None = Field(None, min_length=1, max_length=255)
-    license_plate: str | None = Field(None, min_length=1, max_length=64)
-    status: VehicleStatus | None = None
-    mileage: int | None = Field(None, ge=0)
+    make_model: str | None = Field(
+        None, min_length=1, max_length=255, examples=["Ford Transit 2022"]
+    )
+    license_plate: str | None = Field(None, min_length=1, max_length=64, examples=["RESCUE-01"])
+    status: VehicleStatus | None = Field(None, examples=["active"])
+    mileage: int | None = Field(None, ge=0, examples=[12800])
     primary_driver_id: uuid.UUID | None = None
-    insurance_provider: str | None = Field(None, max_length=255)
-    insurance_policy_number: str | None = Field(None, max_length=128)
-    insurance_expiry_date: date | None = None
-    insurance_contact_phone: str | None = Field(None, max_length=32)
+    insurance_provider: str | None = Field(
+        None, max_length=255, examples=["SafeGuard Insurance Co."]
+    )
+    insurance_policy_number: str | None = Field(None, max_length=128, examples=["POL-2026-004521"])
+    insurance_expiry_date: date | None = Field(None, examples=["2027-01-31"])
+    insurance_contact_phone: str | None = Field(None, max_length=32, examples=["+1-555-0188"])
 
 
 class VehicleStatusUpdate(BaseModel):
-    status: VehicleStatus = Field(..., description="New status for the vehicle")
+    status: VehicleStatus = Field(
+        ..., description="New status for the vehicle", examples=["in_maintenance"]
+    )
 
 
 class VehicleResponse(BaseModel):
@@ -51,10 +57,10 @@ class VehicleResponse(BaseModel):
 
 class MaintenanceCreate(BaseModel):
     vehicle_id: uuid.UUID
-    service_date: date
-    description: str = Field(..., min_length=1)
-    cost: float = Field(0.0, ge=0.0)
-    next_due_date: date | None = None
+    service_date: date = Field(..., examples=["2026-07-15"])
+    description: str = Field(..., min_length=1, examples=["Oil change and brake inspection"])
+    cost: float = Field(0.0, ge=0.0, examples=[150.0])
+    next_due_date: date | None = Field(None, examples=["2027-01-15"])
 
 
 class MaintenanceResponse(BaseModel):
@@ -70,14 +76,14 @@ class MaintenanceResponse(BaseModel):
 
 
 class EquipmentCheckoutCreate(BaseModel):
-    equipment_name: str = Field(..., min_length=1, max_length=255)
+    equipment_name: str = Field(..., min_length=1, max_length=255, examples=["Net Gun"])
     assigned_to_agent_id: uuid.UUID | None = None
     assigned_to_vehicle_id: uuid.UUID | None = None
-    notes: str | None = None
+    notes: str | None = Field(None, examples=["Checked out for Sector 4 rescue."])
 
 
 class EquipmentReturnRequest(BaseModel):
-    notes: str | None = None
+    notes: str | None = Field(None, examples=["Returned in good condition."])
 
 
 class EquipmentCheckoutResponse(BaseModel):
@@ -94,13 +100,13 @@ class EquipmentCheckoutResponse(BaseModel):
 
 
 class FuelLogCreate(BaseModel):
-    fuel_type: str = Field(..., min_length=1, max_length=32)
-    volume_litres: float = Field(..., gt=0)
-    cost: float = Field(..., ge=0)
-    mileage_at_fill: int = Field(..., ge=0)
-    vendor: str | None = Field(None, max_length=255)
-    receipt_url: str | None = Field(None, max_length=512)
-    notes: str | None = None
+    fuel_type: str = Field(..., min_length=1, max_length=32, examples=["Diesel"])
+    volume_litres: float = Field(..., gt=0, examples=[45.5])
+    cost: float = Field(..., ge=0, examples=[68.25])
+    mileage_at_fill: int = Field(..., ge=0, examples=[12750])
+    vendor: str | None = Field(None, max_length=255, examples=["Shell Gas Station"])
+    receipt_url: str | None = Field(None, max_length=512, examples=["https://example.com/receipt.jpg"])
+    notes: str | None = Field(None, examples=["Full tank before long-distance dispatch."])
 
 
 class FuelLogResponse(BaseModel):

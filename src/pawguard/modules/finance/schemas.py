@@ -14,19 +14,19 @@ from pawguard.modules.finance.models import (
 
 
 class ChartOfAccountsCreate(BaseModel):
-    account_code: str = Field(..., min_length=2, max_length=32)
-    account_name: str = Field(..., min_length=2, max_length=255)
-    account_type: AccountType
-    category: AccountCategory
-    description: str | None = None
+    account_code: str = Field(..., min_length=2, max_length=32, examples=["5010"])
+    account_name: str = Field(..., min_length=2, max_length=255, examples=["Veterinary Expenses"])
+    account_type: AccountType = Field(..., examples=["expense"])
+    category: AccountCategory = Field(..., examples=["medical_expense"])
+    description: str | None = Field(None, examples=["Tracks all veterinary and medical costs."])
     parent_account_id: uuid.UUID | None = None
-    opening_balance: Decimal = Field(default=Decimal("0.00"), ge=0)
+    opening_balance: Decimal = Field(default=Decimal("0.00"), ge=0, examples=[0.0])
 
 
 class ChartOfAccountsUpdate(BaseModel):
-    account_name: str | None = None
-    description: str | None = None
-    is_active: bool | None = None
+    account_name: str | None = Field(None, examples=["Veterinary Expenses"])
+    description: str | None = Field(None, examples=["Updated description."])
+    is_active: bool | None = Field(None, examples=[True])
     parent_account_id: uuid.UUID | None = None
 
 
@@ -48,12 +48,12 @@ class ChartOfAccountsResponse(BaseModel):
 
 
 class FinancialTransactionCreate(BaseModel):
-    transaction_type: TransactionType
-    transaction_date: date
-    amount: Decimal = Field(..., gt=0)
-    currency: str = Field(default="USD", min_length=3, max_length=3)
-    description: str | None = None
-    reference_type: str | None = None
+    transaction_type: TransactionType = Field(..., examples=["expense"])
+    transaction_date: date = Field(..., examples=["2026-07-22"])
+    amount: Decimal = Field(..., gt=0, examples=[150.0])
+    currency: str = Field(default="USD", min_length=3, max_length=3, examples=["USD"])
+    description: str | None = Field(None, examples=["Vet supplies restock"])
+    reference_type: str | None = Field(None, examples=["rescue_case"])
     reference_id: uuid.UUID | None = None
     donation_id: uuid.UUID | None = None
     debit_account_id: uuid.UUID
@@ -61,8 +61,8 @@ class FinancialTransactionCreate(BaseModel):
 
 
 class FinancialTransactionUpdate(BaseModel):
-    description: str | None = None
-    status: TransactionStatus | None = None
+    description: str | None = Field(None, examples=["Updated: includes delivery fee."])
+    status: TransactionStatus | None = Field(None, examples=["posted"])
 
 
 class FinancialTransactionResponse(BaseModel):
@@ -98,26 +98,26 @@ class GeneralLedgerEntryResponse(BaseModel):
 
 
 class RecurringTransactionCreate(BaseModel):
-    name: str = Field(..., min_length=2, max_length=255)
-    description: str | None = None
-    transaction_type: TransactionType
-    amount: Decimal = Field(..., gt=0)
-    currency: str = Field(default="USD", min_length=3, max_length=3)
-    interval: RecurringInterval
-    day_of_month: int | None = Field(None, ge=1, le=31)
-    day_of_week: int | None = Field(None, ge=0, le=6)
-    start_date: date
-    end_date: date | None = None
+    name: str = Field(..., min_length=2, max_length=255, examples=["Monthly Rent"])
+    description: str | None = Field(None, examples=["Shelter facility lease payment."])
+    transaction_type: TransactionType = Field(..., examples=["expense"])
+    amount: Decimal = Field(..., gt=0, examples=[2000.0])
+    currency: str = Field(default="USD", min_length=3, max_length=3, examples=["USD"])
+    interval: RecurringInterval = Field(..., examples=["monthly"])
+    day_of_month: int | None = Field(None, ge=1, le=31, examples=[1])
+    day_of_week: int | None = Field(None, ge=0, le=6, examples=[1])
+    start_date: date = Field(..., examples=["2026-08-01"])
+    end_date: date | None = Field(None, examples=["2027-08-01"])
     debit_account_id: uuid.UUID
     credit_account_id: uuid.UUID
 
 
 class RecurringTransactionUpdate(BaseModel):
-    name: str | None = None
-    description: str | None = None
-    amount: Decimal | None = Field(default=None, gt=0)
-    is_active: bool | None = None
-    end_date: date | None = None
+    name: str | None = Field(None, examples=["Monthly Rent - Updated"])
+    description: str | None = Field(None, examples=["Updated description."])
+    amount: Decimal | None = Field(default=None, gt=0, examples=[2100.0])
+    is_active: bool | None = Field(None, examples=[True])
+    end_date: date | None = Field(None, examples=["2027-08-01"])
 
 
 class RecurringTransactionResponse(BaseModel):
@@ -141,22 +141,22 @@ class RecurringTransactionResponse(BaseModel):
 
 
 class BudgetCreate(BaseModel):
-    name: str = Field(..., min_length=2, max_length=255)
-    fiscal_year: int = Field(..., ge=2020, le=2100)
-    start_date: date
-    end_date: date
-    notes: str | None = None
+    name: str = Field(..., min_length=2, max_length=255, examples=["Annual 2026"])
+    fiscal_year: int = Field(..., ge=2020, le=2100, examples=[2026])
+    start_date: date = Field(..., examples=["2026-01-01"])
+    end_date: date = Field(..., examples=["2026-12-31"])
+    notes: str | None = Field(None, examples=["Approved by the board on 2025-12-15."])
 
 
 class BudgetUpdate(BaseModel):
-    name: str | None = None
-    notes: str | None = None
-    is_active: bool | None = None
+    name: str | None = Field(None, examples=["Annual 2026 - Revised"])
+    notes: str | None = Field(None, examples=["Revised after Q2 review."])
+    is_active: bool | None = Field(None, examples=[True])
 
 
 class BudgetItemCreate(BaseModel):
     account_id: uuid.UUID
-    allocated_amount: Decimal = Field(..., gt=0)
+    allocated_amount: Decimal = Field(..., gt=0, examples=[5000.0])
 
 
 class BudgetResponse(BaseModel):

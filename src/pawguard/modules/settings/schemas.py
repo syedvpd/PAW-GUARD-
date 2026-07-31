@@ -7,19 +7,23 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class SystemSettingCreate(BaseModel):
-    key: str = Field(..., min_length=1, max_length=255)
-    value: str = Field(..., min_length=0)
-    category: str = Field(default="general", max_length=64)
-    description: str | None = None
+    key: str = Field(
+        ..., min_length=1, max_length=255, examples=["max_rescue_dispatch_radius_km"]
+    )
+    value: str = Field(..., min_length=0, examples=["25"])
+    category: str = Field(default="general", max_length=64, examples=["rescue"])
+    description: str | None = Field(
+        None, examples=["Maximum radius for auto-assigning field agents."]
+    )
     is_encrypted: bool = False
     is_editable: bool = True
 
 
 class SystemSettingUpdate(BaseModel):
-    value: str | None = None
-    description: str | None = None
-    is_encrypted: bool | None = None
-    is_editable: bool | None = None
+    value: str | None = Field(None, examples=["30"])
+    description: str | None = Field(None, examples=["Updated description."])
+    is_encrypted: bool | None = Field(None, examples=[False])
+    is_editable: bool | None = Field(None, examples=[True])
 
 
 class SystemSettingResponse(BaseModel):
@@ -54,29 +58,29 @@ class PasswordPolicyResponse(BaseModel):
 
 
 class PasswordPolicyUpdate(BaseModel):
-    min_length: int | None = Field(None, ge=6, le=128)
-    require_uppercase: bool | None = None
-    require_lowercase: bool | None = None
-    require_digit: bool | None = None
-    require_special_char: bool | None = None
-    max_age_days: int | None = Field(None, ge=1, le=365)
-    password_history_count: int | None = Field(None, ge=0, le=50)
-    max_login_attempts: int | None = Field(None, ge=1, le=20)
-    lockout_duration_minutes: int | None = Field(None, ge=1, le=1440)
-    is_active: bool | None = None
+    min_length: int | None = Field(None, ge=6, le=128, examples=[10])
+    require_uppercase: bool | None = Field(None, examples=[True])
+    require_lowercase: bool | None = Field(None, examples=[True])
+    require_digit: bool | None = Field(None, examples=[True])
+    require_special_char: bool | None = Field(None, examples=[False])
+    max_age_days: int | None = Field(None, ge=1, le=365, examples=[90])
+    password_history_count: int | None = Field(None, ge=0, le=50, examples=[5])
+    max_login_attempts: int | None = Field(None, ge=1, le=20, examples=[5])
+    lockout_duration_minutes: int | None = Field(None, ge=1, le=1440, examples=[15])
+    is_active: bool | None = Field(None, examples=[True])
 
 
 class BusinessRuleCreate(BaseModel):
-    rule_key: str = Field(..., min_length=1, max_length=255)
-    rule_value: str = Field(..., min_length=0)
-    description: str | None = None
-    module: str = Field(..., max_length=64)
+    rule_key: str = Field(..., min_length=1, max_length=255, examples=["adoption_lock_status"])
+    rule_value: str = Field(..., min_length=0, examples=["home_check"])
+    description: str | None = Field(None, examples=["Status at which a dog's profile locks."])
+    module: str = Field(..., max_length=64, examples=["adoption"])
 
 
 class BusinessRuleUpdate(BaseModel):
-    rule_value: str | None = None
-    description: str | None = None
-    is_active: bool | None = None
+    rule_value: str | None = Field(None, examples=["approved"])
+    description: str | None = Field(None, examples=["Updated description."])
+    is_active: bool | None = Field(None, examples=[True])
 
 
 class BusinessRuleResponse(BaseModel):
@@ -110,12 +114,12 @@ class EmailSettingsResponse(BaseModel):
 
 
 class EmailSettingsUpdate(BaseModel):
-    mail_from: str | None = None
-    mail_host: str | None = None
-    mail_port: int | None = Field(None, ge=1, le=65535)
-    mail_username: str | None = None
-    mail_password: str | None = None
-    mail_use_tls: bool | None = None
+    mail_from: str | None = Field(None, examples=["no-reply@pawguard.org"])
+    mail_host: str | None = Field(None, examples=["smtp.mailgun.org"])
+    mail_port: int | None = Field(None, ge=1, le=65535, examples=[587])
+    mail_username: str | None = Field(None, examples=["postmaster@pawguard.org"])
+    mail_password: str | None = Field(None, examples=["********"])
+    mail_use_tls: bool | None = Field(None, examples=[True])
 
 
 class NotificationSettingsResponse(BaseModel):

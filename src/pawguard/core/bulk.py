@@ -26,7 +26,7 @@ class BulkIdsRequest(BaseModel):
 
 
 class BulkStatusUpdateRequest(BulkIdsRequest):
-    status: str = Field(..., min_length=1, max_length=64)
+    status: str = Field(..., min_length=1, max_length=64, examples=["active"])
 
 
 class BulkDeleteRequest(BulkIdsRequest):

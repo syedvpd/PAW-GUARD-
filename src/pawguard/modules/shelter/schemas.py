@@ -14,19 +14,19 @@ from pawguard.modules.shelter.models import (
 
 
 class ShelterFacilityCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=255)
-    address: str = Field(..., min_length=1)
-    phone: str = Field(..., min_length=1, max_length=32)
-    total_capacity: int = Field(50, ge=1)
-    facility_type: FacilityType = Field(FacilityType.SHELTER)
+    name: str = Field(..., min_length=1, max_length=255, examples=["Central Shelter Alpha"])
+    address: str = Field(..., min_length=1, examples=["45 Rescue Road, Sector 4"])
+    phone: str = Field(..., min_length=1, max_length=32, examples=["+1-555-0111"])
+    total_capacity: int = Field(50, ge=1, examples=[100])
+    facility_type: FacilityType = Field(FacilityType.SHELTER, examples=["shelter"])
 
 
 class ShelterFacilityUpdate(BaseModel):
-    name: str | None = Field(None, min_length=1, max_length=255)
-    address: str | None = Field(None, min_length=1)
-    phone: str | None = Field(None, min_length=1, max_length=32)
-    total_capacity: int | None = Field(None, ge=1)
-    facility_type: FacilityType | None = None
+    name: str | None = Field(None, min_length=1, max_length=255, examples=["Central Shelter Alpha"])
+    address: str | None = Field(None, min_length=1, examples=["45 Rescue Road, Sector 4"])
+    phone: str | None = Field(None, min_length=1, max_length=32, examples=["+1-555-0111"])
+    total_capacity: int | None = Field(None, ge=1, examples=[120])
+    facility_type: FacilityType | None = Field(None, examples=["shelter"])
 
 
 class ShelterFacilityResponse(BaseModel):
@@ -44,12 +44,12 @@ class ShelterFacilityResponse(BaseModel):
 
 
 class FacilityStatusUpdate(BaseModel):
-    status: FacilityStatus
+    status: FacilityStatus = Field(..., examples=["active"])
 
 
 class ShelterSectionCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=128)
-    capacity: int = Field(10, ge=1)
+    name: str = Field(..., min_length=1, max_length=128, examples=["Quarantine"])
+    capacity: int = Field(10, ge=1, examples=[15])
 
 
 class ShelterSectionResponse(BaseModel):
@@ -64,8 +64,8 @@ class ShelterSectionResponse(BaseModel):
 
 
 class KennelCreate(BaseModel):
-    identifier: str = Field(..., min_length=1, max_length=64)
-    capacity: int = Field(1, ge=1)
+    identifier: str = Field(..., min_length=1, max_length=64, examples=["K-08"])
+    capacity: int = Field(1, ge=1, examples=[2])
 
 
 class KennelResponse(BaseModel):
@@ -84,7 +84,7 @@ class FacilityTransferCreate(BaseModel):
     dog_id: uuid.UUID
     from_facility_id: uuid.UUID
     to_facility_id: uuid.UUID
-    notes: str | None = None
+    notes: str | None = Field(None, examples=["Transferring for specialized surgical care."])
 
 
 class FacilityTransferResponse(BaseModel):
@@ -107,9 +107,11 @@ class FacilityTransferResponse(BaseModel):
 
 class DailyCareLogCreate(BaseModel):
     dog_id: uuid.UUID
-    dietary_requirements: str | None = None
-    exercise_hours: float = Field(0.0, ge=0.0, le=24.0)
-    behavioral_enrichment: str | None = None
+    dietary_requirements: str | None = Field(
+        None, examples=["Grain-free diet, small portions 3x daily"]
+    )
+    exercise_hours: float = Field(0.0, ge=0.0, le=24.0, examples=[1.5])
+    behavioral_enrichment: str | None = Field(None, examples=["Puzzle feeder, 20 min outdoor play"])
 
 
 class DailyCareLogResponse(BaseModel):

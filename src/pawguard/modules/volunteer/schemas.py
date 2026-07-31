@@ -26,16 +26,18 @@ class VolunteerProfileCreate(BaseModel):
 
 
 class VolunteerProfileUpdate(BaseModel):
-    status: VolunteerStatus | None = None
-    emergency_contact_name: str | None = None
-    emergency_contact_phone: str | None = None
-    skills: str | None = None
-    availability: str | None = None
-    notes: str | None = None
-    medical_conditions: str | None = None
-    animal_handling_experience: str | None = None
-    background_check_completed: bool | None = None
-    background_check_notes: str | None = None
+    status: VolunteerStatus | None = Field(None, examples=["active"])
+    emergency_contact_name: str | None = Field(None, examples=["Jane Doe"])
+    emergency_contact_phone: str | None = Field(None, examples=["+1-555-0100"])
+    skills: str | None = Field(None, examples=["Grooming, Transport"])
+    availability: str | None = Field(None, examples=["Weekends"])
+    notes: str | None = Field(None, examples=["Onboarding completed."])
+    medical_conditions: str | None = Field(None, examples=["None"])
+    animal_handling_experience: str | None = Field(
+        None, examples=["Comfortable with large breeds."]
+    )
+    background_check_completed: bool | None = Field(None, examples=[True])
+    background_check_notes: str | None = Field(None, examples=["Clear, verified 2026-07-20."])
 
 
 class VolunteerProfileResponse(BaseModel):
@@ -60,10 +62,10 @@ class VolunteerProfileResponse(BaseModel):
 
 class VolunteerShiftCreate(BaseModel):
     shelter_facility_id: uuid.UUID | None = None
-    role_name: str = Field(..., min_length=1, max_length=64)
-    start_at: datetime
-    end_at: datetime
-    capacity: int = Field(5, ge=1)
+    role_name: str = Field(..., min_length=1, max_length=64, examples=["Dog Walking"])
+    start_at: datetime = Field(..., examples=["2026-08-01T09:00:00Z"])
+    end_at: datetime = Field(..., examples=["2026-08-01T12:00:00Z"])
+    capacity: int = Field(5, ge=1, examples=[5])
 
 
 class VolunteerShiftResponse(BaseModel):

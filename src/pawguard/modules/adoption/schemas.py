@@ -28,15 +28,25 @@ class AdoptionApplicationCreate(BaseModel):
 
 
 class AdoptionApplicationUpdate(BaseModel):
-    status: AdoptionStatus | None = None
-    vetting_officer_notes: str | None = None
-    home_inspection_scheduled_at: datetime | None = None
-    home_inspection_notes: str | None = None
-    adoption_agreement_url: str | None = None
+    status: AdoptionStatus | None = Field(None, examples=["home_check"])
+    vetting_officer_notes: str | None = Field(
+        None, examples=["Phone interview completed, applicant is a strong candidate."]
+    )
+    home_inspection_scheduled_at: datetime | None = Field(
+        None, examples=["2026-08-15T14:00:00Z"]
+    )
+    home_inspection_notes: str | None = Field(
+        None, examples=["Yard is securely fenced, home is clean and pet-ready."]
+    )
+    adoption_agreement_url: str | None = Field(
+        None, examples=["documents/agreement_1a2b3c.pdf"]
+    )
 
 
 class AdoptionStatusUpdate(BaseModel):
-    status: AdoptionStatus = Field(..., description="New status for the adoption application")
+    status: AdoptionStatus = Field(
+        ..., description="New status for the adoption application", examples=["approved"]
+    )
 
 
 class AdoptionApplicationResponse(BaseModel):
@@ -65,12 +75,14 @@ class AdoptionApplicationResponse(BaseModel):
 
 
 class AdoptionScoreCreate(BaseModel):
-    home_environment_score: int = Field(..., ge=1, le=10)
-    pet_care_knowledge_score: int = Field(..., ge=1, le=10)
-    financial_readiness_score: int = Field(..., ge=1, le=10)
-    lifestyle_compatibility_score: int = Field(..., ge=1, le=10)
-    recommendation: str = Field(..., min_length=1, max_length=32)
-    notes: str | None = None
+    home_environment_score: int = Field(..., ge=1, le=10, examples=[8])
+    pet_care_knowledge_score: int = Field(..., ge=1, le=10, examples=[7])
+    financial_readiness_score: int = Field(..., ge=1, le=10, examples=[9])
+    lifestyle_compatibility_score: int = Field(..., ge=1, le=10, examples=[8])
+    recommendation: str = Field(..., min_length=1, max_length=32, examples=["approve"])
+    notes: str | None = Field(
+        None, examples=["Strong candidate, active lifestyle matches dog's energy."]
+    )
 
 
 class AdoptionScoreResponse(BaseModel):

@@ -9,14 +9,18 @@ from pydantic import BaseModel, EmailStr, Field, field_validator, model_validato
 # ── Role ─────────────────────────────────────────────────────────────────────
 
 class RoleCreateRequest(BaseModel):
-    name: str = Field(min_length=1, max_length=64)
-    description: str | None = None
-    permission_codes: list[str] = []
+    name: str = Field(min_length=1, max_length=64, examples=["event_coordinator"])
+    description: str | None = Field(None, examples=["Plans and runs community adoption events."])
+    permission_codes: list[str] = Field(
+        default=[], examples=[["adoption:read", "public:read"]]
+    )
 
 
 class RoleUpdateRequest(BaseModel):
-    description: str | None = None
-    permission_codes: list[str] | None = None
+    description: str | None = Field(None, examples=["Updated role description."])
+    permission_codes: list[str] | None = Field(
+        None, examples=[["adoption:read", "adoption:process"]]
+    )
 
 
 class RoleResponse(BaseModel):
@@ -59,18 +63,18 @@ class PermissionResponse(BaseModel):
 # ── User (admin) ─────────────────────────────────────────────────────────────
 
 class AdminUserCreateRequest(BaseModel):
-    email: EmailStr
-    password: str = Field(min_length=10)
-    full_name: str = Field(min_length=1, max_length=255)
-    phone: str | None = None
-    role_names: list[str] = []
+    email: EmailStr = Field(..., examples=["new.staff@pawguard.com"])
+    password: str = Field(min_length=10, examples=["StrongP@ssw0rd"])
+    full_name: str = Field(min_length=1, max_length=255, examples=["Alex Rivera"])
+    phone: str | None = Field(None, examples=["+1-555-0100"])
+    role_names: list[str] = Field(default=[], examples=[["shelter_manager"]])
 
 
 class AdminUserUpdateRequest(BaseModel):
-    full_name: str | None = None
-    phone: str | None = None
-    is_active: bool | None = None
-    role_names: list[str] | None = None
+    full_name: str | None = Field(None, examples=["Alex Rivera"])
+    phone: str | None = Field(None, examples=["+1-555-0100"])
+    is_active: bool | None = Field(None, examples=[True])
+    role_names: list[str] | None = Field(None, examples=[["shelter_manager"]])
 
 
 class AdminUserResponse(BaseModel):
