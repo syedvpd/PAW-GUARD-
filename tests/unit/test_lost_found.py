@@ -230,8 +230,118 @@ class TestLostFoundService:
             found_at=datetime.now(UTC), latitude=40.001, longitude=-74.001,
             status=ReportStatus.ACTIVE,
         )
-        score = service._evaluate_match_score(lost, found)
-        assert score >= 90.0
+        score, gap_days, reasons = service._evaluate_match_score(lost, found)
+        assert score >= 80.0
+        assert isinstance(gap_days, float)
+        assert isinstance(reasons, list)
+
+    @pytest.mark.asyncio
+    async def test_evaluate_match_score_temporal_gap(self, service):
+        lost = LostReport(
+            id=uuid.uuid4(), user_id=uuid.uuid4(), pet_name="M", breed="labrador",
+            color="brown", location_address="Addr",
+            lost_at=datetime(2026, 7, 1, tzinfo=UTC),
+            latitude=40.0, longitude=-74.0, status=ReportStatus.ACTIVE,
+        )
+        found_close = FoundReport(
+            id=uuid.uuid4(), user_id=uuid.uuid4(), breed_observed="labrador",
+            color_observed="brown", location_address="Addr2",
+            found_at=datetime(2026, 7, 2, tzinfo=UTC),
+            latitude=40.001, longitude=-74.001, status=ReportStatus.ACTIVE,
+        )
+        found_far = FoundReport(
+            id=uuid.uuid4(), user_id=uuid.uuid4(), breed_observed="labrador",
+            color_observed="brown", location_address="Addr2",
+            found_at=datetime(2026, 9, 1, tzinfo=UTC),
+            latitude=40.001, longitude=-74.001, status=ReportStatus.ACTIVE,
+        )
+        score_close, gap_close, _ = service._evaluate_match_score(lost, found_close)
+        score_far, gap_far, _ = service._evaluate_match_score(lost, found_far)
+        assert gap_close < gap_far
+        assert score_close > score_far
+
+    @pytest.mark.asyncio
+    async def test_evaluate_match_score_collar_boost(self, service):
+        lost = LostReport(
+            id=uuid.uuid4(), user_id=uuid.uuid4(), pet_name="M", breed="labrador",
+            color="brown", location_address="Addr", lost_at=datetime.now(UTC),
+            latitude=40.0, longitude=-74.0, status=ReportStatus.ACTIVE,
+            collar_color="Red",
+        )
+        found_match = FoundReport(
+            id=uuid.uuid4(), user_id=uuid.uuid4(), breed_observed="labrador",
+            color_observed="brown", location_address="Addr2",
+            found_at=datetime.now(UTC), latitude=40.001, longitude=-74.001,
+            status=ReportStatus.ACTIVE, collar_color="Red",
+        )
+        found_no_collar = FoundReport(
+            id=uuid.uuid4(), user_id=uuid.uuid4(), breed_observed="labrador",
+            color_observed="brown", location_address="Addr2",
+            found_at=datetime.now(UTC), latitude=40.001, longitude=-74.001,
+            status=ReportStatus.ACTIVE, collar_color=None,
+        )
+        score_with, _, _ = service._evaluate_match_score(lost, found_match)
+        score_without, _, _ = service._evaluate_match_score(lost, found_no_collar)
+        assert score_with > score_without
+
+    @pytest.mark.asyncio
+    async def test_evaluate_match_score_markers_boost(self, service):
+        lost = LostReport(
+            id=uuid.uuid4(), user_id=uuid.uuid4(), pet_name="M", breed="labrador",
+            color="brown", location_address="Addr", lost_at=datetime.now(UTC),
+            latitude=40.0, longitude=-74.0, status=ReportStatus.ACTIVE,
+            marker_description="White patch on left ear, scar on right leg",
+        )
+        found_match = FoundReport(
+            id=uuid.uuid4(), user_id=uuid.uuid4(), breed_observed="labrador",
+            color_observed="brown", location_address="Addr2",
+            found_at=datetime.now(UTC), latitude=40.001, longitude=-74.001,
+            status=ReportStatus.ACTIVE,
+            marker_description="white patch on left ear, limping",
+        )
+        found_no_match = FoundReport(
+            id=uuid.uuid4(), user_id=uuid.uuid4(), breed_observed="labrador",
+            color_observed="brown", location_address="Addr2",
+            found_at=datetime.now(UTC), latitude=40.001, longitude=-74.001,
+            status=ReportStatus.ACTIVE, marker_description="tattoo on tail",
+        )
+        score_with, _, _ = service._evaluate_match_score(lost, found_match)
+        score_without, _, _ = service._evaluate_match_score(lost, found_no_match)
+        assert score_with > score_without
+
+    @pytest.mark.asyncio
+    async def test_evaluate_match_score_within_bounds(self, service):
+        lost = LostReport(
+            id=uuid.uuid4(), user_id=uuid.uuid4(), pet_name="M", breed="labrador",
+            color="brown", location_address="Addr", lost_at=datetime.now(UTC),
+            latitude=40.0, longitude=-74.0, status=ReportStatus.ACTIVE,
+        )
+        found = FoundReport(
+            id=uuid.uuid4(), user_id=uuid.uuid4(), breed_observed="poodle",
+            color_observed="white", location_address="Addr2",
+            found_at=datetime.now(UTC), latitude=45.0, longitude=-80.0,
+            status=ReportStatus.ACTIVE,
+        )
+        score, gap_days, reasons = service._evaluate_match_score(lost, found)
+        assert 0.0 <= score <= 100.0
+        assert isinstance(gap_days, float)
+        assert isinstance(reasons, list)
+
+    @pytest.mark.asyncio
+    async def test_evaluate_match_score_no_match_below_threshold(self, service):
+        lost = LostReport(
+            id=uuid.uuid4(), user_id=uuid.uuid4(), pet_name="M", breed="labrador",
+            color="brown", location_address="Addr", lost_at=datetime.now(UTC),
+            latitude=40.0, longitude=-74.0, status=ReportStatus.ACTIVE,
+        )
+        found = FoundReport(
+            id=uuid.uuid4(), user_id=uuid.uuid4(), breed_observed="poodle",
+            color_observed="white", location_address="Addr2",
+            found_at=datetime.now(UTC), latitude=45.0, longitude=-80.0,
+            status=ReportStatus.ACTIVE,
+        )
+        score, _, _ = service._evaluate_match_score(lost, found)
+        assert score < 50.0
 
 
 class TestOwnershipClaimWorkflow:

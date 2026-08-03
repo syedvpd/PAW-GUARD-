@@ -124,14 +124,18 @@ async def check_equipment_checkout_expiry(ctx: dict[str, object]) -> None:
         notification_svc = NotificationService(repository=NotificationRepository(session))
         for checkout in overdue_checkouts:
             for user_id in staff_user_ids:
+                due_date = (
+                    checkout.expected_return_at.isoformat()
+                    if checkout.expected_return_at
+                    else "unknown"
+                )
                 await notification_svc.create_notification(
                     payload=NotificationCreate(
                         user_id=user_id,
                         title="Equipment Return Overdue",
                         body=(
                             f"Equipment '{checkout.equipment_name}' was due back on "
-                            f"{checkout.expected_return_at.isoformat()} and is still "
-                            f"checked out."
+                            f"{due_date} and is still checked out."
                         ),
                         notification_type="fleet_alert",
                     )

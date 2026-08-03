@@ -11,7 +11,12 @@ from pawguard.core.exceptions import NotFoundError, ValidationFailedError
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
-from pawguard.core.upload import MAX_FILE_SIZE_BYTES, UploadError, verify_mime_type
+from pawguard.core.upload import (
+    MAX_FILE_SIZE_BYTES,
+    UploadError,
+    verify_batch_size,
+    verify_mime_type,
+)
 from pawguard.modules.storage.models import StoredFile
 from pawguard.modules.storage.repository import StorageRepository
 from pawguard.modules.storage.schemas import (
@@ -60,7 +65,9 @@ class StorageService:
             file_id=stored.id,
         )
 
-    async def confirm_upload(self, file_id: uuid.UUID) -> StoredFile:
+    async def confirm_upload(
+        self, file_id: uuid.UUID, batch_file_ids: list[uuid.UUID] | None = None
+    ) -> StoredFile:
         """Verifies the object actually uploaded to S3 before trusting it.
 
         The presigned-URL flow means the client uploads bytes straight to S3;
@@ -68,12 +75,23 @@ class StorageService:
         client-supplied claims. This re-checks real size and file-signature
         (magic bytes) against the object S3 received, deleting it and
         rejecting confirmation if it doesn't match what was declared.
+
+        When ``batch_file_ids`` is provided the combined size of all files
+        in the batch is validated against the 50 MB cap before the
+        individual file is confirmed.
         """
         stored = await self._repo.get_by_id(file_id)
         if stored is None:
             raise NotFoundError("Stored file not found.")
 
+        if batch_file_ids:
+            batch_ids = list(set(batch_file_ids))
+            batch_files = await self._repo.list_by_ids(batch_ids)
+            batch_sizes = [f.file_size for f in batch_files if f.file_size is not None]
+
         try:
+            if batch_file_ids:
+                verify_batch_size(batch_sizes)
             actual_size = self._s3.get_object_size(object_key=stored.object_key)
             if actual_size > MAX_FILE_SIZE_BYTES:
                 raise UploadError(

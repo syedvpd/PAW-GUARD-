@@ -25,6 +25,8 @@ from pawguard.redis.client import ping_redis
 
 logger = get_logger(__name__)
 
+logger = get_logger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
@@ -45,8 +47,9 @@ async def _seed_roles() -> None:
     Reconciliation only creates missing roles/permissions and grants missing
     grants (never revokes), so it is cheap enough to run on every startup.
     """
-    from pawguard.db.session import AsyncSessionLocal
     from scripts.seed_roles_and_permissions import reconcile_roles
+
+    from pawguard.db.session import AsyncSessionLocal
 
     async with AsyncSessionLocal() as session:
         await reconcile_roles(session, verbose=False)

@@ -102,6 +102,12 @@ class StorageRepository:
 
         return results, total
 
+    async def list_by_ids(self, ids: list[uuid.UUID]) -> Sequence[StoredFile]:
+        stmt = select(StoredFile).where(
+            StoredFile.id.in_(ids), StoredFile.deleted_at.is_(None)
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
     async def soft_delete(self, file_id: uuid.UUID) -> StoredFile | None:
         file = await self.get_by_id(file_id)
         if file is None:

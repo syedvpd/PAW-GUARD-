@@ -1,7 +1,7 @@
 """Unit tests for MedicalService with mocked repository."""
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest

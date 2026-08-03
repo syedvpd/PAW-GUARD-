@@ -19,6 +19,8 @@ from pawguard.modules.donation.models import (
     Donation,
     DonationStatus,
     DonationType,
+    RecurringStatus,
+    RecurringSubscription,
 )
 from pawguard.modules.donation.repository import DonationRepository
 from pawguard.modules.grievance.models import ServiceFeedback
@@ -288,6 +290,162 @@ async def send_post_service_feedback_surveys(ctx: dict[str, object]) -> None:
                     action_url=action_url,
                 )
             )
+        await session.commit()
+
+
+async def check_grievance_sla_escalation(ctx: dict[str, object]) -> None:
+    """Auto-escalate grievance tickets approaching or past SLA deadline.
+
+    Tickets past sla_due_at without a first response are escalated to the
+    next level; the assigned admin (or all admins if unassigned) receive a
+    notification. Repeats every escalation cycle so unactioned tickets
+    continue climbing (PRR 3.14 mandatory response SLAs).
+    """
+    from pawguard.modules.grievance.models import GrievanceStatus, GrievanceTicket
+
+    now = datetime.now(UTC)
+
+    async with AsyncSessionLocal() as session:
+        # Find open/investigating tickets past SLA without a first response
+        stmt = (
+            select(GrievanceTicket).where(
+                GrievanceTicket.deleted_at.is_(None),
+                GrievanceTicket.status.in_([
+                    GrievanceStatus.OPEN,
+                    GrievanceStatus.INVESTIGATING,
+                    GrievanceStatus.AWAITING_RESPONSE,
+                ]),
+                GrievanceTicket.sla_due_at.isnot(None),
+                GrievanceTicket.sla_due_at < now,
+                GrievanceTicket.first_responded_at.is_(None),
+            )
+        )
+        overdue_tickets = (await session.execute(stmt)).scalars().all()
+        if not overdue_tickets:
+            return
+
+        notification_svc = NotificationService(repository=NotificationRepository(session))
+        for ticket in overdue_tickets:
+            ticket.escalation_level += 1
+            ticket.escalated_at = now
+
+            # Notify the assigned admin, or all grievance-capable admins
+            if ticket.assigned_to_admin_id:
+                target_ids = [ticket.assigned_to_admin_id]
+            else:
+                target_ids = await _staff_user_ids(
+                    session, pc.GRIEVANCE_UPDATE, pc.GRIEVANCE_ASSIGN,
+                )
+
+            for uid in target_ids:
+                await notification_svc.create_notification(
+                    payload=NotificationCreate(
+                        user_id=uid,
+                        title="Grievance SLA Breach",
+                        body=(
+                            f"Ticket {ticket.id} has exceeded its SLA deadline "
+                            f"(due {ticket.sla_due_at}). "
+                            f"Escalation level: {ticket.escalation_level}. "
+                            f"Please respond immediately."
+                        ),
+                        notification_type="grievance_sla_breach",
+                        action_url=f"/api/v1/grievance/{ticket.id}",
+                    )
+                )
+
+        await session.commit()
+
+
+async def process_recurring_donation_charges(ctx: dict[str, object]) -> None:
+    """Process general recurring donations whose next_charge_date has arrived.
+
+    Each charge creates a PENDING Donation (donation_type=RECURRING) linked
+    back to the RecurringSubscription. A payment order is created when a
+    gateway is available; otherwise the donation stays PENDING for manual
+    collection. This is distinct from sponsorship charges which link to
+    DogSponsorship records (PRR 3.11 audit 3.11).
+    """
+    from datetime import date as date_type
+
+    today = date_type.today()
+
+    try:
+        gateway = get_payment_gateway()
+    except PaymentGatewayError:
+        gateway = None
+
+    async with AsyncSessionLocal() as session:
+        # Find active subscriptions whose next_charge_date is today or past
+        stmt = (
+            select(RecurringSubscription)
+            .where(
+                RecurringSubscription.status == RecurringStatus.ACTIVE,
+                RecurringSubscription.next_charge_date <= today,
+            )
+        )
+        subscriptions = (await session.execute(stmt)).scalars().all()
+        if not subscriptions:
+            return
+
+        donation_repo = DonationRepository(session)
+        notification_repo = NotificationRepository(session)
+        notification_svc = NotificationService(repository=notification_repo)
+
+        for sub in subscriptions:
+            # Skip if there is already an active PENDING donation for this subscription
+            pending_stmt = select(Donation).where(
+                Donation.recurring_subscription_id == sub.id,
+                Donation.status == DonationStatus.PENDING,
+            )
+            existing_pending = (await session.execute(pending_stmt)).scalar_one_or_none()
+            if existing_pending is not None:
+                continue
+
+            donation = Donation(
+                donor_id=sub.donor_id,
+                amount=sub.amount,
+                currency=sub.currency,
+                donation_type=DonationType.RECURRING,
+                status=DonationStatus.PENDING,
+                recurring_subscription_id=sub.id,
+                notes="Monthly recurring donation charge requires payment.",
+            )
+
+            if gateway is not None:
+                try:
+                    order = await gateway.create_order(
+                        amount=sub.amount,
+                        currency=sub.currency,
+                        receipt=str(uuid.uuid4()),
+                        notes={
+                            "recurring_subscription_id": str(sub.id),
+                            "donor_id": str(sub.donor_id),
+                        },
+                    )
+                except PaymentGatewayError:
+                    order = None
+
+                if order is not None:
+                    donation.payment_provider = order.provider
+                    donation.gateway_order_id = order.order_id
+                    donation.notes = "Monthly recurring donation initiated; awaiting payment."
+
+            await donation_repo.create_donation(donation)
+
+            # Notify the donor
+            if sub.donor and sub.donor.user_id:
+                await notification_svc.create_notification(
+                    payload=NotificationCreate(
+                        user_id=sub.donor.user_id,
+                        title="Monthly Recurring Donation",
+                        body=(
+                            f"Your monthly recurring donation of {sub.amount} {sub.currency} "
+                            f"is now due. We'll let you know once your payment has been received."
+                        ),
+                        notification_type="recurring_donation_charge",
+                    )
+                )
+
         await session.commit()
 
 

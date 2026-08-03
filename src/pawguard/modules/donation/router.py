@@ -17,9 +17,15 @@ from pawguard.core.bulk import (
     BulkStatusUpdateRequest,
     BulkStatusUpdateResponse,
 )
-from pawguard.core.exceptions import ForbiddenError, ValidationFailedError, parse_enum
+from pawguard.core.exceptions import (
+    ForbiddenError,
+    NotFoundError,
+    ValidationFailedError,
+    parse_enum,
+)
 from pawguard.core.pagination import PageParams, page_params
 from pawguard.core.payments import PaymentGatewayError, get_payment_gateway
+from pawguard.core.pii import mask_email, mask_full_name, mask_phone
 from pawguard.core.rate_limiter import rate_limit
 from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.core.search import SortParams, sort_params
@@ -52,6 +58,8 @@ from pawguard.modules.donation.schemas import (
     DonorProfileCreate,
     DonorProfileResponse,
     DonorProfileUpdate,
+    RecurringSubscriptionCreate,
+    RecurringSubscriptionResponse,
     SponsorshipCreate,
     SponsorshipResponse,
     SponsorshipStatusUpdate,
@@ -64,6 +72,40 @@ from pawguard.services.audit_service import AuditService
 from pawguard.services.storage_service import StorageService
 
 router = APIRouter(prefix="/donations", tags=["donations"])
+
+# Roles allowed to see unmasked donor PII (PRR §6.1).
+_UNMASKED_DONOR_PII_PERMISSIONS = {
+    "donation:manage",
+    "donation:read",
+    "finance:read",
+    "system:admin",
+}
+
+
+def _mask_donor_pii(
+    item: DonorProfileResponse, current_user: CurrentUser
+) -> DonorProfileResponse:
+    """Return a copy of the response with donor PII masked unless the
+    caller holds donor-management permissions or is the donor themselves."""
+    is_owner = current_user.user.id == item.user_id
+    user_permissions = {p.code for r in current_user.user.roles for p in r.permissions}
+    if is_owner or (_UNMASKED_DONOR_PII_PERMISSIONS & user_permissions):
+        return item
+    masked_user = item.user
+    if masked_user is not None:
+        masked_user = masked_user.model_copy(
+            update={
+                "email": mask_email(masked_user.email),
+                "full_name": mask_full_name(masked_user.full_name),
+                "phone": mask_phone(masked_user.phone),
+            }
+        )
+    return item.model_copy(
+        update={
+            "tax_identifier": "***MASKED***" if item.tax_identifier else None,
+            "user": masked_user,
+        }
+    )
 
 
 def get_donation_service(
@@ -297,13 +339,16 @@ async def list_donors(
     page: PageParams = Depends(page_params),
     sort: SortParams = Depends(sort_params),
     search: str | None = Query(None, description="Search donor profiles"),
+    current_user: CurrentUser = Depends(get_current_user),
     service: DonationService = Depends(get_donation_service),
 ) -> PaginatedResponse[DonorProfileResponse]:
-    return await service.list_donors_paginated(
+    result = await service.list_donors_paginated(
         page=page,
         sort=sort,
         search_term=search,
     )
+    data = [_mask_donor_pii(d, current_user) for d in result.data]
+    return PaginatedResponse(data=data, meta=result.meta)
 
 
 @router.get(
@@ -620,3 +665,106 @@ async def delete_campaign(
         ip_address=request.client.host if request.client else None,
     )
     return ApiResponse(message="Donation campaign deleted successfully.")
+
+
+# ── Donor self-service ──────────────────────────────────────────────
+
+
+@router.get(
+    "/donors/me",
+    response_model=ApiResponse[DonorProfileResponse],
+)
+async def get_my_donor_profile(
+    current_user: CurrentUser = Depends(get_current_user),
+    service: DonationService = Depends(get_donation_service),
+) -> ApiResponse[DonorProfileResponse]:
+    donor = await service.get_or_create_donor(current_user.id)
+    return ApiResponse(
+        data=DonorProfileResponse.model_validate(donor),
+        message="Donor profile retrieved.",
+    )
+
+
+# ── Recurring subscriptions (audit 3.11) ────────────────────────────
+
+
+@router.post(
+    "/recurring",
+    response_model=ApiResponse[RecurringSubscriptionResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_recurring_subscription(
+    payload: RecurringSubscriptionCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: DonationService = Depends(get_donation_service),
+) -> ApiResponse[RecurringSubscriptionResponse]:
+    subscription = await service.create_recurring_subscription(
+        current_user.id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(
+        data=RecurringSubscriptionResponse.model_validate(subscription),
+        message="Recurring subscription created successfully.",
+    )
+
+
+@router.get(
+    "/recurring",
+    response_model=ApiResponse[list[RecurringSubscriptionResponse]],
+)
+async def list_my_recurring_subscriptions(
+    current_user: CurrentUser = Depends(get_current_user),
+    service: DonationService = Depends(get_donation_service),
+) -> ApiResponse[list[RecurringSubscriptionResponse]]:
+    donor = await service._repo.get_donor_by_user_id(current_user.id)
+    if donor is None:
+        return ApiResponse(data=[], message="No recurring subscriptions found.")
+    subscriptions = await service._repo.get_recurring_subscriptions_for_donor(
+        donor.id,
+    )
+    return ApiResponse(
+        data=[
+            RecurringSubscriptionResponse.model_validate(s)
+            for s in subscriptions
+        ],
+        message="Recurring subscriptions retrieved.",
+    )
+
+
+@router.delete(
+    "/recurring/{subscription_id}",
+    response_model=ApiResponse[RecurringSubscriptionResponse],
+)
+async def cancel_recurring_subscription(
+    subscription_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: DonationService = Depends(get_donation_service),
+) -> ApiResponse[RecurringSubscriptionResponse]:
+    subscription = await service._repo.get_recurring_subscription_by_id(
+        subscription_id,
+    )
+    if subscription is None:
+        raise NotFoundError("Recurring subscription not found.")
+    is_owner = (
+        subscription.donor is not None
+        and subscription.donor.user_id == current_user.user.id
+    )
+    if not is_owner and not has_permission(
+        current_user.user, "donation:manage"
+    ):
+        raise ForbiddenError(
+            "You do not have permission to cancel this subscription."
+        )
+    updated = await service.cancel_recurring_subscription(
+        subscription_id,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(
+        data=RecurringSubscriptionResponse.model_validate(updated),
+        message="Recurring subscription cancelled successfully.",
+    )

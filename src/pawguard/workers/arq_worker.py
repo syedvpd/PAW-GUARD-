@@ -36,11 +36,18 @@ from pawguard.workers.jobs.email_jobs import (
     send_notification_email_job,
     send_password_reset_email_job,
 )
+from pawguard.workers.jobs.fleet_jobs import (
+    check_equipment_checkout_expiry,
+    check_fleet_maintenance_due,
+    check_vehicle_insurance_expiry,
+)
 from pawguard.workers.jobs.scheduled_jobs import (
+    check_grievance_sla_escalation,
     check_inventory_expiry,
     check_inventory_low_stock,
     check_vaccination_renewals,
     post_adoption_followups,
+    process_recurring_donation_charges,
     process_sponsorship_charges,
     send_post_service_feedback_surveys,
 )
@@ -62,7 +69,12 @@ class WorkerSettings:
         check_vaccination_renewals,
         post_adoption_followups,
         process_sponsorship_charges,
+        process_recurring_donation_charges,
         send_post_service_feedback_surveys,
+        check_fleet_maintenance_due,
+        check_vehicle_insurance_expiry,
+        check_equipment_checkout_expiry,
+        check_grievance_sla_escalation,
     ]
     cron_jobs = [
         cron(check_inventory_low_stock, hour={0, 12}, minute={0}),
@@ -70,7 +82,12 @@ class WorkerSettings:
         cron(check_vaccination_renewals, hour={9}, minute={30}),
         cron(post_adoption_followups, hour={10}, minute={0}),
         cron(send_post_service_feedback_surveys, hour={10}, minute={30}),
-        cron(process_sponsorship_charges, hour={8}, minute={0}),
+        cron(process_sponsorship_charges, hour=8, minute=0),
+        cron(process_recurring_donation_charges, hour=8, minute=15),
+        cron(check_fleet_maintenance_due, hour=7, minute=0),
+        cron(check_vehicle_insurance_expiry, hour=7, minute=30),
+        cron(check_equipment_checkout_expiry, hour=7, minute=45),
+        cron(check_grievance_sla_escalation, hour={0, 12}, minute={15}),
     ]
     on_startup = startup
     redis_settings = RedisSettings.from_dsn(settings.redis_url)

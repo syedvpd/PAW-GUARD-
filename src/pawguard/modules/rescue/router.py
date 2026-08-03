@@ -30,6 +30,7 @@ from pawguard.modules.rescue.repository import RescueRepository
 from pawguard.modules.rescue.schemas import (
     PublicRescueStatusResponse,
     RescueDispatchCreate,
+    RescueEscalateCreate,
     RescueReportCreate,
     RescueRequestCreate,
     RescueRequestResponse,
@@ -171,7 +172,9 @@ async def dispatch_team(
     rescue = await service.dispatch_team(
         request_id,
         assigned_driver_id=payload.assigned_driver_id,
+        assigned_agent_ids=payload.assigned_agent_ids,
         vehicle_id=payload.vehicle_id,
+        assigned_vehicle_id=payload.assigned_vehicle_id,
         equipment_details=payload.equipment_details,
         escalation_type=payload.escalation_type,
         escalation_notes=payload.escalation_notes,
@@ -183,6 +186,32 @@ async def dispatch_team(
         rescue,
         current_user,
         message="Rescue vehicle and team dispatched successfully.",
+    )
+
+
+@router.post(
+    "/{request_id}/escalate",
+    response_model=ApiResponse[RescueRequestResponse],
+    dependencies=[Depends(require_permission("rescue:update"))],
+)
+async def escalate_rescue(
+    request_id: uuid.UUID,
+    payload: RescueEscalateCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: RescueService = Depends(get_rescue_service),
+) -> ApiResponse[RescueRequestResponse]:
+    rescue = await service.escalate(
+        request_id,
+        escalation_type=payload.escalation_type,
+        escalation_notes=payload.escalation_notes,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return _masked_rescue_response(
+        rescue,
+        current_user,
+        message="Rescue case escalated successfully.",
     )
 
 
@@ -340,12 +369,16 @@ async def list_requests(
     urgent_only: bool | None = Query(
         None, description="Filter to urgent-flagged cases (PRR 3.1.1)"
     ),
+    assigned_to_me: bool | None = Query(
+        None, description="Filter to requests assigned to the current user"
+    ),
     current_user: CurrentUser = Depends(get_current_user),
     service: RescueService = Depends(get_rescue_service),
 ) -> PaginatedResponse[RescueRequestResponse]:
     result = await service.list_requests_paginated(
         page=page, sort=sort, search_term=search, status=status,
         severity=severity, urgent_only=urgent_only,
+        assigned_to_me=current_user.id if assigned_to_me else None,
     )
     data = [_mask_reporter_pii(item, current_user) for item in result.data]
     return PaginatedResponse(data=data, meta=result.meta)

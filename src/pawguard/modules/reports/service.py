@@ -565,7 +565,7 @@ class ReportService:
         timestamps.sort()
         gaps = [
             (later - earlier).total_seconds() / 86400.0
-            for earlier, later in zip(timestamps, timestamps[1:])
+            for earlier, later in zip(timestamps, timestamps[1:], strict=True)
         ]
         avg_movement_interval = sum(gaps) / len(gaps) if gaps else None
 
@@ -608,13 +608,24 @@ class ReportService:
         if movements:
             movement_rows = []
             for reference, type_buckets in sorted(movement_by_ref.items()):
-                movement_rows.append([
-                    reference,
-                    f"{type_buckets.get(MovementType.CHECK_IN, {'quantity': 0.0})['quantity']:.1f}",
-                    f"{type_buckets.get(MovementType.CHECK_OUT, {'quantity': 0.0})['quantity']:.1f}",
-                    f"{type_buckets.get(MovementType.ADJUSTMENT, {'quantity': 0.0})['quantity']:.1f}",
-                    str(sum(bucket["count"] for bucket in type_buckets.values())),
-                ])
+                in_qty = type_buckets.get(MovementType.CHECK_IN, {"quantity": 0.0})[
+                    "quantity"
+                ]
+                out_qty = type_buckets.get(
+                    MovementType.CHECK_OUT, {"quantity": 0.0}
+                )["quantity"]
+                adj_qty = type_buckets.get(
+                    MovementType.ADJUSTMENT, {"quantity": 0.0}
+                )["quantity"]
+                movement_rows.append(
+                    [
+                        reference,
+                        f"{in_qty:.1f}",
+                        f"{out_qty:.1f}",
+                        f"{adj_qty:.1f}",
+                        str(sum(bucket["count"] for bucket in type_buckets.values())),
+                    ]
+                )
             movement_rows.append([
                 "TOTAL", f"{check_in_total:.1f}", f"{check_out_total:.1f}",
                 f"{adjustment_total:.1f}", str(len(movements)),

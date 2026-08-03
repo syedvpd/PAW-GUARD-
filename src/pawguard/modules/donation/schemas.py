@@ -13,6 +13,8 @@ from pawguard.modules.donation.models import (
     CampaignType,
     DonationStatus,
     DonationType,
+    RecurringFrequency,
+    RecurringStatus,
     SponsorshipStatus,
 )
 
@@ -125,6 +127,30 @@ class SponsorshipResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     dog: DogProfileResponse | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RecurringSubscriptionCreate(BaseModel):
+    amount: float = Field(..., ge=1.0, examples=[50.0])
+    currency: str = Field(
+        default_factory=_default_currency, min_length=3, max_length=3, examples=["USD"]
+    )
+    frequency: RecurringFrequency = RecurringFrequency.MONTHLY
+
+
+class RecurringSubscriptionResponse(BaseModel):
+    id: uuid.UUID
+    donor_id: uuid.UUID
+    amount: float
+    currency: str
+    frequency: RecurringFrequency
+    status: RecurringStatus
+    next_charge_date: date
+    started_at: datetime
+    cancelled_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 

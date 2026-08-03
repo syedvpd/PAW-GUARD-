@@ -3,7 +3,6 @@
 import math
 import uuid
 from collections.abc import Sequence
-from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from pawguard.core.exceptions import ForbiddenError, NotFoundError, ValidationFailedError
@@ -49,6 +48,9 @@ class LostFoundService:
             breed=payload.breed.lower(),
             color=payload.color.lower(),
             microchip_id=payload.microchip_id,
+            collar_color=payload.collar_color,
+            collar_description=payload.collar_description,
+            marker_description=payload.marker_description,
             location_address=payload.location_address,
             latitude=payload.latitude,
             longitude=payload.longitude,
@@ -77,6 +79,9 @@ class LostFoundService:
             user_id=user_id,
             breed_observed=payload.breed_observed.lower(),
             color_observed=payload.color_observed.lower(),
+            collar_color=payload.collar_color,
+            collar_description=payload.collar_description,
+            marker_description=payload.marker_description,
             location_address=payload.location_address,
             latitude=payload.latitude,
             longitude=payload.longitude,
@@ -404,22 +409,42 @@ class LostFoundService:
         c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
         return r * c
 
-    def _evaluate_match_score(self, lost: LostReport, found: FoundReport) -> float:
+    def _evaluate_match_score(
+        self, lost: LostReport, found: FoundReport
+    ) -> tuple[float, float, list[str]]:
+        """Compute a confidence score (0-100) for a lost/found pair.
+
+        Weight breakdown (total = 100):
+            Breed match:            25.0
+            Color match:            25.0
+            Distance (Haversine):   20.0
+            Temporal alignment:     15.0
+            Collar color match:     10.0
+            Marker overlap:          5.0
+
+        Returns:
+            (confidence_score, temporal_gap_days, match_reasons)
+        """
         score = 0.0
+        reasons: list[str] = []
 
-        # 1. Breed match (max 33.33)
+        # 1. Breed match (max 25.0)
         if lost.breed == found.breed_observed:
-            score += 33.33
+            score += 25.0
+            reasons.append("breed_exact")
         elif lost.breed in found.breed_observed or found.breed_observed in lost.breed:
-            score += 15.0  # partial match
+            score += 15.0
+            reasons.append("breed_partial")
 
-        # 2. Color match (max 33.33)
+        # 2. Color match (max 25.0)
         if lost.color == found.color_observed:
-            score += 33.33
+            score += 25.0
+            reasons.append("color_exact")
         elif lost.color in found.color_observed or found.color_observed in lost.color:
-            score += 15.0  # partial match
+            score += 15.0
+            reasons.append("color_partial")
 
-        # 3. Distance Match (max 33.34)
+        # 3. Distance Match (max 20.0)
         dist = self._calculate_distance_km(
             float(lost.latitude) if lost.latitude is not None else None,
             float(lost.longitude) if lost.longitude is not None else None,
@@ -427,23 +452,77 @@ class LostFoundService:
             float(found.longitude) if found.longitude is not None else None,
         )
         if dist <= 2.0:
-            score += 33.34
-        elif dist <= 5.0:
             score += 20.0
+            reasons.append("distance_near")
+        elif dist <= 5.0:
+            score += 12.0
+            reasons.append("distance_close")
         elif dist <= 10.0:
-            score += 10.0
+            score += 6.0
+            reasons.append("distance_moderate")
 
-        return round(score, 2)
+        # 4. Temporal alignment (max 15.0)
+        lost_dt = lost.lost_at
+        found_dt = found.found_at
+        temporal_gap_days = abs((lost_dt - found_dt).total_seconds()) / 86400.0
+        if temporal_gap_days <= 1:
+            score += 15.0
+            reasons.append("temporal_same_day")
+        elif temporal_gap_days <= 3:
+            score += 12.0
+            reasons.append("temporal_within_3_days")
+        elif temporal_gap_days <= 7:
+            score += 9.0
+            reasons.append("temporal_within_week")
+        elif temporal_gap_days <= 14:
+            score += 6.0
+            reasons.append("temporal_within_2_weeks")
+        elif temporal_gap_days <= 30:
+            score += 3.0
+            reasons.append("temporal_within_month")
+
+        # 5. Collar color match (max 10.0)
+        if (
+            lost.collar_color
+            and found.collar_color
+            and lost.collar_color.lower() == found.collar_color.lower()
+        ):
+            score += 10.0
+            reasons.append("collar_color_match")
+
+        # 6. Marker description overlap (max 5.0)
+        if lost.marker_description and found.marker_description:
+            lost_markers = {
+                m.strip().lower()
+                for m in lost.marker_description.split(",")
+                if m.strip()
+            }
+            found_markers = {
+                m.strip().lower()
+                for m in found.marker_description.split(",")
+                if m.strip()
+            }
+            overlap = lost_markers & found_markers
+            if overlap:
+                marker_score = min(len(overlap) * 2.5, 5.0)
+                score += marker_score
+                reasons.append("markers_overlap")
+
+        score = round(score, 2)
+        temporal_gap_days = round(temporal_gap_days, 2)
+        return score, temporal_gap_days, reasons
 
     async def _run_matching_for_lost(self, lost: LostReport) -> None:
         active_founds = await self._repo.list_found_reports(status=ReportStatus.ACTIVE)
         for found in active_founds:
-            score = self._evaluate_match_score(lost, found)
+            score, gap_days, reasons = self._evaluate_match_score(lost, found)
             if score >= 50.0:
                 match = ReportMatch(
                     lost_report_id=lost.id,
                     found_report_id=found.id,
                     confidence_score=score,
+                    temporal_gap_days=gap_days,
+                    match_reasons=", ".join(reasons),
                     status=MatchStatus.PENDING,
                 )
                 await self._repo.create_match(match)
@@ -451,12 +530,14 @@ class LostFoundService:
     async def _run_matching_for_found(self, found: FoundReport) -> None:
         active_losts = await self._repo.list_lost_reports(status=ReportStatus.ACTIVE)
         for lost in active_losts:
-            score = self._evaluate_match_score(lost, found)
+            score, gap_days, reasons = self._evaluate_match_score(lost, found)
             if score >= 50.0:
                 match = ReportMatch(
                     lost_report_id=lost.id,
                     found_report_id=found.id,
                     confidence_score=score,
+                    temporal_gap_days=gap_days,
+                    match_reasons=", ".join(reasons),
                     status=MatchStatus.PENDING,
                 )
                 await self._repo.create_match(match)

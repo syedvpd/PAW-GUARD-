@@ -21,6 +21,9 @@ from pawguard.modules.donation.models import (
     DonationStatus,
     DonationType,
     DonorProfile,
+    RecurringFrequency,
+    RecurringStatus,
+    RecurringSubscription,
     SponsorshipStatus,
 )
 from pawguard.modules.donation.repository import DonationRepository
@@ -29,10 +32,12 @@ from pawguard.modules.donation.schemas import (
     DonationCampaignUpdate,
     DonationCreate,
     DonorProfileCreate,
+    RecurringSubscriptionCreate,
     SponsorshipCreate,
 )
 from pawguard.modules.donation.service import DonationService
 from pawguard.modules.notifications.service import NotificationService
+from pawguard.modules.auth.schemas import UserProfile
 from pawguard.services.audit_service import AuditService
 from pawguard.services.storage_service import StorageService
 
@@ -646,3 +651,312 @@ class TestCampaignService:
         )
         assert isinstance(result, PaginatedResponse)
         assert result.meta.total == 1
+
+
+# ── PII masking tests (audit 6.1) ─────────────────────────
+
+
+class TestDonorPIIMasking:
+    @pytest.fixture
+    def mock_repo(self):
+        return AsyncMock(spec=DonationRepository)
+
+    @pytest.fixture
+    def mock_dog_repo(self):
+        return AsyncMock(spec=DogRepository)
+
+    @pytest.fixture
+    def mock_audit(self):
+        return AsyncMock(spec=AuditService)
+
+    @pytest.fixture
+    def service(self, mock_repo, mock_dog_repo, mock_audit):
+        return DonationService(mock_repo, mock_dog_repo, audit_service=mock_audit)
+
+    def test_mask_donor_pii_masks_pii_for_non_staff(self):
+        from pawguard.core.pii import mask_email, mask_full_name, mask_phone
+        from pawguard.modules.donation.router import _mask_donor_pii
+        from pawguard.modules.donation.schemas import DonorProfileResponse
+
+        user_id = uuid.uuid4()
+        donor = DonorProfileResponse(
+            id=uuid.uuid4(),
+            user_id=user_id,
+            tax_identifier="TAX-123",
+            notes="Test donor",
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            user=UserProfile(
+                id=uuid.uuid4(),
+                email="john@example.com",
+                full_name="John Doe",
+                phone="+1-555-0100",
+                is_verified=True,
+                mfa_enabled=False,
+                roles=[],
+            ),
+        )
+
+        class FakeUser:
+            id = uuid.uuid4()
+            roles = []
+
+        class FakeCurrentUser:
+            user = FakeUser()
+
+        current_user = FakeCurrentUser()
+        masked = _mask_donor_pii(donor, current_user)
+
+        assert masked.tax_identifier == "***MASKED***"
+        assert masked.user is not None
+        assert masked.user.email == mask_email("john@example.com")
+        assert masked.user.full_name == mask_full_name("John Doe")
+        assert masked.user.phone == mask_phone("+1-555-0100")
+
+    def test_mask_donor_pii_unmasked_for_owner(self):
+        from pawguard.modules.donation.router import _mask_donor_pii
+        from pawguard.modules.donation.schemas import DonorProfileResponse
+
+        user_id = uuid.uuid4()
+        donor = DonorProfileResponse(
+            id=uuid.uuid4(),
+            user_id=user_id,
+            tax_identifier="TAX-123",
+            notes="Test donor",
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            user=UserProfile(
+                id=uuid.uuid4(),
+                email="john@example.com",
+                full_name="John Doe",
+                phone="+1-555-0100",
+                is_verified=True,
+                mfa_enabled=False,
+                roles=[],
+            ),
+        )
+
+        class FakeUser:
+            id = user_id
+            roles = []
+
+        class FakeCurrentUser:
+            user = FakeUser()
+
+        current_user = FakeCurrentUser()
+        masked = _mask_donor_pii(donor, current_user)
+
+        assert masked.tax_identifier == "TAX-123"
+        assert masked.user.email == "john@example.com"
+        assert masked.user.full_name == "John Doe"
+        assert masked.user.phone == "+1-555-0100"
+
+    def test_mask_donor_pii_unmasked_for_staff(self):
+        from pawguard.modules.donation.router import _mask_donor_pii
+        from pawguard.modules.donation.schemas import DonorProfileResponse
+
+        user_id = uuid.uuid4()
+        donor = DonorProfileResponse(
+            id=uuid.uuid4(),
+            user_id=user_id,
+            tax_identifier="TAX-123",
+            notes="Test donor",
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            user=UserProfile(
+                id=uuid.uuid4(),
+                email="john@example.com",
+                full_name="John Doe",
+                phone="+1-555-0100",
+                is_verified=True,
+                mfa_enabled=False,
+                roles=[],
+            ),
+        )
+
+        class Permission:
+            code = "donation:read"
+
+        class Role:
+            name = "staff"
+            permissions = [Permission()]
+
+        class FakeUser:
+            id = uuid.uuid4()
+            roles = [Role()]
+
+        class FakeCurrentUser:
+            user = FakeUser()
+
+        current_user = FakeCurrentUser()
+        masked = _mask_donor_pii(donor, current_user)
+
+        assert masked.tax_identifier == "TAX-123"
+        assert masked.user.email == "john@example.com"
+
+
+# ── Recurring subscription tests (audit 3.11) ──────────────
+
+
+class TestRecurringSubscriptionService:
+    @pytest.fixture
+    def mock_repo(self):
+        return AsyncMock(spec=DonationRepository)
+
+    @pytest.fixture
+    def mock_dog_repo(self):
+        return AsyncMock(spec=DogRepository)
+
+    @pytest.fixture
+    def mock_audit(self):
+        return AsyncMock(spec=AuditService)
+
+    @pytest.fixture
+    def service(self, mock_repo, mock_dog_repo, mock_audit):
+        return DonationService(mock_repo, mock_dog_repo, audit_service=mock_audit)
+
+    @pytest.mark.asyncio
+    async def test_create_recurring_subscription(self, service, mock_repo):
+        user_id = uuid.uuid4()
+        donor_id = uuid.uuid4()
+        sub_id = uuid.uuid4()
+        mock_repo.get_donor_by_user_id.return_value = DonorProfile(
+            id=donor_id, user_id=user_id,
+        )
+        mock_repo.create_recurring_subscription.return_value = RecurringSubscription(
+            id=sub_id,
+            donor_id=donor_id,
+            amount=50.0,
+            currency="USD",
+            frequency=RecurringFrequency.MONTHLY,
+            status=RecurringStatus.ACTIVE,
+            next_charge_date=datetime.now(UTC).date(),
+            started_at=datetime.now(UTC),
+        )
+        mock_repo.create_donation.return_value = None
+
+        payload = RecurringSubscriptionCreate(amount=50.0, currency="USD")
+        result = await service.create_recurring_subscription(user_id, payload)
+        assert result is not None
+        mock_repo.create_recurring_subscription.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_cancel_recurring_subscription(self, service, mock_repo):
+        sub_id = uuid.uuid4()
+        donor_id = uuid.uuid4()
+        mock_repo.get_recurring_subscription_by_id.return_value = RecurringSubscription(
+            id=sub_id,
+            donor_id=donor_id,
+            amount=50.0,
+            currency="USD",
+            frequency=RecurringFrequency.MONTHLY,
+            status=RecurringStatus.ACTIVE,
+            next_charge_date=datetime.now(UTC).date(),
+            started_at=datetime.now(UTC),
+        )
+        mock_repo.cancel_recurring_subscription.return_value = RecurringSubscription(
+            id=sub_id,
+            donor_id=donor_id,
+            amount=50.0,
+            currency="USD",
+            frequency=RecurringFrequency.MONTHLY,
+            status=RecurringStatus.CANCELLED,
+            next_charge_date=datetime.now(UTC).date(),
+            started_at=datetime.now(UTC),
+            cancelled_at=datetime.now(UTC),
+        )
+
+        result = await service.cancel_recurring_subscription(sub_id)
+        assert result.status == RecurringStatus.CANCELLED
+        mock_repo.cancel_recurring_subscription.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_cancel_already_cancelled_subscription(self, service, mock_repo):
+        sub_id = uuid.uuid4()
+        mock_repo.get_recurring_subscription_by_id.return_value = RecurringSubscription(
+            id=sub_id,
+            donor_id=uuid.uuid4(),
+            amount=50.0,
+            currency="USD",
+            frequency=RecurringFrequency.MONTHLY,
+            status=RecurringStatus.CANCELLED,
+            next_charge_date=datetime.now(UTC).date(),
+            started_at=datetime.now(UTC),
+        )
+
+        with pytest.raises(ValidationFailedError, match="already cancelled"):
+            await service.cancel_recurring_subscription(sub_id)
+
+    @pytest.mark.asyncio
+    async def test_charge_due_recurring_subscriptions(self, service, mock_repo, mock_dog_repo, mock_audit):
+        donor_id = uuid.uuid4()
+        sub_id = uuid.uuid4()
+        today = datetime.now(UTC).date()
+
+        mock_repo.get_due_recurring_subscriptions.return_value = [
+            RecurringSubscription(
+                id=sub_id,
+                donor_id=donor_id,
+                amount=50.0,
+                currency="USD",
+                frequency=RecurringFrequency.MONTHLY,
+                status=RecurringStatus.ACTIVE,
+                next_charge_date=today,
+                started_at=datetime.now(UTC),
+            )
+        ]
+        mock_repo.has_pending_donation_for_subscription.return_value = False
+        mock_repo.create_donation.return_value = None
+        mock_repo.advance_recurring_charge_date.return_value = RecurringSubscription(
+            id=sub_id,
+            donor_id=donor_id,
+            amount=50.0,
+            currency="USD",
+            frequency=RecurringFrequency.MONTHLY,
+            status=RecurringStatus.ACTIVE,
+            next_charge_date=today,
+            started_at=datetime.now(UTC),
+        )
+
+        from unittest.mock import patch
+        from pawguard.modules.donation.repository import DonationRepository
+        from sqlalchemy.ext.asyncio import AsyncSession
+
+        mock_session = AsyncMock(spec=AsyncSession)
+        with patch("pawguard.modules.donation.service.DonationRepository", return_value=mock_repo):
+            donations = await service.charge_due_recurring_subscriptions(mock_session)
+        assert len(donations) == 1
+        assert donations[0].recurring_subscription_id == sub_id
+        assert donations[0].donation_type == DonationType.RECURRING
+        assert donations[0].status == DonationStatus.PENDING
+        mock_repo.advance_recurring_charge_date.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_charge_skips_subscription_with_pending_donation(self, service, mock_repo, mock_dog_repo, mock_audit):
+        donor_id = uuid.uuid4()
+        sub_id = uuid.uuid4()
+        today = datetime.now(UTC).date()
+
+        mock_repo.get_due_recurring_subscriptions.return_value = [
+            RecurringSubscription(
+                id=sub_id,
+                donor_id=donor_id,
+                amount=50.0,
+                currency="USD",
+                frequency=RecurringFrequency.MONTHLY,
+                status=RecurringStatus.ACTIVE,
+                next_charge_date=today,
+                started_at=datetime.now(UTC),
+            )
+        ]
+        mock_repo.has_pending_donation_for_subscription.return_value = True
+
+        from unittest.mock import patch
+        from pawguard.modules.donation.repository import DonationRepository
+        from sqlalchemy.ext.asyncio import AsyncSession
+
+        mock_session = AsyncMock(spec=AsyncSession)
+        with patch("pawguard.modules.donation.service.DonationRepository", return_value=mock_repo):
+            donations = await service.charge_due_recurring_subscriptions(mock_session)
+        assert len(donations) == 0
+        mock_repo.create_donation.assert_not_awaited()

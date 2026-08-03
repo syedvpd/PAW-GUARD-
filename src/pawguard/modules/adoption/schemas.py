@@ -149,3 +149,11 @@ class AdoptionFollowUpResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class AdoptionFollowUpCreate(BaseModel):
+    """Create a post-adoption follow-up milestone."""
+
+    due_day: int = Field(
+        ..., ge=30, le=180, examples=[30], description="Days after completion"
+    )

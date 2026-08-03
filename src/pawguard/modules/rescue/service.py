@@ -360,12 +360,51 @@ class RescueService:
                     "assigned_driver_id": str(assigned_driver_id) if assigned_driver_id else None,
                     "assigned_agent_ids": [str(i) for i in agent_ids],
                     "vehicle_id": vehicle_id,
-                    "assigned_vehicle_id": str(assigned_vehicle_id) if assigned_vehicle_id else None,
+                    "assigned_vehicle_id": (
+                        str(assigned_vehicle_id) if assigned_vehicle_id else None
+                    ),
                     "escalation_type": escalation_type.value if escalation_type else None,
                 },
             )
 
         return res
+
+    async def escalate(
+        self,
+        request_id: uuid.UUID,
+        *,
+        escalation_type: RescueEscalationType,
+        escalation_notes: str | None = None,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> RescueRequest:
+        request = await self._repo.get_request_by_id(request_id)
+        if request is None:
+            raise NotFoundError("Rescue request not found.")
+
+        dispatch = await self._repo.get_dispatch_by_request_id(request_id)
+        if dispatch is None:
+            raise NotFoundError("Dispatch record not found for this request.")
+
+        dispatch.escalation_type = escalation_type
+        dispatch.escalation_notes = escalation_notes
+        await self._repo._session.flush()
+        await self._repo._session.refresh(request)
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.RESCUE_DISPATCHED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "rescue_id": str(request_id),
+                    "escalation_type": escalation_type.value,
+                    "escalation_notes": escalation_notes,
+                },
+            )
+
+        return request
 
     async def update_dispatch_status(
         self,
@@ -558,10 +597,12 @@ class RescueService:
         status: RescueStatus | None = None,
         severity: RescueSeverity | None = None,
         urgent_only: bool | None = None,
+        assigned_to_me: uuid.UUID | None = None,
     ) -> PaginatedResponse[RescueRequestResponse]:
         results, total = await self._repo.list_paginated(
             page=page, sort=sort, search_term=search_term, status=status,
             severity=severity, urgent_only=urgent_only,
+            assigned_to_me=assigned_to_me,
         )
         return PaginatedResponse(
             data=[RescueRequestResponse.model_validate(r) for r in results],

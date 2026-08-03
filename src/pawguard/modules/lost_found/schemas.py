@@ -15,6 +15,9 @@ class LostReportCreate(BaseModel):
     breed: str = Field(..., min_length=1, max_length=128, examples=["Beagle Mix"])
     color: str = Field(..., min_length=1, max_length=64, examples=["Tan/White"])
     microchip_id: str | None = Field(None, max_length=64, examples=["985141002345678"])
+    collar_color: str | None = Field(None, max_length=64, examples=["Red"])
+    collar_description: str | None = Field(None, max_length=512, examples=["Red buckle collar"])
+    marker_description: str | None = Field(None, examples=["White patch on left ear"])
     location_address: str = Field(..., min_length=1, examples=["Jubilee Hills Sector 2"])
     latitude: float | None = Field(None, ge=-90.0, le=90.0, examples=[17.4326])
     longitude: float | None = Field(None, ge=-180.0, le=180.0, examples=[78.4071])
@@ -30,6 +33,9 @@ class LostReportResponse(BaseModel):
     breed: str
     color: str
     microchip_id: str | None
+    collar_color: str | None
+    collar_description: str | None
+    marker_description: str | None
     location_address: str
     latitude: float | None
     longitude: float | None
@@ -46,6 +52,9 @@ class FoundReportCreate(BaseModel):
     species: Species = Field(Species.DOG)
     breed_observed: str = Field(..., min_length=1, max_length=128, examples=["Beagle Mix"])
     color_observed: str = Field(..., min_length=1, max_length=64, examples=["Tan/White"])
+    collar_color: str | None = Field(None, max_length=64, examples=["Red"])
+    collar_description: str | None = Field(None, max_length=512, examples=["Red buckle collar"])
+    marker_description: str | None = Field(None, examples=["White patch on left ear"])
     location_address: str = Field(..., min_length=1, examples=["Jubilee Hills Sector 3"])
     latitude: float | None = Field(None, ge=-90.0, le=90.0, examples=[17.4321])
     longitude: float | None = Field(None, ge=-180.0, le=180.0, examples=[78.4055])
@@ -59,6 +68,9 @@ class FoundReportResponse(BaseModel):
     species: Species
     breed_observed: str
     color_observed: str
+    collar_color: str | None
+    collar_description: str | None
+    marker_description: str | None
     location_address: str
     latitude: float | None
     longitude: float | None

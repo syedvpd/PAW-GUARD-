@@ -154,15 +154,18 @@ class TestEndToEndModuleFlows:
         app_id = app_data["id"]
         assert app_data["status"] == AdoptionStatus.SUBMITTED.value
 
-        # Walk the vetting pipeline (submitted -> vetting -> home_check ->
-        # approved) - status is a state machine, no direct jumps allowed.
-        vetting_resp = await client.put(
-            f"/api/v1/adoptions/{app_id}", json={"status": "vetting"}, headers=headers
+        # Walk the 6-phase vetting pipeline (submitted -> screening ->
+        # interview -> home_check -> approved -> completed).
+        screening_resp = await client.put(
+            f"/api/v1/adoptions/{app_id}", json={"status": "screening"}, headers=headers
         )
-        assert vetting_resp.status_code == 200
+        assert screening_resp.status_code == 200
 
-        # Home inspection approval is where exclusivity locks the dog, per
-        # the PRR (not final approval).
+        interview_resp = await client.put(
+            f"/api/v1/adoptions/{app_id}", json={"status": "interview"}, headers=headers
+        )
+        assert interview_resp.status_code == 200
+
         home_check_resp = await client.put(
             f"/api/v1/adoptions/{app_id}", json={"status": "home_check"}, headers=headers
         )

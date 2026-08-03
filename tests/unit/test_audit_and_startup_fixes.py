@@ -102,7 +102,7 @@ class TestDefaultRole:
         lookup returned None and new registrations got no role at all."""
         general_public = Role(name=DEFAULT_PUBLIC_ROLE, description="Public", is_system=False)
         session = AsyncMock()
-        result = AsyncMock()
+        result = MagicMock()
         result.scalar_one_or_none.return_value = general_public
         session.execute.return_value = result
 

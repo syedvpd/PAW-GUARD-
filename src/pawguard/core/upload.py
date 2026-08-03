@@ -1,6 +1,7 @@
 """File upload validation: mime-type, magic-bytes signature, and size enforcement.
 
-Every file upload endpoint MUST call ``verify_upload`` before persisting the file.
+Every file upload endpoint MUST call the appropriate verification functions
+before persisting the file.
 """
 
 
@@ -15,6 +16,8 @@ ALLOWED_MIME_TYPES: frozenset[str] = frozenset({
 })
 
 MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB
+
+MAX_BATCH_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB combined batch cap
 
 MAX_IMAGE_COUNT = 5
 
@@ -42,13 +45,18 @@ def verify_mime_type(content: bytes, declared_mime: str | None = None) -> str:
     return detected
 
 
+def verify_batch_size(sizes: list[int]) -> None:
+    """Reject the batch if the combined size exceeds the 50 MB cap."""
+    total = sum(sizes)
+    if total > MAX_BATCH_SIZE_BYTES:
+        raise UploadError(
+            f"Combined batch size of {total} bytes exceeds the "
+            f"{MAX_BATCH_SIZE_BYTES // (1024*1024)} MB limit."
+        )
+
+
 def _detect_mime(content: bytes) -> str:
     mime = magic.from_buffer(content, mime=True)
     if isinstance(mime, bytes):
         mime = mime.decode("utf-8")
     return mime or "application/octet-stream"
-
-
-def verify_upload(content: bytes, declared_mime: str | None = None) -> str:
-    verify_file_size(content)
-    return verify_mime_type(content, declared_mime)

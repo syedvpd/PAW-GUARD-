@@ -13,6 +13,7 @@ from pawguard.core.pagination import PageParams
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
 from pawguard.modules.dog.repository import DogRepository
+from pawguard.modules.fleet.models import VehicleStatus
 from pawguard.modules.rescue.models import (
     RescueDispatch,
     RescueEscalationType,
@@ -915,6 +916,219 @@ class TestRescueService:
                 physical_condition=RescuePhysicalCondition.UNKNOWN,
             )
         mock_repo.create_request.assert_not_awaited()
+
+
+    # --- Multi-agent dispatch (PRR 3.2) ---
+
+    @pytest.mark.asyncio
+    async def test_dispatch_team_multi_agent(self, service, mock_repo):
+        """Multiple agents plus the legacy driver are all mirrored into
+        the dispatch-agent association table and deduplicated."""
+        request_id = uuid.uuid4()
+        driver_id = uuid.uuid4()
+        agent_a = uuid.uuid4()
+        agent_b = uuid.uuid4()
+        request = RescueRequest(
+            id=request_id, ticket_number="RES-001", reporter_name="A",
+            reporter_phone="+1", location_address="Addr",
+            physical_condition=RescuePhysicalCondition.UNKNOWN,
+            status=RescueStatus.VERIFIED,
+        )
+        mock_repo.get_request_by_id.side_effect = [request, request]
+        mock_repo.get_dispatch_by_request_id.return_value = None
+        mock_repo.create_dispatch.return_value = None
+
+        await service.dispatch_team(
+            request_id,
+            assigned_driver_id=driver_id,
+            assigned_agent_ids=[agent_a, agent_b],
+            actor_id=uuid.uuid4(),
+        )
+
+        assert mock_repo.create_dispatch_agent.call_count == 3
+        created_agents = [
+            call[0][0] for call in mock_repo.create_dispatch_agent.call_args_list
+        ]
+        agent_ids = {a.agent_id for a in created_agents}
+        assert driver_id in agent_ids
+        assert agent_a in agent_ids
+        assert agent_b in agent_ids
+
+    @pytest.mark.asyncio
+    async def test_dispatch_team_driver_also_in_agent_table(self, service, mock_repo):
+        """The legacy assigned_driver_id is mirrored into the dispatch-agent
+        association table so the "assigned to me" filter works for drivers."""
+        request_id = uuid.uuid4()
+        driver_id = uuid.uuid4()
+        request = RescueRequest(
+            id=request_id, ticket_number="RES-001", reporter_name="A",
+            reporter_phone="+1", location_address="Addr",
+            physical_condition=RescuePhysicalCondition.UNKNOWN,
+            status=RescueStatus.VERIFIED,
+        )
+        mock_repo.get_request_by_id.side_effect = [request, request]
+        mock_repo.get_dispatch_by_request_id.return_value = None
+        mock_repo.create_dispatch.return_value = None
+
+        await service.dispatch_team(
+            request_id,
+            assigned_driver_id=driver_id,
+            actor_id=uuid.uuid4(),
+        )
+
+        assert mock_repo.create_dispatch_agent.call_count == 1
+        created_agent = mock_repo.create_dispatch_agent.call_args[0][0]
+        assert created_agent.agent_id == driver_id
+
+    # --- Vehicle assignment validation (PRR 3.2) ---
+
+    @pytest.mark.asyncio
+    @patch("pawguard.modules.rescue.service.FleetService")
+    async def test_dispatch_team_rejects_inactive_vehicle(
+        self, mock_fleet_cls, service, mock_repo
+    ):
+        """Only ACTIVE vehicles can be assigned to a dispatch."""
+        request_id = uuid.uuid4()
+        vehicle_id = uuid.uuid4()
+        request = RescueRequest(
+            id=request_id, ticket_number="RES-001", reporter_name="A",
+            reporter_phone="+1", location_address="Addr",
+            physical_condition=RescuePhysicalCondition.UNKNOWN,
+            status=RescueStatus.VERIFIED,
+        )
+        mock_repo.get_request_by_id.side_effect = [request, request]
+        mock_repo.get_dispatch_by_request_id.return_value = None
+
+        mock_fleet = AsyncMock()
+        mock_fleet_cls.return_value = mock_fleet
+        mock_fleet.get_vehicle.return_value = AsyncMock(
+            status=VehicleStatus.IN_MAINTENANCE
+        )
+
+        with pytest.raises(ValidationFailedError, match="ACTIVE"):
+            await service.dispatch_team(
+                request_id,
+                assigned_vehicle_id=vehicle_id,
+                actor_id=uuid.uuid4(),
+            )
+
+    @pytest.mark.asyncio
+    @patch("pawguard.modules.rescue.service.FleetService")
+    async def test_dispatch_team_accepts_active_vehicle(
+        self, mock_fleet_cls, service, mock_repo
+    ):
+        """An ACTIVE vehicle is accepted and stored on the dispatch."""
+        request_id = uuid.uuid4()
+        vehicle_id = uuid.uuid4()
+        request = RescueRequest(
+            id=request_id, ticket_number="RES-001", reporter_name="A",
+            reporter_phone="+1", location_address="Addr",
+            physical_condition=RescuePhysicalCondition.UNKNOWN,
+            status=RescueStatus.VERIFIED,
+        )
+        mock_repo.get_request_by_id.side_effect = [request, request]
+        mock_repo.get_dispatch_by_request_id.return_value = None
+        mock_repo.create_dispatch.return_value = None
+
+        mock_fleet = AsyncMock()
+        mock_fleet_cls.return_value = mock_fleet
+        mock_fleet.get_vehicle.return_value = AsyncMock(status=VehicleStatus.ACTIVE)
+
+        await service.dispatch_team(
+            request_id,
+            assigned_vehicle_id=vehicle_id,
+            actor_id=uuid.uuid4(),
+        )
+
+        created_dispatch = mock_repo.create_dispatch.call_args[0][0]
+        assert created_dispatch.assigned_vehicle_id == vehicle_id
+
+    # --- assigned_to_me filter ---
+
+    @pytest.mark.asyncio
+    async def test_list_requests_paginated_forwards_assigned_to_me(
+        self, service, mock_repo
+    ):
+        """assigned_to_me reaches the repository so the "my cases" filter
+        is applied on the dispatch-agent association and driver column."""
+        now = datetime.now(UTC)
+        req = RescueRequest(
+            id=uuid.uuid4(), ticket_number="RES-001", reporter_name="A",
+            reporter_phone="+12345", location_address="Addr",
+            physical_condition=RescuePhysicalCondition.UNKNOWN,
+            status=RescueStatus.REPORTED, is_anonymous=False, animal_count=1,
+            severity=RescueSeverity.MEDIUM, is_urgent=False,
+            created_at=now, updated_at=now,
+        )
+        mock_repo.list_paginated.return_value = ([req], 1)
+        page = PageParams(page=1, page_size=20)
+        sort = SortParams()
+        user_id = uuid.uuid4()
+        result = await service.list_requests_paginated(
+            page, sort, assigned_to_me=user_id,
+        )
+        assert result.meta.total == 1
+        mock_repo.list_paginated.assert_awaited_once()
+        kwargs = mock_repo.list_paginated.call_args.kwargs
+        assert kwargs["assigned_to_me"] == user_id
+
+    # --- Escalation ---
+
+    @pytest.mark.asyncio
+    async def test_escalate_sets_escalation_on_dispatch(self, service, mock_repo):
+        """Escalation type and notes are written to the dispatch record."""
+        request_id = uuid.uuid4()
+        request = RescueRequest(
+            id=request_id, ticket_number="RES-001", reporter_name="A",
+            reporter_phone="+1", location_address="Addr",
+            physical_condition=RescuePhysicalCondition.UNKNOWN,
+            status=RescueStatus.DISPATCHED,
+        )
+        dispatch = RescueDispatch(
+            rescue_request_id=request_id,
+            escalation_type=None,
+            escalation_notes=None,
+        )
+        mock_repo.get_request_by_id.return_value = request
+        mock_repo.get_dispatch_by_request_id.return_value = dispatch
+
+        result = await service.escalate(
+            request_id,
+            escalation_type=RescueEscalationType.BACKUP_PERSONNEL,
+            escalation_notes="Second team needed",
+            actor_id=uuid.uuid4(),
+        )
+
+        assert result.id == request_id
+        assert dispatch.escalation_type == RescueEscalationType.BACKUP_PERSONNEL
+        assert dispatch.escalation_notes == "Second team needed"
+
+    @pytest.mark.asyncio
+    async def test_escalate_not_found_request(self, service, mock_repo):
+        mock_repo.get_request_by_id.return_value = None
+        with pytest.raises(NotFoundError, match="Rescue request not found"):
+            await service.escalate(
+                uuid.uuid4(),
+                escalation_type=RescueEscalationType.BACKUP_PERSONNEL,
+            )
+
+    @pytest.mark.asyncio
+    async def test_escalate_not_found_dispatch(self, service, mock_repo):
+        request_id = uuid.uuid4()
+        request = RescueRequest(
+            id=request_id, ticket_number="RES-001", reporter_name="A",
+            reporter_phone="+1", location_address="Addr",
+            physical_condition=RescuePhysicalCondition.UNKNOWN,
+            status=RescueStatus.REPORTED,
+        )
+        mock_repo.get_request_by_id.return_value = request
+        mock_repo.get_dispatch_by_request_id.return_value = None
+
+        with pytest.raises(NotFoundError, match="Dispatch record not found"):
+            await service.escalate(
+                request_id,
+                escalation_type=RescueEscalationType.BACKUP_PERSONNEL,
+            )
 
 
 class TestRescueRequestCreateSchema:

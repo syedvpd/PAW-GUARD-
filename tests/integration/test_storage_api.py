@@ -75,7 +75,7 @@ class TestStorageAPI:
         file_id = create_resp.json()["data"]["file_id"]
         resp = await client.get(f"/api/v1/storage/{file_id}", headers=headers)
         assert resp.status_code == 200
-        assert resp.json()["data"]["original_filename"] == "file.txt"
+        assert resp.json()["data"]["original_filename"] == "file.pdf"
 
     async def test_get_file_not_found(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)

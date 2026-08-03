@@ -589,11 +589,15 @@ class DogService:
         actor_id: uuid.UUID | None,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        await record_activity(
-            self._repo._session,
-            dog_id=dog_id,
-            event_type=event_type,
-            actor_id=actor_id,
-            message=message,
-            metadata=metadata,
+        if message is None:
+            value = event_type.value if isinstance(event_type, DogActivityEventType) else event_type
+            message = f"{value.replace('_', ' ')}."
+        await self._repo.create_activity(
+            DogActivityLog(
+                dog_id=dog_id,
+                actor_id=actor_id,
+                event_type=event_type,
+                message=message,
+                event_metadata=metadata,
+            )
         )

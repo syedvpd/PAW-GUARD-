@@ -101,7 +101,8 @@ class TestAdoptionAPI:
         app_id = create_resp.json()["data"]["id"]
         # Status is a state machine now (submitted -> vetting -> home_check ->
         # approved); walk through the pipeline instead of jumping directly.
-        await client.put(f"/api/v1/adoptions/{app_id}", json={"status": "vetting"}, headers=headers)
+        await client.put(f"/api/v1/adoptions/{app_id}", json={"status": "screening"}, headers=headers)
+        await client.put(f"/api/v1/adoptions/{app_id}", json={"status": "interview"}, headers=headers)
         await client.put(f"/api/v1/adoptions/{app_id}", json={"status": "home_check"}, headers=headers)
         resp = await client.put(f"/api/v1/adoptions/{app_id}", json={"status": "approved"}, headers=headers)
         assert resp.status_code == 200
@@ -118,9 +119,9 @@ class TestAdoptionAPI:
         payload = {"dog_id": dog_id, "residential_status": "owned", "has_landlord_approval": True, "has_yard_fence": True, "household_members_count": 4}
         create_resp = await client.post("/api/v1/adoptions", json=payload, headers=headers)
         app_id = create_resp.json()["data"]["id"]
-        resp = await client.patch(f"/api/v1/adoptions/{app_id}/status", json={"status": "vetting"}, headers=headers)
+        resp = await client.patch(f"/api/v1/adoptions/{app_id}/status", json={"status": "screening"}, headers=headers)
         assert resp.status_code == 200
-        assert resp.json()["data"]["status"] == AdoptionStatus.VETTING.value
+        assert resp.json()["data"]["status"] == AdoptionStatus.SCREENING.value
 
     async def test_soft_delete_adoption(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
@@ -141,6 +142,6 @@ class TestAdoptionAPI:
         a1 = (await client.post("/api/v1/adoptions", json=payload, headers=headers)).json()["data"]
         payload["dog_id"] = dog2_id
         a2 = (await client.post("/api/v1/adoptions", json=payload, headers=headers)).json()["data"]
-        resp = await client.post("/api/v1/adoptions/bulk/status-update", json={"ids": [a1["id"], a2["id"]], "status": "vetting"}, headers=headers)
+        resp = await client.post("/api/v1/adoptions/bulk/status-update", json={"ids": [a1["id"], a2["id"]], "status": "screening"}, headers=headers)
         assert resp.status_code == 200
         assert resp.json()["data"]["updated_count"] == 2

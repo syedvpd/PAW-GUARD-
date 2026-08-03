@@ -129,6 +129,7 @@ class UserProfile(BaseModel):
     id: uuid.UUID
     email: str
     full_name: str
+    phone: str | None = None
     is_verified: bool
     mfa_enabled: bool
     roles: list[str]

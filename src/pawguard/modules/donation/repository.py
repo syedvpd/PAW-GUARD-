@@ -24,6 +24,8 @@ from pawguard.modules.donation.models import (
     DonationCampaign,
     DonationStatus,
     DonorProfile,
+    RecurringStatus,
+    RecurringSubscription,
     SponsorshipStatus,
 )
 
@@ -449,3 +451,80 @@ class DonationRepository:
         )
         res = (await self._session.execute(stmt)).scalars().first()
         return res is not None
+
+    # ── Recurring subscriptions ──────────────────────────────────────
+
+    async def create_recurring_subscription(
+        self, subscription: RecurringSubscription
+    ) -> RecurringSubscription:
+        self._session.add(subscription)
+        await self._session.flush()
+        return subscription
+
+    async def get_recurring_subscription_by_id(
+        self, subscription_id: uuid.UUID
+    ) -> RecurringSubscription | None:
+        stmt = select(RecurringSubscription).where(
+            RecurringSubscription.id == subscription_id
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def cancel_recurring_subscription(
+        self, subscription_id: uuid.UUID, cancelled_at: datetime
+    ) -> RecurringSubscription | None:
+        stmt = (
+            update(RecurringSubscription)
+            .where(RecurringSubscription.id == subscription_id)
+            .values(
+                status=RecurringStatus.CANCELLED,
+                cancelled_at=cancelled_at,
+            )
+            .returning(RecurringSubscription)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_due_recurring_subscriptions(
+        self, as_of: date_type
+    ) -> Sequence[RecurringSubscription]:
+        stmt = (
+            select(RecurringSubscription)
+            .options(selectinload(RecurringSubscription.donor))
+            .where(
+                RecurringSubscription.next_charge_date <= as_of,
+                RecurringSubscription.status == RecurringStatus.ACTIVE,
+            )
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def has_pending_donation_for_subscription(
+        self, subscription_id: uuid.UUID
+    ) -> bool:
+        stmt = select(Donation).where(
+            Donation.recurring_subscription_id == subscription_id,
+            Donation.status == DonationStatus.PENDING,
+        )
+        res = (await self._session.execute(stmt)).scalars().first()
+        return res is not None
+
+    async def advance_recurring_charge_date(
+        self, subscription_id: uuid.UUID, new_date: date_type
+    ) -> RecurringSubscription | None:
+        stmt = (
+            update(RecurringSubscription)
+            .where(RecurringSubscription.id == subscription_id)
+            .values(next_charge_date=new_date)
+            .returning(RecurringSubscription)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_recurring_subscriptions_for_donor(
+        self, donor_id: uuid.UUID
+    ) -> Sequence[RecurringSubscription]:
+        stmt = (
+            select(RecurringSubscription)
+            .where(RecurringSubscription.donor_id == donor_id)
+            .order_by(RecurringSubscription.created_at.desc())
+        )
+        return (await self._session.execute(stmt)).scalars().all()

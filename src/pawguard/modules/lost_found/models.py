@@ -6,7 +6,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pawguard.db.base import Base
@@ -49,6 +49,9 @@ class LostReport(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     breed: Mapped[str] = mapped_column(String(128), nullable=False)
     color: Mapped[str] = mapped_column(String(64), nullable=False)
     microchip_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    collar_color: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    collar_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    marker_description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     location_address: Mapped[str] = mapped_column(Text, nullable=False)
     latitude: Mapped[float | None] = mapped_column(Numeric(9, 6), nullable=True)
@@ -74,6 +77,9 @@ class FoundReport(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     )
     breed_observed: Mapped[str] = mapped_column(String(128), nullable=False)
     color_observed: Mapped[str] = mapped_column(String(64), nullable=False)
+    collar_color: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    collar_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    marker_description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     location_address: Mapped[str] = mapped_column(Text, nullable=False)
     latitude: Mapped[float | None] = mapped_column(Numeric(9, 6), nullable=True)
@@ -102,6 +108,11 @@ class ReportMatch(UUIDPkMixin, TimestampMixin, Base):
     status: Mapped[MatchStatus] = mapped_column(
         String(32), default=MatchStatus.PENDING, nullable=False, index=True
     )
+    # Score-basis transparency (PRR 3.10): computed by the matcher at match time
+    # and persisted so the API response can show *why* a match was made.
+    distance_km: Mapped[float | None] = mapped_column(Numeric(8, 2), nullable=True)
+    temporal_gap_days: Mapped[float | None] = mapped_column(Numeric(8, 2), nullable=True)
+    match_reasons: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
 
     microchip_doc_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     vet_bill_url: Mapped[str | None] = mapped_column(String(512), nullable=True)

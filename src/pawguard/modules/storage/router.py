@@ -56,9 +56,18 @@ async def request_upload_url(
 )
 async def confirm_upload(
     file_id: uuid.UUID,
+    batch_file_ids: str | None = Query(
+        None,
+        description="Comma-separated batch file IDs for combined size check",
+    ),
     service: StorageService = Depends(get_storage_service),
 ) -> ApiResponse[StoredFileResponse]:
-    stored = await service.confirm_upload(file_id)
+    ids = (
+        [uuid.UUID(fid.strip()) for fid in batch_file_ids.split(",") if fid.strip()]
+        if batch_file_ids
+        else None
+    )
+    stored = await service.confirm_upload(file_id, batch_file_ids=ids)
     return ApiResponse(
         data=StoredFileResponse.model_validate(stored),
         message="Upload confirmed successfully.",

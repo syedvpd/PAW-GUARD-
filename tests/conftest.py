@@ -10,6 +10,45 @@ os.environ.setdefault("AWS_ACCESS_KEY_ID", "mock_key")
 os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "mock_secret")
 os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
 
+import base64
+from unittest.mock import MagicMock
+import boto3
+
+original_boto3_client = boto3.client
+
+def mock_boto3_client(service_name, *args, **kwargs):
+    if service_name == "s3":
+        mock_s3 = MagicMock()
+        
+        def get_object_mock(Bucket, Key, Range=None):
+            key_str = str(Key).lower()
+            if "pdf" in key_str:
+                body_bytes = b"%PDF-1.4\n"
+            elif "png" in key_str:
+                body_bytes = base64.b64decode(
+                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+                )
+            elif "jpg" in key_str or "jpeg" in key_str:
+                body_bytes = b"\xff\xd8\xff\xe0"
+            elif "webp" in key_str:
+                body_bytes = b"RIFF\x00\x00\x00\x00WEBP"
+            elif "mp4" in key_str:
+                body_bytes = b"\x00\x00\x00\x18ftypmp42"
+            else:
+                body_bytes = b"dummy content"
+            
+            body_mock = MagicMock()
+            body_mock.read.return_value = body_bytes
+            return {"Body": body_mock}
+            
+        mock_s3.get_object.side_effect = get_object_mock
+        mock_s3.head_object.return_value = {"ContentLength": 1024}
+        mock_s3.generate_presigned_url.side_effect = lambda operation, Params, ExpiresIn=900: f"http://localhost/{Params.get('Bucket', 'bucket')}/{Params.get('Key', 'key')}"
+        return mock_s3
+    return original_boto3_client(service_name, *args, **kwargs)
+
+boto3.client = mock_boto3_client
+
 # Ensure UTF-8 for structlog's ConsoleRenderer (uses Unicode box-drawing chars).
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")

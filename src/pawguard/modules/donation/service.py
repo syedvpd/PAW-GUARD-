@@ -1,8 +1,11 @@
 """DonationService: owns donor registers, contributions, and sponsorships (RULE-003)."""
 
+import calendar
 import uuid
 from datetime import UTC, date, datetime
 from logging import getLogger
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.config import get_settings
 from pawguard.core.exceptions import ConflictError, NotFoundError, ValidationFailedError
@@ -19,7 +22,10 @@ from pawguard.modules.donation.models import (
     Donation,
     DonationCampaign,
     DonationStatus,
+    DonationType,
     DonorProfile,
+    RecurringStatus,
+    RecurringSubscription,
     SponsorshipStatus,
 )
 from pawguard.modules.donation.repository import DonationRepository
@@ -33,6 +39,7 @@ from pawguard.modules.donation.schemas import (
     DonorProfileCreate,
     DonorProfileResponse,
     DonorProfileUpdate,
+    RecurringSubscriptionCreate,
     SponsorshipCreate,
 )
 from pawguard.modules.notifications.service import NotificationService
@@ -767,6 +774,208 @@ class DonationService:
         if sponsorship is None:
             raise NotFoundError("Sponsorship not found.")
         return sponsorship
+
+    # ── Recurring subscriptions (audit 3.11) ──────────────────────────
+
+    async def create_recurring_subscription(
+        self,
+        user_id: uuid.UUID,
+        payload: RecurringSubscriptionCreate,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> RecurringSubscription:
+        donor = await self.get_or_create_donor(user_id)
+
+        now = datetime.now(UTC)
+        subscription = RecurringSubscription(
+            donor_id=donor.id,
+            amount=payload.amount,
+            currency=payload.currency,
+            frequency=payload.frequency,
+            status=RecurringStatus.ACTIVE,
+            next_charge_date=now.date(),
+            started_at=now,
+        )
+        await self._repo.create_recurring_subscription(subscription)
+
+        # Create the initial PENDING donation (mirrors sponsorship charge pattern)
+        donation = Donation(
+            donor_id=donor.id,
+            amount=payload.amount,
+            currency=payload.currency,
+            donation_type=DonationType.RECURRING,
+            status=DonationStatus.PENDING,
+            recurring_subscription_id=subscription.id,
+            notes="Initial recurring donation charge.",
+        )
+        await self._repo.create_donation(donation)
+
+        # Attempt to create a gateway order for online payment
+        if self._gateway is not None:
+            try:
+                order = await self._gateway.create_order(
+                    amount=payload.amount,
+                    currency=payload.currency,
+                    receipt=str(donation.id),
+                    notes={
+                        "recurring_subscription_id": str(subscription.id),
+                        "donor_id": str(donor.id),
+                    },
+                )
+                donation.payment_provider = order.provider
+                donation.gateway_order_id = order.order_id
+                donation.notes = "Recurring donation order initiated; awaiting payment."
+                await self._repo.update_gateway_fields(
+                    donation.id,
+                    payment_provider=order.provider,
+                    gateway_order_id=order.order_id,
+                    notes=donation.notes,
+                )
+            except PaymentGatewayError:
+                pass
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.DONATION_RECEIVED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "recurring_subscription_id": str(subscription.id),
+                    "donor_id": str(donor.id),
+                    "amount": str(payload.amount),
+                    "currency": payload.currency,
+                    "recurring": True,
+                },
+            )
+        return subscription
+
+    async def cancel_recurring_subscription(
+        self,
+        subscription_id: uuid.UUID,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> RecurringSubscription:
+        subscription = await self._repo.get_recurring_subscription_by_id(
+            subscription_id,
+        )
+        if subscription is None:
+            raise NotFoundError("Recurring subscription not found.")
+        if subscription.status == RecurringStatus.CANCELLED:
+            raise ValidationFailedError("Subscription is already cancelled.")
+
+        updated = await self._repo.cancel_recurring_subscription(
+            subscription_id,
+            cancelled_at=datetime.now(UTC),
+        )
+        if updated is None:
+            raise NotFoundError("Failed to cancel recurring subscription.")
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.SPONSORSHIP_CANCELLED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"recurring_subscription_id": str(subscription_id)},
+            )
+        return updated
+
+    async def charge_due_recurring_subscriptions(
+        self, session: AsyncSession
+    ) -> list[Donation]:
+        """Charge all due recurring subscriptions.
+
+        Returns the list of created PENDING Donation records. On success
+        the subscription's next_charge_date is advanced by one month.
+        """
+        repo = DonationRepository(session)
+        today = datetime.now(UTC).date()
+        subscriptions = await repo.get_due_recurring_subscriptions(today)
+        created: list[Donation] = []
+
+        for sub in subscriptions:
+            if await repo.has_pending_donation_for_subscription(sub.id):
+                continue
+
+            donation = Donation(
+                donor_id=sub.donor_id,
+                amount=sub.amount,
+                currency=sub.currency,
+                donation_type=DonationType.RECURRING,
+                status=DonationStatus.PENDING,
+                recurring_subscription_id=sub.id,
+                notes="Monthly recurring donation charge.",
+            )
+
+            if self._gateway is not None:
+                try:
+                    order = await self._gateway.create_order(
+                        amount=sub.amount,
+                        currency=sub.currency,
+                        receipt=str(donation.id),
+                        notes={
+                            "recurring_subscription_id": str(sub.id),
+                            "donor_id": str(sub.donor_id),
+                        },
+                    )
+                    donation.payment_provider = order.provider
+                    donation.gateway_order_id = order.order_id
+                    donation.notes = (
+                        "Recurring donation order initiated; awaiting payment."
+                    )
+                except PaymentGatewayError:
+                    pass
+
+            await repo.create_donation(donation)
+            created.append(donation)
+
+            # Advance next_charge_date by one month
+            next_date = sub.next_charge_date.month + 1
+            year = sub.next_charge_date.year
+            if next_date > 12:
+                next_date = 1
+                year += 1
+            day = min(
+                sub.next_charge_date.day,
+                calendar.monthrange(year, next_date)[1],
+            )
+            new_charge_date = sub.next_charge_date.replace(
+                year=year, month=next_date, day=day,
+            )
+            await repo.advance_recurring_charge_date(sub.id, new_charge_date)
+
+            # Create in-app notification for the donor
+            if sub.donor and sub.donor.user_id and self._notification_svc:
+                try:
+                    from pawguard.modules.notifications.schemas import (
+                        NotificationCreate,
+                    )
+
+                    await self._notification_svc.create_notification(
+                        payload=NotificationCreate(
+                            user_id=sub.donor.user_id,
+                            title="Monthly Recurring Donation Charge",
+                            body=(
+                                f"Your recurring donation of {sub.amount} "
+                                f"{sub.currency} is now due. We'll let you "
+                                f"know once your payment has been received."
+                            ),
+                            notification_type="recurring_donation_charge",
+                        )
+                    )
+                except Exception as notif_exc:
+                    logger.warning(
+                        "Failed to send notification for recurring charge %s: %s",
+                        sub.id,
+                        notif_exc,
+                        exc_info=True,
+                    )
+
+        await session.commit()
+        return created
 
     # ── Donation campaigns (PRR 3.1.7 / 3.11) ─────────────────────────────
 

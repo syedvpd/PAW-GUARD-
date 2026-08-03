@@ -4,11 +4,6 @@ import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import select, update
-
-# The role granted to users on self-service registration / OAuth account
-# creation. Must match the `general_public` role seeded by
-# scripts/seed_roles_and_permissions.py (ROLE_DEFINITIONS).
-DEFAULT_PUBLIC_ROLE = "general_public"
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -24,6 +19,11 @@ from pawguard.modules.auth.models import (
     User,
     UserSession,
 )
+
+# The role granted to users on self-service registration / OAuth account
+# creation. Must match the `general_public` role seeded by
+# scripts/seed_roles_and_permissions.py (ROLE_DEFINITIONS).
+DEFAULT_PUBLIC_ROLE = "general_public"
 
 
 class UserRepository:

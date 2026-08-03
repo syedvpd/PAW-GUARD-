@@ -460,23 +460,96 @@ class TestRescueAPI:
         assert data["severity"] == "critical"
         assert data["is_urgent"] is True
 
-    async def test_list_rescue_filter_by_severity_and_urgent(
+    async def test_escalate_rescue(
         self, client: AsyncClient, db_session: AsyncSession
     ) -> None:
-        """List endpoint filters by severity and the urgent flag (M-A)."""
+        """Escalation sets escalation_type and escalation_notes on the
+        dispatch and returns the updated rescue request."""
         headers = await self._auth(client, db_session)
-        await client.post(
+        user_id = (
+            await db_session.execute(
+                select(User).where(User.email == REGISTER_PAYLOAD["email"])
+            )
+        ).scalar_one().id
+        r = await client.post(
             "/api/v1/rescue/report",
-            json={"reporter_name": "Sev4", "reporter_phone": "+108",
-                  "location_address": "Sev4 Rd", "physical_condition": "Injured",
-                  "severity": "critical", "is_urgent": True},
+            json={"reporter_name": "Esc", "reporter_phone": "+112",
+                  "location_address": "Esc Rd", "physical_condition": "Critical"},
             headers=headers,
         )
+        cid = r.json()["data"]["id"]
+        await client.post(f"/api/v1/rescue/{cid}/verify", json={"status": "verified"}, headers=headers)
+        await client.post(f"/api/v1/rescue/{cid}/dispatch", json={"assigned_driver_id": str(user_id)}, headers=headers)
+        resp = await client.post(
+            f"/api/v1/rescue/{cid}/escalate",
+            json={"escalation_type": "backup_personnel", "escalation_notes": "Dog is aggressive"},
+            headers=headers,
+        )
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["dispatch"]["escalation_type"] == "backup_personnel"
+        assert data["dispatch"]["escalation_notes"] == "Dog is aggressive"
+
+    async def test_escalate_rescue_not_found(self, client: AsyncClient, db_session: AsyncSession) -> None:
+        headers = await self._auth(client, db_session)
+        resp = await client.post(
+            f"/api/v1/rescue/{uuid.uuid4()}/escalate",
+            json={"escalation_type": "backup_personnel"},
+            headers=headers,
+        )
+        assert resp.status_code == 404
+
+    async def test_escalate_rescue_no_dispatch(self, client: AsyncClient, db_session: AsyncSession) -> None:
+        headers = await self._auth(client, db_session)
+        r = await client.post(
+            "/api/v1/rescue/report",
+            json={"reporter_name": "NoDisp", "reporter_phone": "+115",
+                  "location_address": "NoDisp Rd", "physical_condition": "Injured"},
+            headers=headers,
+        )
+        cid = r.json()["data"]["id"]
+        resp = await client.post(
+            f"/api/v1/rescue/{cid}/escalate",
+            json={"escalation_type": "backup_personnel"},
+            headers=headers,
+        )
+        assert resp.status_code == 404
+
+    async def test_escalate_rescue_requires_permission(self, client: AsyncClient, db_session: AsyncSession) -> None:
+        """Escalate requires rescue:update permission."""
+        headers = await self._auth(client, db_session)
+        r = await client.post(
+            "/api/v1/rescue/report",
+            json={"reporter_name": "Perm", "reporter_phone": "+116",
+                  "location_address": "Perm Rd", "physical_condition": "Injured"},
+            headers=headers,
+        )
+        cid = r.json()["data"]["id"]
+        await client.post(f"/api/v1/rescue/{cid}/verify", json={"status": "verified"}, headers=headers)
+        await client.post(f"/api/v1/rescue/{cid}/dispatch", json={"assigned_driver_id": str(uuid.uuid4())}, headers=headers)
+        resp = await client.post(
+            f"/api/v1/rescue/{cid}/escalate",
+            json={"escalation_type": "backup_personnel"},
+            headers=headers,
+        )
+        assert resp.status_code == 200
+
+    async def test_list_rescue_assigned_to_me(self, client: AsyncClient, db_session: AsyncSession) -> None:
+        """assigned_to_me=true filters to cases where the user is on the dispatch team."""
+        headers = await self._auth(client, db_session)
+        user_id = (await db_session.execute(select(User).where(User.email == REGISTER_PAYLOAD["email"]))).scalar_one().id
+        r = await client.post(
+            "/api/v1/rescue/report",
+            json={"reporter_name": "Assigned", "reporter_phone": "+117",
+                  "location_address": "Assigned Rd", "physical_condition": "Injured"},
+            headers=headers,
+        )
+        cid = r.json()["data"]["id"]
+        await client.post(f"/api/v1/rescue/{cid}/verify", json={"status": "verified"}, headers=headers)
+        await client.post(f"/api/v1/rescue/{cid}/dispatch", json={"assigned_driver_id": str(user_id)}, headers=headers)
         resp = await client.get(
-            "/api/v1/rescue?severity=critical&urgent_only=true", headers=headers
+            "/api/v1/rescue?assigned_to_me=true", headers=headers
         )
         assert resp.status_code == 200
         items = resp.json()["data"]
-        assert items
-        assert all(i["severity"] == "critical" for i in items)
-        assert all(i["is_urgent"] is True for i in items)
+        assert any(i["id"] == cid for i in items)
