@@ -127,12 +127,12 @@ class TestAuditContextOnProfileUpdate:
 
 @pytest.mark.asyncio
 class TestResolveClientIp:
-    async def test_prefers_first_xff_hop(self) -> None:
+    async def test_prefers_last_xff_hop(self) -> None:
         req = _FakeRequest(
             headers={"X-Forwarded-For": "203.0.113.9, 10.0.0.1, 10.0.0.2"},
             client_host="10.0.0.2",
         )
-        assert resolve_client_ip(req) == "203.0.113.9"
+        assert resolve_client_ip(req) == "10.0.0.2"
 
     async def test_falls_back_to_client_host_without_xff(self) -> None:
         req = _FakeRequest(headers={}, client_host="10.0.0.1")
@@ -147,4 +147,5 @@ class TestResolveClientIp:
             headers={"X-Forwarded-For": " 203.0.113.9 , 10.0.0.1"},
             client_host="10.0.0.1",
         )
-        assert resolve_client_ip(req) == "203.0.113.9"
+        assert resolve_client_ip(req) == "10.0.0.1"
+

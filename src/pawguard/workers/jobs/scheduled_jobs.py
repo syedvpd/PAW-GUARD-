@@ -246,6 +246,10 @@ async def process_sponsorship_charges(ctx: dict[str, object]) -> None:
             return
 
         for sp in sponsorships:
+            # Check if there is already an active PENDING donation for this sponsorship (PRD 3.11)
+            if await donation_repo.has_pending_donation_for_sponsorship(sp.id):
+                continue
+
             donation = Donation(
                 donor_id=sp.donor_id,
                 dog_id=sp.dog_id,
@@ -279,17 +283,6 @@ async def process_sponsorship_charges(ctx: dict[str, object]) -> None:
                     )
 
             await donation_repo.create_donation(donation)
-
-            month = sp.next_charge_date.month + 1
-            year = sp.next_charge_date.year
-            if month > 12:
-                month = 1
-                year += 1
-            # Clamp the day: e.g. a sponsorship charged on Jan 31 must land on
-            # Feb 28/29, not raise ValueError("day is out of range for month").
-            day = min(sp.next_charge_date.day, calendar.monthrange(year, month)[1])
-            next_date = sp.next_charge_date.replace(year=year, month=month, day=day)
-            await donation_repo.advance_charge_date(sp.id, next_date)
 
             if sp.donor and sp.donor.user_id:
                 n_payload = NotificationCreate(

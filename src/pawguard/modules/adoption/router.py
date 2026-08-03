@@ -227,10 +227,7 @@ async def get_scores(
     current_user: CurrentUser = Depends(get_current_user),
     service: AdoptionService = Depends(get_adoption_service),
 ) -> ApiResponse[list[AdoptionScoreResponse]]:
-    app = await service.get_application(app_id)
-    if app.adopter_id != current_user.user.id and not has_permission(
-        current_user.user, "adoption:read"
-    ):
+    if not has_permission(current_user.user, "adoption:read"):
         raise ForbiddenError("You do not have permission to view these scores.")
     scores = await service.get_scores(app_id)
     return ApiResponse(

@@ -38,15 +38,21 @@ class _RateLimitDependency:
 
 
 def resolve_client_ip(request: Request) -> str:
-    """Best-effort real client IP, trusting the first X-Forwarded-For hop.
+    """Securely resolve real client IP, avoiding header spoofing.
 
-    Reverse proxies append the caller's IP as the *leftmost* entry of
-    X-Forwarded-For; naive ``request.client.host`` would resolve to the proxy
-    itself and collapse every user into one rate-limit bucket / audit row.
+    If behind Cloudflare, CF-Connecting-IP is used. Otherwise, the rightmost
+    entry of X-Forwarded-For is returned since the last proxy appends the caller's
+    connecting IP to the end.
     """
+    cf_ip = request.headers.get("CF-Connecting-IP")
+    if cf_ip:
+        return cf_ip.strip()
+
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded:
-        return forwarded.split(",")[0].strip()
+        parts = [p.strip() for p in forwarded.split(",") if p.strip()]
+        if parts:
+            return parts[-1]
     return request.client.host if request.client else "unknown"
 
 

@@ -306,6 +306,7 @@ class TestScheduledJobs:
 
         mock_repo = AsyncMock()
         mock_repo.get_due_sponsorships.return_value = [sponsorship]
+        mock_repo.has_pending_donation_for_sponsorship.return_value = False
         mock_donation_repo_cls.return_value = mock_repo
 
         mock_session = AsyncMock()
@@ -324,9 +325,6 @@ class TestScheduledJobs:
         assert donation.sponsorship_id == sponsorship.id
         assert "manual collection" in donation.notes
 
-        mock_repo.advance_charge_date.assert_called_once()
-        next_date = mock_repo.advance_charge_date.call_args[0][1]
-        assert next_date == date_type(2026, 2, 28)
 
         mock_notif.create_notification.assert_called_once()
         notif_body = mock_notif.create_notification.call_args.kwargs["payload"].body
@@ -368,6 +366,7 @@ class TestScheduledJobs:
 
         mock_repo = AsyncMock()
         mock_repo.get_due_sponsorships.return_value = [sponsorship]
+        mock_repo.has_pending_donation_for_sponsorship.return_value = False
         mock_donation_repo_cls.return_value = mock_repo
 
         mock_session = AsyncMock()
@@ -386,9 +385,7 @@ class TestScheduledJobs:
         assert donation.gateway_order_id == "order_abc123"
         assert donation.payment_provider == "razorpay"
         assert "awaiting payment" in donation.notes
-        mock_repo.advance_charge_date.assert_called_once()
-        next_date = mock_repo.advance_charge_date.call_args[0][1]
-        assert next_date == date_type(2026, 2, 15)
+
 
     @pytest.mark.asyncio
     @patch("pawguard.workers.jobs.scheduled_jobs.get_payment_gateway")
@@ -418,6 +415,7 @@ class TestScheduledJobs:
 
         mock_repo = AsyncMock()
         mock_repo.get_due_sponsorships.return_value = [sponsorship]
+        mock_repo.has_pending_donation_for_sponsorship.return_value = False
         mock_donation_repo_cls.return_value = mock_repo
 
         mock_session = AsyncMock()
@@ -435,5 +433,5 @@ class TestScheduledJobs:
         assert donation.gateway_order_id is None
         assert donation.transaction_id is None
         assert "manual collection" in donation.notes
-        mock_repo.advance_charge_date.assert_called_once()
         mock_notif.create_notification.assert_called_once()
+

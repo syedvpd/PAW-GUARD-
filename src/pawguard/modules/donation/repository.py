@@ -16,8 +16,10 @@ from sqlalchemy.orm import selectinload
 from pawguard.core.pagination import PageParams
 from pawguard.core.search import SortParams, apply_sorting, build_search_filter
 from pawguard.modules.donation.models import (
+    CampaignStatus,
     DogSponsorship,
     Donation,
+    DonationCampaign,
     DonationStatus,
     DonorProfile,
     SponsorshipStatus,
@@ -32,6 +34,11 @@ class DonationRepository:
     DONOR_SEARCH_FIELDS = ("notes", "tax_identifier")
     DONOR_SORTABLE_FIELDS = {
         "created_at", "updated_at",
+    }
+    CAMPAIGN_SEARCH_FIELDS = ("name", "description")
+    CAMPAIGN_SORTABLE_FIELDS = {
+        "target_amount", "currency", "campaign_type", "status",
+        "start_date", "end_date", "created_at",
     }
 
     def __init__(self, session: AsyncSession) -> None:
@@ -185,6 +192,13 @@ class DonationRepository:
         return result.scalar_one_or_none()
 
     async def update_gateway_fields(self, donation_id: uuid.UUID, **kwargs: Any) -> Donation | None:
+        current = await self.get_donation_by_id(donation_id)
+        if current is None:
+            return None
+
+        old_status = current.status
+        sponsorship_id = current.sponsorship_id
+
         stmt = (
             update(Donation)
             .where(Donation.id == donation_id)
@@ -192,7 +206,25 @@ class DonationRepository:
             .returning(Donation)
         )
         result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
+        updated = result.scalar_one_or_none()
+
+        if updated and updated.status == DonationStatus.SUCCESS and old_status != DonationStatus.SUCCESS:
+            if sponsorship_id:
+                from pawguard.modules.donation.models import DogSponsorship
+                import calendar
+                
+                sp = await self._session.get(DogSponsorship, sponsorship_id)
+                if sp and sp.next_charge_date:
+                    month = sp.next_charge_date.month + 1
+                    year = sp.next_charge_date.year
+                    if month > 12:
+                        month = 1
+                        year += 1
+                    day = min(sp.next_charge_date.day, calendar.monthrange(year, month)[1])
+                    next_date = sp.next_charge_date.replace(year=year, month=month, day=day)
+                    sp.next_charge_date = next_date
+
+        return updated
 
     async def list_donations_by_ids(self, ids: list[uuid.UUID]) -> Sequence[Donation]:
         stmt = select(Donation).where(Donation.id.in_(ids))
@@ -302,3 +334,113 @@ class DonationRepository:
         )
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
+
+    # ── Donation campaigns (PRR 3.1.7 / 3.11) ─────────────────────────────
+
+    async def create_campaign(self, campaign: DonationCampaign) -> DonationCampaign:
+        self._session.add(campaign)
+        await self._session.flush()
+        return campaign
+
+    async def get_campaign_by_id(
+        self, campaign_id: uuid.UUID, *, include_deleted: bool = False
+    ) -> DonationCampaign | None:
+        stmt = select(DonationCampaign).where(DonationCampaign.id == campaign_id)
+        if not include_deleted:
+            stmt = stmt.where(DonationCampaign.deleted_at.is_(None))
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def update_campaign(
+        self, campaign_id: uuid.UUID, **kwargs: Any
+    ) -> DonationCampaign | None:
+        stmt = (
+            update(DonationCampaign)
+            .where(
+                DonationCampaign.id == campaign_id,
+                DonationCampaign.deleted_at.is_(None),
+            )
+            .values(**kwargs)
+            .returning(DonationCampaign)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def soft_delete_campaign(self, campaign_id: uuid.UUID) -> bool:
+        stmt = (
+            update(DonationCampaign)
+            .where(
+                DonationCampaign.id == campaign_id,
+                DonationCampaign.deleted_at.is_(None),
+            )
+            .values(deleted_at=datetime.now(UTC))
+        )
+        result = await self._session.execute(stmt)
+        return result.rowcount > 0  # type: ignore[attr-defined,no-any-return]
+
+    async def paginate_campaigns(
+        self,
+        page: PageParams,
+        sort: SortParams,
+        search_term: str | None = None,
+        status: CampaignStatus | None = None,
+        campaign_type: str | None = None,
+    ) -> tuple[Sequence[DonationCampaign], int]:
+        stmt = select(DonationCampaign).where(DonationCampaign.deleted_at.is_(None))
+
+        search_filter = build_search_filter(
+            DonationCampaign, search_term, self.CAMPAIGN_SEARCH_FIELDS
+        )
+        if search_filter is not None:
+            stmt = stmt.where(search_filter)
+        if status is not None:
+            stmt = stmt.where(DonationCampaign.status == status)
+        if campaign_type is not None:
+            stmt = stmt.where(DonationCampaign.campaign_type == campaign_type)
+
+        stmt = apply_sorting(stmt, sort, self.CAMPAIGN_SORTABLE_FIELDS)
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = (await self._session.execute(count_stmt)).scalar_one()
+
+        stmt = stmt.offset(page.offset).limit(page.limit)
+        results = (await self._session.execute(stmt)).scalars().all()
+
+        return results, total
+
+    async def list_active_campaigns(self, as_of: date_type) -> Sequence[DonationCampaign]:
+        stmt = (
+            select(DonationCampaign)
+            .where(
+                DonationCampaign.status == CampaignStatus.ACTIVE,
+                DonationCampaign.deleted_at.is_(None),
+                DonationCampaign.start_date <= as_of,
+            )
+            .order_by(DonationCampaign.created_at.desc())
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def get_campaign_totals(
+        self, campaign_id: uuid.UUID
+    ) -> tuple[float, int]:
+        """Raised amount and distinct donor count for a campaign (successful
+        donations only)."""
+        raised, donor_count = (
+            await self._session.execute(
+                select(
+                    func.coalesce(func.sum(Donation.amount), 0),
+                    func.count(func.distinct(Donation.donor_id)),
+                ).where(
+                    Donation.campaign_id == campaign_id,
+                    Donation.status == DonationStatus.SUCCESS,
+                )
+            )
+        ).one()
+        return float(raised), int(donor_count)
+
+    async def has_pending_donation_for_sponsorship(self, sponsorship_id: uuid.UUID) -> bool:
+        stmt = select(Donation).where(
+            Donation.sponsorship_id == sponsorship_id,
+            Donation.status == DonationStatus.PENDING,
+        )
+        res = (await self._session.execute(stmt)).scalars().first()
+        return res is not None

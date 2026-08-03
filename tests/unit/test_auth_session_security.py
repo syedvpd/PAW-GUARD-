@@ -111,7 +111,7 @@ class _FakeRequest:
 
 @pytest.mark.asyncio
 class TestRateLimiterXForwardedFor:
-    async def test_uses_first_forwarded_ip(self) -> None:
+    async def test_uses_last_forwarded_ip(self) -> None:
         limiter = rate_limit("login", 10, 60)
         request = _FakeRequest({"X-Forwarded-For": "203.0.113.5, 10.0.0.1"})
         redis = AsyncMock()
@@ -120,8 +120,9 @@ class TestRateLimiterXForwardedFor:
         await limiter(request, redis)
 
         key = redis.incr.call_args.args[0]
-        assert "203.0.113.5" in key
+        assert "10.0.0.1" in key
         assert "127.0.0.1" not in key
+
 
     async def test_falls_back_to_client_host_without_xff(self) -> None:
         limiter = rate_limit("login", 10, 60)
