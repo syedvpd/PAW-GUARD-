@@ -4,7 +4,7 @@ Routers only validate and call services (RULE-004).
 """
 
 import uuid
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession

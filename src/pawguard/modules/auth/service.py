@@ -30,6 +30,7 @@ from pawguard.core.security import (
     verify_password,
 )
 from pawguard.modules.auth import permission_codes as pc
+from pawguard.redis.client import RedisClient
 from pawguard.modules.auth.exceptions import (
     AccountInactiveError,
     AccountLockedError,
