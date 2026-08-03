@@ -38,6 +38,7 @@ class StoredFileResponse(BaseModel):
     id: uuid.UUID
     user_id: uuid.UUID | None
     object_key: str
+    thumbnail_object_key: str | None
     original_filename: str
     mime_type: str
     file_size: int

@@ -60,6 +60,11 @@ async def get_current_user(
     except TokenError as exc:
         raise InvalidSessionError(str(exc)) from exc
 
+    session_repo = SessionRepository(db)
+    session = await session_repo.get_by_id(claims.session_id)
+    if session is None or not session.is_active:
+        raise InvalidSessionError("Session has been revoked or has expired.")
+
     user_repo = UserRepository(db)
     user = await user_repo.get_by_id(claims.user_id)
     if user is None or not user.is_active:

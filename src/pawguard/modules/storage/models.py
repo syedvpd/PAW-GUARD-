@@ -33,6 +33,9 @@ class StoredFile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     object_key: Mapped[str] = mapped_column(
         String(1024), unique=True, nullable=False, index=True
     )
+    thumbnail_object_key: Mapped[str | None] = mapped_column(
+        String(1024), nullable=True
+    )
     original_filename: Mapped[str] = mapped_column(String(512), nullable=False)
     mime_type: Mapped[str] = mapped_column(String(128), nullable=False)
     file_size: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)

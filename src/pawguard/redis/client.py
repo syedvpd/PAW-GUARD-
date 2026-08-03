@@ -9,7 +9,7 @@ and rate-limiting / caching degrade gracefully.
 """
 
 from collections.abc import AsyncGenerator
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from redis.asyncio import ConnectionPool, Redis
 
@@ -62,12 +62,12 @@ async def _ensure_client() -> RedisClient:
             decode_responses=True,
             max_connections=100,
         )
-        _client = Redis(connection_pool=_pool)  # type: ignore[assignment]
-        assert _client is not None
+        _client = cast(RedisClient, Redis(connection_pool=_pool))
         await _client.ping()
     except Exception:
-        _client = _NullRedis()  # type: ignore[assignment]
-    return _client  # type: ignore[no-any-return]
+        _client = cast(RedisClient, _NullRedis())
+    assert _client is not None
+    return _client
 
 
 async def get_redis() -> AsyncGenerator[RedisClient]:

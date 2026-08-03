@@ -3,19 +3,28 @@
 import base64
 import uuid
 from datetime import UTC, datetime
+from io import BytesIO
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from PIL import Image
+
+from pawguard.core.exceptions import NotFoundError, ValidationFailedError
+from pawguard.modules.storage.models import StoredFile
+from pawguard.modules.storage.repository import StorageRepository
+from pawguard.modules.storage.service import StorageService
 
 # A real 1x1 PNG so python-magic's signature detection recognizes it.
 _PNG_BYTES = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 )
 
-from pawguard.core.exceptions import NotFoundError, ValidationFailedError
-from pawguard.modules.storage.models import StoredFile
-from pawguard.modules.storage.repository import StorageRepository
-from pawguard.modules.storage.service import StorageService
+
+def _jpeg_bytes() -> bytes:
+    """A real small JPEG so python-magic's signature detection recognizes it."""
+    buf = BytesIO()
+    Image.new("RGB", (8, 8), color=(0, 128, 255)).save(buf, format="JPEG")
+    return buf.getvalue()
 
 
 def _make_file(**kw):
@@ -56,6 +65,7 @@ class TestStorageService:
         mock_repo.get_by_id.return_value = stored
         mock_s3.get_object_size.return_value = 2048
         mock_s3.get_object_prefix_bytes.return_value = _PNG_BYTES
+        mock_s3.get_object.return_value = _PNG_BYTES
 
         result = await service.confirm_upload(file_id)
 
@@ -63,6 +73,39 @@ class TestStorageService:
         assert result.file_size == 2048
         assert result.mime_type == "image/png"
         mock_s3.delete_object.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_confirm_upload_generates_thumbnail(self, service, mock_repo, mock_s3):
+        file_id = uuid.uuid4()
+        stored = _make_file(id=file_id, mime_type="image/jpeg", file_size=999)
+        mock_repo.get_by_id.return_value = stored
+        mock_s3.get_object_size.return_value = len(_jpeg_bytes())
+        mock_s3.get_object_prefix_bytes.return_value = _jpeg_bytes()
+        mock_s3.get_object.return_value = _jpeg_bytes()
+
+        result = await service.confirm_upload(file_id)
+
+        mock_s3.put_object.assert_called_once()
+        put_kwargs = mock_s3.put_object.call_args.kwargs
+        assert put_kwargs["object_key"] == "dogs/abc_thumb.jpg"
+        assert put_kwargs["content_type"] == "image/jpeg"
+        assert result.thumbnail_object_key == "dogs/abc_thumb.jpg"
+
+    @pytest.mark.asyncio
+    async def test_confirm_upload_thumbnail_failure_does_not_reject(self, service, mock_repo, mock_s3):
+        file_id = uuid.uuid4()
+        stored = _make_file(id=file_id, mime_type="image/jpeg", file_size=999)
+        mock_repo.get_by_id.return_value = stored
+        mock_s3.get_object_size.return_value = len(_jpeg_bytes())
+        mock_s3.get_object_prefix_bytes.return_value = _jpeg_bytes()
+        # Undecodable object bytes -> thumbnail generation returns None.
+        mock_s3.get_object.return_value = b"garbage not an image"
+
+        result = await service.confirm_upload(file_id)
+
+        assert result.is_uploaded is True
+        assert result.thumbnail_object_key is None
+        mock_s3.put_object.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_confirm_upload_rejects_oversized_object(self, service, mock_repo, mock_s3):

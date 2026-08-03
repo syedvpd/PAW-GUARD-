@@ -1,10 +1,11 @@
 """Pydantic request/response DTOs for the auth module."""
 
+import re
 import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from pawguard.core.constants import DeviceType
 
@@ -23,6 +24,9 @@ def _validate_password_strength(value: str) -> str:
     return value
 
 
+PHONE_REGEX = re.compile(r"^\+?[0-9\s\-()]{7,20}$")
+
+
 class DeviceContext(BaseModel):
     device_id: str | None = Field(None, examples=["a1b2c3d4-device-001"])
     device_name: str | None = Field(None, examples=["Jane's iPhone 15"])
@@ -39,6 +43,20 @@ class RegisterRequest(BaseModel):
     @classmethod
     def password_strength(cls, value: str) -> str:
         return _validate_password_strength(value)
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def validate_phone(cls, v: Any) -> Any:
+        if v is None:
+            return None
+        if isinstance(v, str):
+            val = v.strip()
+            if not val:
+                return None
+            if not PHONE_REGEX.match(val):
+                raise ValueError("Invalid phone number format.")
+            return val
+        return v
 
 
 class LoginRequest(BaseModel):
@@ -86,6 +104,12 @@ class ChangePasswordRequest(BaseModel):
     def password_strength(cls, value: str) -> str:
         return _validate_password_strength(value)
 
+    @model_validator(mode="after")
+    def password_must_be_different(self) -> "ChangePasswordRequest":
+        if self.current_password == self.new_password:
+            raise ValueError("New password must be different from current password.")
+        return self
+
 
 class PasswordResetRequest(BaseModel):
     email: EmailStr = Field(..., examples=["jane.doe@example.com"])
@@ -120,15 +144,65 @@ class MFALoginVerifyRequest(BaseModel):
     device: DeviceContext = DeviceContext()
 
 
+class MFADisableRequest(BaseModel):
+    password: str | None = Field(None, examples=["CurrentP@ssw0rd"])
+    totp_code: str | None = Field(
+        None, min_length=6, max_length=6, examples=["482913"]
+    )
+
+    @model_validator(mode="after")
+    def at_least_one_credential(self) -> "MFADisableRequest":
+        if self.password is None and self.totp_code is None:
+            raise ValueError(
+                "Provide either your current password or a valid TOTP code."
+            )
+        return self
+
+
 class UserProfileUpdate(BaseModel):
     full_name: str | None = Field(None, examples=["Jane Doe"])
     phone: str | None = Field(None, examples=["+1-555-0100"])
+
+    @field_validator("full_name", mode="before")
+    @classmethod
+    def validate_full_name(cls, v: Any) -> Any:
+        if v is None:
+            raise ValueError("Full name cannot be null.")
+        if isinstance(v, str):
+            v_str = v.strip()
+            if not v_str:
+                raise ValueError("Full name cannot be empty.")
+            return v_str
+        return v
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def validate_phone(cls, v: Any) -> Any:
+        if v is None:
+            return None
+        if isinstance(v, str):
+            val = v.strip()
+            if not val:
+                return None
+            if not PHONE_REGEX.match(val):
+                raise ValueError("Invalid phone number format.")
+            return val
+        return v
+
+    @model_validator(mode="after")
+    def at_least_one_field_provided(self) -> "UserProfileUpdate":
+        if self.full_name is None and self.phone is None:
+            raise ValueError(
+                "At least one field (full_name or phone) must be provided for profile update."
+            )
+        return self
 
 
 class UserProfile(BaseModel):
     id: uuid.UUID
     email: str
     full_name: str
+    phone: str | None = None
     is_verified: bool
     mfa_enabled: bool
     roles: list[str]

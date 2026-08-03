@@ -30,7 +30,7 @@ async def generate_report(
     payload: ReportRequest,
     current_user: CurrentUser = Depends(get_current_user),
     service: ReportService = Depends(get_report_service),
-):
+) -> ApiResponse[ReportResponse]:
     result = await service.generate_report(
         report_type=payload.report_type,
         fmt=payload.format,
@@ -51,7 +51,7 @@ async def generate_report(
 )
 async def list_report_types(
     current_user: CurrentUser = Depends(get_current_user),
-):
+) -> ApiResponse[list[str]]:
     return ApiResponse(data=[t.value for t in ReportType])
 
 
@@ -62,7 +62,7 @@ async def list_report_types(
 )
 async def list_report_formats(
     current_user: CurrentUser = Depends(get_current_user),
-):
+) -> ApiResponse[list[str]]:
     return ApiResponse(data=[f.value for f in ReportFormat])
 
 
@@ -73,7 +73,7 @@ async def list_report_formats(
 async def download_report(
     filename: str,
     current_user: CurrentUser = Depends(get_current_user),
-):
+) -> FileResponse:
     reports_dir = pathlib.Path(ensure_reports_dir())
     filepath = (reports_dir / filename).resolve()
     if not str(filepath).startswith(str(reports_dir.resolve())):  # noqa: ASYNC240

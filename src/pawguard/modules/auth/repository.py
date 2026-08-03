@@ -63,6 +63,27 @@ class UserRepository:
         )
         return list((await self._session.execute(stmt)).scalars().all())
 
+    async def list_staff_user_ids(self) -> list[uuid.UUID]:
+        """Active users holding any role other than the public ``user`` role.
+
+        Used by scheduled alert jobs (inventory / expiry / vaccination) to
+        fan operational alerts out to staff who can act on them.
+        """
+        from pawguard.modules.auth.models import Role, UserRole
+
+        stmt = (
+            select(User.id)
+            .join(UserRole, UserRole.user_id == User.id)
+            .join(Role, Role.id == UserRole.role_id)
+            .where(
+                User.is_active.is_(True),
+                User.deleted_at.is_(None),
+                Role.name != "user",
+            )
+            .distinct()
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
+
 
 class SessionRepository:
     def __init__(self, session: AsyncSession) -> None:

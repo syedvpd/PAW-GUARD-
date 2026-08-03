@@ -4,6 +4,7 @@ Routers only validate and call services (RULE-004).
 """
 
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -303,7 +304,7 @@ async def list_supply_dispatches(
 
 @router.post(
     "/placements/{placement_id}/convert-to-adopt",
-    response_model=ApiResponse[dict],
+    response_model=ApiResponse[dict[str, Any]],
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_permission("foster:approve"))],
 )
@@ -312,7 +313,7 @@ async def convert_to_adopt(
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: FosterService = Depends(get_foster_service),
-) -> ApiResponse[dict]:
+) -> ApiResponse[dict[str, Any]]:
     ip = request.client.host if request.client else None
     app = await service.convert_to_adoption(
         placement_id,

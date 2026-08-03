@@ -5,6 +5,7 @@ in general system views so that only authorised roles see the full value.
 """
 
 import re
+from typing import Any
 
 
 def mask_email(email: str | None) -> str | None:
@@ -48,9 +49,9 @@ def mask_full_name(name: str | None) -> str | None:
 
 
 def mask_report_data(
-    rows: list[list], headers: list[str], pii_columns: set[str]
-) -> list[list]:
-    masked_rows = []
+    rows: list[list[Any]], headers: list[str], pii_columns: set[str]
+) -> list[list[Any]]:
+    masked_rows: list[list[Any]] = []
     for row in rows:
         masked_row = list(row)
         for i, header in enumerate(headers):

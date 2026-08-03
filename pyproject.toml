@@ -28,7 +28,6 @@ dependencies = [
     "python-multipart>=0.0.17",
     "reportlab>=4.2.0",
     "openpyxl>=3.1.0",
-    "weasyprint>=62.3.0",
     "razorpay>=2.0.0",
 ]
 
@@ -73,7 +72,7 @@ plugins = ["pydantic.mypy"]
 exclude = ["alembic/"]
 
 [[tool.mypy.overrides]]
-module = ["boto3.*", "botocore.*", "pyotp.*"]
+module = ["boto3.*", "botocore.*", "pyotp.*", "razorpay.*", "reportlab.*", "openpyxl.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
@@ -82,6 +81,6 @@ testpaths = ["tests"]
 
 [tool.bandit]
 exclude_dirs = ["tests", "alembic"]
-# B101: internal invariant checks in UnitOfWork, not security validation.
+# B101: internal invariant assertions, not security validation.
 # B105: false positives on enum event-type/cookie-name string literals, not secrets.
 skips = ["B101", "B105"]

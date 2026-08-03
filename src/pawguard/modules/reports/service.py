@@ -1,5 +1,6 @@
 import os
 from datetime import date
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,7 +22,7 @@ from pawguard.modules.reports.renderers import (
 )
 from pawguard.modules.reports.schemas import ReportFormat, ReportType
 from pawguard.modules.rescue.models import RescueDispatch, RescueRequest
-from pawguard.modules.volunteer.models import VolunteerProfile
+from pawguard.modules.volunteer.models import VolunteerProfile, VolunteerStatus
 
 
 class ReportService:
@@ -34,8 +35,8 @@ class ReportService:
         fmt: ReportFormat,
         period_start: date | None = None,
         period_end: date | None = None,
-        filters: dict | None = None,
-    ) -> dict:
+        filters: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         raw_data = await self._collect_data(
             report_type, period_start, period_end, filters
         )
@@ -82,8 +83,8 @@ class ReportService:
         report_type: ReportType,
         period_start: date | None,
         period_end: date | None,
-        filters: dict | None,
-    ) -> dict:
+        filters: dict[str, Any] | None,
+    ) -> dict[str, Any]:
         match report_type:
             case ReportType.DONATION:
                 return await self._donation_report(
@@ -125,8 +126,8 @@ class ReportService:
                 return {"title": "Report", "headers": [], "rows": []}
 
     async def _donation_report(
-        self, start: date | None, end: date | None, filters: dict | None
-    ) -> dict:
+        self, start: date | None, end: date | None, filters: dict[str, Any] | None
+    ) -> dict[str, Any]:
         stmt = select(Donation)
         if start:
             stmt = stmt.where(Donation.created_at >= start)
@@ -149,8 +150,8 @@ class ReportService:
         }
 
     async def _adoption_report(
-        self, start: date | None, end: date | None, filters: dict | None
-    ) -> dict:
+        self, start: date | None, end: date | None, filters: dict[str, Any] | None
+    ) -> dict[str, Any]:
         stmt = select(AdoptionApplication)
         if start:
             stmt = stmt.where(AdoptionApplication.created_at >= start)
@@ -180,8 +181,8 @@ class ReportService:
         }
 
     async def _medical_report(
-        self, start: date | None, end: date | None, filters: dict | None
-    ) -> dict:
+        self, start: date | None, end: date | None, filters: dict[str, Any] | None
+    ) -> dict[str, Any]:
         stmt = select(MedicalTreatment)
         if start:
             stmt = stmt.where(MedicalTreatment.treatment_date >= start)
@@ -202,8 +203,8 @@ class ReportService:
         }
 
     async def _inventory_report(
-        self, filters: dict | None
-    ) -> dict:
+        self, filters: dict[str, Any] | None
+    ) -> dict[str, Any]:
         stmt = select(InventoryItem)
         if filters and "category" in filters:
             stmt = stmt.where(
@@ -229,8 +230,8 @@ class ReportService:
         }
 
     async def _rescue_report(
-        self, start: date | None, end: date | None, filters: dict | None
-    ) -> dict:
+        self, start: date | None, end: date | None, filters: dict[str, Any] | None
+    ) -> dict[str, Any]:
         stmt = select(RescueRequest)
         if start:
             stmt = stmt.where(RescueRequest.created_at >= start)
@@ -257,8 +258,8 @@ class ReportService:
         }
 
     async def _finance_report(
-        self, start: date | None, end: date | None, filters: dict | None
-    ) -> dict:
+        self, start: date | None, end: date | None, filters: dict[str, Any] | None
+    ) -> dict[str, Any]:
         stmt = select(FinancialTransaction).where(
             FinancialTransaction.deleted_at.is_(None),
         )
@@ -300,8 +301,8 @@ class ReportService:
         return max(1, (end.year - start.year) * 12 + end.month - start.month + 1)
 
     async def _staff_performance_report(
-        self, start: date | None, end: date | None, filters: dict | None
-    ) -> dict:
+        self, start: date | None, end: date | None, filters: dict[str, Any] | None
+    ) -> dict[str, Any]:
         adoption_stmt = select(func.count(AdoptionApplication.id)).where(
             AdoptionApplication.status == AdoptionStatus.COMPLETED
         )
@@ -403,8 +404,8 @@ class ReportService:
         }
 
     async def _animal_population_report(
-        self, filters: dict | None
-    ) -> dict:
+        self, filters: dict[str, Any] | None
+    ) -> dict[str, Any]:
         stmt = select(DogProfile)
         if filters and "status" in filters:
             stmt = stmt.where(DogProfile.status == filters["status"])
@@ -426,8 +427,8 @@ class ReportService:
         }
 
     async def _foster_report(
-        self, start: date | None, end: date | None, filters: dict | None
-    ) -> dict:
+        self, start: date | None, end: date | None, filters: dict[str, Any] | None
+    ) -> dict[str, Any]:
         stmt = select(FosterPlacement)
         if start:
             stmt = stmt.where(FosterPlacement.placed_at >= start)
@@ -452,8 +453,8 @@ class ReportService:
         }
 
     async def _volunteer_report(
-        self, start: date | None, end: date | None, filters: dict | None
-    ) -> dict:
+        self, start: date | None, end: date | None, filters: dict[str, Any] | None
+    ) -> dict[str, Any]:
         stmt = select(VolunteerProfile)
         if filters and "status" in filters:
             stmt = stmt.where(
@@ -465,7 +466,8 @@ class ReportService:
             "headers": ["ID", "User ID", "Status", "Skills", "Available"],
             "rows": [
                 [str(v.id), str(v.user_id), v.status,
-                 v.skills or "", "Yes" if v.is_available else "No"]
+                 v.skills or "",
+                 "Yes" if v.status == VolunteerStatus.ACTIVE else "No"]
                 for v in results
             ],
         }

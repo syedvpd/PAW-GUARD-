@@ -188,7 +188,6 @@ class User(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    mfa_secret_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     failed_login_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

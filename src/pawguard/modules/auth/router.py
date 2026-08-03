@@ -37,6 +37,7 @@ from pawguard.modules.auth.schemas import (
     EmailVerificationConfirmRequest,
     LoginRequest,
     LoginResponse,
+    MFADisableRequest,
     MFAEnrollResponse,
     MFALoginVerifyRequest,
     MFARequiredResponse,
@@ -145,6 +146,7 @@ def _to_login_response(
             id=tokens.user.id,
             email=tokens.user.email,
             full_name=tokens.user.full_name,
+            phone=tokens.user.phone,
             is_verified=tokens.user.is_verified,
             mfa_enabled=tokens.user.mfa_enabled,
             roles=[r.name for r in tokens.user.roles],
@@ -174,14 +176,18 @@ async def register(
         user=user, ctx=_build_request_context(request)
     )
     verify_url = f"{get_settings().web_app_url}/verify-email?token={raw_token}"
-    await arq_pool.enqueue_job(
-        "send_email_verification_email_job", to=user.email, verify_url=verify_url
-    )
+    try:
+        await arq_pool.enqueue_job(
+            "send_email_verification_email_job", to=user.email, verify_url=verify_url
+        )
+    except Exception:
+        pass
     return ApiResponse(
         data=UserProfile(
             id=user.id,
             email=user.email,
             full_name=user.full_name,
+            phone=user.phone,
             is_verified=user.is_verified,
             mfa_enabled=user.mfa_enabled,
             roles=[r.name for r in user.roles],
@@ -318,6 +324,7 @@ async def get_me(current: CurrentUser = Depends(get_current_user)) -> ApiRespons
             id=current.user.id,
             email=current.user.email,
             full_name=current.user.full_name,
+            phone=current.user.phone,
             is_verified=current.user.is_verified,
             mfa_enabled=current.user.mfa_enabled,
             roles=[r.name for r in current.user.roles],
@@ -339,6 +346,7 @@ async def update_profile(
             id=user.id,
             email=user.email,
             full_name=user.full_name,
+            phone=user.phone,
             is_verified=user.is_verified,
             mfa_enabled=user.mfa_enabled,
             roles=[r.name for r in user.roles],
@@ -360,7 +368,7 @@ async def list_sessions(
         )
         for s in sessions
     ]
-    return ApiResponse(data=data)
+    return ApiResponse(data=data, message="Active sessions retrieved successfully.")
 
 
 @router.delete("/sessions/{session_id}", response_model=ApiResponse[None])
@@ -414,9 +422,12 @@ async def request_password_reset(
     )
     if raw_token is not None:
         reset_url = f"{get_settings().web_app_url}/reset-password?token={raw_token}"
-        await arq_pool.enqueue_job(
-            "send_password_reset_email_job", to=payload.email, reset_url=reset_url
-        )
+        try:
+            await arq_pool.enqueue_job(
+                "send_password_reset_email_job", to=payload.email, reset_url=reset_url
+            )
+        except Exception:
+            pass
     return ApiResponse(message="If that email exists, a reset link has been sent.")
 
 
@@ -498,11 +509,14 @@ async def confirm_mfa_enrollment(
     dependencies=[Depends(mfa_disable_rate_limiter)],
 )
 async def disable_mfa(
+    payload: MFADisableRequest,
     request: Request,
     current: CurrentUser = Depends(get_current_user),
     auth_service: AuthService = Depends(get_auth_service),
 ) -> ApiResponse[None]:
-    await auth_service.disable_mfa(user=current.user, ctx=_build_request_context(request))
+    await auth_service.disable_mfa(
+        user=current.user, payload=payload, ctx=_build_request_context(request)
+    )
     return ApiResponse(message="MFA disabled.")
 
 

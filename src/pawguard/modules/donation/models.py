@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Date, DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -57,6 +57,12 @@ class DonorProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
 class DogSponsorship(UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "dog_sponsorships"
 
+    __table_args__ = (
+        CheckConstraint(
+            "monthly_amount > 0", name="ck_dog_sponsorships_monthly_amount_positive"
+        ),
+    )
+
     donor_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("donor_profiles.id", ondelete="CASCADE"),
@@ -87,6 +93,10 @@ class DogSponsorship(UUIDPkMixin, TimestampMixin, Base):
 
 class Donation(UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "donations"
+
+    __table_args__ = (
+        CheckConstraint("amount > 0", name="ck_donations_amount_positive"),
+    )
 
     donor_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),

@@ -22,7 +22,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import selectinload
 
 from pawguard.core.config import get_settings
@@ -229,7 +229,7 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
 
 
 async def _get_or_create_permission(
-    session, permissions_cache: dict[str, Permission], code: str
+    session: AsyncSession, permissions_cache: dict[str, Permission], code: str
 ) -> Permission:
     if code in permissions_cache:
         return permissions_cache[code]
@@ -240,11 +240,12 @@ async def _get_or_create_permission(
         session.add(perm)
         await session.flush()
     permissions_cache[code] = perm
+    assert perm is not None
     return perm
 
 
 async def reconcile_roles(
-    session,
+    session: AsyncSession,
     role_definitions: list[tuple[str, str, bool, list[str]]] = ROLE_DEFINITIONS,
     *,
     verbose: bool = True,

@@ -62,7 +62,7 @@ from pawguard.modules.auth.repository import (
     UserRepository,
     UserRoleRepository,
 )
-from pawguard.modules.auth.schemas import DeviceContext
+from pawguard.modules.auth.schemas import DeviceContext, MFADisableRequest
 from pawguard.services.audit_service import AuditService
 
 MAX_FAILED_LOGIN_ATTEMPTS = 5
@@ -345,6 +345,8 @@ class AuthService:
         current_session_id: uuid.UUID,
         ctx: RequestContext,
     ) -> None:
+        if current_password == new_password:
+            raise InvalidCredentialsError("New password must be different from current password.")
         if not await asyncio.to_thread(verify_password, current_password, user.hashed_password):
             raise InvalidCredentialsError("Current password is incorrect.")
 
@@ -548,7 +550,28 @@ class AuthService:
 
     # --- MFA disable ---
 
-    async def disable_mfa(self, *, user: User, ctx: RequestContext) -> None:
+    async def disable_mfa(
+        self, *, user: User, payload: MFADisableRequest, ctx: RequestContext
+    ) -> None:
+        confirmed_via: str | None = None
+
+        if payload.password is not None:
+            if not await asyncio.to_thread(verify_password, payload.password, user.hashed_password):
+                raise InvalidCredentialsError("Incorrect password.")
+            confirmed_via = "password"
+
+        if payload.totp_code is not None:
+            device = await self._mfa.get_for_user(user.id)
+            if device is None or not self._verify_totp(device, payload.totp_code):
+                raise InvalidMFACodeError("Invalid MFA code.")
+            if confirmed_via is None:
+                confirmed_via = "totp"
+
+        if confirmed_via is None:
+            raise InvalidCredentialsError(
+                "Provide either your current password or a valid TOTP code."
+            )
+
         device = await self._mfa.get_for_user(user.id)
         if device is not None:
             device.is_verified = False
@@ -558,6 +581,7 @@ class AuthService:
             actor_id=user.id,
             ip_address=ctx.ip_address,
             user_agent=ctx.user_agent,
+            metadata={"confirmed_via": confirmed_via},
         )
 
     # --- OAuth / Social Login ---
@@ -753,12 +777,12 @@ class AuthService:
             user.full_name = full_name
         if phone is not None:
             user.phone = phone
-        fresh = await self._users.get_by_id(user_id)
+        await self._users._session.flush()
         await self._audit.record(
             event_type=AuthAuditEventType.PROFILE_UPDATED,
             actor_id=user_id,
         )
-        return fresh or user
+        return user
 
 
 # ── Admin service ────────────────────────────────────────────────────────────

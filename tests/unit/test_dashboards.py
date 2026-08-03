@@ -227,3 +227,26 @@ class TestDashboards:
         assert "rescue" in result
         assert "shelter" in result
         assert "inventory" in result
+
+    async def test_dashboard_cache_hit(self, session):
+        fake_redis = AsyncMock()
+        fake_redis.get.return_value = '{"total_calls": 999, "pending": 1, "dispatched": 2, "rescued": 3, "recent_calls": []}'
+        result = await rescue_dashboard(session, redis=fake_redis)
+        assert result["total_calls"] == 999
+        session.execute.assert_not_called()
+
+    async def test_dashboard_cache_miss_stores_value(self, session):
+        fake_redis = AsyncMock()
+        fake_redis.get.return_value = None
+        session.execute.side_effect = [
+            _fake_result(scalar_one_val=10),
+            _fake_result(scalar_one_val=3),
+            _fake_result(scalar_one_val=2),
+            _fake_result(scalar_one_val=5),
+            _fake_result(scalars_all=[]),
+        ]
+        result = await rescue_dashboard(session, redis=fake_redis)
+        assert result["total_calls"] == 10
+        fake_redis.set.assert_called_once()
+        assert fake_redis.set.call_args[0][0] == "cache:dashboard:rescue"
+

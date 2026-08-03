@@ -4,7 +4,10 @@ Every file upload endpoint MUST call ``verify_upload`` before persisting the fil
 """
 
 
+from io import BytesIO
+
 import magic  # type: ignore[import-untyped]
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 ALLOWED_MIME_TYPES: frozenset[str] = frozenset({
     "image/jpeg",
@@ -52,3 +55,33 @@ def _detect_mime(content: bytes) -> str:
 def verify_upload(content: bytes, declared_mime: str | None = None) -> str:
     verify_file_size(content)
     return verify_mime_type(content, declared_mime)
+
+
+def create_thumbnail(content: bytes, max_size: int = 400) -> bytes | None:
+    """Build a small, EXIF-free thumbnail for an image upload.
+
+    Resizes the image down to at most ``max_size`` on the longest edge while
+    preserving aspect ratio, re-encodes it without EXIF metadata (so uploader
+    GPS/location data is never stored or served), and returns PNG bytes when
+    the source has transparency and JPEG bytes otherwise. Returns ``None``
+    when ``content`` is not a decodable image.
+    """
+    try:
+        with Image.open(BytesIO(content)) as img:
+            img.load()
+    except (UnidentifiedImageError, OSError, ValueError, TypeError):
+        return None
+
+    # Expose the correct pixel orientation and drop the EXIF block.
+    thumb = ImageOps.exif_transpose(img)
+    if thumb.mode == "P":
+        thumb = thumb.convert("RGBA")
+    thumb.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+
+    out = BytesIO()
+    if thumb.mode in ("RGBA", "LA"):
+        thumb.save(out, format="PNG", optimize=True)
+    else:
+        thumb = thumb.convert("RGB")
+        thumb.save(out, format="JPEG", quality=80, optimize=True)
+    return out.getvalue()
