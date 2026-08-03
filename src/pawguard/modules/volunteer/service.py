@@ -3,11 +3,20 @@
 import uuid
 from datetime import UTC, datetime
 
-from pawguard.core.exceptions import ConflictError, ForbiddenError, NotFoundError
+from pawguard.core.config import get_settings
+from pawguard.core.exceptions import (
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+    ValidationFailedError,
+)
 from pawguard.core.pagination import PageParams, build_pagination_meta
+from pawguard.core.pdf_generation import generate_volunteer_certificate
 from pawguard.core.responses import PaginationMeta
 from pawguard.core.search import SortParams
+from pawguard.modules.auth.models import AuthAuditEventType
 from pawguard.modules.auth.repository import RoleRepository, UserRoleRepository
+from pawguard.modules.storage.models import FileFolder, StoredFile
 from pawguard.modules.volunteer.models import (
     ShiftAttendance,
     VolunteerProfile,
@@ -18,18 +27,29 @@ from pawguard.modules.volunteer.repository import VolunteerRepository
 from pawguard.modules.volunteer.schemas import (
     VolunteerProfileCreate,
     VolunteerProfileUpdate,
+    VolunteerServiceSummary,
     VolunteerShiftCreate,
 )
+from pawguard.services.audit_service import AuditService
+from pawguard.services.storage_service import StorageService
 
 
 class VolunteerService:
-    def __init__(self, repository: VolunteerRepository) -> None:
+    def __init__(
+        self, repository: VolunteerRepository, audit_service: AuditService | None = None
+    ) -> None:
         self._repo = repository
+        self._audit = audit_service
         self._roles = RoleRepository(repository._session)
         self._user_roles = UserRoleRepository(repository._session)
 
     async def apply_to_volunteer(
-        self, user_id: uuid.UUID, payload: VolunteerProfileCreate
+        self,
+        user_id: uuid.UUID,
+        payload: VolunteerProfileCreate,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
     ) -> VolunteerProfile:
         existing = await self._repo.get_profile_by_user_id(user_id)
         if existing is not None:
@@ -50,6 +70,20 @@ class VolunteerService:
         res = await self._repo.get_profile_by_id(profile.id)
         if res is None:
             raise NotFoundError("Failed to fetch newly created volunteer profile.")
+
+        # Self-service public application - always audited so coordinators can
+        # trace who registered, from where, and when (PRR §6.1).
+        if self._audit:
+            await self._audit.record(
+                event_type=AuthAuditEventType.VOLUNTEER_APPLICATION_SUBMITTED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "profile_id": str(res.id),
+                    "user_id": str(user_id),
+                },
+            )
         return res
 
     async def update_profile(
@@ -230,3 +264,107 @@ class VolunteerService:
         self, ids: list[uuid.UUID], status: VolunteerStatus
     ) -> int:
         return await self._repo.bulk_update_profile_status(ids, status)
+
+    # --- Service certificates (PRR 3.9) ------------------------------------
+
+    async def get_service_summary(self, profile_id: uuid.UUID) -> VolunteerServiceSummary:
+        """Aggregate a volunteer's verified service hours from completed
+        (checked-out) attendance records."""
+        profile = await self._repo.get_profile_by_id(profile_id)
+        if profile is None:
+            raise NotFoundError("Volunteer profile not found.")
+
+        records = await self._repo.list_attendance_for_volunteer(profile_id)
+        total_hours = sum(float(r.hours_logged) for r in records if r.hours_logged is not None)
+        period_start = records[0].check_out_at if records else None
+        period_end = records[-1].check_out_at if records else None
+        roles = sorted({
+            r.shift.role_name for r in records
+            if r.shift is not None and r.shift.role_name
+        })
+        return VolunteerServiceSummary(
+            volunteer_id=profile_id,
+            total_hours=round(total_hours, 2),
+            shifts_count=len(records),
+            period_start=period_start,
+            period_end=period_end,
+            role_summary=", ".join(roles),
+        )
+
+    async def issue_service_certificate(
+        self,
+        profile_id: uuid.UUID,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+        storage_service: StorageService | None = None,
+    ) -> tuple[bytes, str]:
+        """Generate and store a PDF service certificate for a volunteer based
+        on verified attended shifts. Returns (pdf_bytes, object_key)."""
+        profile = await self._repo.get_profile_by_id(profile_id)
+        if profile is None:
+            raise NotFoundError("Volunteer profile not found.")
+
+        summary = await self.get_service_summary(profile_id)
+        if summary.shifts_count == 0:
+            raise ValidationFailedError(
+                "No verified shifts to certify; the volunteer must complete at "
+                "least one attended shift first."
+            )
+
+        volunteer_name = profile.user.full_name if profile.user else "Volunteer"
+        settings = get_settings()
+        pdf_bytes = generate_volunteer_certificate(
+            volunteer_name=volunteer_name,
+            total_hours=summary.total_hours,
+            shifts_count=summary.shifts_count,
+            period_start=summary.period_start,
+            period_end=summary.period_end,
+            role_summary=summary.role_summary,
+            org_name=settings.org_name,
+            org_address=settings.org_address,
+            issued_at=datetime.now(UTC),
+        )
+
+        if storage_service is not None:
+            object_key = storage_service.build_object_key(
+                folder=FileFolder.CERTIFICATES.value,
+                filename=f"service_certificate_{profile_id}.pdf",
+            )
+            storage_service.put_object(
+                object_key=object_key,
+                content=pdf_bytes,
+                content_type="application/pdf",
+            )
+            stored = StoredFile(
+                object_key=object_key,
+                original_filename=f"service_certificate_{profile_id}.pdf",
+                mime_type="application/pdf",
+                file_size=len(pdf_bytes),
+                folder=FileFolder.CERTIFICATES.value,
+                is_uploaded=True,
+                uploaded_at=datetime.now(UTC),
+                entity_type="volunteer_certificate",
+                entity_id=profile_id,
+                user_id=profile.user_id,
+            )
+            self._repo._session.add(stored)
+            await self._repo._session.flush()
+        else:
+            object_key = ""
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.VOLUNTEER_CERTIFICATE_ISSUED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "profile_id": str(profile_id),
+                    "volunteer_id": str(profile.user_id),
+                    "total_hours": str(summary.total_hours),
+                    "shifts_count": summary.shifts_count,
+                    "object_key": object_key,
+                },
+            )
+        return pdf_bytes, object_key

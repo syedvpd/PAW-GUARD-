@@ -4,7 +4,17 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+)
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -128,6 +138,10 @@ class GeneralLedgerEntry(UUIDPkMixin, TimestampMixin, Base):
 
 class FinancialTransaction(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "financial_transactions"
+
+    __table_args__ = (
+        CheckConstraint("amount > 0", name="ck_financial_transactions_amount_positive"),
+    )
 
     transaction_number: Mapped[str] = mapped_column(
         String(64), unique=True, nullable=False, index=True

@@ -13,11 +13,11 @@ from pawguard.core.constants import (
     REFRESH_TOKEN_COOKIE_NAME,
     ClientType,
 )
+from pawguard.core.rate_limiter import rate_limit, resolve_client_ip
 from pawguard.core.responses import ApiResponse
 from pawguard.db.session import get_db
 from pawguard.modules.auth.dependencies import (
     CurrentUser,
-    RateLimiter,
     get_current_session,
     get_current_user,
 )
@@ -37,6 +37,7 @@ from pawguard.modules.auth.schemas import (
     EmailVerificationConfirmRequest,
     LoginRequest,
     LoginResponse,
+    MFADisableRequest,
     MFAEnrollResponse,
     MFALoginVerifyRequest,
     MFARequiredResponse,
@@ -59,26 +60,19 @@ from pawguard.workers.pool import get_arq_pool
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-register_rate_limiter = RateLimiter(key_prefix="register", limit=5, window_seconds=3600)
-login_rate_limiter = RateLimiter(key_prefix="login", limit=10, window_seconds=60)
-refresh_rate_limiter = RateLimiter(key_prefix="refresh", limit=30, window_seconds=60)
-reset_rate_limiter = RateLimiter(key_prefix="password_reset", limit=5, window_seconds=3600)
+register_rate_limiter = rate_limit("register", 5, 3600)
+login_rate_limiter = rate_limit("login", 10, 60)
+refresh_rate_limiter = rate_limit("refresh", 30, 60)
+reset_rate_limiter = rate_limit("password_reset", 5, 3600)
 # Short numeric codes (TOTP/backup codes) are brute-forceable without a tight throttle.
-mfa_verify_rate_limiter = RateLimiter(key_prefix="mfa_verify", limit=10, window_seconds=300)
-mfa_enroll_confirm_rate_limiter = RateLimiter(
-    key_prefix="mfa_enroll_confirm", limit=10, window_seconds=300
-)
-mfa_disable_rate_limiter = RateLimiter(key_prefix="mfa_disable", limit=10, window_seconds=300)
-password_change_rate_limiter = RateLimiter(
-    key_prefix="password_change", limit=10, window_seconds=300
-)
-reset_confirm_rate_limiter = RateLimiter(
-    key_prefix="password_reset_confirm", limit=10, window_seconds=300
-)
-email_verify_confirm_rate_limiter = RateLimiter(
-    key_prefix="email_verify_confirm", limit=10, window_seconds=300
-)
-oauth_login_rate_limiter = RateLimiter(key_prefix="oauth_login", limit=10, window_seconds=60)
+mfa_verify_rate_limiter = rate_limit("mfa_verify", 10, 300)
+mfa_enroll_confirm_rate_limiter = rate_limit("mfa_enroll_confirm", 10, 300)
+mfa_disable_rate_limiter = rate_limit("mfa_disable", 10, 300)
+email_verify_request_rate_limiter = rate_limit("email_verify_request", 10, 300)
+password_change_rate_limiter = rate_limit("password_change", 10, 300)
+reset_confirm_rate_limiter = rate_limit("password_reset_confirm", 10, 300)
+email_verify_confirm_rate_limiter = rate_limit("email_verify_confirm", 10, 300)
+oauth_login_rate_limiter = rate_limit("oauth_login", 10, 60)
 
 
 def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
@@ -95,17 +89,31 @@ def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
 
 
 def _build_request_context(request: Request) -> RequestContext:
-    client_ip = request.client.host if request.client else None
-    return RequestContext(ip_address=client_ip, user_agent=request.headers.get("user-agent"))
+    # resolve_client_ip() trusts the leftmost X-Forwarded-For hop so audit
+    # rows record the real caller, not the reverse proxy (mirrors the rate
+    # limiter's keying).
+    return RequestContext(
+        ip_address=resolve_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
 
 
 def _is_web_client(client_type: str | None) -> bool:
     return client_type == ClientType.WEB.value
 
 
+def _cookie_domain() -> str | None:
+    """Cookie domain attr: None for localhost so the browser treats the cookie
+    as host-only. Set and clear must agree or logout's delete_cookie would
+    target a different domain and silently fail to clear the cookies.
+    """
+    domain = get_settings().cookie_domain
+    return domain if domain != "localhost" else None
+
+
 def _set_auth_cookies(response: Response, *, access_token: str, refresh_token: str | None) -> None:
     settings = get_settings()
-    domain = settings.cookie_domain if settings.cookie_domain != "localhost" else None
+    domain = _cookie_domain()
 
     response.set_cookie(
         ACCESS_TOKEN_COOKIE_NAME,
@@ -129,9 +137,9 @@ def _set_auth_cookies(response: Response, *, access_token: str, refresh_token: s
 
 
 def _clear_auth_cookies(response: Response) -> None:
-    settings = get_settings()
-    response.delete_cookie(ACCESS_TOKEN_COOKIE_NAME, domain=settings.cookie_domain)
-    response.delete_cookie(REFRESH_TOKEN_COOKIE_NAME, domain=settings.cookie_domain)
+    domain = _cookie_domain()
+    response.delete_cookie(ACCESS_TOKEN_COOKIE_NAME, domain=domain)
+    response.delete_cookie(REFRESH_TOKEN_COOKIE_NAME, domain=domain)
 
 
 def _to_login_response(
@@ -145,6 +153,7 @@ def _to_login_response(
             id=tokens.user.id,
             email=tokens.user.email,
             full_name=tokens.user.full_name,
+            phone=tokens.user.phone,
             is_verified=tokens.user.is_verified,
             mfa_enabled=tokens.user.mfa_enabled,
             roles=[r.name for r in tokens.user.roles],
@@ -169,19 +178,24 @@ async def register(
         password=payload.password,
         full_name=payload.full_name,
         phone=payload.phone,
+        ctx=_build_request_context(request),
     )
     raw_token = await auth_service.request_email_verification(
         user=user, ctx=_build_request_context(request)
     )
     verify_url = f"{get_settings().web_app_url}/verify-email?token={raw_token}"
-    await arq_pool.enqueue_job(
-        "send_email_verification_email_job", to=user.email, verify_url=verify_url
-    )
+    try:
+        await arq_pool.enqueue_job(
+            "send_email_verification_email_job", to=user.email, verify_url=verify_url
+        )
+    except Exception:
+        pass
     return ApiResponse(
         data=UserProfile(
             id=user.id,
             email=user.email,
             full_name=user.full_name,
+            phone=user.phone,
             is_verified=user.is_verified,
             mfa_enabled=user.mfa_enabled,
             roles=[r.name for r in user.roles],
@@ -318,6 +332,7 @@ async def get_me(current: CurrentUser = Depends(get_current_user)) -> ApiRespons
             id=current.user.id,
             email=current.user.email,
             full_name=current.user.full_name,
+            phone=current.user.phone,
             is_verified=current.user.is_verified,
             mfa_enabled=current.user.mfa_enabled,
             roles=[r.name for r in current.user.roles],
@@ -328,17 +343,22 @@ async def get_me(current: CurrentUser = Depends(get_current_user)) -> ApiRespons
 @router.put("/me", response_model=ApiResponse[UserProfile])
 async def update_profile(
     payload: UserProfileUpdate,
+    request: Request,
     current: CurrentUser = Depends(get_current_user),
     auth_service: AuthService = Depends(get_auth_service),
 ) -> ApiResponse[UserProfile]:
     user = await auth_service.update_profile(
-        current.user.id, full_name=payload.full_name, phone=payload.phone
+        current.user.id,
+        full_name=payload.full_name,
+        phone=payload.phone,
+        ctx=_build_request_context(request),
     )
     return ApiResponse(
         data=UserProfile(
             id=user.id,
             email=user.email,
             full_name=user.full_name,
+            phone=user.phone,
             is_verified=user.is_verified,
             mfa_enabled=user.mfa_enabled,
             roles=[r.name for r in user.roles],
@@ -360,7 +380,7 @@ async def list_sessions(
         )
         for s in sessions
     ]
-    return ApiResponse(data=data)
+    return ApiResponse(data=data, message="Active sessions retrieved successfully.")
 
 
 @router.delete("/sessions/{session_id}", response_model=ApiResponse[None])
@@ -414,9 +434,12 @@ async def request_password_reset(
     )
     if raw_token is not None:
         reset_url = f"{get_settings().web_app_url}/reset-password?token={raw_token}"
-        await arq_pool.enqueue_job(
-            "send_password_reset_email_job", to=payload.email, reset_url=reset_url
-        )
+        try:
+            await arq_pool.enqueue_job(
+                "send_password_reset_email_job", to=payload.email, reset_url=reset_url
+            )
+        except Exception:
+            pass
     return ApiResponse(message="If that email exists, a reset link has been sent.")
 
 
@@ -454,7 +477,11 @@ async def confirm_email_verification(
     return ApiResponse(message="Email verified.")
 
 
-@router.post("/email/verify/request", response_model=ApiResponse[None])
+@router.post(
+    "/email/verify/request",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(email_verify_request_rate_limiter)],
+)
 async def request_email_verification(
     request: Request,
     current: CurrentUser = Depends(get_current_user),
@@ -498,11 +525,14 @@ async def confirm_mfa_enrollment(
     dependencies=[Depends(mfa_disable_rate_limiter)],
 )
 async def disable_mfa(
+    payload: MFADisableRequest,
     request: Request,
     current: CurrentUser = Depends(get_current_user),
     auth_service: AuthService = Depends(get_auth_service),
 ) -> ApiResponse[None]:
-    await auth_service.disable_mfa(user=current.user, ctx=_build_request_context(request))
+    await auth_service.disable_mfa(
+        user=current.user, payload=payload, ctx=_build_request_context(request)
+    )
     return ApiResponse(message="MFA disabled.")
 
 

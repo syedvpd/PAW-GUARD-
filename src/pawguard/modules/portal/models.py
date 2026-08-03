@@ -17,6 +17,22 @@ class ContentStatus(StrEnum):
     PUBLISHED = "published"
 
 
+class LegalDocumentType(StrEnum):
+    TERMS = "terms"
+    PRIVACY = "privacy"
+    ADOPTION = "adoption"
+    FOSTER = "foster"
+    VOLUNTEER = "volunteer"
+    DONATION = "donation"
+    OTHER = "other"
+
+
+class AlertSeverity(StrEnum):
+    INFO = "info"
+    WARNING = "warning"
+    CRITICAL = "critical"
+
+
 class SuccessStory(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "success_stories"
 
@@ -87,3 +103,41 @@ class FAQEntry(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_published: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
 
+
+class LegalDocument(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+    """Legal framework content: terms of service, privacy policy, adoption
+    contracts, etc. Published documents are served publicly (no auth); drafts
+    are only visible to admins.
+    """
+
+    __tablename__ = "legal_documents"
+
+    slug: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    document_type: Mapped[LegalDocumentType] = mapped_column(
+        String(32), default=LegalDocumentType.OTHER, nullable=False, index=True
+    )
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    version: Mapped[str] = mapped_column(String(32), default="1.0", nullable=False)
+    status: Mapped[ContentStatus] = mapped_column(
+        String(32), default=ContentStatus.DRAFT, nullable=False, index=True
+    )
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class UrgentAlert(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+    """Urgent alert banner shown on the public site (PRR §6.1). Only alerts
+    that are active and inside their scheduled window are served publicly.
+    """
+
+    __tablename__ = "urgent_alerts"
+
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    severity: Mapped[AlertSeverity] = mapped_column(
+        String(16), default=AlertSeverity.INFO, nullable=False, index=True
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

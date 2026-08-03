@@ -16,7 +16,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: python -m pawguard.workers.arq_worker
+    command: arq pawguard.workers.arq_worker.WorkerSettings
     restart: unless-stopped
     env_file:
       - .env

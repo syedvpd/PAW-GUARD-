@@ -6,6 +6,7 @@ Routers only validate and call services (RULE-004).
 import contextlib
 import uuid
 from datetime import date
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,19 +17,39 @@ from pawguard.core.bulk import (
     BulkStatusUpdateRequest,
     BulkStatusUpdateResponse,
 )
-from pawguard.core.exceptions import ValidationFailedError, parse_enum
+from pawguard.core.exceptions import (
+    ForbiddenError,
+    NotFoundError,
+    ValidationFailedError,
+    parse_enum,
+)
 from pawguard.core.pagination import PageParams, page_params
 from pawguard.core.payments import PaymentGatewayError, get_payment_gateway
+from pawguard.core.pii import mask_email, mask_full_name, mask_phone
+from pawguard.core.rate_limiter import rate_limit
 from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.core.search import SortParams, sort_params
 from pawguard.db.session import get_db
 from pawguard.modules.auth.audit import get_audit_service
-from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
-from pawguard.modules.auth.rbac import require_permission
+from pawguard.modules.auth.dependencies import (
+    CurrentUser,
+    get_current_user,
+    get_optional_current_user,
+)
+from pawguard.modules.auth.rbac import has_permission, require_permission
 from pawguard.modules.dog.repository import DogRepository
-from pawguard.modules.donation.models import DonationStatus, DonationType, SponsorshipStatus
+from pawguard.modules.donation.models import (
+    CampaignStatus,
+    CampaignType,
+    DonationStatus,
+    DonationType,
+    SponsorshipStatus,
+)
 from pawguard.modules.donation.repository import DonationRepository
 from pawguard.modules.donation.schemas import (
+    DonationCampaignCreate,
+    DonationCampaignResponse,
+    DonationCampaignUpdate,
     DonationCreate,
     DonationOrderResponse,
     DonationResponse,
@@ -37,6 +58,8 @@ from pawguard.modules.donation.schemas import (
     DonorProfileCreate,
     DonorProfileResponse,
     DonorProfileUpdate,
+    RecurringSubscriptionCreate,
+    RecurringSubscriptionResponse,
     SponsorshipCreate,
     SponsorshipResponse,
     SponsorshipStatusUpdate,
@@ -49,6 +72,40 @@ from pawguard.services.audit_service import AuditService
 from pawguard.services.storage_service import StorageService
 
 router = APIRouter(prefix="/donations", tags=["donations"])
+
+# Roles allowed to see unmasked donor PII (PRR §6.1).
+_UNMASKED_DONOR_PII_PERMISSIONS = {
+    "donation:manage",
+    "donation:read",
+    "finance:read",
+    "system:admin",
+}
+
+
+def _mask_donor_pii(
+    item: DonorProfileResponse, current_user: CurrentUser
+) -> DonorProfileResponse:
+    """Return a copy of the response with donor PII masked unless the
+    caller holds donor-management permissions or is the donor themselves."""
+    is_owner = current_user.user.id == item.user_id
+    user_permissions = {p.code for r in current_user.user.roles for p in r.permissions}
+    if is_owner or (_UNMASKED_DONOR_PII_PERMISSIONS & user_permissions):
+        return item
+    masked_user = item.user
+    if masked_user is not None:
+        masked_user = masked_user.model_copy(
+            update={
+                "email": mask_email(masked_user.email),
+                "full_name": mask_full_name(masked_user.full_name),
+                "phone": mask_phone(masked_user.phone) if masked_user.phone else None,
+            }
+        )
+    return item.model_copy(
+        update={
+            "tax_identifier": "***MASKED***" if item.tax_identifier else None,
+            "user": masked_user,
+        }
+    )
 
 
 def get_donation_service(
@@ -78,10 +135,17 @@ def get_donation_service(
 )
 async def register_donor(
     payload: DonorProfileCreate,
+    request: Request,
     current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(rate_limit("donor_register", 10, 3600))] = None,
     service: DonationService = Depends(get_donation_service),
 ) -> ApiResponse[DonorProfileResponse]:
-    donor = await service.register_donor(current_user.id, payload)
+    donor = await service.register_donor(
+        current_user.id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
     return ApiResponse(
         data=DonorProfileResponse.model_validate(donor),
         message="Donor profile registered successfully.",
@@ -162,13 +226,20 @@ async def record_manual_donation(
 )
 async def initiate_donation_checkout(
     payload: DonationCreate,
+    request: Request,
     current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(rate_limit("donation_checkout", 10, 60))] = None,
     service: DonationService = Depends(get_donation_service),
 ) -> ApiResponse[DonationOrderResponse]:
     """Create a PENDING donation plus a payment-provider order. The client
     opens the provider's checkout with the returned order details, then calls
     `/donations/verify` once the user completes payment."""
-    order = await service.initiate_online_donation(current_user.id, payload)
+    order = await service.initiate_online_donation(
+        current_user.id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
     return ApiResponse(data=order, message="Donation order created. Complete payment to confirm.")
 
 
@@ -180,8 +251,13 @@ async def verify_donation_checkout(
     payload: DonationVerifyRequest,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(rate_limit("donation_verify", 10, 60))] = None,
     service: DonationService = Depends(get_donation_service),
 ) -> ApiResponse[DonationResponse]:
+    donation = await service.get_donation(payload.donation_id)
+    is_owner = donation.donor is not None and donation.donor.user_id == current_user.user.id
+    if not is_owner and not has_permission(current_user.user, "donation:read"):
+        raise ForbiddenError("You do not have permission to verify this donation.")
     donation = await service.verify_donation_payment(
         donation_id=payload.donation_id,
         gateway_order_id=payload.gateway_order_id,
@@ -263,13 +339,16 @@ async def list_donors(
     page: PageParams = Depends(page_params),
     sort: SortParams = Depends(sort_params),
     search: str | None = Query(None, description="Search donor profiles"),
+    current_user: CurrentUser = Depends(get_current_user),
     service: DonationService = Depends(get_donation_service),
 ) -> PaginatedResponse[DonorProfileResponse]:
-    return await service.list_donors_paginated(
+    result = await service.list_donors_paginated(
         page=page,
         sort=sort,
         search_term=search,
     )
+    data = [_mask_donor_pii(d, current_user) for d in result.data]
+    return PaginatedResponse(data=data, meta=result.meta)
 
 
 @router.get(
@@ -282,9 +361,8 @@ async def get_donation_receipt(
     service: DonationService = Depends(get_donation_service),
 ) -> ApiResponse[DownloadUrlResponse]:
     donation = await service.get_donation(donation_id)
-    user_permissions = {p.code for r in current_user.user.roles for p in r.permissions}
-    if donation.donor_id != current_user.user.id and "donation:read" not in user_permissions:
-        from pawguard.core.exceptions import ForbiddenError
+    is_owner = donation.donor is not None and donation.donor.user_id == current_user.user.id
+    if not is_owner and not has_permission(current_user.user, "donation:read"):
         raise ForbiddenError("You do not have permission to view this receipt.")
     if not donation.receipt_file_key:
         from pawguard.core.exceptions import NotFoundError
@@ -379,6 +457,7 @@ async def create_sponsorship(
     payload: SponsorshipCreate,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(rate_limit("sponsorship_create", 10, 3600))] = None,
     service: DonationService = Depends(get_donation_service),
 ) -> ApiResponse[SponsorshipResponse]:
     sponsorship = await service.create_sponsorship(
@@ -403,6 +482,10 @@ async def update_sponsorship_status(
     current_user: CurrentUser = Depends(get_current_user),
     service: DonationService = Depends(get_donation_service),
 ) -> ApiResponse[SponsorshipResponse]:
+    sponsorship = await service.get_sponsorship(sponsorship_id)
+    is_owner = sponsorship.donor is not None and sponsorship.donor.user_id == current_user.user.id
+    if not is_owner and not has_permission(current_user.user, "donation:manage"):
+        raise ForbiddenError("You do not have permission to update this sponsorship.")
     if payload.status == SponsorshipStatus.PAUSED:
         sponsorship = await service.pause_sponsorship(
             sponsorship_id, actor_id=current_user.id,
@@ -456,7 +539,232 @@ async def list_all_sponsorships(
 )
 async def get_sponsorship(
     sponsorship_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
     service: DonationService = Depends(get_donation_service),
 ) -> ApiResponse[SponsorshipResponse]:
     sponsorship = await service.get_sponsorship(sponsorship_id)
+    is_owner = sponsorship.donor is not None and sponsorship.donor.user_id == current_user.user.id
+    if not is_owner and not has_permission(current_user.user, "donation:read"):
+        raise ForbiddenError("You do not have permission to view this sponsorship.")
     return ApiResponse(data=SponsorshipResponse.model_validate(sponsorship))
+
+
+# ── Donation campaigns (PRR 3.1.7 / 3.11) ─────────────────────────────────
+
+
+@router.get(
+    "/campaigns",
+    response_model=ApiResponse[list[DonationCampaignResponse]],
+)
+async def list_public_campaigns(
+    service: DonationService = Depends(get_donation_service),
+) -> ApiResponse[list[DonationCampaignResponse]]:
+    """Public listing of currently accepting donation campaigns."""
+    campaigns = await service.list_active_campaigns()
+    return ApiResponse(
+        data=[await service._to_campaign_response(c) for c in campaigns],
+    )
+
+
+@router.get(
+    "/campaigns/manage",
+    response_model=PaginatedResponse[DonationCampaignResponse],
+    dependencies=[Depends(require_permission("donation:read"))],
+)
+async def list_all_campaigns(
+    page: PageParams = Depends(page_params),
+    sort: SortParams = Depends(sort_params),
+    search: str | None = Query(None, description="Search campaigns by name/description"),
+    status: CampaignStatus | None = Query(None, description="Filter by status"),
+    campaign_type: CampaignType | None = Query(None, description="Filter by type"),
+    service: DonationService = Depends(get_donation_service),
+) -> PaginatedResponse[DonationCampaignResponse]:
+    return await service.list_campaigns_paginated(
+        page=page,
+        sort=sort,
+        search_term=search,
+        status=status,
+        campaign_type=campaign_type.value if campaign_type else None,
+    )
+
+
+@router.post(
+    "/campaigns",
+    response_model=ApiResponse[DonationCampaignResponse],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("donation:manage"))],
+)
+async def create_campaign(
+    payload: DonationCampaignCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: DonationService = Depends(get_donation_service),
+) -> ApiResponse[DonationCampaignResponse]:
+    campaign = await service.create_campaign(
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(
+        data=await service._to_campaign_response(campaign),
+        message="Donation campaign created successfully.",
+    )
+
+
+@router.get(
+    "/campaigns/{campaign_id}",
+    response_model=ApiResponse[DonationCampaignResponse],
+)
+async def get_campaign(
+    campaign_id: uuid.UUID,
+    current_user: CurrentUser | None = Depends(get_optional_current_user),
+    service: DonationService = Depends(get_donation_service),
+) -> ApiResponse[DonationCampaignResponse]:
+    campaign = await service.get_campaign(campaign_id)
+    return ApiResponse(data=await service._to_campaign_response(campaign))
+
+
+@router.patch(
+    "/campaigns/{campaign_id}",
+    response_model=ApiResponse[DonationCampaignResponse],
+    dependencies=[Depends(require_permission("donation:update"))],
+)
+async def update_campaign(
+    campaign_id: uuid.UUID,
+    payload: DonationCampaignUpdate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: DonationService = Depends(get_donation_service),
+) -> ApiResponse[DonationCampaignResponse]:
+    campaign = await service.update_campaign(
+        campaign_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(
+        data=await service._to_campaign_response(campaign),
+        message="Donation campaign updated successfully.",
+    )
+
+
+@router.delete(
+    "/campaigns/{campaign_id}",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(require_permission("donation:update"))],
+)
+async def delete_campaign(
+    campaign_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: DonationService = Depends(get_donation_service),
+) -> ApiResponse[None]:
+    await service.soft_delete_campaign(
+        campaign_id,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(message="Donation campaign deleted successfully.")
+
+
+# ── Donor self-service ──────────────────────────────────────────────
+
+
+@router.get(
+    "/donors/me",
+    response_model=ApiResponse[DonorProfileResponse],
+)
+async def get_my_donor_profile(
+    current_user: CurrentUser = Depends(get_current_user),
+    service: DonationService = Depends(get_donation_service),
+) -> ApiResponse[DonorProfileResponse]:
+    donor = await service.get_or_create_donor(current_user.id)
+    return ApiResponse(
+        data=DonorProfileResponse.model_validate(donor),
+        message="Donor profile retrieved.",
+    )
+
+
+# ── Recurring subscriptions (audit 3.11) ────────────────────────────
+
+
+@router.post(
+    "/recurring",
+    response_model=ApiResponse[RecurringSubscriptionResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_recurring_subscription(
+    payload: RecurringSubscriptionCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: DonationService = Depends(get_donation_service),
+) -> ApiResponse[RecurringSubscriptionResponse]:
+    subscription = await service.create_recurring_subscription(
+        current_user.id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(
+        data=RecurringSubscriptionResponse.model_validate(subscription),
+        message="Recurring subscription created successfully.",
+    )
+
+
+@router.get(
+    "/recurring",
+    response_model=ApiResponse[list[RecurringSubscriptionResponse]],
+)
+async def list_my_recurring_subscriptions(
+    current_user: CurrentUser = Depends(get_current_user),
+    service: DonationService = Depends(get_donation_service),
+) -> ApiResponse[list[RecurringSubscriptionResponse]]:
+    donor = await service._repo.get_donor_by_user_id(current_user.id)
+    if donor is None:
+        return ApiResponse(data=[], message="No recurring subscriptions found.")
+    subscriptions = await service._repo.get_recurring_subscriptions_for_donor(
+        donor.id,
+    )
+    return ApiResponse(
+        data=[
+            RecurringSubscriptionResponse.model_validate(s)
+            for s in subscriptions
+        ],
+        message="Recurring subscriptions retrieved.",
+    )
+
+
+@router.delete(
+    "/recurring/{subscription_id}",
+    response_model=ApiResponse[RecurringSubscriptionResponse],
+)
+async def cancel_recurring_subscription(
+    subscription_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: DonationService = Depends(get_donation_service),
+) -> ApiResponse[RecurringSubscriptionResponse]:
+    subscription = await service._repo.get_recurring_subscription_by_id(
+        subscription_id,
+    )
+    if subscription is None:
+        raise NotFoundError("Recurring subscription not found.")
+    is_owner = (
+        subscription.donor is not None
+        and subscription.donor.user_id == current_user.user.id
+    )
+    if not is_owner and not has_permission(
+        current_user.user, "donation:manage"
+    ):
+        raise ForbiddenError(
+            "You do not have permission to cancel this subscription."
+        )
+    updated = await service.cancel_recurring_subscription(
+        subscription_id,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(
+        data=RecurringSubscriptionResponse.model_validate(updated),
+        message="Recurring subscription cancelled successfully.",
+    )

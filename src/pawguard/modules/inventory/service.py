@@ -83,8 +83,15 @@ class InventoryService:
             raise NotFoundError("Inventory item not found.")
 
         qty_change = payload.quantity
+        from datetime import date
 
         if payload.movement_type == MovementType.CHECK_OUT:
+            # Expiry date enforcement (PRD 3.12)
+            if item.expiry_date is not None and item.expiry_date < date.today():
+                raise ConflictError(
+                    f"Cannot check out expired inventory item '{item.name}'. "
+                    f"Expired on: {item.expiry_date}"
+                )
             if item.quantity < qty_change:
                 raise ConflictError(
                     f"Insufficient stock for '{item.name}'. "

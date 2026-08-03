@@ -13,13 +13,18 @@ from pawguard.core.search import SortParams
 from pawguard.modules.auth.models import AuthAuditEventType
 from pawguard.modules.dog.models import DogStatus
 from pawguard.modules.dog.repository import DogRepository
+from pawguard.modules.inventory.models import MovementType
+from pawguard.modules.inventory.schemas import InventoryConsumptionItem, InventoryMovementCreate
+from pawguard.modules.inventory.service import InventoryService
 from pawguard.modules.shelter.models import (
     DailyCareLog,
     FacilityStatus,
     FacilityTransfer,
     FacilityType,
     Kennel,
+    KennelCleaningLog,
     KennelSanitationState,
+    SectionType,
     ShelterFacility,
     ShelterSection,
     TransferStatus,
@@ -28,6 +33,8 @@ from pawguard.modules.shelter.repository import ShelterRepository
 from pawguard.modules.shelter.schemas import (
     DailyCareLogCreate,
     FacilityTransferCreate,
+    KennelCleaningLogCreate,
+    KennelCleaningLogResponse,
     KennelCreate,
     KennelResponse,
     ShelterFacilityCreate,
@@ -44,10 +51,12 @@ class ShelterService:
         repository: ShelterRepository,
         dog_repo: DogRepository,
         audit_service: AuditService | None = None,
+        inventory_service: InventoryService | None = None,
     ) -> None:
         self._repo = repository
         self._dog_repo = dog_repo
         self._audit = audit_service
+        self._inventory = inventory_service
 
     async def create_facility(
         self,
@@ -91,6 +100,7 @@ class ShelterService:
         section = ShelterSection(
             facility_id=facility_id,
             name=payload.name,
+            section_type=payload.section_type,
             capacity=payload.capacity,
         )
         section = await self._repo.create_section(section)
@@ -157,13 +167,17 @@ class ShelterService:
         if dog is None:
             raise NotFoundError("Dog profile not found.")
 
-        kennel = await self._repo.get_kennel(kennel_id)
+        # Row-lock the kennel (SELECT ... FOR UPDATE) before the capacity and
+        # sanitation check-then-act: two concurrent assignments to the same
+        # kennel would otherwise both pass the availability check and double-book.
+        kennel = await self._repo.get_kennel_for_update(kennel_id)
         if kennel is None:
             raise NotFoundError("Kennel not found.")
 
         # Business Validation: check sanitation state & availability
         bad_states = (
             KennelSanitationState.NEEDS_CLEANING,
+            KennelSanitationState.DISINFECTING,
             KennelSanitationState.OUT_OF_SERVICE,
         )
         if kennel.sanitation_state in bad_states:
@@ -226,6 +240,51 @@ class ShelterService:
                 },
             )
         return kennel
+
+    async def log_kennel_cleaning(
+        self,
+        kennel_id: uuid.UUID,
+        cleaned_by_id: uuid.UUID,
+        payload: KennelCleaningLogCreate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> KennelCleaningLog:
+        """Records a cleaning/disinfection rotation for a kennel (PRR 3.6).
+
+        Creates a KennelCleaningLog row and, as its side effect, returns the
+        kennel to CLEAN so it is immediately assignable again. The kennel row
+        is locked for the duration of the transaction.
+        """
+        kennel = await self._repo.get_kennel_for_update(kennel_id)
+        if kennel is None:
+            raise NotFoundError("Kennel not found.")
+
+        log = KennelCleaningLog(
+            kennel_id=kennel_id,
+            cleaned_by=cleaned_by_id,
+            cleaned_at=datetime.now(UTC),
+            sanitation_state_after=KennelSanitationState.CLEAN,
+            cleaning_method=payload.method,
+            notes=payload.notes,
+        )
+        log = await self._repo.create_cleaning_log(log)
+
+        kennel.sanitation_state = KennelSanitationState.CLEAN
+        await self._repo._session.flush()
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.KENNEL_SANITATION_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "kennel_id": str(kennel_id),
+                    "new_status": KennelSanitationState.CLEAN.value,
+                    "cleaning_log_id": str(log.id),
+                },
+            )
+        return log
 
     async def request_transfer(
         self,
@@ -367,6 +426,14 @@ class ShelterService:
                     "dog_id": str(payload.dog_id),
                 },
             )
+        await self._record_inventory_consumptions(
+            user_id=user_id,
+            consumptions=payload.inventory_consumptions,
+            reference_type="daily_care_log",
+            reference_id=care_log.id,
+            actor_id=actor_id,
+            ip_address=ip_address,
+        )
         return care_log
 
     async def list_facilities(self) -> Sequence[ShelterFacility]:
@@ -403,13 +470,29 @@ class ShelterService:
         page_params: PageParams,
         sort: SortParams,
         facility_id: uuid.UUID | None = None,
+        section_type: SectionType | None = None,
         search_term: str | None = None,
     ) -> PaginatedResponse[ShelterSectionResponse]:
         sections, total = await self._repo.list_sections_paginated(
-            page_params, sort, facility_id=facility_id, search_term=search_term,
+            page_params, sort, facility_id=facility_id, section_type=section_type,
+            search_term=search_term,
         )
         return PaginatedResponse(
             data=list(sections),
+            meta=build_pagination_meta(total=total, params=page_params),
+        )
+
+    async def list_cleaning_logs_paginated(
+        self,
+        page_params: PageParams,
+        sort: SortParams,
+        kennel_id: uuid.UUID,
+    ) -> PaginatedResponse[KennelCleaningLogResponse]:
+        logs, total = await self._repo.list_cleaning_logs_paginated(
+            page_params, sort, kennel_id=kennel_id,
+        )
+        return PaginatedResponse(
+            data=list(logs),
             meta=build_pagination_meta(total=total, params=page_params),
         )
 
@@ -454,3 +537,29 @@ class ShelterService:
         status: FacilityStatus,
     ) -> int:
         return await self._repo.bulk_update_facility_status(ids, status)
+
+    async def _record_inventory_consumptions(
+        self,
+        user_id: uuid.UUID,
+        consumptions: list[InventoryConsumptionItem] | None,
+        reference_type: str,
+        reference_id: uuid.UUID,
+        actor_id: uuid.UUID | None,
+        ip_address: str | None,
+    ) -> None:
+        if not self._inventory or not consumptions:
+            return
+        for item in consumptions:
+            await self._inventory.record_movement(
+                user_id=user_id,
+                payload=InventoryMovementCreate(
+                    item_id=item.item_id,
+                    movement_type=MovementType.CHECK_OUT,
+                    quantity=item.quantity,
+                    notes=f"Consumed for {reference_type} {reference_id}",
+                    reference_type=reference_type,
+                    reference_id=reference_id,
+                ),
+                actor_id=actor_id,
+                ip_address=ip_address,
+            )

@@ -4,7 +4,6 @@ These are the dependencies every future module's routers will depend on (RULE-00
 routers authenticate/authorise via dependencies, never inline).
 """
 
-import time
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -13,7 +12,6 @@ from fastapi import Cookie, Depends, Header, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.constants import ACCESS_TOKEN_COOKIE_NAME
-from pawguard.core.exceptions import TooManyRequestsError
 from pawguard.core.security import AccessTokenClaims, TokenError, parse_access_token_claims
 from pawguard.db.session import get_db
 from pawguard.modules.auth.exceptions import AccountInactiveError, InvalidSessionError
@@ -60,10 +58,66 @@ async def get_current_user(
     except TokenError as exc:
         raise InvalidSessionError(str(exc)) from exc
 
+    session_repo = SessionRepository(db)
+    session = await session_repo.get_by_id(claims.session_id)
+    if session is None or not session.is_active:
+        raise InvalidSessionError("Session has been revoked or has expired.")
+
     user_repo = UserRepository(db)
     user = await user_repo.get_by_id(claims.user_id)
     if user is None or not user.is_active:
         raise AccountInactiveError("Account is inactive or no longer exists.")
+
+    # A valid JWT signature is not enough: the backing session must still be
+    # active and unexpired. This makes logout / password change / account
+    # lockout revoke access immediately instead of leaving a usable token
+    # until its 15-minute expiry (the refresh path already rotates tokens).
+    session = await SessionRepository(db).get_by_id(claims.session_id)
+    if session is None or not session.is_active:
+        raise InvalidSessionError("Session has been revoked or has expired.")
+    if session.expires_at < datetime.now(UTC):
+        raise InvalidSessionError("Session has expired.")
+
+    request.state.user_id = user.id
+    return CurrentUser(user=user, claims=claims, db=db, redis=redis)
+
+
+async def get_optional_current_user(
+    request: Request,
+    authorization: str | None = Header(default=None),
+    access_token_cookie: str | None = Cookie(default=None, alias=ACCESS_TOKEN_COOKIE_NAME),
+    db: AsyncSession = Depends(get_db),
+    redis: RedisClient = Depends(get_redis),
+) -> CurrentUser | None:
+    """Resolve the current user when a valid token is presented, else None.
+
+    Used by anonymous-readable public endpoints (adoption directory, lost &
+    found listings) so the public site can browse without an account while
+    still showing richer, unmasked data to signed-in users.
+    """
+    token: str | None = None
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1]
+    elif access_token_cookie:
+        token = access_token_cookie
+    if not token:
+        return None
+
+    try:
+        claims = parse_access_token_claims(token)
+    except TokenError:
+        return None
+
+    user_repo = UserRepository(db)
+    user = await user_repo.get_by_id(claims.user_id)
+    if user is None or not user.is_active:
+        return None
+
+    # Same session check as get_current_user: a revoked/expired session makes
+    # the caller anonymous rather than authenticated.
+    session = await SessionRepository(db).get_by_id(claims.session_id)
+    if session is None or not session.is_active or session.expires_at < datetime.now(UTC):
+        return None
 
     request.state.user_id = user.id
     return CurrentUser(user=user, claims=claims, db=db, redis=redis)
@@ -84,24 +138,3 @@ async def get_current_session(
         raise InvalidSessionError("Session has expired due to inactivity.")
 
     return session
-
-
-class RateLimiter:
-    """Redis fixed-window rate limiter, scoped to specific sensitive endpoints only."""
-
-    def __init__(self, *, key_prefix: str, limit: int, window_seconds: int) -> None:
-        self.key_prefix = key_prefix
-        self.limit = limit
-        self.window_seconds = window_seconds
-
-    async def __call__(self, request: Request, redis: RedisClient = Depends(get_redis)) -> None:
-        identifier = request.client.host if request.client else "unknown"
-        window = int(time.time() // self.window_seconds)
-        key = f"ratelimit:{self.key_prefix}:{identifier}:{window}"
-
-        count = await redis.incr(key)
-        if count == 1:
-            await redis.expire(key, self.window_seconds)
-
-        if count > self.limit:
-            raise TooManyRequestsError("Too many requests. Please try again later.")

@@ -11,6 +11,8 @@ from typing import Annotated, Any
 from fastapi import Query
 from sqlalchemy import ColumnElement, Unicode, asc, cast, desc
 
+from pawguard.core.exceptions import ValidationFailedError
+
 
 @dataclass(slots=True)
 class SortParams:
@@ -37,8 +39,20 @@ def apply_sorting(
     valid_fields: set[str],
     default_field: str = "created_at",
 ) -> Any:
-    field = sort.sort_by if sort.sort_by in valid_fields else default_field
-    column = getattr(stmt.froms[0].columns, field, None)
+    if sort.sort_by in valid_fields:
+        field = sort.sort_by
+    elif sort.sort_by == "created_at":
+        # The shared dependency defaults to `created_at` even when a module's
+        # allowlist uses a different field (e.g. fleet fuel sorts by filled_at).
+        # Treat that as "no explicit sort choice" and use the module default so
+        # default-sorted requests keep working.
+        field = default_field
+    else:
+        allowed = ", ".join(sorted(valid_fields))
+        raise ValidationFailedError(
+            f"Invalid sort_by '{sort.sort_by}'. Allowed fields: {allowed}."
+        )
+    column = getattr(stmt.get_final_froms()[0].columns, field, None)
     if column is None:
         return stmt
     order_fn = desc if sort.is_descending else asc

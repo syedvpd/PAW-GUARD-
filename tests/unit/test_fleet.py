@@ -1,7 +1,7 @@
 """Unit tests for FleetService with mocked repository."""
 
 import uuid
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import AsyncMock
 
 import pytest
@@ -16,6 +16,7 @@ from pawguard.modules.fleet.models import (
     FuelLog,
     Vehicle,
     VehicleStatus,
+    VehicleType,
 )
 from pawguard.modules.fleet.repository import FleetRepository
 from pawguard.modules.fleet.schemas import (
@@ -87,6 +88,65 @@ class TestFleetService:
             await service.create_vehicle(payload)
 
     @pytest.mark.asyncio
+    async def test_create_vehicle_defaults_vehicle_type(self, service, mock_repo):
+        """New vehicles default to a sensible vehicle_type (PRR 3.13)."""
+        mock_repo.get_vehicle_by_plate.return_value = None
+        mock_repo.create_vehicle.return_value = Vehicle(
+            id=uuid.uuid4(), make_model="Ford Transit", license_plate="AMB-01",
+            status=VehicleStatus.ACTIVE, mileage=0,
+        )
+        payload = VehicleCreate(make_model="Ford Transit", license_plate="AMB-01")
+        await service.create_vehicle(payload, actor_id=uuid.uuid4())
+        created = mock_repo.create_vehicle.call_args.args[0]
+        assert created.vehicle_type == VehicleType.RESCUE_VAN
+
+    @pytest.mark.asyncio
+    async def test_create_vehicle_with_explicit_vehicle_type(self, service, mock_repo):
+        mock_repo.get_vehicle_by_plate.return_value = None
+        mock_repo.create_vehicle.return_value = Vehicle(
+            id=uuid.uuid4(), make_model="Vet Truck", license_plate="VET-01",
+            status=VehicleStatus.ACTIVE, mileage=0,
+        )
+        payload = VehicleCreate(
+            make_model="Vet Truck", license_plate="VET-01",
+            vehicle_type=VehicleType.MOBILE_VET_UNIT,
+        )
+        await service.create_vehicle(payload, actor_id=uuid.uuid4())
+        created = mock_repo.create_vehicle.call_args.args[0]
+        assert created.vehicle_type == VehicleType.MOBILE_VET_UNIT
+
+    @pytest.mark.asyncio
+    async def test_update_vehicle_vehicle_type(self, service, mock_repo):
+        vehicle_id = uuid.uuid4()
+        vehicle = Vehicle(
+            id=vehicle_id, make_model="V", license_plate="P-001",
+            status=VehicleStatus.ACTIVE, mileage=0,
+        )
+        mock_repo.get_vehicle.return_value = vehicle
+        payload = VehicleUpdate(vehicle_type=VehicleType.AMBULANCE)
+        result = await service.update_vehicle(vehicle_id, payload, actor_id=uuid.uuid4())
+        assert result.vehicle_type == VehicleType.AMBULANCE
+
+    @pytest.mark.asyncio
+    async def test_list_vehicles_paginated_by_vehicle_type(self, service, mock_repo):
+        vehicle = _make_vehicle(
+            id=uuid.uuid4(), make_model="Ambulance", license_plate="AMB-01",
+        )
+        mock_repo.paginate_vehicles.return_value = ([vehicle], 1)
+        result = await service.list_vehicles_paginated(
+            PageParams(), SortParams(), vehicle_type=VehicleType.AMBULANCE
+        )
+        assert isinstance(result, PaginatedResponse)
+        assert result.meta.total == 1
+        mock_repo.paginate_vehicles.assert_awaited_once_with(
+            page=PageParams(),
+            sort=SortParams(),
+            search_term=None,
+            status=None,
+            vehicle_type=VehicleType.AMBULANCE,
+        )
+
+    @pytest.mark.asyncio
     async def test_update_vehicle(self, service, mock_repo):
         vehicle_id = uuid.uuid4()
         vehicle = Vehicle(
@@ -135,6 +195,93 @@ class TestFleetService:
         mock_repo.get_vehicle.return_value = None
         with pytest.raises(NotFoundError):
             await service.get_vehicle(uuid.uuid4())
+
+    @pytest.mark.asyncio
+    async def test_checkout_equipment_defaults_expected_return_at(self, service, mock_repo):
+        """Checkout without an explicit due date gets the default window (PRR 3.13)."""
+        mock_repo.create_equipment_checkout.return_value = EquipmentCheckout(
+            id=uuid.uuid4(), equipment_name="Net Gun", checked_out_at=datetime.now(UTC),
+        )
+        payload = EquipmentCheckoutCreate(equipment_name="Net Gun")
+        await service.checkout_equipment(payload, actor_id=uuid.uuid4())
+        created = mock_repo.create_equipment_checkout.call_args.args[0]
+        assert created.expected_return_at is not None
+        assert created.expected_return_at > created.checked_out_at
+
+    @pytest.mark.asyncio
+    async def test_checkout_equipment_honours_explicit_expected_return_at(self, service, mock_repo):
+        mock_repo.create_equipment_checkout.return_value = EquipmentCheckout(
+            id=uuid.uuid4(), equipment_name="Net Gun", checked_out_at=datetime.now(UTC),
+        )
+        due = datetime.now(UTC) + timedelta(days=5)
+        payload = EquipmentCheckoutCreate(equipment_name="Net Gun", expected_return_at=due)
+        await service.checkout_equipment(payload, actor_id=uuid.uuid4())
+        created = mock_repo.create_equipment_checkout.call_args.args[0]
+        assert created.expected_return_at == due
+
+    @pytest.mark.asyncio
+    async def test_checkout_equipment_rejects_past_expected_return_at(self, service, mock_repo):
+        payload = EquipmentCheckoutCreate(
+            equipment_name="Net Gun",
+            expected_return_at=datetime.now(UTC) - timedelta(days=1),
+        )
+        with pytest.raises(ConflictError, match="expected_return_at"):
+            await service.checkout_equipment(payload)
+        mock_repo.create_equipment_checkout.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_checkout_equipment_for_dispatch_sets_expected_return_at(self, service, mock_repo):
+        """Auto-checked-out dispatch equipment still gets a due date (PRR 3.13)."""
+        dispatch_id = uuid.uuid4()
+        mock_repo.create_equipment_checkout.return_value = EquipmentCheckout(
+            id=uuid.uuid4(), equipment_name="Net Gun", checked_out_at=datetime.now(UTC),
+        )
+        records = await service.checkout_equipment_for_dispatch(
+            rescue_dispatch_id=dispatch_id, equipment_names=["Net Gun"],
+        )
+        assert len(records) == 1
+        created = mock_repo.create_equipment_checkout.call_args.args[0]
+        assert created.expected_return_at is not None
+        assert created.expected_return_at > created.checked_out_at
+
+    @pytest.mark.asyncio
+    async def test_return_equipment_flags_late_return(self, service, mock_repo):
+        """Late returns are allowed but flagged on the ledger notes (PRR 3.13)."""
+        checkout_id = uuid.uuid4()
+        mock_repo.get_equipment_checkout.return_value = EquipmentCheckout(
+            id=checkout_id, equipment_name="Net Gun",
+            checked_out_at=datetime.now(UTC) - timedelta(days=5),
+            expected_return_at=datetime.now(UTC) - timedelta(days=2),
+        )
+        result = await service.return_equipment(checkout_id, EquipmentReturnRequest())
+        assert result.returned_at is not None
+        assert result.notes is not None
+        assert "Returned late" in result.notes
+        assert "expected" in result.notes
+
+    @pytest.mark.asyncio
+    async def test_return_equipment_on_time_no_late_flag(self, service, mock_repo):
+        checkout_id = uuid.uuid4()
+        mock_repo.get_equipment_checkout.return_value = EquipmentCheckout(
+            id=checkout_id, equipment_name="Net Gun",
+            checked_out_at=datetime.now(UTC),
+            expected_return_at=datetime.now(UTC) + timedelta(days=2),
+        )
+        result = await service.return_equipment(checkout_id, EquipmentReturnRequest())
+        assert result.returned_at is not None
+        assert result.notes is None
+
+    @pytest.mark.asyncio
+    async def test_return_equipment_without_due_date_no_late_flag(self, service, mock_repo):
+        """Legacy checkouts without a due date are never flagged as late."""
+        checkout_id = uuid.uuid4()
+        mock_repo.get_equipment_checkout.return_value = EquipmentCheckout(
+            id=checkout_id, equipment_name="Net Gun", checked_out_at=datetime.now(UTC),
+            expected_return_at=None,
+        )
+        result = await service.return_equipment(checkout_id, EquipmentReturnRequest())
+        assert result.returned_at is not None
+        assert result.notes is None
 
     @pytest.mark.asyncio
     async def test_list_vehicles_paginated(self, service, mock_repo):
@@ -262,6 +409,71 @@ class TestFleetService:
         )
         with pytest.raises(ConflictError, match="already been returned"):
             await service.return_equipment(checkout_id, EquipmentReturnRequest())
+
+    @pytest.mark.asyncio
+    async def test_checkout_equipment_for_dispatch(self, service, mock_repo):
+        """Dispatch equipment auto-checkout creates rows linked to the dispatch,
+        trims names, and leaves them outstanding."""
+        dispatch_id = uuid.uuid4()
+        agent_id = uuid.uuid4()
+        mock_repo.create_equipment_checkout.side_effect = [
+            EquipmentCheckout(id=uuid.uuid4(), equipment_name="Net Gun", checked_out_at=datetime.now(UTC)),
+            EquipmentCheckout(id=uuid.uuid4(), equipment_name="Crate", checked_out_at=datetime.now(UTC)),
+            EquipmentCheckout(id=uuid.uuid4(), equipment_name="Trap", checked_out_at=datetime.now(UTC)),
+        ]
+        records = await service.checkout_equipment_for_dispatch(
+            rescue_dispatch_id=dispatch_id,
+            equipment_names=["Net Gun", " Crate ", "Trap"],
+            assigned_to_agent_id=agent_id,
+            actor_id=uuid.uuid4(),
+        )
+        assert len(records) == 3
+        assert mock_repo.create_equipment_checkout.call_count == 3
+        created = mock_repo.create_equipment_checkout.call_args_list[1].args[0]
+        assert created.equipment_name == "Crate"
+        assert created.rescue_dispatch_id == dispatch_id
+        assert created.assigned_to_agent_id == agent_id
+        assert created.returned_at is None
+
+    @pytest.mark.asyncio
+    async def test_checkout_equipment_for_dispatch_empty_names(self, service, mock_repo):
+        """No equipment names means no checkout rows."""
+        records = await service.checkout_equipment_for_dispatch(
+            rescue_dispatch_id=uuid.uuid4(), equipment_names=[],
+        )
+        assert records == []
+        mock_repo.create_equipment_checkout.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_checkout_equipment_for_dispatch_vehicle_not_found(self, service, mock_repo):
+        """Auto-checkout still validates the target vehicle like manual checkout."""
+        mock_repo.get_vehicle.return_value = None
+        with pytest.raises(NotFoundError):
+            await service.checkout_equipment_for_dispatch(
+                rescue_dispatch_id=uuid.uuid4(),
+                equipment_names=["Net Gun"],
+                assigned_to_vehicle_id=uuid.uuid4(),
+            )
+
+    @pytest.mark.asyncio
+    async def test_release_equipment_for_dispatch(self, service, mock_repo, mock_audit):
+        """Release marks outstanding dispatch equipment returned and audits."""
+        dispatch_id = uuid.uuid4()
+        mock_repo.release_equipment_for_dispatch.return_value = 3
+        count = await service.release_equipment_for_dispatch(
+            rescue_dispatch_id=dispatch_id, actor_id=uuid.uuid4(),
+        )
+        assert count == 3
+        assert mock_repo.release_equipment_for_dispatch.call_args[0][0] == dispatch_id
+        mock_audit.record.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_release_equipment_for_dispatch_none_outstanding(self, service, mock_repo, mock_audit):
+        """No outstanding equipment for the dispatch -> no audit noise."""
+        mock_repo.release_equipment_for_dispatch.return_value = 0
+        count = await service.release_equipment_for_dispatch(rescue_dispatch_id=uuid.uuid4())
+        assert count == 0
+        mock_audit.record.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_list_equipment_checkouts_paginated(self, service, mock_repo):

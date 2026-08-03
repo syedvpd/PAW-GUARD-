@@ -22,7 +22,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import selectinload
 
 from pawguard.core.config import get_settings
@@ -44,13 +44,14 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
             pc.RESCUE_VERIFY, pc.RESCUE_DISPATCH, pc.RESCUE_EXECUTE,
             pc.VEHICLE_READ, pc.VEHICLE_ASSIGN, pc.VEHICLE_UPDATE,
             pc.SHELTER_READ, pc.SHELTER_UPDATE, pc.SHELTER_MANAGE_KENNELS, pc.SHELTER_TRANSFER,
-            pc.MEDICAL_CREATE, pc.MEDICAL_READ, pc.MEDICAL_UPDATE, pc.MEDICAL_CLEARANCE, pc.MEDICAL_DELETE,
+            pc.MEDICAL_CREATE, pc.MEDICAL_READ, pc.MEDICAL_UPDATE, pc.MEDICAL_CLEARANCE,
+            pc.MEDICAL_DELETE,
             pc.ADOPTION_READ, pc.ADOPTION_PROCESS, pc.ADOPTION_APPROVE, pc.ADOPTION_LOCK,
             pc.FOSTER_CREATE, pc.FOSTER_READ, pc.FOSTER_UPDATE, pc.FOSTER_APPROVE,
             pc.VOLUNTEER_CREATE, pc.VOLUNTEER_READ, pc.VOLUNTEER_UPDATE, pc.VOLUNTEER_SCHEDULE,
             pc.INVENTORY_CREATE, pc.INVENTORY_READ, pc.INVENTORY_UPDATE, pc.INVENTORY_DELETE,
             pc.FINANCE_READ, pc.FINANCE_CREATE, pc.FINANCE_RECONCILE,
-            pc.DONATION_READ, pc.DONATION_MANAGE,
+            pc.DONATION_READ, pc.DONATION_MANAGE, pc.DONATION_UPDATE,
             pc.PUBLIC_READ, pc.PUBLIC_CREATE,
             pc.AUDIT_READ,
             pc.GRIEVANCE_CREATE, pc.GRIEVANCE_READ,
@@ -70,7 +71,8 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
         True,
         [
             pc.USER_READ, pc.USER_CREATE, pc.USER_UPDATE, pc.USER_ASSIGN_ROLE,
-            pc.RESCUE_CREATE, pc.RESCUE_READ, pc.RESCUE_UPDATE, pc.RESCUE_VERIFY, pc.RESCUE_DISPATCH, pc.RESCUE_EXECUTE,
+            pc.RESCUE_CREATE, pc.RESCUE_READ, pc.RESCUE_UPDATE, pc.RESCUE_VERIFY,
+            pc.RESCUE_DISPATCH, pc.RESCUE_EXECUTE,
             pc.VEHICLE_READ, pc.VEHICLE_ASSIGN, pc.VEHICLE_UPDATE,
             pc.SHELTER_READ, pc.SHELTER_UPDATE, pc.SHELTER_MANAGE_KENNELS, pc.SHELTER_TRANSFER,
             pc.MEDICAL_READ, pc.MEDICAL_CLEARANCE,
@@ -95,7 +97,8 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
         "Verification of public reports, severity prioritization, field dispatching.",
         True,
         [
-            pc.RESCUE_CREATE, pc.RESCUE_READ, pc.RESCUE_UPDATE, pc.RESCUE_VERIFY, pc.RESCUE_DISPATCH,
+            pc.RESCUE_CREATE, pc.RESCUE_READ, pc.RESCUE_UPDATE, pc.RESCUE_VERIFY,
+            pc.RESCUE_DISPATCH,
             pc.VEHICLE_READ, pc.VEHICLE_ASSIGN,
             pc.PUBLIC_READ,
             pc.DASHBOARD_RESCUE,
@@ -186,7 +189,7 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
         True,
         [
             pc.FINANCE_READ, pc.FINANCE_CREATE, pc.FINANCE_RECONCILE,
-            pc.DONATION_READ, pc.DONATION_MANAGE,
+            pc.DONATION_READ, pc.DONATION_MANAGE, pc.DONATION_UPDATE,
             pc.PUBLIC_READ,
             pc.DASHBOARD_FINANCE,
         ],
@@ -212,7 +215,6 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
         "Direct contributions, dog sponsorship, tax receipt downloads.",
         False,
         [
-            pc.DONATION_READ,
             pc.PUBLIC_READ,
             pc.DASHBOARD_DONOR,
         ],
@@ -229,7 +231,7 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
 
 
 async def _get_or_create_permission(
-    session, permissions_cache: dict[str, Permission], code: str
+    session: AsyncSession, permissions_cache: dict[str, Permission], code: str
 ) -> Permission:
     if code in permissions_cache:
         return permissions_cache[code]
@@ -240,11 +242,12 @@ async def _get_or_create_permission(
         session.add(perm)
         await session.flush()
     permissions_cache[code] = perm
+    assert perm is not None
     return perm
 
 
 async def reconcile_roles(
-    session,
+    session: AsyncSession,
     role_definitions: list[tuple[str, str, bool, list[str]]] = ROLE_DEFINITIONS,
     *,
     verbose: bool = True,

@@ -20,6 +20,11 @@ from pawguard.modules.auth.models import (
     UserSession,
 )
 
+# The role granted to users on self-service registration / OAuth account
+# creation. Must match the `general_public` role seeded by
+# scripts/seed_roles_and_permissions.py (ROLE_DEFINITIONS).
+DEFAULT_PUBLIC_ROLE = "general_public"
+
 
 class UserRepository:
     def __init__(self, session: AsyncSession) -> None:
@@ -47,7 +52,7 @@ class UserRepository:
         return user
 
     async def get_default_role(self) -> Role | None:
-        stmt = select(Role).where(Role.name == "user")
+        stmt = select(Role).where(Role.name == DEFAULT_PUBLIC_ROLE)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def get_role_by_name(self, name: str) -> Role | None:
@@ -60,6 +65,27 @@ class UserRepository:
             .options(selectinload(User.roles))
             .where(User.deleted_at.is_(None))
             .order_by(User.created_at.desc())
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
+
+    async def list_staff_user_ids(self) -> list[uuid.UUID]:
+        """Active users holding any role other than the public ``user`` role.
+
+        Used by scheduled alert jobs (inventory / expiry / vaccination) to
+        fan operational alerts out to staff who can act on them.
+        """
+        from pawguard.modules.auth.models import Role, UserRole
+
+        stmt = (
+            select(User.id)
+            .join(UserRole, UserRole.user_id == User.id)
+            .join(Role, Role.id == UserRole.role_id)
+            .where(
+                User.is_active.is_(True),
+                User.deleted_at.is_(None),
+                Role.name != "user",
+            )
+            .distinct()
         )
         return list((await self._session.execute(stmt)).scalars().all())
 

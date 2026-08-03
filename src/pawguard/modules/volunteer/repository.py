@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 
 from pawguard.core.pagination import PageParams
 from pawguard.core.search import SortParams, apply_sorting
+from pawguard.modules.auth.models import User
 from pawguard.modules.volunteer.models import (
     ShiftAttendance,
     VolunteerProfile,
@@ -33,7 +34,7 @@ class VolunteerRepository:
     async def get_profile_by_id(self, profile_id: uuid.UUID) -> VolunteerProfile | None:
         stmt = (
             select(VolunteerProfile)
-            .options(selectinload(VolunteerProfile.user))
+            .options(selectinload(VolunteerProfile.user).selectinload(User.roles))
             .where(VolunteerProfile.id == profile_id, VolunteerProfile.deleted_at.is_(None))
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
@@ -41,7 +42,7 @@ class VolunteerRepository:
     async def get_profile_by_user_id(self, user_id: uuid.UUID) -> VolunteerProfile | None:
         stmt = (
             select(VolunteerProfile)
-            .options(selectinload(VolunteerProfile.user))
+            .options(selectinload(VolunteerProfile.user).selectinload(User.roles))
             .where(VolunteerProfile.user_id == user_id, VolunteerProfile.deleted_at.is_(None))
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
@@ -76,7 +77,7 @@ class VolunteerRepository:
     ) -> Sequence[VolunteerProfile]:
         stmt = (
             select(VolunteerProfile)
-            .options(selectinload(VolunteerProfile.user))
+            .options(selectinload(VolunteerProfile.user).selectinload(User.roles))
             .where(VolunteerProfile.deleted_at.is_(None))
         )
         if status is not None:
@@ -176,6 +177,23 @@ class VolunteerRepository:
         )
         if page_params:
             stmt = stmt.offset(page_params.offset).limit(page_params.limit)
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def list_attendance_for_volunteer(
+        self, volunteer_id: uuid.UUID
+    ) -> Sequence[ShiftAttendance]:
+        """Completed (checked-out) attendance records for a volunteer, with the
+        shift loaded so service-certificate generation can aggregate verified
+        hours and role coverage (PRR 3.9)."""
+        stmt = (
+            select(ShiftAttendance)
+            .options(selectinload(ShiftAttendance.shift))
+            .where(
+                ShiftAttendance.volunteer_id == volunteer_id,
+                ShiftAttendance.check_out_at.isnot(None),
+            )
+            .order_by(ShiftAttendance.check_out_at.asc())
+        )
         return (await self._session.execute(stmt)).scalars().all()
 
     async def soft_delete_profile(self, profile_id: uuid.UUID) -> None:

@@ -25,6 +25,8 @@ from pawguard.redis.client import ping_redis
 
 logger = get_logger(__name__)
 
+logger = get_logger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
@@ -37,19 +39,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
 
 async def _seed_roles() -> None:
-    """Seed roles + permissions on first startup (no-op if already seeded)."""
-    from sqlalchemy import select
+    """Reconcile roles + permissions on every startup (additive + idempotent).
+
+    Uses reconcile_roles(), not a create-if-empty seeder: the old first-startup
+    guard short-circuited once any Role row existed, so permission codes added
+    to ROLE_DEFINITIONS later never reached an already-seeded database.
+    Reconciliation only creates missing roles/permissions and grants missing
+    grants (never revokes), so it is cheap enough to run on every startup.
+    """
+    from scripts.seed_roles_and_permissions import reconcile_roles
 
     from pawguard.db.session import AsyncSessionLocal
-    from pawguard.modules.auth.models import Role
 
     async with AsyncSessionLocal() as session:
-        exists = (await session.execute(select(Role).limit(1))).scalar_one_or_none()
-        if exists is not None:
-            return
-
-    from scripts.seed_roles_and_permissions import seed_db
-    await seed_db("Startup", get_settings().database_url)
+        await reconcile_roles(session, verbose=False)
+        await session.commit()
 
 
 def create_app() -> FastAPI:
@@ -63,6 +67,32 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json" if settings.docs_enabled else None,
         lifespan=lifespan,
     )
+
+    from fastapi.openapi.utils import get_openapi
+
+    def custom_openapi():
+        if app.openapi_schema:
+            return app.openapi_schema
+        openapi_schema = get_openapi(
+            title=app.title,
+            version=app.version,
+            description=app.description,
+            routes=app.routes,
+        )
+        openapi_schema["components"] = openapi_schema.get("components", {})
+        openapi_schema["components"]["securitySchemes"] = {
+            "BearerAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT",
+            }
+        }
+        # Apply security globally to all endpoints
+        openapi_schema["security"] = [{"BearerAuth": []}]
+        app.openapi_schema = openapi_schema
+        return app.openapi_schema
+
+    app.openapi = custom_openapi
 
     app.add_middleware(
         CORSMiddleware,

@@ -4,17 +4,20 @@ import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.pagination import PageParams
 from pawguard.core.search import SortParams, apply_sorting
 from pawguard.modules.portal.models import (
+    AlertSeverity,
     BlogPost,
     ContactLocation,
     ContentStatus,
     FAQEntry,
+    LegalDocument,
     SuccessStory,
+    UrgentAlert,
     VeterinaryPartner,
 )
 from pawguard.modules.settings.models import SystemSetting
@@ -326,6 +329,190 @@ class PortalRepository:
     async def soft_delete_faq(self, entry_id: uuid.UUID) -> None:
         now = datetime.now(UTC)
         stmt = select(FAQEntry).where(FAQEntry.id == entry_id, FAQEntry.deleted_at.is_(None))
+        obj = (await self._session.execute(stmt)).scalar_one_or_none()
+        if obj:
+            obj.deleted_at = now
+
+    # ── Legal documents ────────────────────────────────────────────────────
+
+    async def create_legal_doc(self, doc: LegalDocument) -> LegalDocument:
+        self._session.add(doc)
+        await self._session.flush()
+        return doc
+
+    async def get_legal_doc(self, doc_id: uuid.UUID) -> LegalDocument | None:
+        stmt = select(LegalDocument).where(
+            LegalDocument.id == doc_id, LegalDocument.deleted_at.is_(None)
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def get_legal_doc_by_slug(self, slug: str) -> LegalDocument | None:
+        stmt = select(LegalDocument).where(
+            LegalDocument.slug == slug, LegalDocument.deleted_at.is_(None)
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def count_legal_docs(
+        self,
+        *,
+        status: ContentStatus | None = None,
+        document_type: str | None = None,
+        search: str | None = None,
+    ) -> int:
+        stmt = select(func.count(LegalDocument.id)).where(LegalDocument.deleted_at.is_(None))
+        if status:
+            stmt = stmt.where(LegalDocument.status == status)
+        if document_type:
+            stmt = stmt.where(LegalDocument.document_type == document_type)
+        if search:
+            like = f"%{search.strip().lower()}%"
+            stmt = stmt.where(
+                or_(
+                    LegalDocument.title.ilike(like),
+                    LegalDocument.body.ilike(like),
+                    LegalDocument.slug.ilike(like),
+                )
+            )
+        result = await self._session.execute(stmt)
+        return result.scalar_one()
+
+    async def list_legal_docs(
+        self,
+        *,
+        published_only: bool = False,
+        page_params: PageParams | None = None,
+        status: ContentStatus | None = None,
+        document_type: str | None = None,
+        search: str | None = None,
+        sort: SortParams | None = None,
+    ) -> Sequence[LegalDocument]:
+        stmt = select(LegalDocument).where(LegalDocument.deleted_at.is_(None))
+        if published_only:
+            stmt = stmt.where(LegalDocument.status == ContentStatus.PUBLISHED)
+        if status:
+            stmt = stmt.where(LegalDocument.status == status)
+        if document_type:
+            stmt = stmt.where(LegalDocument.document_type == document_type)
+        if search:
+            like = f"%{search.strip().lower()}%"
+            stmt = stmt.where(
+                or_(
+                    LegalDocument.title.ilike(like),
+                    LegalDocument.body.ilike(like),
+                    LegalDocument.slug.ilike(like),
+                )
+            )
+        valid_sort = {"created_at", "updated_at", "published_at", "title", "version", "status"}
+        if sort:
+            stmt = apply_sorting(stmt, sort, valid_sort, default_field="created_at")
+        else:
+            stmt = stmt.order_by(
+                LegalDocument.published_at.desc().nullslast(), LegalDocument.created_at.desc()
+            )
+        if page_params:
+            stmt = stmt.offset(page_params.offset).limit(page_params.limit)
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def soft_delete_legal_doc(self, doc_id: uuid.UUID) -> None:
+        now = datetime.now(UTC)
+        stmt = select(LegalDocument).where(
+            LegalDocument.id == doc_id, LegalDocument.deleted_at.is_(None)
+        )
+        obj = (await self._session.execute(stmt)).scalar_one_or_none()
+        if obj:
+            obj.deleted_at = now
+
+    # ── Urgent alerts ──────────────────────────────────────────────────────
+
+    async def create_urgent_alert(self, alert: UrgentAlert) -> UrgentAlert:
+        self._session.add(alert)
+        await self._session.flush()
+        return alert
+
+    async def get_urgent_alert(self, alert_id: uuid.UUID) -> UrgentAlert | None:
+        stmt = select(UrgentAlert).where(
+            UrgentAlert.id == alert_id, UrgentAlert.deleted_at.is_(None)
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def count_urgent_alerts(
+        self,
+        *,
+        is_active: bool | None = None,
+        search: str | None = None,
+    ) -> int:
+        stmt = select(func.count(UrgentAlert.id)).where(UrgentAlert.deleted_at.is_(None))
+        if is_active is not None:
+            stmt = stmt.where(UrgentAlert.is_active.is_(is_active))
+        if search:
+            like = f"%{search.strip().lower()}%"
+            stmt = stmt.where(
+                or_(
+                    UrgentAlert.title.ilike(like),
+                    UrgentAlert.message.ilike(like),
+                )
+            )
+        result = await self._session.execute(stmt)
+        return result.scalar_one()
+
+    async def list_urgent_alerts(
+        self,
+        *,
+        page_params: PageParams | None = None,
+        is_active: bool | None = None,
+        search: str | None = None,
+        sort: SortParams | None = None,
+    ) -> Sequence[UrgentAlert]:
+        stmt = select(UrgentAlert).where(UrgentAlert.deleted_at.is_(None))
+        if is_active is not None:
+            stmt = stmt.where(UrgentAlert.is_active.is_(is_active))
+        if search:
+            like = f"%{search.strip().lower()}%"
+            stmt = stmt.where(
+                or_(
+                    UrgentAlert.title.ilike(like),
+                    UrgentAlert.message.ilike(like),
+                )
+            )
+        valid_sort = {"created_at", "updated_at", "severity", "sort_order", "is_active"}
+        if sort:
+            stmt = apply_sorting(stmt, sort, valid_sort, default_field="sort_order")
+        else:
+            stmt = stmt.order_by(UrgentAlert.sort_order.asc(), UrgentAlert.created_at.desc())
+        if page_params:
+            stmt = stmt.offset(page_params.offset).limit(page_params.limit)
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def list_active_alerts(self) -> Sequence[UrgentAlert]:
+        """Active alerts inside their scheduled window (if any), highest
+        severity first, then sort order."""
+        now = datetime.now(UTC)
+        severity_order = case(
+            (UrgentAlert.severity == AlertSeverity.CRITICAL, 0),
+            (UrgentAlert.severity == AlertSeverity.WARNING, 1),
+            else_=2,
+        )
+        stmt = (
+            select(UrgentAlert)
+            .where(
+                UrgentAlert.deleted_at.is_(None),
+                UrgentAlert.is_active.is_(True),
+                or_(UrgentAlert.starts_at.is_(None), UrgentAlert.starts_at <= now),
+                or_(UrgentAlert.ends_at.is_(None), UrgentAlert.ends_at >= now),
+            )
+            .order_by(
+                severity_order,
+                UrgentAlert.sort_order.asc(),
+                UrgentAlert.created_at.desc(),
+            )
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def soft_delete_urgent_alert(self, alert_id: uuid.UUID) -> None:
+        now = datetime.now(UTC)
+        stmt = select(UrgentAlert).where(
+            UrgentAlert.id == alert_id, UrgentAlert.deleted_at.is_(None)
+        )
         obj = (await self._session.execute(stmt)).scalar_one_or_none()
         if obj:
             obj.deleted_at = now

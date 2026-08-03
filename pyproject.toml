@@ -19,6 +19,7 @@ dependencies = [
     "arq>=0.26.0",
     "jinja2>=3.1.4",
     "boto3>=1.35.0",
+    "cryptography>=44.0.0",
     "python-magic-bin>=0.4.14; platform_system == 'Windows'",
     "python-magic>=0.4.27; platform_system != 'Windows'",
     "pillow>=11.0.0",
@@ -28,7 +29,6 @@ dependencies = [
     "python-multipart>=0.0.17",
     "reportlab>=4.2.0",
     "openpyxl>=3.1.0",
-    "weasyprint>=62.3.0",
     "razorpay>=2.0.0",
 ]
 
@@ -73,15 +73,23 @@ plugins = ["pydantic.mypy"]
 exclude = ["alembic/"]
 
 [[tool.mypy.overrides]]
-module = ["boto3.*", "botocore.*", "pyotp.*"]
+module = ["boto3.*", "botocore.*", "pyotp.*", "razorpay.*", "reportlab.*", "openpyxl.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# Make the repo root importable (`import scripts.seed_roles_and_permissions`)
+# under any pytest invocation. Without this, the integration tests' top-level
+# `from scripts...` imports only worked under `python -m pytest` (which puts
+# the cwd on sys.path) and failed under the bare `pytest` console script used
+# by CI's `uv run pytest`.
+# `src` is included so tests always import the working tree's `pawguard`
+# package instead of a stale snapshot left in site-packages.
+pythonpath = [".", "src"]
 
 [tool.bandit]
 exclude_dirs = ["tests", "alembic"]
-# B101: internal invariant checks in UnitOfWork, not security validation.
+# B101: internal invariant assertions, not security validation.
 # B105: false positives on enum event-type/cookie-name string literals, not secrets.
 skips = ["B101", "B105"]

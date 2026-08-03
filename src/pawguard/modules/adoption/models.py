@@ -2,10 +2,12 @@
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -18,12 +20,30 @@ if TYPE_CHECKING:
 
 
 class AdoptionStatus(StrEnum):
+    """Six-phase adoption pipeline (PRR 3.7) plus a terminal REJECTED.
+
+    SUBMITTED -> SCREENING -> INTERVIEW -> HOME_CHECK -> APPROVED -> COMPLETED.
+
+    ``VETTING`` is a deprecated legacy member kept only so historical rows
+    that stored the collapsed ``"vetting"`` value (the old phases 1+2) still
+    parse. It is NOT part of the active state machine and has no valid
+    transitions; new applications use SCREENING/INTERVIEW.
+    """
+
     SUBMITTED = "submitted"
-    VETTING = "vetting"
+    SCREENING = "screening"
+    INTERVIEW = "interview"
     HOME_CHECK = "home_check"
     APPROVED = "approved"
-    REJECTED = "rejected"
     COMPLETED = "completed"
+    REJECTED = "rejected"
+    VETTING = "vetting"  # deprecated legacy value, kept for data compatibility
+
+
+class FollowUpStatus(StrEnum):
+    PENDING = "pending"
+    SUBMITTED = "submitted"
+    OVERDUE = "overdue"
 
 
 class AdoptionApplication(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
@@ -54,11 +74,17 @@ class AdoptionApplication(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     home_inspection_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     adoption_agreement_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    fee_amount: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 2), default=Decimal("0.00"), nullable=True
+    )
 
     dog: Mapped["DogProfile"] = relationship("DogProfile", lazy="joined")
     adopter: Mapped["User"] = relationship("User", lazy="joined")
     scores: Mapped[list["AdoptionScore"]] = relationship(
         "AdoptionScore", back_populates="application", lazy="selectin"
+    )
+    follow_ups: Mapped[list["AdoptionFollowUp"]] = relationship(
+        "AdoptionFollowUp", back_populates="application", lazy="selectin"
     )
 
 
@@ -88,3 +114,31 @@ class AdoptionScore(UUIDPkMixin, TimestampMixin, Base):
 
     if TYPE_CHECKING:
         scored_by: Mapped["User"] = relationship("User", lazy="joined")
+
+
+class AdoptionFollowUp(UUIDPkMixin, TimestampMixin, Base):
+    """A scheduled post-adoption check-in (30/90/180 days after completion).
+
+    Created by the background job for completed adoptions; adopters submit
+    proof media + notes, or the check-in goes OVERDUE once past ``due_at``.
+    """
+
+    __tablename__ = "adoption_follow_ups"
+
+    adoption_application_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("adoption_applications.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    due_day: Mapped[int] = mapped_column(Integer, nullable=False)
+    due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    status: Mapped[FollowUpStatus] = mapped_column(
+        String(16), default=FollowUpStatus.PENDING, nullable=False, index=True
+    )
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    media_keys: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    application: Mapped["AdoptionApplication"] = relationship(
+        "AdoptionApplication", back_populates="follow_ups"
+    )

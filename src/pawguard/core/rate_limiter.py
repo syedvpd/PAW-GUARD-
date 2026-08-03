@@ -37,14 +37,30 @@ class _RateLimitDependency:
             raise TooManyRequestsError("Too many requests. Please try again later.")
 
 
+def resolve_client_ip(request: Request) -> str:
+    """Securely resolve real client IP, avoiding header spoofing.
+
+    If behind Cloudflare, CF-Connecting-IP is used. Otherwise, the rightmost
+    entry of X-Forwarded-For is returned since the last proxy appends the caller's
+    connecting IP to the end.
+    """
+    cf_ip = request.headers.get("CF-Connecting-IP")
+    if cf_ip:
+        return cf_ip.strip()
+
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        parts = [p.strip() for p in forwarded.split(",") if p.strip()]
+        if parts:
+            return parts[-1]
+    return request.client.host if request.client else "unknown"
+
+
 def _resolve_user_key(request: Request) -> str:
     user_id = getattr(request.state, "user_id", None)
     if user_id is not None:
         return str(user_id)
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    return resolve_client_ip(request)
 
 
 def rate_limit(

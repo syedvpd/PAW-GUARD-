@@ -6,10 +6,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.exceptions import InsufficientPermissionsError
-from pawguard.modules.auth.models import Permission, Role, RolePermission
+from pawguard.modules.auth.models import Permission, Role, RolePermission, User
 from pawguard.services.cache_service import CacheService
 
 PERMISSIONS_CACHE_TTL_SECONDS = 300
+
+
+def has_permission(user: User, permission_code: str) -> bool:
+    """Direct role->permission check on an in-memory User object.
+
+    Used by owner-or-permission endpoint guards (e.g. a donor reading their own
+    receipt) where a full `require_permission` dependency would be too coarse.
+    """
+    return any(
+        permission_code == p.code for r in user.roles for p in r.permissions
+    )
 
 
 async def get_role_permission_codes(session: AsyncSession, role_names: list[str]) -> set[str]:

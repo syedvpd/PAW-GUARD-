@@ -4,19 +4,27 @@ import uuid
 from collections.abc import Sequence
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from pawguard.core.pagination import PageParams
 from pawguard.core.search import SortParams, apply_sorting, build_search_filter
-from pawguard.modules.rescue.models import RescueDispatch, RescueReport, RescueRequest, RescueStatus
+from pawguard.modules.rescue.models import (
+    RescueDispatch,
+    RescueDispatchAgent,
+    RescueReport,
+    RescueRequest,
+    RescueSeverity,
+    RescueStatus,
+)
 
 
 class RescueRepository:
     SEARCH_FIELDS = ("ticket_number", "reporter_name", "reporter_phone", "location_address")
     SORTABLE_FIELDS = {
-        "ticket_number", "reporter_name", "status", "created_at", "updated_at", "animal_count"
+        "ticket_number", "reporter_name", "status", "severity", "is_urgent",
+        "created_at", "updated_at", "animal_count",
     }
 
     def __init__(self, session: AsyncSession) -> None:
@@ -45,6 +53,18 @@ class RescueRepository:
         stmt = self._base_stmt().where(RescueRequest.ticket_number == ticket_number)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    async def get_request_by_ticket_and_phone(
+        self, ticket_number: str, phone: str
+    ) -> RescueRequest | None:
+        """Public case-status lookup (PRR 3.2): the reporter verifies ownership
+        with the ticket number AND the phone they reported with, so guessing a
+        ticket number alone cannot leak another person's case."""
+        stmt = self._base_stmt().where(
+            RescueRequest.ticket_number == ticket_number,
+            RescueRequest.reporter_phone == phone,
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
     async def list_requests(self, status: RescueStatus | None = None) -> Sequence[RescueRequest]:
         stmt = self._base_stmt().order_by(RescueRequest.created_at.desc())
         if status is not None:
@@ -57,6 +77,9 @@ class RescueRepository:
         sort: SortParams,
         search_term: str | None = None,
         status: RescueStatus | None = None,
+        severity: RescueSeverity | None = None,
+        urgent_only: bool | None = None,
+        assigned_to_me: uuid.UUID | None = None,
     ) -> tuple[Sequence[RescueRequest], int]:
         stmt = self._base_stmt()
 
@@ -66,6 +89,31 @@ class RescueRepository:
 
         if status is not None:
             stmt = stmt.where(RescueRequest.status == status)
+
+        if severity is not None:
+            stmt = stmt.where(RescueRequest.severity == severity)
+
+        if urgent_only is not None:
+            stmt = stmt.where(RescueRequest.is_urgent.is_(urgent_only))
+
+        if assigned_to_me is not None:
+            # "My assigned cases" filter (PRR 3.2 field-agent interface): the
+            # user is on the dispatch team when they are either the legacy
+            # assigned_driver_id or a row in the dispatch-agent association
+            # table. EXISTS keeps the row set distinct (no fan-out) so the
+            # count query below stays correct.
+            agent_scope = exists().where(
+                RescueDispatchAgent.dispatch_id == RescueDispatch.id,
+                RescueDispatchAgent.agent_id == assigned_to_me,
+            )
+            stmt = stmt.join(
+                RescueDispatch, RescueDispatch.rescue_request_id == RescueRequest.id
+            ).where(
+                or_(
+                    RescueDispatch.assigned_driver_id == assigned_to_me,
+                    agent_scope,
+                )
+            )
 
         stmt = apply_sorting(stmt, sort, self.SORTABLE_FIELDS)
 
@@ -81,6 +129,18 @@ class RescueRepository:
         stmt = self._base_stmt().where(RescueRequest.id.in_(ids))
         return (await self._session.execute(stmt)).scalars().all()
 
+    async def bulk_soft_delete(self, ids: list[uuid.UUID]) -> int:
+        from datetime import UTC, datetime
+
+        from sqlalchemy import update
+        stmt = (
+            update(RescueRequest)
+            .where(RescueRequest.id.in_(ids), RescueRequest.deleted_at.is_(None))
+            .values(deleted_at=datetime.now(UTC))
+        )
+        result = await self._session.execute(stmt)
+        return result.rowcount  # type: ignore[attr-defined,no-any-return]
+
     async def count_by_status(self) -> dict[str, int]:
         stmt = (
             select(RescueRequest.status, func.count())
@@ -90,21 +150,17 @@ class RescueRepository:
         rows = (await self._session.execute(stmt)).all()
         return {row[0]: row[1] for row in rows}
 
-    async def bulk_update_status(self, ids: list[uuid.UUID], status: RescueStatus) -> int:
-        from sqlalchemy import update
-
-        stmt = (
-            update(RescueRequest)
-            .where(RescueRequest.id.in_(ids), RescueRequest.deleted_at.is_(None))
-            .values(status=status)
-        )
-        result = await self._session.execute(stmt)
-        return result.rowcount  # type: ignore[attr-defined,no-any-return]
-
     async def create_dispatch(self, dispatch: RescueDispatch) -> RescueDispatch:
         self._session.add(dispatch)
         await self._session.flush()
         return dispatch
+
+    async def create_dispatch_agent(
+        self, agent: RescueDispatchAgent
+    ) -> RescueDispatchAgent:
+        self._session.add(agent)
+        await self._session.flush()
+        return agent
 
     async def get_dispatch_by_request_id(self, request_id: uuid.UUID) -> RescueDispatch | None:
         stmt = select(RescueDispatch).where(RescueDispatch.rescue_request_id == request_id)

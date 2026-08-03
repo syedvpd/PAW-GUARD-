@@ -1,6 +1,10 @@
+import asyncio
+import json
+from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.responses import ApiResponse
@@ -8,6 +12,7 @@ from pawguard.db.session import get_db
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.rbac import require_permission
 from pawguard.modules.dashboards import service as dasvc
+from pawguard.redis.client import RedisClient, get_redis
 
 router = APIRouter(prefix="/dashboards", tags=["dashboards"])
 
@@ -19,10 +24,61 @@ router = APIRouter(prefix="/dashboards", tags=["dashboards"])
 )
 async def get_rescue_dashboard(
     db: AsyncSession = Depends(get_db),
+    redis: RedisClient = Depends(get_redis),
     current_user: CurrentUser = Depends(get_current_user),
-):
-    data = await dasvc.rescue_dashboard(db)
+) -> ApiResponse[dict[str, Any]]:
+    data = await dasvc.rescue_dashboard(db, redis=redis)
     return ApiResponse(data=data)
+
+
+@router.get(
+    "/rescue/stream",
+    responses={
+        200: {
+            "description": "Server-Sent Events stream of the live rescue dashboard",
+            "content": {"text/event-stream": {}},
+        }
+    },
+    dependencies=[Depends(require_permission("dashboard:rescue"))],
+)
+async def stream_rescue_dashboard(
+    request: Request,
+    interval: int = Query(10, ge=5, le=300, description="Snapshot interval (seconds)"),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> StreamingResponse:
+    """Real-time rescue dashboard feed (PRR 3.2).
+
+    Emits an SSE `snapshot` event every `interval` seconds with the current
+    rescue dashboard data plus a timestamp, so command-centre screens update
+    without polling. A heartbeat comment is sent when a snapshot fails so the
+    client knows the stream is still alive.
+    """
+
+    async def _event_stream():
+        while True:
+            if await request.is_disconnected():
+                break
+            try:
+                data = await dasvc.rescue_dashboard(db)
+                payload = json.dumps(
+                    {"data": data, "ts": datetime.now(UTC).isoformat()},
+                    default=str,
+                )
+                yield f"event: snapshot\ndata: {payload}\n\n"
+            except Exception:
+                yield ": snapshot unavailable, stream alive\n\n"
+            await asyncio.sleep(interval)
+
+    return StreamingResponse(
+        _event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get(
@@ -32,9 +88,10 @@ async def get_rescue_dashboard(
 )
 async def get_shelter_dashboard(
     db: AsyncSession = Depends(get_db),
+    redis: RedisClient = Depends(get_redis),
     current_user: CurrentUser = Depends(get_current_user),
-):
-    data = await dasvc.shelter_dashboard(db)
+) -> ApiResponse[dict[str, Any]]:
+    data = await dasvc.shelter_dashboard(db, redis=redis)
     return ApiResponse(data=data)
 
 
@@ -45,9 +102,10 @@ async def get_shelter_dashboard(
 )
 async def get_medical_dashboard(
     db: AsyncSession = Depends(get_db),
+    redis: RedisClient = Depends(get_redis),
     current_user: CurrentUser = Depends(get_current_user),
-):
-    data = await dasvc.medical_dashboard(db)
+) -> ApiResponse[dict[str, Any]]:
+    data = await dasvc.medical_dashboard(db, redis=redis)
     return ApiResponse(data=data)
 
 
@@ -58,9 +116,10 @@ async def get_medical_dashboard(
 )
 async def get_adoption_dashboard(
     db: AsyncSession = Depends(get_db),
+    redis: RedisClient = Depends(get_redis),
     current_user: CurrentUser = Depends(get_current_user),
-):
-    data = await dasvc.adoption_dashboard(db)
+) -> ApiResponse[dict[str, Any]]:
+    data = await dasvc.adoption_dashboard(db, redis=redis)
     return ApiResponse(data=data)
 
 
@@ -71,9 +130,10 @@ async def get_adoption_dashboard(
 )
 async def get_foster_dashboard(
     db: AsyncSession = Depends(get_db),
+    redis: RedisClient = Depends(get_redis),
     current_user: CurrentUser = Depends(get_current_user),
-):
-    data = await dasvc.foster_dashboard(db)
+) -> ApiResponse[dict[str, Any]]:
+    data = await dasvc.foster_dashboard(db, redis=redis)
     return ApiResponse(data=data)
 
 
@@ -84,9 +144,10 @@ async def get_foster_dashboard(
 )
 async def get_volunteer_dashboard(
     db: AsyncSession = Depends(get_db),
+    redis: RedisClient = Depends(get_redis),
     current_user: CurrentUser = Depends(get_current_user),
-):
-    data = await dasvc.volunteer_dashboard(db)
+) -> ApiResponse[dict[str, Any]]:
+    data = await dasvc.volunteer_dashboard(db, redis=redis)
     return ApiResponse(data=data)
 
 
@@ -97,9 +158,10 @@ async def get_volunteer_dashboard(
 )
 async def get_inventory_dashboard(
     db: AsyncSession = Depends(get_db),
+    redis: RedisClient = Depends(get_redis),
     current_user: CurrentUser = Depends(get_current_user),
-):
-    data = await dasvc.inventory_dashboard(db)
+) -> ApiResponse[dict[str, Any]]:
+    data = await dasvc.inventory_dashboard(db, redis=redis)
     return ApiResponse(data=data)
 
 
@@ -110,9 +172,10 @@ async def get_inventory_dashboard(
 )
 async def get_finance_dashboard(
     db: AsyncSession = Depends(get_db),
+    redis: RedisClient = Depends(get_redis),
     current_user: CurrentUser = Depends(get_current_user),
-):
-    data = await dasvc.finance_dashboard(db)
+) -> ApiResponse[dict[str, Any]]:
+    data = await dasvc.finance_dashboard(db, redis=redis)
     return ApiResponse(data=data)
 
 
@@ -123,9 +186,10 @@ async def get_finance_dashboard(
 )
 async def get_donor_dashboard(
     db: AsyncSession = Depends(get_db),
+    redis: RedisClient = Depends(get_redis),
     current_user: CurrentUser = Depends(get_current_user),
-):
-    data = await dasvc.donor_dashboard(db)
+) -> ApiResponse[dict[str, Any]]:
+    data = await dasvc.donor_dashboard(db, redis=redis)
     return ApiResponse(data=data)
 
 
@@ -136,9 +200,10 @@ async def get_donor_dashboard(
 )
 async def get_staff_dashboard(
     db: AsyncSession = Depends(get_db),
+    redis: RedisClient = Depends(get_redis),
     current_user: CurrentUser = Depends(get_current_user),
-):
-    data = await dasvc.staff_dashboard(db)
+) -> ApiResponse[dict[str, Any]]:
+    data = await dasvc.staff_dashboard(db, redis=redis)
     return ApiResponse(data=data)
 
 
@@ -149,9 +214,10 @@ async def get_staff_dashboard(
 )
 async def get_executive_dashboard(
     db: AsyncSession = Depends(get_db),
+    redis: RedisClient = Depends(get_redis),
     current_user: CurrentUser = Depends(get_current_user),
-):
-    data = await dasvc.executive_dashboard(db)
+) -> ApiResponse[dict[str, Any]]:
+    data = await dasvc.executive_dashboard(db, redis=redis)
     return ApiResponse(data=data)
 
 
@@ -161,8 +227,9 @@ async def get_executive_dashboard(
 )
 async def get_public_dashboard(
     db: AsyncSession = Depends(get_db),
-):
-    data = await dasvc.public_dashboard(db)
+    redis: RedisClient = Depends(get_redis),
+) -> ApiResponse[dict[str, Any]]:
+    data = await dasvc.public_dashboard(db, redis=redis)
     return ApiResponse(data=data)
 
 
@@ -173,7 +240,9 @@ async def get_public_dashboard(
 )
 async def get_operations_dashboard(
     db: AsyncSession = Depends(get_db),
+    redis: RedisClient = Depends(get_redis),
     current_user: CurrentUser = Depends(get_current_user),
-):
-    data = await dasvc.operations_dashboard(db)
+) -> ApiResponse[dict[str, Any]]:
+    data = await dasvc.operations_dashboard(db, redis=redis)
     return ApiResponse(data=data)
+

@@ -89,3 +89,14 @@ class ShiftAttendanceResponse(BaseModel):
     hours_logged: float | None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class VolunteerServiceSummary(BaseModel):
+    """Verified service totals used to issue a service certificate (PRR 3.9)."""
+
+    volunteer_id: uuid.UUID
+    total_hours: float
+    shifts_count: int
+    period_start: datetime | None
+    period_end: datetime | None
+    role_summary: str

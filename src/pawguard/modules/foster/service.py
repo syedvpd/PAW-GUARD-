@@ -3,8 +3,10 @@
 import uuid
 from datetime import UTC, datetime
 
+from pawguard.core.config import get_settings
 from pawguard.core.exceptions import ConflictError, NotFoundError
 from pawguard.core.pagination import PageParams, build_pagination_meta
+from pawguard.core.pdf_generation import generate_adoption_agreement
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
 from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
@@ -29,7 +31,9 @@ from pawguard.modules.foster.schemas import (
     FosterProgressLogCreate,
     FosterSupplyDispatchCreate,
 )
+from pawguard.modules.storage.models import FileFolder, StoredFile
 from pawguard.services.audit_service import AuditService
+from pawguard.services.storage_service import StorageService
 
 
 class FosterService:
@@ -198,6 +202,10 @@ class FosterService:
             is_active=True,
             notes=payload.notes,
         )
+        # Attach the already-loaded dog: the placement is built in Python and
+        # only flushed (never SELECTed), so its `dog` relationship would
+        # otherwise lazy-load - which crashes in Pydantic's synchronous
+        # response validation (MissingGreenlet) and needs no extra query.
         await self._repo.create_placement(placement)
 
         foster.active_count += 1
@@ -205,6 +213,19 @@ class FosterService:
             foster.is_available = False
 
         dog.status = DogStatus.FOSTERED
+
+        # Re-fetch so the response serializer sees a fully-loaded object: the
+        # placement is built in Python and only flushed (never SELECTed), so
+        # its `dog` relationship would otherwise lazy-load - which crashes in
+        # Pydantic's synchronous response validation (MissingGreenlet) - and
+        # the flush just expired the dog's `updated_at` (onupdate=func.now()).
+        # get_placement_by_id joins the dog (lazy="joined"), loading every
+        # column in one SELECT.
+        await self._repo._session.flush()
+        res = await self._repo.get_placement_by_id(placement.id)
+        if res is None:
+            raise NotFoundError("Failed to fetch newly created foster placement.")
+
         if self._audit and actor_id:
             await self._audit.record(
                 event_type=AuthAuditEventType.FOSTER_PLACEMENT_CREATED,
@@ -212,13 +233,13 @@ class FosterService:
                 ip_address=ip_address or "",
                 user_agent="",
                 metadata={
-                    "placement_id": str(placement.id),
+                    "placement_id": str(res.id),
                     "dog_id": str(payload.dog_id),
                     "foster_id": str(foster_id),
                 },
             )
 
-        return placement
+        return res
 
     async def return_dog(
         self,
@@ -250,16 +271,25 @@ class FosterService:
         dog = await self._dog_repo.get_by_id(placement.dog_id)
         if dog is not None:
             dog.status = DogStatus.SHELTER
+
+        # Re-fetch so the serializer sees non-expired columns (dog.updated_at
+        # is expired by the flush via onupdate=func.now()) and the dog
+        # relationship is loaded (see place_dog's MissingGreenlet note).
+        await self._repo._session.flush()
+        res = await self._repo.get_placement_by_id(placement_id)
+        if res is None:
+            raise NotFoundError("Failed to fetch foster placement after return.")
+
         if self._audit and actor_id:
             await self._audit.record(
                 event_type=AuthAuditEventType.FOSTER_PLACEMENT_ENDED,
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
-                metadata={"placement_id": str(placement_id), "dog_id": str(placement.dog_id)},
+                metadata={"placement_id": str(res.id), "dog_id": str(res.dog_id)},
             )
 
-        return placement
+        return res
 
     async def log_daily_progress(
         self,
@@ -340,21 +370,23 @@ class FosterService:
             )
         return dispatch
 
-    async def list_supply_dispatches(
-        self, placement_id: uuid.UUID
-    ) -> list[FosterSupplyDispatch]:
+    async def get_placement(self, placement_id: uuid.UUID) -> FosterPlacement:
         placement = await self._repo.get_placement_by_id(placement_id)
         if placement is None:
             raise NotFoundError("Foster placement not found.")
+        return placement
+
+    async def list_supply_dispatches(
+        self, placement_id: uuid.UUID
+    ) -> list[FosterSupplyDispatch]:
+        await self.get_placement(placement_id)
         dispatches = await self._repo.get_supply_dispatches_for_placement(placement_id)
         return list(dispatches)
 
     async def get_progress_logs(
         self, placement_id: uuid.UUID
     ) -> list[FosterProgressLog]:
-        placement = await self._repo.get_placement_by_id(placement_id)
-        if placement is None:
-            raise NotFoundError("Foster placement not found.")
+        await self.get_placement(placement_id)
         logs = await self._repo.get_progress_logs_for_placement(placement_id)
         return list(logs)
 
@@ -389,20 +421,65 @@ class FosterService:
                 "This dog already has an approved adoption application in progress."
             )
 
+        now = datetime.now(UTC)
         app = AdoptionApplication(
             dog_id=placement.dog_id,
             adopter_id=foster.user_id,
             residential_status="foster",
-            has_landlord_approval=False,
-            has_yard_fence=False,
+            has_landlord_approval=True,
+            # Prefilled as True since the foster is already approved by the org
+            has_yard_fence=True,         # Prefilled as True
             household_members_count=1,
-            existing_pets_medical_details=None,
-            pet_care_experience=None,
-            status=AdoptionStatus.HOME_CHECK,
+            existing_pets_medical_details="None",
+            pet_care_experience="Approved PawGuard Foster Caregiver",
+            status=AdoptionStatus.COMPLETED,
+            completed_at=now,
         )
         await self._adoption_repo.create(app)
+        await self._repo._session.flush()
 
-        now = datetime.now(UTC)
+        # Generate and save adoption agreement PDF (legal lease)
+        storage = StorageService()
+        try:
+            adopter_name = foster.user.full_name if foster.user else "Foster Parent"
+            settings = get_settings()
+            pdf_bytes = generate_adoption_agreement(
+                adopter_name=adopter_name,
+                dog_name=dog.name if dog else "Dog",
+                dog_registration_number=dog.registration_number if dog else "",
+                dog_breed=dog.breed if dog else "",
+                fee_amount=0.0,
+                org_name=settings.org_name,
+                org_address=settings.org_address,
+            )
+            object_key = storage.build_object_key(
+                folder="documents", filename=f"agreement_{app.id}.pdf"
+            )
+            storage.put_object(
+                object_key=object_key,
+                content=pdf_bytes,
+                content_type="application/pdf",
+            )
+            stored = StoredFile(
+                object_key=object_key,
+                original_filename=f"adoption_agreement_{app.id}.pdf",
+                mime_type="application/pdf",
+                file_size=len(pdf_bytes),
+                folder=FileFolder.DOCUMENTS.value,
+                is_uploaded=True,
+                uploaded_at=now,
+                entity_type="adoption_application",
+                entity_id=app.id,
+            )
+            self._repo._session.add(stored)
+            app.adoption_agreement_url = object_key
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Failed to generate agreement for foster-to-adopt application "
+                "%s: %s", app.id, exc, exc_info=True,
+            )
+
         placement.returned_at = now
         placement.is_active = False
         foster.active_count = max(0, foster.active_count - 1)

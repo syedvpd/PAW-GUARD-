@@ -14,20 +14,22 @@ from pawguard.modules.fleet.models import (
     FuelLog,
     Vehicle,
     VehicleStatus,
+    VehicleType,
 )
 
 
 class FleetRepository:
     VEHICLE_SEARCH_FIELDS = ("make_model", "license_plate")
     VEHICLE_SORTABLE_FIELDS = {
-        "make_model", "license_plate", "status", "mileage", "created_at", "updated_at",
+        "make_model", "license_plate", "status", "vehicle_type", "mileage",
+        "created_at", "updated_at",
     }
     MAINTENANCE_SORTABLE_FIELDS = {
         "service_date", "cost", "created_at",
     }
     EQUIPMENT_SEARCH_FIELDS = ("equipment_name", "notes")
     EQUIPMENT_SORTABLE_FIELDS = {
-        "equipment_name", "checked_out_at", "returned_at", "created_at",
+        "equipment_name", "checked_out_at", "expected_return_at", "returned_at", "created_at",
     }
     FUEL_SORTABLE_FIELDS = {"filled_at", "volume_litres", "cost", "mileage_at_fill"}
     FUEL_SEARCH_FIELDS = ("vendor", "notes")
@@ -57,6 +59,7 @@ class FleetRepository:
         sort: SortParams,
         search_term: str | None = None,
         status: VehicleStatus | None = None,
+        vehicle_type: VehicleType | None = None,
     ) -> tuple[Sequence[Vehicle], int]:
         stmt = select(Vehicle).where(Vehicle.deleted_at.is_(None))
 
@@ -66,6 +69,9 @@ class FleetRepository:
 
         if status is not None:
             stmt = stmt.where(Vehicle.status == status)
+
+        if vehicle_type is not None:
+            stmt = stmt.where(Vehicle.vehicle_type == vehicle_type)
 
         stmt = apply_sorting(stmt, sort, self.VEHICLE_SORTABLE_FIELDS)
 
@@ -154,6 +160,33 @@ class FleetRepository:
         self._session.add(record)
         await self._session.flush()
         return record
+
+    async def list_checkouts_for_dispatch(
+        self, rescue_dispatch_id: uuid.UUID
+    ) -> Sequence[EquipmentCheckout]:
+        stmt = (
+            select(EquipmentCheckout)
+            .where(
+                EquipmentCheckout.rescue_dispatch_id == rescue_dispatch_id,
+                EquipmentCheckout.returned_at.is_(None),
+            )
+            .order_by(EquipmentCheckout.checked_out_at)
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def release_equipment_for_dispatch(self, rescue_dispatch_id: uuid.UUID) -> int:
+        from datetime import UTC, datetime
+
+        stmt = (
+            update(EquipmentCheckout)
+            .where(
+                EquipmentCheckout.rescue_dispatch_id == rescue_dispatch_id,
+                EquipmentCheckout.returned_at.is_(None),
+            )
+            .values(returned_at=datetime.now(UTC))
+        )
+        result = await self._session.execute(stmt)
+        return result.rowcount  # type: ignore[attr-defined,no-any-return]
 
     async def get_equipment_checkout(self, checkout_id: uuid.UUID) -> EquipmentCheckout | None:
         stmt = select(EquipmentCheckout).where(EquipmentCheckout.id == checkout_id)

@@ -6,12 +6,21 @@ StoredFile metadata records in the database.
 
 import uuid
 from datetime import UTC, datetime
+from io import BytesIO
+
+from PIL import Image as PILImage
 
 from pawguard.core.exceptions import NotFoundError, ValidationFailedError
+from pawguard.core.logging import get_logger
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
-from pawguard.core.upload import MAX_FILE_SIZE_BYTES, UploadError, verify_mime_type
+from pawguard.core.upload import (
+    MAX_FILE_SIZE_BYTES,
+    UploadError,
+    create_thumbnail,
+    verify_mime_type,
+)
 from pawguard.modules.storage.models import StoredFile
 from pawguard.modules.storage.repository import StorageRepository
 from pawguard.modules.storage.schemas import (
@@ -21,6 +30,8 @@ from pawguard.modules.storage.schemas import (
     UploadUrlResponse,
 )
 from pawguard.services.storage_service import StorageService as S3StorageService
+
+logger = get_logger(__name__)
 
 
 class StorageService:
@@ -60,7 +71,9 @@ class StorageService:
             file_id=stored.id,
         )
 
-    async def confirm_upload(self, file_id: uuid.UUID) -> StoredFile:
+    async def confirm_upload(
+        self, file_id: uuid.UUID, batch_file_ids: list[uuid.UUID] | None = None
+    ) -> StoredFile:
         """Verifies the object actually uploaded to S3 before trusting it.
 
         The presigned-URL flow means the client uploads bytes straight to S3;
@@ -68,12 +81,23 @@ class StorageService:
         client-supplied claims. This re-checks real size and file-signature
         (magic bytes) against the object S3 received, deleting it and
         rejecting confirmation if it doesn't match what was declared.
+
+        When ``batch_file_ids`` is provided the combined size of all files
+        in the batch is validated against the 50 MB cap before the
+        individual file is confirmed.
         """
         stored = await self._repo.get_by_id(file_id)
         if stored is None:
             raise NotFoundError("Stored file not found.")
 
+        if batch_file_ids:
+            batch_ids = list(set(batch_file_ids))
+            batch_files = await self._repo.list_by_ids(batch_ids)
+            batch_sizes = [f.file_size for f in batch_files if f.file_size is not None]
+
         try:
+            if batch_file_ids:
+                verify_batch_size(batch_sizes)
             actual_size = self._s3.get_object_size(object_key=stored.object_key)
             if actual_size > MAX_FILE_SIZE_BYTES:
                 raise UploadError(
@@ -92,9 +116,44 @@ class StorageService:
         stored.file_size = actual_size
         stored.is_uploaded = True
         stored.uploaded_at = datetime.now(UTC)
+        if detected_mime.startswith("image/") and stored.thumbnail_object_key is None:
+            await self._generate_thumbnail(stored)
         await self._repo._session.flush()
         await self._repo._session.refresh(stored)
         return stored
+
+    async def _generate_thumbnail(self, stored: StoredFile) -> None:
+        """Create and store an EXIF-free thumbnail for an image upload.
+
+        Thumbnailing is best-effort: a failure to decode or re-encode the image
+        must never reject an upload that already verified, so it is logged and
+        the stored file simply keeps ``thumbnail_object_key`` unset.
+        """
+        try:
+            content = self._s3.get_object(object_key=stored.object_key)
+            thumbnail = create_thumbnail(content, max_size=400)
+            if thumbnail is None:
+                return
+            fmt = PILImage.open(BytesIO(thumbnail)).format
+            base = stored.object_key.rsplit(".", 1)[0]
+            if "." not in stored.object_key:
+                base = stored.object_key
+            if fmt == "PNG":
+                thumbnail_key = f"{base}_thumb.png"
+                thumbnail_mime = "image/png"
+            else:
+                thumbnail_key = f"{base}_thumb.jpg"
+                thumbnail_mime = "image/jpeg"
+            self._s3.put_object(
+                object_key=thumbnail_key, content=thumbnail, content_type=thumbnail_mime
+            )
+            stored.thumbnail_object_key = thumbnail_key
+        except Exception:
+            logger.warning(
+                "thumbnail_generation_failed",
+                object_key=stored.object_key,
+                exc_info=True,
+            )
 
     async def get_download_url(self, file_id: uuid.UUID) -> DownloadUrlResponse:
         stored = await self._repo.get_by_id(file_id)
@@ -167,11 +226,6 @@ class StorageService:
         )
 
     async def bulk_delete_files(self, ids: list[uuid.UUID]) -> int:
-        count = 0
-        for file_id in ids:
-            stored = await self._repo.get_by_id(file_id)
-            if stored is not None:
-                stored.deleted_at = datetime.now(UTC)
-                count += 1
+        count = await self._repo.bulk_soft_delete(ids)
         await self._repo._session.flush()
         return count

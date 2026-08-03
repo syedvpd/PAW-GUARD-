@@ -42,6 +42,13 @@ class InventoryMovementCreate(BaseModel):
     reference_id: uuid.UUID | None = None
 
 
+class InventoryConsumptionItem(BaseModel):
+    """Optional stock draw-down attached to a treatment/care-log request."""
+
+    item_id: uuid.UUID = Field(..., examples=["3fa85f64-5717-4562-b3fc-2c963f66afa6"])
+    quantity: float = Field(..., gt=0.0, examples=[2.0])
+
+
 class InventoryMovementResponse(BaseModel):
     id: uuid.UUID
     item_id: uuid.UUID

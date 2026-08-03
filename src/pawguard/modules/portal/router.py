@@ -1,6 +1,7 @@
 """API router for public portal CMS and user-facing content (RULE-004)."""
 
 import uuid
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,13 +14,14 @@ from pawguard.core.bulk import (
 )
 from pawguard.core.exceptions import parse_enum
 from pawguard.core.pagination import PageParams, page_params
+from pawguard.core.rate_limiter import rate_limit
 from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.core.search import SortParams, sort_params
 from pawguard.db.session import get_db
 from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.rbac import require_permission
-from pawguard.modules.portal.models import ContentStatus
+from pawguard.modules.portal.models import ContentStatus, LegalDocumentType
 from pawguard.modules.portal.repository import PortalRepository
 from pawguard.modules.portal.schemas import (
     BlogPostCreate,
@@ -31,28 +33,51 @@ from pawguard.modules.portal.schemas import (
     FAQEntryCreate,
     FAQEntryResponse,
     FAQEntryUpdate,
+    LegalDocumentCreate,
+    LegalDocumentResponse,
+    LegalDocumentUpdate,
     PublicHeroStats,
     SuccessStoryCreate,
     SuccessStoryResponse,
     SuccessStoryUpdate,
     SystemSettingResponse,
     SystemSettingUpsert,
+    TransparencyStats,
+    UrgentAlertCreate,
+    UrgentAlertResponse,
+    UrgentAlertUpdate,
     UserDashboardSummary,
     VeterinaryPartnerCreate,
     VeterinaryPartnerResponse,
     VeterinaryPartnerUpdate,
 )
 from pawguard.modules.portal.service import PortalService
+from pawguard.redis.client import RedisClient, get_redis
 from pawguard.services.audit_service import AuditService
+from pawguard.services.cache_service import CacheService
 
 router = APIRouter(prefix="/portal", tags=["portal"])
+
+# Shared per-user budget for all CMS write routes (PRR §6.1 abuse controls).
+# Declared after `get_current_user` in each handler so request.state.user_id is
+# set and the limit keys on the admin's user id, not a shared office IP.
+_ADMIN_WRITE_RATE_LIMIT = rate_limit("portal_admin_write", 30, 60)
+
+
+CACHE_NAMESPACE = "portal"
 
 
 def get_portal_service(
     db: AsyncSession = Depends(get_db),
     audit: AuditService = Depends(get_audit_service),
+    redis: RedisClient = Depends(get_redis),
 ) -> PortalService:
-    return PortalService(PortalRepository(db), db, audit_service=audit)
+    return PortalService(
+        PortalRepository(db),
+        db,
+        audit_service=audit,
+        cache_service=CacheService(redis, namespace=CACHE_NAMESPACE),
+    )
 
 
 # ── Public reads (no auth) ───────────────────────────────────────────────────
@@ -128,6 +153,38 @@ async def list_faq(
     return ApiResponse(data=[FAQEntryResponse.model_validate(e) for e in entries])
 
 
+@router.get("/legal", response_model=ApiResponse[list[LegalDocumentResponse]])
+async def list_published_legal_docs(
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[list[LegalDocumentResponse]]:
+    docs = await service.list_legal_docs(published_only=True)
+    return ApiResponse(data=[LegalDocumentResponse.model_validate(d) for d in docs])
+
+
+@router.get("/legal/{slug}", response_model=ApiResponse[LegalDocumentResponse])
+async def get_published_legal_doc(
+    slug: str,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[LegalDocumentResponse]:
+    doc = await service.get_legal_doc_by_slug(slug, published_only=True)
+    return ApiResponse(data=LegalDocumentResponse.model_validate(doc))
+
+
+@router.get("/urgent-alerts", response_model=ApiResponse[list[UrgentAlertResponse]])
+async def list_active_urgent_alerts(
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[list[UrgentAlertResponse]]:
+    alerts = await service.get_active_alerts()
+    return ApiResponse(data=[UrgentAlertResponse.model_validate(a) for a in alerts])
+
+
+@router.get("/transparency", response_model=ApiResponse[TransparencyStats])
+async def get_transparency_stats(
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[TransparencyStats]:
+    return ApiResponse(data=await service.get_transparency_stats())
+
+
 @router.get("/me/dashboard", response_model=ApiResponse[UserDashboardSummary])
 async def get_user_dashboard(
     current_user: CurrentUser = Depends(get_current_user),
@@ -149,6 +206,7 @@ async def create_story(
     payload: SuccessStoryCreate,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
     service: PortalService = Depends(get_portal_service),
 ) -> ApiResponse[SuccessStoryResponse]:
     ip = request.client.host if request.client else None
@@ -173,6 +231,7 @@ async def update_story(
     payload: SuccessStoryUpdate,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
     service: PortalService = Depends(get_portal_service),
 ) -> ApiResponse[SuccessStoryResponse]:
     ip = request.client.host if request.client else None
@@ -198,6 +257,7 @@ async def create_blog(
     payload: BlogPostCreate,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
     service: PortalService = Depends(get_portal_service),
 ) -> ApiResponse[BlogPostResponse]:
     ip = request.client.host if request.client else None
@@ -222,6 +282,7 @@ async def update_blog(
     payload: BlogPostUpdate,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
     service: PortalService = Depends(get_portal_service),
 ) -> ApiResponse[BlogPostResponse]:
     ip = request.client.host if request.client else None
@@ -247,6 +308,7 @@ async def create_vet(
     payload: VeterinaryPartnerCreate,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
     service: PortalService = Depends(get_portal_service),
 ) -> ApiResponse[VeterinaryPartnerResponse]:
     ip = request.client.host if request.client else None
@@ -271,6 +333,7 @@ async def update_vet(
     payload: VeterinaryPartnerUpdate,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
     service: PortalService = Depends(get_portal_service),
 ) -> ApiResponse[VeterinaryPartnerResponse]:
     ip = request.client.host if request.client else None
@@ -296,6 +359,7 @@ async def create_contact(
     payload: ContactLocationCreate,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
     service: PortalService = Depends(get_portal_service),
 ) -> ApiResponse[ContactLocationResponse]:
     ip = request.client.host if request.client else None
@@ -320,6 +384,7 @@ async def update_contact(
     payload: ContactLocationUpdate,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
     service: PortalService = Depends(get_portal_service),
 ) -> ApiResponse[ContactLocationResponse]:
     ip = request.client.host if request.client else None
@@ -345,6 +410,7 @@ async def create_faq(
     payload: FAQEntryCreate,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
     service: PortalService = Depends(get_portal_service),
 ) -> ApiResponse[FAQEntryResponse]:
     ip = request.client.host if request.client else None
@@ -369,6 +435,7 @@ async def update_faq(
     payload: FAQEntryUpdate,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
     service: PortalService = Depends(get_portal_service),
 ) -> ApiResponse[FAQEntryResponse]:
     ip = request.client.host if request.client else None
@@ -472,6 +539,7 @@ async def upsert_setting(
     payload: SystemSettingUpsert,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
     service: PortalService = Depends(get_portal_service),
 ) -> ApiResponse[SystemSettingResponse]:
     ip = request.client.host if request.client else None
@@ -511,6 +579,7 @@ async def soft_delete_story(
     story_id: uuid.UUID,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
     service: PortalService = Depends(get_portal_service),
 ) -> ApiResponse[None]:
     ip = request.client.host if request.client else None
@@ -531,6 +600,7 @@ async def soft_delete_blog(
     post_id: uuid.UUID,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
     service: PortalService = Depends(get_portal_service),
 ) -> ApiResponse[None]:
     ip = request.client.host if request.client else None
@@ -551,6 +621,7 @@ async def soft_delete_faq(
     entry_id: uuid.UUID,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
     service: PortalService = Depends(get_portal_service),
 ) -> ApiResponse[None]:
     ip = request.client.host if request.client else None
@@ -573,6 +644,7 @@ async def bulk_delete_stories(
     payload: BulkDeleteRequest,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
     service: PortalService = Depends(get_portal_service),
 ) -> BulkDeleteResponse:
     ip = request.client.host if request.client else None
@@ -596,6 +668,7 @@ async def bulk_update_story_status(
     payload: BulkStatusUpdateRequest,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
     service: PortalService = Depends(get_portal_service),
 ) -> BulkStatusUpdateResponse:
     ip = request.client.host if request.client else None
@@ -621,6 +694,7 @@ async def bulk_delete_blogs(
     payload: BulkDeleteRequest,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
     service: PortalService = Depends(get_portal_service),
 ) -> BulkDeleteResponse:
     ip = request.client.host if request.client else None
@@ -644,6 +718,7 @@ async def bulk_update_blog_status(
     payload: BulkStatusUpdateRequest,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
     service: PortalService = Depends(get_portal_service),
 ) -> BulkStatusUpdateResponse:
     ip = request.client.host if request.client else None
@@ -669,6 +744,7 @@ async def bulk_delete_faqs(
     payload: BulkDeleteRequest,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
     service: PortalService = Depends(get_portal_service),
 ) -> BulkDeleteResponse:
     ip = request.client.host if request.client else None
@@ -692,6 +768,7 @@ async def bulk_update_faq_status(
     payload: BulkStatusUpdateRequest,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
     service: PortalService = Depends(get_portal_service),
 ) -> BulkStatusUpdateResponse:
     ip = request.client.host if request.client else None
@@ -707,4 +784,202 @@ async def bulk_update_faq_status(
     return BulkStatusUpdateResponse(
         message=f"{updated} FAQ entry(ies) updated.",
         updated_count=updated,
+    )
+
+
+# ── Legal documents (admin) ──────────────────────────────────────────────────
+
+@router.post(
+    "/admin/legal",
+    response_model=ApiResponse[LegalDocumentResponse],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def create_legal_doc(
+    payload: LegalDocumentCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[LegalDocumentResponse]:
+    ip = request.client.host if request.client else None
+    doc = await service.create_legal_doc(
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=LegalDocumentResponse.model_validate(doc),
+        message="Legal document created.",
+    )
+
+
+@router.put(
+    "/admin/legal/{doc_id}",
+    response_model=ApiResponse[LegalDocumentResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def update_legal_doc(
+    doc_id: uuid.UUID,
+    payload: LegalDocumentUpdate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[LegalDocumentResponse]:
+    ip = request.client.host if request.client else None
+    doc = await service.update_legal_doc(
+        doc_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=LegalDocumentResponse.model_validate(doc),
+        message="Legal document updated.",
+    )
+
+
+@router.delete(
+    "/admin/legal/{doc_id}",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def soft_delete_legal_doc(
+    doc_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[None]:
+    ip = request.client.host if request.client else None
+    await service.soft_delete_legal_doc(
+        doc_id,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(message="Legal document deleted.")
+
+
+@router.get(
+    "/admin/legal",
+    response_model=PaginatedResponse[LegalDocumentResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def admin_list_legal_docs(
+    params: PageParams = Depends(page_params),
+    status: ContentStatus | None = Query(None, description="Filter by status"),
+    document_type: LegalDocumentType | None = Query(None, description="Filter by document type"),
+    search: str | None = Query(None, description="Search by title, body, or slug"),
+    sort: SortParams = Depends(sort_params),
+    service: PortalService = Depends(get_portal_service),
+) -> PaginatedResponse[LegalDocumentResponse]:
+    docs, meta = await service.list_legal_docs_paginated(
+        page_params=params,
+        status=status,
+        document_type=document_type.value if document_type else None,
+        search=search,
+        sort=sort,
+    )
+    return PaginatedResponse(
+        data=[LegalDocumentResponse.model_validate(d) for d in docs],
+        meta=meta,
+    )
+
+
+# ── Urgent alerts (admin) ────────────────────────────────────────────────────
+
+@router.post(
+    "/admin/urgent-alerts",
+    response_model=ApiResponse[UrgentAlertResponse],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def create_urgent_alert(
+    payload: UrgentAlertCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[UrgentAlertResponse]:
+    ip = request.client.host if request.client else None
+    alert = await service.create_urgent_alert(
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=UrgentAlertResponse.model_validate(alert),
+        message="Urgent alert created.",
+    )
+
+
+@router.put(
+    "/admin/urgent-alerts/{alert_id}",
+    response_model=ApiResponse[UrgentAlertResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def update_urgent_alert(
+    alert_id: uuid.UUID,
+    payload: UrgentAlertUpdate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[UrgentAlertResponse]:
+    ip = request.client.host if request.client else None
+    alert = await service.update_urgent_alert(
+        alert_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=UrgentAlertResponse.model_validate(alert),
+        message="Urgent alert updated.",
+    )
+
+
+@router.delete(
+    "/admin/urgent-alerts/{alert_id}",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def soft_delete_urgent_alert(
+    alert_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[None]:
+    ip = request.client.host if request.client else None
+    await service.soft_delete_urgent_alert(
+        alert_id,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(message="Urgent alert deleted.")
+
+
+@router.get(
+    "/admin/urgent-alerts",
+    response_model=PaginatedResponse[UrgentAlertResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def admin_list_urgent_alerts(
+    params: PageParams = Depends(page_params),
+    is_active: bool | None = Query(None, description="Filter by active status"),
+    search: str | None = Query(None, description="Search by title or message"),
+    sort: SortParams = Depends(sort_params),
+    service: PortalService = Depends(get_portal_service),
+) -> PaginatedResponse[UrgentAlertResponse]:
+    alerts, meta = await service.list_urgent_alerts_paginated(
+        page_params=params,
+        is_active=is_active,
+        search=search,
+        sort=sort,
+    )
+    return PaginatedResponse(
+        data=[UrgentAlertResponse.model_validate(a) for a in alerts],
+        meta=meta,
     )

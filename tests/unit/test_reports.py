@@ -111,6 +111,61 @@ class TestReportService:
         assert result["report_type"] == "rescue"
 
     @pytest.mark.asyncio
+    async def test_rescue_report_geo_heatmap_section(self, service, mock_session):
+        located = MagicMock()
+        located.id = "res-1"
+        located.ticket_number = "RC-0001"
+        located.status = "pending"
+        located.reporter_name = "Alice"
+        located.location_address = "Main St"
+        located.animal_count = 2
+        located.created_at.date.return_value = "2026-07-01"
+        located.latitude = 17.4482
+        located.longitude = 78.3741
+        unlocated = MagicMock()
+        unlocated.id = "res-2"
+        unlocated.ticket_number = "RC-0002"
+        unlocated.status = "pending"
+        unlocated.reporter_name = "Bob"
+        unlocated.location_address = "Nowhere"
+        unlocated.animal_count = 1
+        unlocated.created_at.date.return_value = "2026-07-02"
+        unlocated.latitude = None
+        unlocated.longitude = None
+        mock_result = MagicMock()
+        mock_result.all.return_value = [(located, None), (unlocated, None)]
+        mock_session.execute.return_value = mock_result
+
+        result = await service._rescue_report(None, None, None)
+
+        assert result["sections"], "expected a geo heatmap section"
+        section = result["sections"][0]
+        assert section["title"].startswith("Geo Heatmap (Rescue Locations)")
+        assert "1 case(s) without coordinates" in section["title"]
+        assert section["headers"] == ["Latitude", "Longitude", "Cases"]
+        assert section["rows"] == [["17.45", "78.37", 1]]
+
+    @pytest.mark.asyncio
+    async def test_rescue_report_no_geo_section_when_no_coords(self, service, mock_session):
+        unlocated = MagicMock()
+        unlocated.id = "res-1"
+        unlocated.ticket_number = "RC-0001"
+        unlocated.status = "pending"
+        unlocated.reporter_name = "Alice"
+        unlocated.location_address = "Nowhere"
+        unlocated.animal_count = 2
+        unlocated.created_at.date.return_value = "2026-07-01"
+        unlocated.latitude = None
+        unlocated.longitude = None
+        mock_result = MagicMock()
+        mock_result.all.return_value = [(unlocated, None)]
+        mock_session.execute.return_value = mock_result
+
+        result = await service._rescue_report(None, None, None)
+
+        assert not any("Geo Heatmap" in sec["title"] for sec in result["sections"])
+
+    @pytest.mark.asyncio
     async def test_finance_report(self, service, mock_session):
         mock_result = MagicMock()
         mock_result.scalars.return_value.all.return_value = []
@@ -151,14 +206,53 @@ class TestReportService:
         assert result["report_type"] == "volunteer"
 
     @pytest.mark.asyncio
-    async def test_staff_performance_report(self, service, mock_session):
-        mock_session.execute = AsyncMock(side_effect=[
-            MagicMock(scalar=MagicMock(return_value=v)) for v in [0, 1, 0, 0, 0, 0, 0, 0, 0, 0]
-        ])
+    async def test_shelter_report(self, service, mock_session):
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        mock_session.execute.return_value = mock_result
         result = await service.generate_report(
-            ReportType.STAFF_PERFORMANCE, ReportFormat.CSV,
+            ReportType.SHELTER, ReportFormat.CSV,
         )
-        assert result["report_type"] == "staff_performance"
+        assert result["report_type"] == "shelter"
+
+    @pytest.mark.asyncio
+    async def test_shelter_report_with_data(self, service, mock_session):
+        mock_facility = MagicMock()
+        mock_facility.id = "fac-1"
+        mock_facility.name = "Main Shelter"
+        mock_facility.status = "active"
+        mock_facility.facility_type = "shelter"
+        mock_facility.total_capacity = 100
+        mock_facility.deleted_at = None
+
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [mock_facility]
+        mock_session.execute.return_value = mock_result
+
+        result = await service._shelter_report(None, None, None)
+        assert result["title"] == "Shelter Report"
+        assert len(result["rows"]) == 1
+        assert result["rows"][0][1] == "Main Shelter"
+
+    @pytest.mark.asyncio
+    async def test_shelter_report_sections(self, service, mock_session):
+        mock_facility = MagicMock()
+        mock_facility.id = "fac-1"
+        mock_facility.name = "Main Shelter"
+        mock_facility.status = "active"
+        mock_facility.facility_type = "shelter"
+        mock_facility.total_capacity = 100
+        mock_facility.deleted_at = None
+
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [mock_facility]
+        mock_session.execute.return_value = mock_result
+
+        result = await service._shelter_report(None, None, None)
+        assert "sections" in result
+        section_titles = [s["title"] for s in result["sections"]]
+        assert "Kennel Capacity & Utilization" in section_titles
+        assert "Facility Transfer Volumes" in section_titles
 
     @pytest.mark.asyncio
     async def test_download_url_in_response(self, service, mock_session):
@@ -205,7 +299,7 @@ class TestReportService:
         mock_rescue.animal_count = 2
         mock_rescue.created_at.date.return_value = "2026-07-01"
         mock_result = MagicMock()
-        mock_result.scalars.return_value.all.return_value = [mock_rescue]
+        mock_result.all.return_value = [(mock_rescue, None)]
         mock_session.execute.return_value = mock_result
         result = await service._rescue_report(None, None, None)
         row = result["rows"][0]

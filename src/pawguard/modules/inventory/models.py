@@ -4,7 +4,7 @@ import uuid
 from datetime import date
 from enum import StrEnum
 
-from sqlalchemy import Date, ForeignKey, Numeric, String, Text
+from sqlalchemy import CheckConstraint, Date, ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -36,6 +36,11 @@ class RequisitionStatus(StrEnum):
 
 class InventoryItem(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "inventory_items"
+
+    __table_args__ = (
+        CheckConstraint("quantity >= 0", name="ck_inventory_items_quantity_non_negative"),
+        CheckConstraint("unit_cost >= 0", name="ck_inventory_items_unit_cost_non_negative"),
+    )
 
     name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     category: Mapped[ItemCategory] = mapped_column(String(64), nullable=False, index=True)

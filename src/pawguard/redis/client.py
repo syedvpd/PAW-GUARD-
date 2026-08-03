@@ -9,7 +9,7 @@ and rate-limiting / caching degrade gracefully.
 """
 
 from collections.abc import AsyncGenerator
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from redis.asyncio import ConnectionPool, Redis
 
@@ -48,8 +48,16 @@ class _NullRedis:
     async def ping(self) -> bool:
         return False
 
-    async def scan_iter(self, match: str = "", count: int | None = None) -> list[str]:
-        return []
+    async def scan_iter(self, match: str = "", count: int | None = None):
+        """No-op async generator mirroring redis-py's scan_iter protocol.
+
+        ``CacheService.delete_prefix`` consumes scan_iter with ``async for``.
+        If this returned a coroutine yielding a list, ``async for`` would raise
+        TypeError the moment Redis is unavailable (e.g. RBAC cache invalidation
+        or portal stats purges in dev/CI) instead of gracefully no-op'ing.
+        """
+        return
+        yield  # pragma: no cover — marks this function as an async generator
 
 
 async def _ensure_client() -> RedisClient:
@@ -62,12 +70,12 @@ async def _ensure_client() -> RedisClient:
             decode_responses=True,
             max_connections=100,
         )
-        _client = Redis(connection_pool=_pool)  # type: ignore[assignment]
-        assert _client is not None
+        _client = cast(RedisClient, Redis(connection_pool=_pool))
         await _client.ping()
     except Exception:
-        _client = _NullRedis()  # type: ignore[assignment]
-    return _client  # type: ignore[no-any-return]
+        _client = cast(RedisClient, _NullRedis())
+    assert _client is not None
+    return _client
 
 
 async def get_redis() -> AsyncGenerator[RedisClient]:

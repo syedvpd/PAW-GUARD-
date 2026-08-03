@@ -2,8 +2,9 @@ import uuid
 from collections.abc import Sequence
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -108,6 +109,11 @@ class FinanceRepository:
         ).order_by(ChartOfAccounts.account_code)
         return (await self._session.execute(stmt)).scalars().all()
 
+    async def next_transaction_sequence(self) -> int:
+        stmt = text("SELECT nextval('financial_transaction_seq')")
+        result = await self._session.execute(stmt)
+        return int(result.scalar_one())
+
     async def create_transaction(
         self, tx: FinancialTransaction
     ) -> FinancialTransaction:
@@ -190,7 +196,7 @@ class FinanceRepository:
 
     async def get_finance_summary(
         self, period_start: date, period_end: date
-    ) -> dict:
+    ) -> dict[str, Any]:
         income = await self._session.execute(
             select(func.coalesce(func.sum(FinancialTransaction.amount), 0))
             .where(
@@ -285,7 +291,7 @@ class FinanceRepository:
         )
         return (await self._session.execute(stmt)).scalars().all()
 
-    async def get_donation_reconciliation_summary(self) -> dict:
+    async def get_donation_reconciliation_summary(self) -> dict[str, Any]:
         total = await self._session.execute(
             select(
                 func.count(Donation.id),
@@ -336,7 +342,7 @@ class FinanceRepository:
             )
             await self._session.flush()
 
-    async def get_pnl(self, period_start: date, period_end: date) -> dict:
+    async def get_pnl(self, period_start: date, period_end: date) -> dict[str, Any]:
         income_stmt = select(
             ChartOfAccounts.account_code,
             ChartOfAccounts.account_name,
@@ -493,19 +499,30 @@ class FinanceRepository:
         return results, total
 
     async def list_by_ids(
-        self, model, ids: list[uuid.UUID]
-    ) -> Sequence:
+        self, model: type[Any], ids: list[uuid.UUID]
+    ) -> Sequence[Any]:
         stmt = select(model).where(
             model.id.in_(ids), model.deleted_at.is_(None)
         )
         return (await self._session.execute(stmt)).scalars().all()
 
+    async def bulk_soft_delete(self, model, ids: list[uuid.UUID]) -> int:
+        from datetime import UTC, datetime
+
+        stmt = (
+            update(model)
+            .where(model.id.in_(ids), model.deleted_at.is_(None))
+            .values(deleted_at=datetime.now(UTC))
+        )
+        result = await self._session.execute(stmt)
+        return result.rowcount or 0
+
     async def bulk_update_status(
-        self, model, ids: list[uuid.UUID],
+        self, model: type[Any], ids: list[uuid.UUID],
         status_field: str, status_value: str,
     ) -> int:
         stmt = update(model).where(
             model.id.in_(ids), model.deleted_at.is_(None)
         ).values(**{status_field: status_value})
         result = await self._session.execute(stmt)
-        return result.rowcount or 0
+        return result.rowcount or 0  # type: ignore[attr-defined]

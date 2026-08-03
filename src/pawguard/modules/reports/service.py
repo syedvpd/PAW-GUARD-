@@ -1,17 +1,42 @@
 import os
 from datetime import date
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.pii import mask_report_data
-from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
+from pawguard.modules.adoption.models import (
+    AdoptionApplication,
+    AdoptionScore,
+    AdoptionStatus,
+)
 from pawguard.modules.dog.models import DogProfile, DogStatus
-from pawguard.modules.donation.models import Donation
-from pawguard.modules.finance.models import FinancialTransaction
+from pawguard.modules.donation.models import (
+    Donation,
+    DonationCampaign,
+    DonationStatus,
+)
+from pawguard.modules.finance.models import (
+    ChartOfAccounts,
+    FinancialTransaction,
+    GeneralLedgerEntry,
+    TransactionStatus,
+    TransactionType,
+)
 from pawguard.modules.foster.models import FosterPlacement
-from pawguard.modules.inventory.models import InventoryItem
-from pawguard.modules.medical.models import MedicalTreatment
+from pawguard.modules.inventory.models import (
+    InventoryItem,
+    InventoryMovement,
+    MovementType,
+    RequisitionOrder,
+    RequisitionStatus,
+)
+from pawguard.modules.medical.models import (
+    MedicalTreatment,
+    Prescription,
+    VaccinationRecord,
+)
 from pawguard.modules.reports.renderers import (
     ensure_reports_dir,
     generate_csv,
@@ -21,7 +46,25 @@ from pawguard.modules.reports.renderers import (
 )
 from pawguard.modules.reports.schemas import ReportFormat, ReportType
 from pawguard.modules.rescue.models import RescueDispatch, RescueRequest
-from pawguard.modules.volunteer.models import VolunteerProfile
+from pawguard.modules.volunteer.models import VolunteerProfile, VolunteerStatus
+
+
+def _coerce_utc(value):
+    if value is None or not isinstance(value, datetime):
+        return value
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def _is_overdue(next_due_at) -> bool:
+    value = _coerce_utc(next_due_at)
+    if value is None:
+        return False
+    try:
+        return value < datetime.now(UTC)
+    except TypeError:
+        return False
 
 
 class ReportService:
@@ -34,8 +77,8 @@ class ReportService:
         fmt: ReportFormat,
         period_start: date | None = None,
         period_end: date | None = None,
-        filters: dict | None = None,
-    ) -> dict:
+        filters: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         raw_data = await self._collect_data(
             report_type, period_start, period_end, filters
         )
@@ -43,14 +86,15 @@ class ReportService:
         headers = raw_data["headers"]
         rows = raw_data["rows"]
         subtitle = raw_data.get("subtitle")
+        sections = raw_data.get("sections") or None
 
         if fmt == ReportFormat.CSV:
-            content = generate_csv(headers, rows)
+            content = generate_csv(headers, rows, sections=sections)
             ext = "csv"
             content_type = "text/csv"
         elif fmt == ReportFormat.EXCEL:
             content = generate_excel(
-                report_type.value, headers, rows, title=title
+                report_type.value, headers, rows, title=title, sections=sections
             )
             ext = "xlsx"
             content_type = (
@@ -58,7 +102,7 @@ class ReportService:
                 ".spreadsheetml.sheet"
             )
         else:
-            content = generate_pdf(title, headers, rows, subtitle=subtitle)
+            content = generate_pdf(title, headers, rows, subtitle=subtitle, sections=sections)
             ext = "pdf"
             content_type = "application/pdf"
 
@@ -82,8 +126,8 @@ class ReportService:
         report_type: ReportType,
         period_start: date | None,
         period_end: date | None,
-        filters: dict | None,
-    ) -> dict:
+        filters: dict[str, Any] | None,
+    ) -> dict[str, Any]:
         match report_type:
             case ReportType.DONATION:
                 return await self._donation_report(
@@ -121,12 +165,16 @@ class ReportService:
                 return await self._volunteer_report(
                     period_start, period_end, filters
                 )
+            case ReportType.SHELTER:
+                return await self._shelter_report(
+                    period_start, period_end, filters
+                )
             case _:
                 return {"title": "Report", "headers": [], "rows": []}
 
     async def _donation_report(
-        self, start: date | None, end: date | None, filters: dict | None
-    ) -> dict:
+        self, start: date | None, end: date | None, filters: dict[str, Any] | None
+    ) -> dict[str, Any]:
         stmt = select(Donation)
         if start:
             stmt = stmt.where(Donation.created_at >= start)
@@ -135,22 +183,59 @@ class ReportService:
         if filters and "status" in filters:
             stmt = stmt.where(Donation.status == filters["status"])
         results = (await self._session.execute(stmt)).scalars().all()
+        headers = [
+            "ID", "Donor", "Amount", "Currency", "Type", "Status",
+            "Campaign", "Date"
+        ]
+        rows = [
+            [str(d.id), str(d.donor_id), float(d.amount), d.currency,
+             d.donation_type, d.status,
+             d.campaign.name if d.campaign else "", d.created_at.date()]
+            for d in results
+        ]
+
+        # Campaign progress metrics (PRR 4.1): how each drive is performing
+        # toward its fundraising goal.
+        campaign_stmt = select(DonationCampaign).where(
+            DonationCampaign.deleted_at.is_(None)
+        )
+        campaigns = (await self._session.execute(campaign_stmt)).scalars().all()
+        campaign_rows = []
+        for c in campaigns:
+            raised = (
+                await self._session.execute(
+                    select(func.coalesce(func.sum(Donation.amount), 0)).where(
+                        Donation.campaign_id == c.id,
+                        Donation.status == "success",
+                    )
+                )
+            ).scalar_one()
+            raised = float(raised)
+            pct = (raised / float(c.target_amount) * 100.0) if float(c.target_amount) else 0.0
+            campaign_rows.append(
+                [c.name, c.campaign_type, c.status,
+                 f"{float(c.target_amount):.2f}", f"{raised:.2f}",
+                 f"{min(pct, 100.0):.1f}%"]
+            )
+
         return {
             "title": "Donation Report",
             "subtitle": f"{start or 'N/A'} to {end or 'N/A'}",
-            "headers": [
-                "ID", "Donor", "Amount", "Currency", "Type", "Status", "Date"
-            ],
-            "rows": [
-                [str(d.id), str(d.donor_id), float(d.amount), d.currency,
-                 d.donation_type, d.status, d.created_at.date()]
-                for d in results
-            ],
+            "headers": headers,
+            "rows": rows,
+            "sections": [                {
+                    "title": "Campaign Progress",
+                    "headers": [
+                        "Campaign", "Type", "Status", "Target", "Raised", "Progress",
+                    ],
+                    "rows": campaign_rows,
+                }
+            ] if campaign_rows else [],
         }
 
     async def _adoption_report(
-        self, start: date | None, end: date | None, filters: dict | None
-    ) -> dict:
+        self, start: date | None, end: date | None, filters: dict[str, Any] | None
+    ) -> dict[str, Any]:
         stmt = select(AdoptionApplication)
         if start:
             stmt = stmt.where(AdoptionApplication.created_at >= start)
@@ -161,6 +246,14 @@ class ReportService:
                 AdoptionApplication.status == filters["status"]
             )
         results = (await self._session.execute(stmt)).scalars().all()
+
+        score_stmt = select(AdoptionScore)
+        if start:
+            score_stmt = score_stmt.where(AdoptionScore.scored_at >= start)
+        if end:
+            score_stmt = score_stmt.where(AdoptionScore.scored_at <= end)
+        scores = (await self._session.execute(score_stmt)).scalars().all()
+
         headers = [
             "ID", "Dog ID", "Adopter ID", "Status",
             "Submitted At", "Completed At",
@@ -172,22 +265,236 @@ class ReportService:
             for a in results
         ]
         rows = mask_report_data(rows, headers, {"Adopter Name", "Adopter Email", "Adopter Phone"})
+
+        # Vetting & pipeline analytics (PRR 4.1 Adoption Velocity Index).
+        total = len(results)
+        completed = sum(1 for a in results if a.status == AdoptionStatus.COMPLETED)
+        conversion_rate = (completed / total * 100.0) if total else 0.0
+
+        score_list = list(scores)
+        avg_score = (
+            sum(float(s.overall_score) for s in score_list) / len(score_list)
+            if score_list else None
+        )
+        recommendation_counts: dict[str, int] = {}
+        for s in score_list:
+            recommendation_counts[s.recommendation] = (
+                recommendation_counts.get(s.recommendation, 0) + 1
+            )
+
+        completed_apps = [
+            a for a in results
+            if a.status == AdoptionStatus.COMPLETED and a.completed_at is not None
+        ]
+        completion_days = [
+            (a.completed_at - a.created_at).total_seconds() / 86400.0
+            for a in completed_apps
+        ]
+        avg_days = sum(completion_days) / len(completion_days) if completion_days else None
+
+        months = self._months_in_range(start, end)
+        velocity = (completed / months) if months else 0.0
+
+        rejection_counts: dict[str, int] = {}
+        for a in results:
+            if a.status != AdoptionStatus.REJECTED:
+                continue
+            if a.home_inspection_notes:
+                stage = "home_check"
+            elif a.vetting_officer_notes:
+                stage = "vetting"
+            else:
+                stage = "submitted"
+            rejection_counts[stage] = rejection_counts.get(stage, 0) + 1
+
+        sections = [
+            {
+                "title": "Vetting & Pipeline",
+                "headers": ["Metric", "Value"],
+                "rows": [
+                    ["Total Applications", str(total)],
+                    ["Completed", str(completed)],
+                    ["Conversion Rate", f"{conversion_rate:.1f}%"],
+                    ["Avg Interview Score", f"{avg_score:.1f}" if avg_score is not None else "N/A"],
+                    ["Avg Days to Complete", f"{avg_days:.1f}" if avg_days is not None else "N/A"],
+                    ["Adoption Velocity Index", f"{velocity:.2f} adoptions / month"],
+                ],
+            }
+        ]
+        if recommendation_counts:
+            sections.append({
+                "title": "Interview Recommendation Distribution",
+                "headers": ["Recommendation", "Count"],
+                "rows": [
+                    [recommendation, str(count)]
+                    for recommendation, count in sorted(
+                        recommendation_counts.items(), key=lambda item: item[1], reverse=True
+                    )
+                ],
+            })
+        if rejection_counts:
+            sections.append({
+                "title": "Rejection Distribution",
+                "headers": ["Rejected Stage", "Count"],
+                "rows": [
+                    [stage, str(count)]
+                    for stage, count in sorted(rejection_counts.items())
+                ],
+            })
+
         return {
             "title": "Adoption Report",
             "subtitle": f"{start or 'N/A'} to {end or 'N/A'}",
             "headers": headers,
             "rows": rows,
+            "sections": sections,
         }
 
     async def _medical_report(
-        self, start: date | None, end: date | None, filters: dict | None
-    ) -> dict:
+        self, start: date | None, end: date | None, filters: dict[str, Any] | None
+    ) -> dict[str, Any]:
         stmt = select(MedicalTreatment)
         if start:
-            stmt = stmt.where(MedicalTreatment.treatment_date >= start)
+            treatment_stmt = treatment_stmt.where(
+                MedicalTreatment.treatment_date >= start
+            )
         if end:
-            stmt = stmt.where(MedicalTreatment.treatment_date <= end)
-        results = (await self._session.execute(stmt)).scalars().all()
+            treatment_stmt = treatment_stmt.where(
+                MedicalTreatment.treatment_date <= end
+            )
+        treatments = (await self._session.execute(treatment_stmt)).scalars().all()
+
+        vaccination_stmt = select(VaccinationRecord)
+        if start:
+            vaccination_stmt = vaccination_stmt.where(
+                VaccinationRecord.administered_at >= start
+            )
+        if end:
+            vaccination_stmt = vaccination_stmt.where(
+                VaccinationRecord.administered_at <= end
+            )
+        vaccinations = (await self._session.execute(vaccination_stmt)).scalars().all()
+
+        prescription_stmt = select(Prescription)
+        if start:
+            prescription_stmt = prescription_stmt.where(Prescription.start_at >= start)
+        if end:
+            prescription_stmt = prescription_stmt.where(Prescription.start_at <= end)
+        prescriptions = (await self._session.execute(prescription_stmt)).scalars().all()
+
+        total_dogs = int(
+            (
+                await self._session.execute(
+                    select(func.count(DogProfile.id)).where(
+                        DogProfile.deleted_at.is_(None)
+                    )
+                )
+            ).scalar()
+            or 0
+        )
+
+        # Vaccination coverage (PRR 4.1 Medical Care & Immunization Compliance).
+        vaccine_counts: dict[str, int] = {}
+        vaccine_dogs: dict[str, set[str]] = {}
+        vaccinated_dog_ids: set[str] = set()
+        for v in vaccinations:
+            vaccine_counts[v.vaccine_name] = vaccine_counts.get(v.vaccine_name, 0) + 1
+            dog_key = str(v.dog_id)
+            vaccine_dogs.setdefault(v.vaccine_name, set()).add(dog_key)
+            vaccinated_dog_ids.add(dog_key)
+        coverage_pct = (len(vaccinated_dog_ids) / total_dogs * 100.0) if total_dogs else 0.0
+
+        # Follow-up / compliance (PRR 4.1): vaccinations whose next_due_at is
+        # past their due date are overdue.
+        overdue = 0
+        on_track = 0
+        no_followup = 0
+        for v in vaccinations:
+            if v.next_due_at is None:
+                no_followup += 1
+            elif _is_overdue(v.next_due_at):
+                overdue += 1
+            else:
+                on_track += 1
+
+        prescription_counts: dict[str, int] = {}
+        active_prescriptions = 0
+        for p in prescriptions:
+            prescription_counts[p.drug_name] = prescription_counts.get(p.drug_name, 0) + 1
+            if p.is_active:
+                active_prescriptions += 1
+
+        # Pending surgery backlog: MedicalTreatment has no completed flag, so a
+        # surgery-type treatment lacking post-op notes is treated as pending.
+        pending_surgeries = [
+            t for t in treatments
+            if t.treatment_type and "surg" in t.treatment_type.lower() and not t.post_op_notes
+        ]
+
+        sections = []
+        if vaccinations:
+            sections.append({
+                "title": "Vaccination Coverage",
+                "headers": ["Vaccine Name", "Doses Administered", "Dogs Vaccinated"],
+                "rows": [
+                    [name, str(count), str(len(vaccine_dogs.get(name, set())))]
+                    for name, count in sorted(
+                        vaccine_counts.items(), key=lambda item: item[1], reverse=True
+                    )
+                ],
+            })
+        sections.append({
+            "title": "Vaccination & Follow-up Compliance",
+            "headers": ["Metric", "Value"],
+            "rows": [
+                ["Total Dogs", str(total_dogs)],
+                ["Dogs Vaccinated", str(len(vaccinated_dog_ids))],
+                ["Vaccination Coverage", f"{coverage_pct:.1f}%"],
+                ["Follow-ups Overdue", str(overdue)],
+                ["Follow-ups On Track", str(on_track)],
+                ["No Follow-up Scheduled", str(no_followup)],
+            ],
+        })
+        if prescriptions:
+            sections.append({
+                "title": "Prescription Summary",
+                "headers": ["Drug Name", "Total", "Active"],
+                "rows": [
+                    [
+                        name,
+                        str(count),
+                        str(sum(
+                            1 for p in prescriptions
+                            if p.drug_name == name and p.is_active
+                        )),
+                    ]
+                    for name, count in sorted(
+                        prescription_counts.items(), key=lambda item: item[1], reverse=True
+                    )
+                ],
+            })
+            sections.append({
+                "title": "Prescription Volume",
+                "headers": ["Metric", "Value"],
+                "rows": [
+                    ["Total Prescriptions", str(len(prescriptions))],
+                    ["Active Prescriptions", str(active_prescriptions)],
+                    ["Unique Drugs", str(len(prescription_counts))],
+                ],
+            })
+        if pending_surgeries:
+            sections.append({
+                "title": "Pending Surgery Backlog (surgery-type treatments without post-op notes)",
+                "headers": ["Treatment ID", "Dog ID", "Vet ID", "Date"],
+                "rows": [
+                    [str(t.id), str(t.dog_id), str(t.vet_id),
+                     t.treatment_date.date()
+                     if hasattr(t.treatment_date, "date")
+                     else t.treatment_date]
+                    for t in pending_surgeries
+                ],
+            })
+
         return {
             "title": "Medical Treatment Report",
             "subtitle": f"{start or 'N/A'} to {end or 'N/A'}",
@@ -197,40 +504,196 @@ class ReportService:
                  m.treatment_date.date()
                  if hasattr(m.treatment_date, "date")
                  else m.treatment_date]
-                for m in results
+                for m in treatments
             ],
+            "sections": sections,
         }
 
     async def _inventory_report(
-        self, filters: dict | None
-    ) -> dict:
+        self, filters: dict[str, Any] | None
+    ) -> dict[str, Any]:
         stmt = select(InventoryItem)
         if filters and "category" in filters:
-            stmt = stmt.where(
+            item_stmt = item_stmt.where(
                 InventoryItem.category == filters["category"]
             )
-        results = (await self._session.execute(stmt)).scalars().all()
+        results = (await self._session.execute(item_stmt)).scalars().all()
+        movements = (
+            await self._session.execute(select(InventoryMovement))
+        ).scalars().all()
+        requisitions = (
+            await self._session.execute(select(RequisitionOrder))
+        ).scalars().all()
+
         total_value = sum(float(i.quantity * i.unit_cost) for i in results)
+        item_costs = {str(i.id): float(i.unit_cost) for i in results}
+
+        # Movement / usage analytics (PRR 4.1 Inventory Consumption & Expiry
+        # Audit): volume by reference type and movement direction, movement
+        # speed (avg interval), and loss / write-off value (negative
+        # adjustments valued at the item's unit cost).
+        movement_by_ref: dict[str, dict[str, dict]] = {}
+        write_off_value = 0.0
+        check_in_total = check_out_total = adjustment_total = 0.0
+        timestamps: list[datetime] = []
+        for m in movements:
+            reference = m.reference_type or "unspecified"
+            mtype = m.movement_type
+            bucket = movement_by_ref.setdefault(reference, {}).setdefault(
+                mtype, {"quantity": 0.0, "count": 0}
+            )
+            qty = float(m.quantity)
+            bucket["quantity"] += qty
+            bucket["count"] += 1
+            if mtype == MovementType.CHECK_IN:
+                check_in_total += qty
+            elif mtype == MovementType.CHECK_OUT:
+                check_out_total += qty
+            elif mtype == MovementType.ADJUSTMENT:
+                adjustment_total += qty
+                if qty < 0:
+                    write_off_value += abs(qty) * item_costs.get(str(m.item_id), 0.0)
+            timestamp = _coerce_utc(m.created_at)
+            if timestamp is not None:
+                timestamps.append(timestamp)
+        timestamps.sort()
+        gaps = [
+            (later - earlier).total_seconds() / 86400.0
+            for earlier, later in zip(timestamps, timestamps[1:], strict=True)
+        ]
+        avg_movement_interval = sum(gaps) / len(gaps) if gaps else None
+
+        today = date.today()
+        expired_items = [
+            i for i in results
+            if i.expiry_date is not None and i.expiry_date < today
+        ]
+        expired_value = sum(float(i.quantity * i.unit_cost) for i in expired_items)
+
+        reorder_items = [
+            i for i in results
+            if float(i.quantity) <= float(i.reorder_threshold)
+        ]
+        pending_requisitions = [
+            r for r in requisitions
+            if r.status == RequisitionStatus.PENDING
+        ]
+        requisition_status_counts: dict[str, int] = {}
+        for r in requisitions:
+            requisition_status_counts[r.status] = (
+                requisition_status_counts.get(r.status, 0) + 1
+            )
+
+        headers = [
+            "ID", "Name", "Category", "Quantity",
+            "Unit", "Reorder Threshold", "Unit Cost", "Total Value",
+        ]
+        rows = [
+            [str(i.id), i.name, i.category, float(i.quantity),
+             i.unit, float(i.reorder_threshold),
+             float(i.unit_cost), float(i.quantity * i.unit_cost)]
+            for i in results
+        ] + (
+            [["", "", "", "", "", "", "TOTAL", f"{total_value:.2f}"]]
+            if results else []
+        )
+
+        sections = []
+        if movements:
+            movement_rows = []
+            for reference, type_buckets in sorted(movement_by_ref.items()):
+                in_qty = type_buckets.get(MovementType.CHECK_IN, {"quantity": 0.0})[
+                    "quantity"
+                ]
+                out_qty = type_buckets.get(
+                    MovementType.CHECK_OUT, {"quantity": 0.0}
+                )["quantity"]
+                adj_qty = type_buckets.get(
+                    MovementType.ADJUSTMENT, {"quantity": 0.0}
+                )["quantity"]
+                movement_rows.append(
+                    [
+                        reference,
+                        f"{in_qty:.1f}",
+                        f"{out_qty:.1f}",
+                        f"{adj_qty:.1f}",
+                        str(sum(bucket["count"] for bucket in type_buckets.values())),
+                    ]
+                )
+            movement_rows.append([
+                "TOTAL", f"{check_in_total:.1f}", f"{check_out_total:.1f}",
+                f"{adjustment_total:.1f}", str(len(movements)),
+            ])
+            sections.append({
+                "title": "Movement & Usage Summary",
+                "headers": [
+                    "Reference Type", "Check-In Qty", "Check-Out Qty",
+                    "Adjustment Qty", "Movement Count",
+                ],
+                "rows": movement_rows,
+            })
+        sections.append({
+            "title": "Inventory Health Metrics",
+            "headers": ["Metric", "Value"],
+            "rows": [
+                ["Total Items", str(len(results))],
+                ["Total Inventory Value", f"{total_value:.2f}"],
+                ["Expired Value", f"{expired_value:.2f}"],
+                ["Write-off / Loss Value", f"{write_off_value:.2f}"],
+                [
+                    "Avg Movement Interval (days)",
+                    f"{avg_movement_interval:.1f}" if avg_movement_interval is not None else "N/A",
+                ],
+            ],
+        })
+        if expired_items:
+            sections.append({
+                "title": "Expired Items",
+                "headers": ["Name", "Category", "Quantity", "Expiry Date", "Unit Cost", "Value"],
+                "rows": [
+                    [i.name, i.category, float(i.quantity), i.expiry_date,
+                     float(i.unit_cost), float(i.quantity * i.unit_cost)]
+                    for i in expired_items
+                ],
+            })
+        if reorder_items:
+            sections.append({
+                "title": "Reorder in Progress (Below Threshold)",
+                "headers": ["Name", "Quantity", "Reorder Threshold", "Unit"],
+                "rows": [
+                    [i.name, float(i.quantity), float(i.reorder_threshold), i.unit]
+                    for i in reorder_items
+                ],
+            })
+        if pending_requisitions:
+            sections.append({
+                "title": "Pending Requisition Orders",
+                "headers": ["Requisition ID", "Item ID", "Quantity", "Status"],
+                "rows": [
+                    [str(r.id), str(r.item_id), float(r.quantity), r.status]
+                    for r in pending_requisitions
+                ],
+            })
+        if requisitions:
+            sections.append({
+                "title": "Requisition Volume",
+                "headers": ["Status", "Count"],
+                "rows": [
+                    [status, str(count)]
+                    for status, count in sorted(requisition_status_counts.items())
+                ],
+            })
+
         return {
             "title": "Inventory Report",
-            "headers": [
-                "ID", "Name", "Category", "Quantity",
-                "Unit", "Reorder Threshold", "Unit Cost", "Total Value",
-            ],
-            "rows": [
-                [str(i.id), i.name, i.category, float(i.quantity),
-                 i.unit, float(i.reorder_threshold),
-                 float(i.unit_cost), float(i.quantity * i.unit_cost)]
-                for i in results
-            ] + (
-                [["", "", "", "", "", "", "TOTAL", f"{total_value:.2f}"]]
-                if results else []
-            ),
+            "headers": headers,
+            "rows": rows,
+            "sections": sections,
         }
 
     async def _rescue_report(
-        self, start: date | None, end: date | None, filters: dict | None
-    ) -> dict:
+        self, start: date | None, end: date | None, filters: dict[str, Any] | None
+    ) -> dict[str, Any]:
         stmt = select(RescueRequest)
         if start:
             stmt = stmt.where(RescueRequest.created_at >= start)
@@ -238,7 +701,11 @@ class ReportService:
             stmt = stmt.where(RescueRequest.created_at <= end)
         if filters and "status" in filters:
             stmt = stmt.where(RescueRequest.status == filters["status"])
-        results = (await self._session.execute(stmt)).scalars().all()
+        joined = (await self._session.execute(stmt)).all()
+        results = [row[0] for row in joined]
+        pairs = [(row[0], row[1]) for row in joined if row[1] is not None]
+        dispatches = [dispatch for _, dispatch in pairs]
+
         headers = [
             "ID", "Ticket", "Status", "Reporter",
             "Location", "Animal Count", "Created",
@@ -249,36 +716,263 @@ class ReportService:
             for r in results
         ]
         rows = mask_report_data(rows, headers, {"Reporter"})
+
+        # Geo heatmap (PRR 3.2): aggregate rescue cases by ~1km grid cell so
+        # staff can spot incident hotspots. Cells without coordinates are
+        # excluded from the map but reported as a count.
+        geo_counts: dict[tuple[float, float], int] = {}
+        cases_without_coords = 0
+        for r in results:
+            if r.latitude is None or r.longitude is None:
+                cases_without_coords += 1
+                continue
+            lat = round(float(r.latitude), 2)
+            lng = round(float(r.longitude), 2)
+            geo_counts[(lat, lng)] = geo_counts.get((lat, lng), 0) + 1
+        geo_rows = [
+            [f"{lat:.2f}", f"{lng:.2f}", count]
+            for (lat, lng), count in sorted(
+                geo_counts.items(), key=lambda item: item[1], reverse=True
+            )
+        ]
+        geo_title = "Geo Heatmap (Rescue Locations)"
+        if cases_without_coords:
+            geo_title += f" — {cases_without_coords} case(s) without coordinates"
+
+        sections = []
+        if geo_rows:
+            sections.append({
+                "title": geo_title,
+                "headers": ["Latitude", "Longitude", "Cases"],
+                "rows": geo_rows,
+            })
+
+        # Dispatch & response analytics (PRR 4.1 Rescue Case Efficiency):
+        # average response time, success ratio, failure-reason breakdown and
+        # per-status distribution.
+        if results:
+            total = len(results)
+            successful = sum(
+                1 for r in results
+                if r.status in (RescueStatus.RESCUED, RescueStatus.ADMITTED)
+            )
+            response_times = [
+                (dispatch.created_at - request.created_at).total_seconds() / 3600.0
+                for request, dispatch in pairs
+            ]
+            avg_response_time = (
+                sum(response_times) / len(response_times) if response_times else None
+            )
+
+            status_counts: dict[str, int] = {}
+            for r in results:
+                status_counts[r.status] = status_counts.get(r.status, 0) + 1
+            sections.append({
+                "title": "Rescue Outcomes by Status",
+                "headers": ["Status", "Count"],
+                "rows": [
+                    [status, str(count)]
+                    for status, count in sorted(status_counts.items())
+                ],
+            })
+            sections.append({
+                "title": "Dispatch & Response Analytics",
+                "headers": ["Metric", "Value"],
+                "rows": [
+                    ["Total Rescue Requests", str(total)],
+                    ["Dispatched", str(len(pairs))],
+                    ["Successful (Rescued/Admitted)", str(successful)],
+                    ["Success Ratio", f"{successful / total * 100.0:.1f}%"],
+                    [
+                        "Avg Response Time",
+                        f"{avg_response_time:.1f}h" if avg_response_time is not None else "N/A",
+                    ],
+                ],
+            })
+
+            failure_counts: dict[str, int] = {}
+            for dispatch in dispatches:
+                if dispatch.failure_reason:
+                    failure_counts[dispatch.failure_reason] = (
+                        failure_counts.get(dispatch.failure_reason, 0) + 1
+                    )
+            if failure_counts:
+                sections.append({
+                    "title": "Failure Reason Breakdown",
+                    "headers": ["Failure Reason", "Count"],
+                    "rows": [
+                        [reason, str(count)]
+                        for reason, count in sorted(
+                            failure_counts.items(), key=lambda item: item[1], reverse=True
+                        )
+                    ],
+                })
+
+            if dispatches:
+                dispatch_rows = [
+                    [str(d.id), str(d.rescue_request_id),
+                     d.assigned_driver_id or "", d.vehicle_id or "",
+                     d.dispatched_at, d.failure_reason or ""]
+                    for d in dispatches
+                ]
+                sections.append({
+                    "title": "Dispatch Log",
+                    "headers": [
+                        "Dispatch ID", "Request ID", "Assigned Driver",
+                        "Vehicle", "Dispatched At", "Failure Reason",
+                    ],
+                    "rows": dispatch_rows,
+                })
+
         return {
             "title": "Rescue Report",
             "subtitle": f"{start or 'N/A'} to {end or 'N/A'}",
             "headers": headers,
             "rows": rows,
+            "sections": sections,
         }
 
     async def _finance_report(
-        self, start: date | None, end: date | None, filters: dict | None
-    ) -> dict:
+        self, start: date | None, end: date | None, filters: dict[str, Any] | None
+    ) -> dict[str, Any]:
         stmt = select(FinancialTransaction).where(
             FinancialTransaction.deleted_at.is_(None),
         )
         if start:
-            stmt = stmt.where(
+            txn_stmt = txn_stmt.where(
                 FinancialTransaction.transaction_date >= start
             )
         if end:
-            stmt = stmt.where(
+            txn_stmt = txn_stmt.where(
                 FinancialTransaction.transaction_date <= end
             )
         if filters and "type" in filters:
-            stmt = stmt.where(
+            txn_stmt = txn_stmt.where(
                 FinancialTransaction.transaction_type == filters["type"]
             )
         if filters and "status" in filters:
-            stmt = stmt.where(
+            txn_stmt = txn_stmt.where(
                 FinancialTransaction.status == filters["status"]
             )
-        results = (await self._session.execute(stmt)).scalars().all()
+        transactions = (await self._session.execute(txn_stmt)).scalars().all()
+
+        donation_stmt = select(Donation)
+        if start:
+            donation_stmt = donation_stmt.where(Donation.created_at >= start)
+        if end:
+            donation_stmt = donation_stmt.where(Donation.created_at <= end)
+        donations = (await self._session.execute(donation_stmt)).scalars().all()
+
+        gl_stmt = (
+            select(
+                ChartOfAccounts.category,
+                func.coalesce(func.sum(GeneralLedgerEntry.credit_amount), 0),
+                func.coalesce(func.sum(GeneralLedgerEntry.debit_amount), 0),
+            )
+            .join(
+                GeneralLedgerEntry,
+                GeneralLedgerEntry.account_id == ChartOfAccounts.id,
+            )
+            .group_by(ChartOfAccounts.category)
+            .order_by(ChartOfAccounts.category)
+        )
+        gl_rows_raw = (await self._session.execute(gl_stmt)).all()
+
+        inventory_value = float(
+            (
+                await self._session.execute(
+                    select(
+                        func.coalesce(
+                            func.sum(InventoryItem.quantity * InventoryItem.unit_cost),
+                            0,
+                        )
+                    ).where(InventoryItem.deleted_at.is_(None))
+                )
+            ).scalar()
+            or 0.0
+        )
+
+        rescued_dogs = int(
+            (
+                await self._session.execute(
+                    select(func.count(DogProfile.id)).where(
+                        DogProfile.deleted_at.is_(None),
+                        DogProfile.rescue_case_id.isnot(None),
+                    )
+                )
+            ).scalar()
+            or 0
+        )
+
+        # GL / summary analytics (PRR 4.1 Financial Transparency).
+        total_expenses = sum(
+            float(t.amount)
+            for t in transactions
+            if t.transaction_type == TransactionType.EXPENSE
+            and t.status not in (TransactionStatus.VOIDED,)
+        )
+        cost_per_dog = (total_expenses / rescued_dogs) if rescued_dogs else 0.0
+
+        donation_group: dict[tuple[str, str], dict] = {}
+        successful_donations_by_donor: dict[str, int] = {}
+        for d in donations:
+            key = (d.donation_type, d.status)
+            entry = donation_group.setdefault(key, {"count": 0, "total": 0.0})
+            entry["count"] += 1
+            entry["total"] += float(d.amount)
+            if d.status == DonationStatus.SUCCESS:
+                donor_key = str(d.donor_id)
+                successful_donations_by_donor[donor_key] = (
+                    successful_donations_by_donor.get(donor_key, 0) + 1
+                )
+        total_donors = len(successful_donations_by_donor)
+        repeat_donors = sum(1 for count in successful_donations_by_donor.values() if count > 1)
+        retention_rate = (repeat_donors / total_donors * 100.0) if total_donors else 0.0
+
+        sections = []
+        if donation_group:
+            sections.append({
+                "title": "Donation Totals",
+                "headers": ["Donation Type", "Status", "Count", "Total Amount"],
+                "rows": [
+                    [donation_type, status, str(info["count"]), f"{info['total']:.2f}"]
+                    for (donation_type, status), info in sorted(donation_group.items())
+                ],
+            })
+            sections.append({
+                "title": "Donor Retention",
+                "headers": ["Metric", "Value"],
+                "rows": [
+                    ["Successful Donors", str(total_donors)],
+                    ["Repeat Donors (>1 donation)", str(repeat_donors)],
+                    ["Donor Retention Rate", f"{retention_rate:.1f}%"],
+                ],
+            })
+        if gl_rows_raw:
+            sections.append({
+                "title": "GL Summary by Category",
+                "headers": ["Category", "Income (Credits)", "Expense (Debits)", "Net"],
+                "rows": [
+                    [
+                        str(row[0]),
+                        f"{float(row[1]):.2f}",
+                        f"{float(row[2]):.2f}",
+                        f"{float(row[1]) - float(row[2]):.2f}",
+                    ]
+                    for row in gl_rows_raw
+                ],
+            })
+        sections.append({
+            "title": "Cost Analysis",
+            "headers": ["Metric", "Value"],
+            "rows": [
+                ["Total Inventory Cost Exposure", f"{inventory_value:.2f}"],
+                ["Total Expenses", f"{total_expenses:.2f}"],
+                ["Dogs Rescued (Admitted via Rescue)", str(rescued_dogs)],
+                ["Cost per Rescued Dog", f"{cost_per_dog:.2f}"],
+            ],
+        })
+
         return {
             "title": "Finance Report",
             "subtitle": f"{start or 'N/A'} to {end or 'N/A'}",
@@ -289,8 +983,9 @@ class ReportService:
             "rows": [
                 [str(t.id), t.transaction_number, t.transaction_type,
                  float(t.amount), t.currency, t.status, t.transaction_date]
-                for t in results
+                for t in transactions
             ],
+            "sections": sections,
         }
 
     @staticmethod
@@ -299,9 +994,221 @@ class ReportService:
             return 1
         return max(1, (end.year - start.year) * 12 + end.month - start.month + 1)
 
-    async def _staff_performance_report(
+    async def _shelter_report(
         self, start: date | None, end: date | None, filters: dict | None
     ) -> dict:
+        facilities = (
+            await self._session.execute(
+                select(ShelterFacility).where(ShelterFacility.deleted_at.is_(None))
+            )
+        ).scalars().all()
+        facility_names = {str(f.id): f.name for f in facilities}
+
+        # Kennel counts / capacity per facility (kennels belong to sections,
+        # sections belong to facilities).
+        kennel_stmt = (
+            select(
+                ShelterFacility.id,
+                func.count(Kennel.id),
+                func.coalesce(func.sum(Kennel.capacity), 0),
+            )
+            .select_from(ShelterFacility)
+            .join(ShelterSection, ShelterSection.facility_id == ShelterFacility.id)
+            .join(Kennel, Kennel.section_id == ShelterSection.id)
+            .group_by(ShelterFacility.id)
+        )
+        kennel_rows = (await self._session.execute(kennel_stmt)).all()
+        kennel_stats = {
+            str(row[0]): {"count": int(row[1]), "capacity": float(row[2])}
+            for row in kennel_rows
+        }
+
+        # Dogs housed, occupied kennels and average length of stay (non-adopted
+        # dogs only: now() - created_at).
+        dog_stmt = (
+            select(
+                DogProfile.shelter_facility_id,
+                func.count(DogProfile.id),
+                func.count(DogProfile.kennel_id),
+                func.avg(
+                    func.extract("epoch", func.now() - DogProfile.created_at) / 86400.0
+                ),
+            )
+            .where(
+                DogProfile.deleted_at.is_(None),
+                DogProfile.shelter_facility_id.isnot(None),
+                DogProfile.status != DogStatus.ADOPTED,
+            )
+            .group_by(DogProfile.shelter_facility_id)
+        )
+        dog_rows = (await self._session.execute(dog_stmt)).all()
+        dog_stats = {
+            str(row[0]): {
+                "dogs": int(row[1]),
+                "occupied": int(row[2]),
+                "avg_los": float(row[3]) if row[3] is not None else None,
+            }
+            for row in dog_rows
+        }
+
+        # Intake / admission log: DogProfile rows created per facility.
+        intake_stmt = (
+            select(DogProfile, ShelterFacility.name)
+            .join(ShelterFacility, ShelterFacility.id == DogProfile.shelter_facility_id)
+            .where(
+                DogProfile.deleted_at.is_(None),
+                DogProfile.shelter_facility_id.isnot(None),
+            )
+            .order_by(ShelterFacility.name, DogProfile.created_at)
+        )
+        intake_rows = (await self._session.execute(intake_stmt)).all()
+
+        # Quarantine-to-clear speed: no explicit quarantine timestamps exist, so
+        # the proxy is intake (DogProfile.created_at) -> first vaccination
+        # record for dogs that have passed quarantine.
+        quarantine_stmt = (
+            select(
+                DogProfile.shelter_facility_id,
+                DogProfile.created_at,
+                func.min(VaccinationRecord.administered_at),
+            )
+            .join(VaccinationRecord, VaccinationRecord.dog_id == DogProfile.id)
+            .where(
+                DogProfile.deleted_at.is_(None),
+                DogProfile.is_quarantine_passed.is_(True),
+                DogProfile.shelter_facility_id.isnot(None),
+            )
+            .group_by(DogProfile.id, DogProfile.shelter_facility_id, DogProfile.created_at)
+        )
+        quarantine_rows = (await self._session.execute(quarantine_stmt)).all()
+        quarantine_days: dict[str, list[float]] = {}
+        for row in quarantine_rows:
+            created = _coerce_utc(row[1])
+            cleared = _coerce_utc(row[2])
+            if created is None or cleared is None:
+                continue
+            days = max(0.0, (cleared - created).total_seconds() / 86400.0)
+            quarantine_days.setdefault(str(row[0]), []).append(days)
+        quarantine_avg = {
+            key: sum(values) / len(values) for key, values in quarantine_days.items()
+        }
+
+        # Facility transfer volumes (in / out per facility).
+        transfers = (
+            await self._session.execute(select(FacilityTransfer))
+        ).scalars().all()
+        transfers_in: dict[str, int] = {}
+        transfers_out: dict[str, int] = {}
+        transfers_in_completed: dict[str, int] = {}
+        transfers_out_completed: dict[str, int] = {}
+        for t in transfers:
+            to_key = str(t.to_facility_id)
+            from_key = str(t.from_facility_id)
+            transfers_in[to_key] = transfers_in.get(to_key, 0) + 1
+            transfers_out[from_key] = transfers_out.get(from_key, 0) + 1
+            if t.status == TransferStatus.COMPLETED:
+                transfers_in_completed[to_key] = transfers_in_completed.get(to_key, 0) + 1
+                transfers_out_completed[from_key] = (
+                    transfers_out_completed.get(from_key, 0) + 1
+                )
+
+        headers = [
+            "ID", "Name", "Status", "Type", "Total Capacity",
+            "Kennels", "Kennel Capacity", "Dogs Housed", "Avg LOS (days)",
+            "Facility Utilization %",
+        ]
+        main_rows = []
+        kennel_util_rows = []
+        for f in facilities:
+            key = str(f.id)
+            ks = kennel_stats.get(key, {"count": 0, "capacity": 0.0})
+            ds = dog_stats.get(key, {"dogs": 0, "occupied": 0, "avg_los": None})
+            facility_util = (
+                round(ds["dogs"] / float(f.total_capacity) * 100, 1)
+                if f.total_capacity else 0.0
+            )
+            kennel_util = (
+                round(ds["occupied"] / ks["count"] * 100, 1) if ks["count"] else 0.0
+            )
+            main_rows.append([
+                key, f.name, f.status, f.facility_type, f.total_capacity,
+                ks["count"], f"{ks['capacity']:.1f}", ds["dogs"],
+                f"{ds['avg_los']:.1f}" if ds["avg_los"] is not None else "",
+                f"{facility_util:.1f}",
+            ])
+            kennel_util_rows.append([
+                f.name, ks["count"], f"{ks['capacity']:.1f}",
+                ds["occupied"], f"{kennel_util:.1f}",
+            ])
+
+        intake_log_rows = [
+            [facility_name, str(dog.id), dog.registration_number, dog.name, dog.status,
+             dog.created_at.date() if hasattr(dog.created_at, "date") else dog.created_at]
+            for dog, facility_name in intake_rows
+        ]
+
+        quarantine_rows_out = [
+            [facility_names.get(key, key), f"{days:.1f}"]
+            for key, days in sorted(quarantine_avg.items())
+        ]
+
+        transfer_rows = [
+            [
+                f.name,
+                transfers_in.get(str(f.id), 0),
+                transfers_out.get(str(f.id), 0),
+                transfers_in_completed.get(str(f.id), 0),
+                transfers_out_completed.get(str(f.id), 0),
+            ]
+            for f in facilities
+        ]
+
+        sections = []
+        if kennel_util_rows:
+            sections.append({
+                "title": "Kennel Capacity & Utilization",
+                "headers": [
+                    "Facility", "Kennel Count", "Kennel Capacity",
+                    "Occupied Kennels", "Kennel Utilization %",
+                ],
+                "rows": kennel_util_rows,
+            })
+        if intake_log_rows:
+            sections.append({
+                "title": "Intake & Admission Log",
+                "headers": [
+                    "Facility", "Dog ID", "Registration #", "Name",
+                    "Status", "Admitted At",
+                ],
+                "rows": intake_log_rows,
+            })
+        if quarantine_rows_out:
+            sections.append({
+                "title": "Quarantine-to-Clear Speed (proxy: intake to first vaccination)",
+                "headers": ["Facility", "Avg Days to Clear"],
+                "rows": quarantine_rows_out,
+            })
+        if transfer_rows:
+            sections.append({
+                "title": "Facility Transfer Volumes",
+                "headers": [
+                    "Facility", "Transfers In", "Transfers Out",
+                    "Completed In", "Completed Out",
+                ],
+                "rows": transfer_rows,
+            })
+
+        return {
+            "title": "Shelter Report",
+            "subtitle": f"{start or 'N/A'} to {end or 'N/A'}",
+            "headers": headers,
+            "rows": main_rows,
+            "sections": sections,
+        }
+
+    async def _staff_performance_report(
+        self, start: date | None, end: date | None, filters: dict[str, Any] | None
+    ) -> dict[str, Any]:
         adoption_stmt = select(func.count(AdoptionApplication.id)).where(
             AdoptionApplication.status == AdoptionStatus.COMPLETED
         )
@@ -403,8 +1310,8 @@ class ReportService:
         }
 
     async def _animal_population_report(
-        self, filters: dict | None
-    ) -> dict:
+        self, filters: dict[str, Any] | None
+    ) -> dict[str, Any]:
         stmt = select(DogProfile)
         if filters and "status" in filters:
             stmt = stmt.where(DogProfile.status == filters["status"])
@@ -426,8 +1333,8 @@ class ReportService:
         }
 
     async def _foster_report(
-        self, start: date | None, end: date | None, filters: dict | None
-    ) -> dict:
+        self, start: date | None, end: date | None, filters: dict[str, Any] | None
+    ) -> dict[str, Any]:
         stmt = select(FosterPlacement)
         if start:
             stmt = stmt.where(FosterPlacement.placed_at >= start)
@@ -452,8 +1359,8 @@ class ReportService:
         }
 
     async def _volunteer_report(
-        self, start: date | None, end: date | None, filters: dict | None
-    ) -> dict:
+        self, start: date | None, end: date | None, filters: dict[str, Any] | None
+    ) -> dict[str, Any]:
         stmt = select(VolunteerProfile)
         if filters and "status" in filters:
             stmt = stmt.where(
@@ -465,7 +1372,8 @@ class ReportService:
             "headers": ["ID", "User ID", "Status", "Skills", "Available"],
             "rows": [
                 [str(v.id), str(v.user_id), v.status,
-                 v.skills or "", "Yes" if v.is_available else "No"]
+                 v.skills or "",
+                 "Yes" if v.status == VolunteerStatus.ACTIVE else "No"]
                 for v in results
             ],
         }

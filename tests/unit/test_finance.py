@@ -1,6 +1,7 @@
 """Unit tests for FinanceService with mocked repository."""
 
 import uuid
+from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -9,6 +10,7 @@ from pawguard.core.exceptions import ConflictError, NotFoundError
 from pawguard.core.pagination import PageParams
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
+from pawguard.modules.donation.models import Donation
 from pawguard.modules.finance.models import (
     Budget,
     ChartOfAccounts,
@@ -117,6 +119,7 @@ class TestFinanceService:
             ChartOfAccounts(id=debit_id, account_code="1010"),
             ChartOfAccounts(id=credit_id, account_code="2020"),
         ]
+        mock_repo.next_transaction_sequence.return_value = 1
         payload = FinancialTransactionCreate(
             transaction_type=TransactionType.INCOME,
             transaction_date="2026-07-30",
@@ -367,18 +370,14 @@ class TestFinanceService:
     @pytest.mark.asyncio
     async def test_bulk_delete_accounts(self, service, mock_repo):
         aid = uuid.uuid4()
-        mock_repo.get_account_by_id.return_value = ChartOfAccounts(
-            id=aid, account_code="1010", account_name="Cash",
-        )
+        mock_repo.bulk_soft_delete.return_value = 1
         count = await service.bulk_delete_accounts([aid])
         assert count == 1
 
     @pytest.mark.asyncio
     async def test_bulk_delete_transactions(self, service, mock_repo):
         tid = uuid.uuid4()
-        mock_repo.get_transaction_by_id.return_value = FinancialTransaction(
-            id=tid, transaction_number="TXN-001",
-        )
+        mock_repo.bulk_soft_delete.return_value = 1
         count = await service.bulk_delete_transactions([tid])
         assert count == 1
 
@@ -387,6 +386,33 @@ class TestFinanceService:
         mock_repo.get_unreconciled_donations.return_value = []
         result = await service.reconcile_donations()
         assert result["reconciled"] == 0
+
+    @pytest.mark.asyncio
+    async def test_reconcile_donations_consumes_sequence_per_donation(
+        self, service, mock_repo
+    ):
+        """Each reconciled donation atomically consumes its own sequence value
+        instead of deriving from a base, so a concurrent create_transaction
+        cannot collide on the UNIQUE transaction_number column."""
+        mock_repo.get_unreconciled_donations.return_value = [
+            Donation(id=uuid.uuid4(), amount=Decimal("100.00")),
+            Donation(id=uuid.uuid4(), amount=Decimal("200.00")),
+            Donation(id=uuid.uuid4(), amount=Decimal("300.00")),
+        ]
+        mock_repo.next_transaction_sequence.side_effect = [101, 102, 103]
+        result = await service.reconcile_donations()
+        assert result["reconciled"] == 3
+        assert result["total_amount"] == Decimal("600.00")
+        numbers = [
+            call.args[0].transaction_number
+            for call in mock_repo.create_transaction.await_args_list
+        ]
+        assert len(numbers) == 3
+        assert numbers[0].endswith("-00101")
+        assert numbers[1].endswith("-00102")
+        assert numbers[2].endswith("-00103")
+        assert len(set(numbers)) == 3
+        assert mock_repo.next_transaction_sequence.await_count == 3
 
     @pytest.mark.asyncio
     async def test_get_donation_reconciliation_summary(self, service, mock_repo):

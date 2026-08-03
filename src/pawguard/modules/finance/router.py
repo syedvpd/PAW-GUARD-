@@ -1,5 +1,6 @@
 import uuid
 from datetime import date
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +19,7 @@ from pawguard.modules.auth.rbac import require_permission
 from pawguard.modules.finance.models import AccountType, TransactionStatus, TransactionType
 from pawguard.modules.finance.repository import FinanceRepository
 from pawguard.modules.finance.schemas import (
+    AccountBalanceResponse,
     BudgetCreate,
     BudgetItemCreate,
     BudgetResponse,
@@ -54,7 +56,7 @@ async def create_account(
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: FinanceService = Depends(get_finance_service),
-):
+) -> ApiResponse[ChartOfAccountsResponse]:
     ip = request.client.host if request.client else None
     account = await service.create_account(
         payload, actor_id=current_user.id, ip_address=ip
@@ -77,7 +79,7 @@ async def list_accounts(
     account_type: AccountType | None = Query(None),
     is_active: bool | None = Query(None),
     service: FinanceService = Depends(get_finance_service),
-):
+) -> PaginatedResponse[ChartOfAccountsResponse]:
     return await service.list_accounts_paginated(
         page, sort, search, account_type, is_active=is_active
     )
@@ -91,7 +93,7 @@ async def list_accounts(
 async def get_account(
     account_id: uuid.UUID,
     service: FinanceService = Depends(get_finance_service),
-):
+) -> ApiResponse[ChartOfAccountsResponse]:
     account = await service.get_account(account_id)
     return ApiResponse(data=ChartOfAccountsResponse.model_validate(account))
 
@@ -107,7 +109,7 @@ async def update_account(
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: FinanceService = Depends(get_finance_service),
-):
+) -> ApiResponse[ChartOfAccountsResponse]:
     ip = request.client.host if request.client else None
     account = await service.update_account(
         account_id, payload, actor_id=current_user.id, ip_address=ip
@@ -128,7 +130,7 @@ async def delete_account(
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: FinanceService = Depends(get_finance_service),
-):
+) -> ApiResponse[None]:
     ip = request.client.host if request.client else None
     await service.soft_delete_account(
         account_id, actor_id=current_user.id, ip_address=ip
@@ -147,7 +149,7 @@ async def create_transaction(
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: FinanceService = Depends(get_finance_service),
-):
+) -> ApiResponse[FinancialTransactionResponse]:
     ip = request.client.host if request.client else None
     tx = await service.create_transaction(
         payload, actor_id=current_user.id, ip_address=ip
@@ -172,7 +174,7 @@ async def list_transactions(
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
     service: FinanceService = Depends(get_finance_service),
-):
+) -> PaginatedResponse[FinancialTransactionResponse]:
     return await service.list_transactions_paginated(
         page, sort, search, transaction_type, status, date_from, date_to
     )
@@ -186,7 +188,7 @@ async def list_transactions(
 async def get_transaction(
     tx_id: uuid.UUID,
     service: FinanceService = Depends(get_finance_service),
-):
+) -> ApiResponse[FinancialTransactionResponse]:
     tx = await service.get_transaction(tx_id)
     return ApiResponse(data=FinancialTransactionResponse.model_validate(tx))
 
@@ -202,7 +204,7 @@ async def update_transaction_status(
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: FinanceService = Depends(get_finance_service),
-):
+) -> ApiResponse[FinancialTransactionResponse]:
     ip = request.client.host if request.client else None
     tx = await service.update_transaction_status(
         tx_id,
@@ -226,7 +228,7 @@ async def delete_transaction(
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: FinanceService = Depends(get_finance_service),
-):
+) -> ApiResponse[None]:
     ip = request.client.host if request.client else None
     await service.soft_delete_transaction(
         tx_id, actor_id=current_user.id, ip_address=ip
@@ -236,54 +238,54 @@ async def delete_transaction(
 
 @router.get(
     "/summary",
-    response_model=ApiResponse[dict],
+    response_model=ApiResponse[dict[str, Any]],
     dependencies=[Depends(require_permission("finance:read"))],
 )
 async def get_finance_summary(
     period_start: date = Query(...),
     period_end: date = Query(...),
     service: FinanceService = Depends(get_finance_service),
-):
+) -> ApiResponse[dict[str, Any]]:
     data = await service.get_finance_summary(period_start, period_end)
     return ApiResponse(data=data)
 
 
 @router.get(
     "/pnl",
-    response_model=ApiResponse[dict],
+    response_model=ApiResponse[dict[str, Any]],
     dependencies=[Depends(require_permission("finance:read"))],
 )
 async def get_pnl(
     period_start: date = Query(...),
     period_end: date = Query(...),
     service: FinanceService = Depends(get_finance_service),
-):
+) -> ApiResponse[dict[str, Any]]:
     data = await service.get_pnl(period_start, period_end)
     return ApiResponse(data=data)
 
 
 @router.get(
     "/account-balances",
-    response_model=ApiResponse[list],
+    response_model=ApiResponse[list[AccountBalanceResponse]],
     dependencies=[Depends(require_permission("finance:read"))],
 )
 async def get_account_balances(
     service: FinanceService = Depends(get_finance_service),
-):
+) -> ApiResponse[list[AccountBalanceResponse]]:
     data = await service.get_account_balances()
-    return ApiResponse(data=[d.model_dump() for d in data])
+    return ApiResponse(data=data)
 
 
 @router.post(
     "/reconcile/donations",
-    response_model=ApiResponse[dict],
+    response_model=ApiResponse[dict[str, Any]],
     dependencies=[Depends(require_permission("finance:create"))],
 )
 async def reconcile_donations(
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: FinanceService = Depends(get_finance_service),
-):
+) -> ApiResponse[dict[str, Any]]:
     ip = request.client.host if request.client else None
     result = await service.reconcile_donations(
         actor_id=current_user.id, ip_address=ip
@@ -295,12 +297,12 @@ async def reconcile_donations(
 
 @router.get(
     "/reconcile/summary",
-    response_model=ApiResponse[dict],
+    response_model=ApiResponse[dict[str, Any]],
     dependencies=[Depends(require_permission("finance:read"))],
 )
 async def get_reconciliation_summary(
     service: FinanceService = Depends(get_finance_service),
-):
+) -> ApiResponse[dict[str, Any]]:
     data = await service.get_donation_reconciliation_summary()
     return ApiResponse(data=data)
 
@@ -316,7 +318,7 @@ async def create_budget(
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: FinanceService = Depends(get_finance_service),
-):
+) -> ApiResponse[BudgetResponse]:
     ip = request.client.host if request.client else None
     budget = await service.create_budget(
         payload, actor_id=current_user.id, ip_address=ip
@@ -339,7 +341,7 @@ async def list_budgets(
     fiscal_year: int | None = Query(None),
     is_active: bool | None = Query(None),
     service: FinanceService = Depends(get_finance_service),
-):
+) -> PaginatedResponse[BudgetResponse]:
     return await service.list_budgets_paginated(
         page, sort, search, fiscal_year, is_active
     )
@@ -353,7 +355,7 @@ async def list_budgets(
 async def get_budget(
     budget_id: uuid.UUID,
     service: FinanceService = Depends(get_finance_service),
-):
+) -> ApiResponse[BudgetResponse]:
     budget = await service.get_budget(budget_id)
     return ApiResponse(data=BudgetResponse.model_validate(budget))
 
@@ -370,7 +372,7 @@ async def add_budget_item(
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: FinanceService = Depends(get_finance_service),
-):
+) -> ApiResponse[BudgetResponse]:
     ip = request.client.host if request.client else None
     budget = await service.add_budget_item(
         budget_id, payload, actor_id=current_user.id, ip_address=ip
@@ -391,7 +393,7 @@ async def delete_budget(
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: FinanceService = Depends(get_finance_service),
-):
+) -> ApiResponse[None]:
     ip = request.client.host if request.client else None
     await service.soft_delete_budget(
         budget_id, actor_id=current_user.id, ip_address=ip
@@ -410,7 +412,7 @@ async def create_recurring(
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: FinanceService = Depends(get_finance_service),
-):
+) -> ApiResponse[RecurringTransactionResponse]:
     ip = request.client.host if request.client else None
     rtx = await service.create_recurring(
         payload, actor_id=current_user.id, ip_address=ip
@@ -432,7 +434,7 @@ async def list_recurring(
     search: str | None = Query(None),
     is_active: bool | None = Query(None),
     service: FinanceService = Depends(get_finance_service),
-):
+) -> PaginatedResponse[RecurringTransactionResponse]:
     return await service.list_recurring_paginated(
         page, sort, search, is_active
     )
@@ -448,7 +450,7 @@ async def delete_recurring(
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: FinanceService = Depends(get_finance_service),
-):
+) -> ApiResponse[None]:
     ip = request.client.host if request.client else None
     await service.soft_delete_recurring(
         rtx_id, actor_id=current_user.id, ip_address=ip
@@ -466,7 +468,7 @@ async def bulk_delete_accounts(
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: FinanceService = Depends(get_finance_service),
-):
+) -> ApiResponse[BulkDeleteResponse]:
     ip = request.client.host if request.client else None
     deleted = await service.bulk_delete_accounts(
         payload.ids, actor_id=current_user.id, ip_address=ip
@@ -489,7 +491,7 @@ async def bulk_delete_transactions(
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: FinanceService = Depends(get_finance_service),
-):
+) -> ApiResponse[BulkDeleteResponse]:
     ip = request.client.host if request.client else None
     deleted = await service.bulk_delete_transactions(
         payload.ids, actor_id=current_user.id, ip_address=ip

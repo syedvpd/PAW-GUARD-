@@ -23,10 +23,13 @@ from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.rbac import require_permission
 from pawguard.modules.dog.repository import DogRepository
+from pawguard.modules.inventory.repository import InventoryRepository
+from pawguard.modules.inventory.service import InventoryService
 from pawguard.modules.shelter.models import (
     FacilityStatus,
     FacilityType,
     KennelSanitationState,
+    SectionType,
 )
 from pawguard.modules.shelter.repository import ShelterRepository
 from pawguard.modules.shelter.schemas import (
@@ -35,6 +38,8 @@ from pawguard.modules.shelter.schemas import (
     FacilityStatusUpdate,
     FacilityTransferCreate,
     FacilityTransferResponse,
+    KennelCleaningLogCreate,
+    KennelCleaningLogResponse,
     KennelCreate,
     KennelResponse,
     ShelterFacilityCreate,
@@ -54,7 +59,8 @@ def get_shelter_service(
 ) -> ShelterService:
     repo = ShelterRepository(db)
     dog_repo = DogRepository(db)
-    return ShelterService(repo, dog_repo, audit_service=audit)
+    inventory = InventoryService(InventoryRepository(db), audit_service=audit)
+    return ShelterService(repo, dog_repo, audit_service=audit, inventory_service=inventory)
 
 
 @router.post(
@@ -144,12 +150,14 @@ async def list_sections(
     page: PageParams = Depends(page_params),
     sort: SortParams = Depends(sort_params),
     search: str | None = None,
+    section_type: SectionType | None = None,
     service: ShelterService = Depends(get_shelter_service),
 ) -> PaginatedResponse[ShelterSectionResponse]:
     result = await service.list_sections_paginated(
         page,
         sort,
         facility_id=facility_id,
+        section_type=section_type,
         search_term=search,
     )
     return PaginatedResponse(
@@ -258,6 +266,57 @@ async def update_kennel_sanitation(
     return ApiResponse(
         data=KennelResponse.model_validate(kennel),
         message="Kennel sanitation status updated successfully.",
+    )
+
+
+@router.post(
+    "/kennels/{kennel_id}/cleaning-logs",
+    response_model=ApiResponse[KennelCleaningLogResponse],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("shelter:update"))],
+)
+async def log_kennel_cleaning(
+    kennel_id: uuid.UUID,
+    payload: KennelCleaningLogCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: ShelterService = Depends(get_shelter_service),
+) -> ApiResponse[KennelCleaningLogResponse]:
+    log = await service.log_kennel_cleaning(
+        kennel_id,
+        cleaned_by_id=current_user.id,
+        payload=payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host
+        if request.client
+        else None,
+    )
+    return ApiResponse(
+        data=KennelCleaningLogResponse.model_validate(log),
+        message="Kennel cleaning rotation logged successfully.",
+    )
+
+
+@router.get(
+    "/kennels/{kennel_id}/cleaning-logs",
+    response_model=PaginatedResponse[KennelCleaningLogResponse],
+    dependencies=[Depends(require_permission("shelter:read"))],
+)
+async def list_kennel_cleaning_logs(
+    kennel_id: uuid.UUID,
+    page: PageParams = Depends(page_params),
+    sort: SortParams = Depends(sort_params),
+    service: ShelterService = Depends(get_shelter_service),
+) -> PaginatedResponse[KennelCleaningLogResponse]:
+    result = await service.list_cleaning_logs_paginated(
+        page, sort, kennel_id=kennel_id,
+    )
+    return PaginatedResponse(
+        data=[
+            KennelCleaningLogResponse.model_validate(log)
+            for log in result.data
+        ],
+        meta=result.meta,
     )
 
 

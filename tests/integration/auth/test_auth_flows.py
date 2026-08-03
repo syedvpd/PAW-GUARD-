@@ -5,13 +5,19 @@ persists between tests. Redis and ARQ are replaced with in-memory fakes.
 """
 
 
+import pyotp
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.constants import CLIENT_TYPE_HEADER, ClientType
-from pawguard.modules.auth.models import EmailVerificationToken, User
+from pawguard.modules.auth.models import (
+    AuthAuditEventType,
+    AuthAuditLog,
+    EmailVerificationToken,
+    User,
+)
 
 REGISTER_PAYLOAD = {
     "email": "testuser@example.com",
@@ -112,6 +118,31 @@ class TestLogin:
         # Web clients do not get tokens in the body
         assert body["data"]["refresh_token"] is None
 
+    async def test_web_logout_clears_cookies(self, client: AsyncClient) -> None:
+        """L-3: logout must clear the cookies it set.
+
+        Set and clear must use the same cookie domain attribute, otherwise the
+        browser would ignore the deletion (host-only cookie vs domain-scoped
+        delete) and the session cookie would linger after logout.
+        """
+        await client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+        login_resp = await client.post(
+            "/api/v1/auth/login",
+            json=LOGIN_PAYLOAD,
+            headers={CLIENT_TYPE_HEADER: ClientType.WEB.value},
+        )
+        assert login_resp.status_code == 200
+        assert "pg_access_token" in client.cookies
+
+        logout_resp = await client.post("/api/v1/auth/logout")
+        assert logout_resp.status_code == 200
+
+        # The deletion Set-Cookie headers must be present (empty value + expiry).
+        set_cookies = logout_resp.headers.get_list("set-cookie")
+        assert any("pg_access_token=" in c and "max-age=0" in c.lower() for c in set_cookies)
+        assert any("pg_refresh_token=" in c and "max-age=0" in c.lower() for c in set_cookies)
+        assert "pg_access_token" not in client.cookies
+
 
 @pytest.mark.asyncio
 class TestRefresh:
@@ -168,6 +199,24 @@ class TestAuthenticatedEndpoints:
         resp = await client.get("/api/v1/auth/me")
         assert resp.status_code == 401
 
+    async def test_email_verify_request_is_rate_limited(self, client: AsyncClient) -> None:
+        """L-4: /email/verify/request must be throttled like its confirm sibling.
+
+        An authenticated caller can otherwise spam verification emails at will.
+        The limiter allows 10 requests per 300s window; the 11th is 429.
+        """
+        await client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+        login_resp = await client.post("/api/v1/auth/login", json=LOGIN_PAYLOAD)
+        access_token = login_resp.json()["data"]["access_token"]
+        headers = {"Authorization": f"Bearer {access_token}"}
+
+        for _ in range(10):
+            resp = await client.post("/api/v1/auth/email/verify/request", headers=headers)
+            assert resp.status_code == 200
+
+        throttled = await client.post("/api/v1/auth/email/verify/request", headers=headers)
+        assert throttled.status_code == 429
+
     async def test_logout(self, client: AsyncClient) -> None:
         await client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
         login_resp = await client.post("/api/v1/auth/login", json=LOGIN_PAYLOAD)
@@ -185,6 +234,14 @@ class TestAuthenticatedEndpoints:
             "/api/v1/auth/refresh", json={"refresh_token": refresh_token}
         )
         assert refresh_resp.status_code == 401
+
+        # The access token is dead immediately too: get_current_user validates
+        # the backing session, so logout revokes access now, not at expiry.
+        me_resp = await client.get(
+            "/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert me_resp.status_code == 401
 
     async def test_list_sessions(self, client: AsyncClient) -> None:
         await client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
@@ -269,3 +326,115 @@ class TestPasswordReset:
             json={"email": REGISTER_PAYLOAD["email"], "password": "NewStrongP@ss99"},
         )
         assert new_login.status_code == 200
+
+
+@pytest.mark.asyncio
+class TestMFADisableReauth:
+    async def _register_and_login(self, client: AsyncClient) -> str:
+        await client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+        login = await client.post("/api/v1/auth/login", json=LOGIN_PAYLOAD)
+        return login.json()["data"]["access_token"]
+
+    async def _enable_mfa(self, client: AsyncClient, token: str) -> None:
+        enroll = await client.post(
+            "/api/v1/auth/mfa/enroll",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert enroll.status_code == 200
+        secret = enroll.json()["data"]["secret"]
+        code = pyotp.totp.TOTP(secret).now()
+        confirm = await client.post(
+            "/api/v1/auth/mfa/enroll/confirm",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"code": code},
+        )
+        assert confirm.status_code == 200
+
+    async def test_disable_without_credentials_returns_422(
+        self, client: AsyncClient
+    ) -> None:
+        token = await self._register_and_login(client)
+        await self._enable_mfa(client, token)
+
+        resp = await client.post(
+            "/api/v1/auth/mfa/disable",
+            headers={"Authorization": f"Bearer {token}"},
+            json={},
+        )
+        assert resp.status_code == 422
+
+    async def test_disable_with_wrong_password_returns_401_and_keeps_mfa(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        token = await self._register_and_login(client)
+        await self._enable_mfa(client, token)
+
+        resp = await client.post(
+            "/api/v1/auth/mfa/disable",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"password": "WrongP@ss123"},
+        )
+        assert resp.status_code == 401
+        assert resp.json()["error"]["code"] == "INVALID_CREDENTIALS"
+
+        user = (
+            await db_session.execute(
+                select(User).where(User.email == REGISTER_PAYLOAD["email"])
+            )
+        ).scalar_one()
+        assert user.mfa_enabled is True
+
+    async def test_disable_with_correct_password_audit_logged(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        token = await self._register_and_login(client)
+        await self._enable_mfa(client, token)
+
+        resp = await client.post(
+            "/api/v1/auth/mfa/disable",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"password": REGISTER_PAYLOAD["password"]},
+        )
+        assert resp.status_code == 200
+
+        user = (
+            await db_session.execute(
+                select(User).where(User.email == REGISTER_PAYLOAD["email"])
+            )
+        ).scalar_one()
+        assert user.mfa_enabled is False
+
+        audit = (
+            await db_session.execute(
+                select(AuthAuditLog).where(
+                    AuthAuditLog.user_id == user.id,
+                    AuthAuditLog.event_type == AuthAuditEventType.MFA_DISABLED.value,
+                )
+            )
+        ).scalar_one()
+        assert audit.event_metadata == {"confirmed_via": "password"}
+
+    async def test_disable_with_correct_totp(self, client: AsyncClient) -> None:
+        token = await self._register_and_login(client)
+
+        enroll = await client.post(
+            "/api/v1/auth/mfa/enroll",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert enroll.status_code == 200
+        secret = enroll.json()["data"]["secret"]
+        enroll_code = pyotp.totp.TOTP(secret).now()
+        confirm = await client.post(
+            "/api/v1/auth/mfa/enroll/confirm",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"code": enroll_code},
+        )
+        assert confirm.status_code == 200
+
+        disable_code = pyotp.totp.TOTP(secret).now()
+        resp = await client.post(
+            "/api/v1/auth/mfa/disable",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"totp_code": disable_code},
+        )
+        assert resp.status_code == 200

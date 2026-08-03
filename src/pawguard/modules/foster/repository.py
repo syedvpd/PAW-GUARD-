@@ -12,6 +12,7 @@ from sqlalchemy.orm import selectinload
 
 from pawguard.core.pagination import PageParams
 from pawguard.core.search import SortParams, apply_sorting, build_search_filter
+from pawguard.modules.auth.models import User
 from pawguard.modules.foster.models import (
     FosterPlacement,
     FosterProfile,
@@ -38,7 +39,7 @@ class FosterRepository:
     async def get_profile_by_id(self, profile_id: uuid.UUID) -> FosterProfile | None:
         stmt = (
             select(FosterProfile)
-            .options(selectinload(FosterProfile.user))
+            .options(selectinload(FosterProfile.user).selectinload(User.roles))
             .where(FosterProfile.id == profile_id, FosterProfile.deleted_at.is_(None))
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
@@ -46,7 +47,7 @@ class FosterRepository:
     async def get_profile_by_user_id(self, user_id: uuid.UUID) -> FosterProfile | None:
         stmt = (
             select(FosterProfile)
-            .options(selectinload(FosterProfile.user))
+            .options(selectinload(FosterProfile.user).selectinload(User.roles))
             .where(FosterProfile.user_id == user_id, FosterProfile.deleted_at.is_(None))
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
@@ -61,7 +62,7 @@ class FosterRepository:
     ) -> tuple[Sequence[FosterProfile], int]:
         stmt = (
             select(FosterProfile)
-            .options(selectinload(FosterProfile.user))
+            .options(selectinload(FosterProfile.user).selectinload(User.roles))
             .where(FosterProfile.deleted_at.is_(None))
         )
 
@@ -100,7 +101,11 @@ class FosterRepository:
         return placement
 
     async def get_placement_by_id(self, placement_id: uuid.UUID) -> FosterPlacement | None:
-        stmt = select(FosterPlacement).where(FosterPlacement.id == placement_id)
+        stmt = (
+            select(FosterPlacement)
+            .options(selectinload(FosterPlacement.foster))
+            .where(FosterPlacement.id == placement_id)
+        )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def get_active_placement_for_dog(self, dog_id: uuid.UUID) -> FosterPlacement | None:

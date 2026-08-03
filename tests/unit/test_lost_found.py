@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from pawguard.core.exceptions import NotFoundError
+from pawguard.core.exceptions import ForbiddenError, NotFoundError, ValidationFailedError
 from pawguard.core.pagination import PageParams
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
@@ -18,7 +18,12 @@ from pawguard.modules.lost_found.models import (
     ReportStatus,
 )
 from pawguard.modules.lost_found.repository import LostFoundRepository
-from pawguard.modules.lost_found.schemas import FoundReportCreate, LostReportCreate
+from pawguard.modules.lost_found.schemas import (
+    FoundReportCreate,
+    LostReportCreate,
+    OwnershipClaimReview,
+    OwnershipClaimSubmit,
+)
 from pawguard.modules.lost_found.service import LostFoundService
 from pawguard.services.audit_service import AuditService
 
@@ -225,5 +230,259 @@ class TestLostFoundService:
             found_at=datetime.now(UTC), latitude=40.001, longitude=-74.001,
             status=ReportStatus.ACTIVE,
         )
-        score = service._evaluate_match_score(lost, found)
-        assert score >= 90.0
+        score, dist_km, gap_days, reasons = service._evaluate_match_score(lost, found)
+        assert score >= 80.0
+        assert isinstance(gap_days, float)
+        assert isinstance(reasons, list)
+
+    @pytest.mark.asyncio
+    async def test_evaluate_match_score_temporal_gap(self, service):
+        lost = LostReport(
+            id=uuid.uuid4(), user_id=uuid.uuid4(), pet_name="M", breed="labrador",
+            color="brown", location_address="Addr",
+            lost_at=datetime(2026, 7, 1, tzinfo=UTC),
+            latitude=40.0, longitude=-74.0, status=ReportStatus.ACTIVE,
+        )
+        found_close = FoundReport(
+            id=uuid.uuid4(), user_id=uuid.uuid4(), breed_observed="labrador",
+            color_observed="brown", location_address="Addr2",
+            found_at=datetime(2026, 7, 2, tzinfo=UTC),
+            latitude=40.001, longitude=-74.001, status=ReportStatus.ACTIVE,
+        )
+        found_far = FoundReport(
+            id=uuid.uuid4(), user_id=uuid.uuid4(), breed_observed="labrador",
+            color_observed="brown", location_address="Addr2",
+            found_at=datetime(2026, 9, 1, tzinfo=UTC),
+            latitude=40.001, longitude=-74.001, status=ReportStatus.ACTIVE,
+        )
+        score_close, _, gap_close, _ = service._evaluate_match_score(lost, found_close)
+        score_far, _, gap_far, _ = service._evaluate_match_score(lost, found_far)
+        assert gap_close < gap_far
+        assert score_close > score_far
+
+    @pytest.mark.asyncio
+    async def test_evaluate_match_score_collar_boost(self, service):
+        lost = LostReport(
+            id=uuid.uuid4(), user_id=uuid.uuid4(), pet_name="M", breed="labrador",
+            color="brown", location_address="Addr", lost_at=datetime.now(UTC),
+            latitude=40.0, longitude=-74.0, status=ReportStatus.ACTIVE,
+            collar_color="Red",
+        )
+        found_match = FoundReport(
+            id=uuid.uuid4(), user_id=uuid.uuid4(), breed_observed="labrador",
+            color_observed="brown", location_address="Addr2",
+            found_at=datetime.now(UTC), latitude=40.001, longitude=-74.001,
+            status=ReportStatus.ACTIVE, collar_color="Red",
+        )
+        found_no_collar = FoundReport(
+            id=uuid.uuid4(), user_id=uuid.uuid4(), breed_observed="labrador",
+            color_observed="brown", location_address="Addr2",
+            found_at=datetime.now(UTC), latitude=40.001, longitude=-74.001,
+            status=ReportStatus.ACTIVE, collar_color=None,
+        )
+        score_with, _, _, _ = service._evaluate_match_score(lost, found_match)
+        score_without, _, _, _ = service._evaluate_match_score(lost, found_no_collar)
+        assert score_with > score_without
+
+    @pytest.mark.asyncio
+    async def test_evaluate_match_score_markers_boost(self, service):
+        lost = LostReport(
+            id=uuid.uuid4(), user_id=uuid.uuid4(), pet_name="M", breed="labrador",
+            color="brown", location_address="Addr", lost_at=datetime.now(UTC),
+            latitude=40.0, longitude=-74.0, status=ReportStatus.ACTIVE,
+            marker_description="White patch on left ear, scar on right leg",
+        )
+        found_match = FoundReport(
+            id=uuid.uuid4(), user_id=uuid.uuid4(), breed_observed="labrador",
+            color_observed="brown", location_address="Addr2",
+            found_at=datetime.now(UTC), latitude=40.001, longitude=-74.001,
+            status=ReportStatus.ACTIVE,
+            marker_description="white patch on left ear, limping",
+        )
+        found_no_match = FoundReport(
+            id=uuid.uuid4(), user_id=uuid.uuid4(), breed_observed="labrador",
+            color_observed="brown", location_address="Addr2",
+            found_at=datetime.now(UTC), latitude=40.001, longitude=-74.001,
+            status=ReportStatus.ACTIVE, marker_description="tattoo on tail",
+        )
+        score_with, _, _, _ = service._evaluate_match_score(lost, found_match)
+        score_without, _, _, _ = service._evaluate_match_score(lost, found_no_match)
+        assert score_with > score_without
+
+    @pytest.mark.asyncio
+    async def test_evaluate_match_score_within_bounds(self, service):
+        lost = LostReport(
+            id=uuid.uuid4(), user_id=uuid.uuid4(), pet_name="M", breed="labrador",
+            color="brown", location_address="Addr", lost_at=datetime.now(UTC),
+            latitude=40.0, longitude=-74.0, status=ReportStatus.ACTIVE,
+        )
+        found = FoundReport(
+            id=uuid.uuid4(), user_id=uuid.uuid4(), breed_observed="poodle",
+            color_observed="white", location_address="Addr2",
+            found_at=datetime.now(UTC), latitude=45.0, longitude=-80.0,
+            status=ReportStatus.ACTIVE,
+        )
+        score, dist_km, gap_days, reasons = service._evaluate_match_score(lost, found)
+        assert 0.0 <= score <= 100.0
+        assert isinstance(gap_days, float)
+        assert isinstance(reasons, list)
+
+    @pytest.mark.asyncio
+    async def test_evaluate_match_score_no_match_below_threshold(self, service):
+        lost = LostReport(
+            id=uuid.uuid4(), user_id=uuid.uuid4(), pet_name="M", breed="labrador",
+            color="brown", location_address="Addr", lost_at=datetime.now(UTC),
+            latitude=40.0, longitude=-74.0, status=ReportStatus.ACTIVE,
+        )
+        found = FoundReport(
+            id=uuid.uuid4(), user_id=uuid.uuid4(), breed_observed="poodle",
+            color_observed="white", location_address="Addr2",
+            found_at=datetime.now(UTC), latitude=45.0, longitude=-80.0,
+            status=ReportStatus.ACTIVE,
+        )
+        score, _, _, _ = service._evaluate_match_score(lost, found)
+        assert score < 50.0
+
+
+class TestOwnershipClaimWorkflow:
+    @pytest.fixture
+    def mock_repo(self):
+        repo = AsyncMock(spec=LostFoundRepository)
+        repo._session = AsyncMock()
+        return repo
+
+    @pytest.fixture
+    def mock_audit(self):
+        return AsyncMock(spec=AuditService)
+
+    @pytest.fixture
+    def service(self, mock_repo, mock_audit):
+        return LostFoundService(mock_repo, mock_audit)
+
+    def _match(self, lost_owner_id, found_reporter_id, **kw):
+        lost = LostReport(
+            id=uuid.uuid4(), user_id=lost_owner_id, pet_name="Max",
+            breed="labrador", color="brown", location_address="Addr",
+            lost_at=datetime.now(UTC), status=ReportStatus.ACTIVE,
+        )
+        found = FoundReport(
+            id=uuid.uuid4(), user_id=found_reporter_id,
+            breed_observed="labrador", color_observed="brown",
+            location_address="Addr2", found_at=datetime.now(UTC),
+            status=ReportStatus.ACTIVE,
+        )
+        vals = dict(
+            id=uuid.uuid4(), lost_report_id=lost.id, found_report_id=found.id,
+            lost_report=lost, found_report=found, confidence_score=88.0,
+            status=MatchStatus.PENDING,
+        )
+        vals.update(kw)
+        return ReportMatch(**vals)
+
+    @pytest.mark.asyncio
+    async def test_submit_claim_success(self, service, mock_repo, mock_audit):
+        owner_id = uuid.uuid4()
+        match = self._match(owner_id, uuid.uuid4())
+        mock_repo.get_match_by_id.return_value = match
+        payload = OwnershipClaimSubmit(
+            microchip_doc_url="https://example.com/chip.pdf",
+            vet_bill_url="https://example.com/bill.pdf",
+        )
+        result = await service.submit_ownership_claim(
+            match.id, owner_id, payload, actor_id=owner_id, ip_address="203.0.113.9",
+        )
+        assert result.claim_submitted_at is not None
+        assert result.microchip_doc_url == "https://example.com/chip.pdf"
+        mock_audit.record.assert_awaited_once()
+        kwargs = mock_audit.record.call_args.kwargs
+        assert kwargs["event_type"].value == "lost_found_claim_submitted"
+        assert kwargs["metadata"]["proof_types"] == ["microchip_doc", "vet_bill"]
+
+    @pytest.mark.asyncio
+    async def test_submit_claim_requires_reporter(self, service, mock_repo):
+        match = self._match(uuid.uuid4(), uuid.uuid4())
+        mock_repo.get_match_by_id.return_value = match
+        stranger_id = uuid.uuid4()
+        with pytest.raises(ForbiddenError, match="reporter"):
+            await service.submit_ownership_claim(
+                match.id, stranger_id, OwnershipClaimSubmit(photo_proof_url="x"),
+            )
+
+    @pytest.mark.asyncio
+    async def test_submit_claim_requires_proof_document(self, service, mock_repo):
+        owner_id = uuid.uuid4()
+        match = self._match(owner_id, uuid.uuid4())
+        mock_repo.get_match_by_id.return_value = match
+        with pytest.raises(ValidationFailedError, match="proof document"):
+            await service.submit_ownership_claim(
+                match.id, owner_id, OwnershipClaimSubmit(),
+            )
+
+    @pytest.mark.asyncio
+    async def test_submit_claim_rejected_after_review(self, service, mock_repo):
+        owner_id = uuid.uuid4()
+        match = self._match(owner_id, uuid.uuid4(), status=MatchStatus.CONFIRMED)
+        mock_repo.get_match_by_id.return_value = match
+        with pytest.raises(ValidationFailedError, match="already been reviewed"):
+            await service.submit_ownership_claim(
+                match.id, owner_id, OwnershipClaimSubmit(photo_proof_url="x"),
+            )
+
+    @pytest.mark.asyncio
+    async def test_review_claim_approve_confirms_and_resolves(
+        self, service, mock_repo, mock_audit
+    ):
+        owner_id = uuid.uuid4()
+        reviewer_id = uuid.uuid4()
+        match = self._match(owner_id, uuid.uuid4(), claim_submitted_at=datetime.now(UTC))
+        mock_repo.get_match_by_id.return_value = match
+        mock_repo.get_lost_report_by_id.return_value = match.lost_report
+        mock_repo.get_found_report_by_id.return_value = match.found_report
+        result = await service.review_ownership_claim(
+            match.id, OwnershipClaimReview(approve=True),
+            actor_id=reviewer_id, ip_address="203.0.113.9",
+        )
+        assert result.status == MatchStatus.CONFIRMED
+        assert result.claim_reviewed_by == reviewer_id
+        assert result.claim_reviewed_at is not None
+        assert match.lost_report.status == ReportStatus.RESOLVED
+        assert match.found_report.status == ReportStatus.RESOLVED
+        mock_audit.record.assert_called()
+        reviewed = [c for c in mock_audit.record.call_args_list
+                    if c.kwargs["event_type"].value == "lost_found_claim_reviewed"]
+        assert reviewed, "claim_reviewed audit event must be recorded"
+
+    @pytest.mark.asyncio
+    async def test_review_claim_reject_marks_rejected(self, service, mock_repo):
+        owner_id = uuid.uuid4()
+        match = self._match(owner_id, uuid.uuid4(), claim_submitted_at=datetime.now(UTC))
+        mock_repo.get_match_by_id.return_value = match
+        result = await service.review_ownership_claim(
+            match.id, OwnershipClaimReview(approve=False),
+            actor_id=uuid.uuid4(),
+        )
+        assert result.status == MatchStatus.REJECTED
+
+    @pytest.mark.asyncio
+    async def test_review_claim_requires_submission(self, service, mock_repo):
+        match = self._match(uuid.uuid4(), uuid.uuid4())
+        mock_repo.get_match_by_id.return_value = match
+        with pytest.raises(ValidationFailedError, match="(?i)no ownership claim"):
+            await service.review_ownership_claim(
+                match.id, OwnershipClaimReview(approve=True),
+            )
+
+    @pytest.mark.asyncio
+    async def test_get_match(self, service, mock_repo):
+        match_id = uuid.uuid4()
+        mock_repo.get_match_by_id.return_value = self._match(
+            uuid.uuid4(), uuid.uuid4(), id=match_id,
+        )
+        result = await service.get_match(match_id)
+        assert result.id == match_id
+
+    @pytest.mark.asyncio
+    async def test_get_match_not_found(self, service, mock_repo):
+        mock_repo.get_match_by_id.return_value = None
+        with pytest.raises(NotFoundError):
+            await service.get_match(uuid.uuid4())
