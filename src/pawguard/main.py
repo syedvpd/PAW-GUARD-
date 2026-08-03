@@ -68,6 +68,32 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    from fastapi.openapi.utils import get_openapi
+
+    def custom_openapi():
+        if app.openapi_schema:
+            return app.openapi_schema
+        openapi_schema = get_openapi(
+            title=app.title,
+            version=app.version,
+            description=app.description,
+            routes=app.routes,
+        )
+        openapi_schema["components"] = openapi_schema.get("components", {})
+        openapi_schema["components"]["securitySchemes"] = {
+            "BearerAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT",
+            }
+        }
+        # Apply security globally to all endpoints
+        openapi_schema["security"] = [{"BearerAuth": []}]
+        app.openapi_schema = openapi_schema
+        return app.openapi_schema
+
+    app.openapi = custom_openapi
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins_list,
