@@ -97,7 +97,7 @@ def _mask_donor_pii(
             update={
                 "email": mask_email(masked_user.email),
                 "full_name": mask_full_name(masked_user.full_name),
-                "phone": mask_phone(masked_user.phone),
+                "phone": mask_phone(masked_user.phone) if masked_user.phone else None,
             }
         )
     return item.model_copy(

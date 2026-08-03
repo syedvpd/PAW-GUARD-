@@ -230,7 +230,7 @@ class TestLostFoundService:
             found_at=datetime.now(UTC), latitude=40.001, longitude=-74.001,
             status=ReportStatus.ACTIVE,
         )
-        score, gap_days, reasons = service._evaluate_match_score(lost, found)
+        score, dist_km, gap_days, reasons = service._evaluate_match_score(lost, found)
         assert score >= 80.0
         assert isinstance(gap_days, float)
         assert isinstance(reasons, list)
@@ -255,8 +255,8 @@ class TestLostFoundService:
             found_at=datetime(2026, 9, 1, tzinfo=UTC),
             latitude=40.001, longitude=-74.001, status=ReportStatus.ACTIVE,
         )
-        score_close, gap_close, _ = service._evaluate_match_score(lost, found_close)
-        score_far, gap_far, _ = service._evaluate_match_score(lost, found_far)
+        score_close, _, gap_close, _ = service._evaluate_match_score(lost, found_close)
+        score_far, _, gap_far, _ = service._evaluate_match_score(lost, found_far)
         assert gap_close < gap_far
         assert score_close > score_far
 
@@ -280,8 +280,8 @@ class TestLostFoundService:
             found_at=datetime.now(UTC), latitude=40.001, longitude=-74.001,
             status=ReportStatus.ACTIVE, collar_color=None,
         )
-        score_with, _, _ = service._evaluate_match_score(lost, found_match)
-        score_without, _, _ = service._evaluate_match_score(lost, found_no_collar)
+        score_with, _, _, _ = service._evaluate_match_score(lost, found_match)
+        score_without, _, _, _ = service._evaluate_match_score(lost, found_no_collar)
         assert score_with > score_without
 
     @pytest.mark.asyncio
@@ -305,8 +305,8 @@ class TestLostFoundService:
             found_at=datetime.now(UTC), latitude=40.001, longitude=-74.001,
             status=ReportStatus.ACTIVE, marker_description="tattoo on tail",
         )
-        score_with, _, _ = service._evaluate_match_score(lost, found_match)
-        score_without, _, _ = service._evaluate_match_score(lost, found_no_match)
+        score_with, _, _, _ = service._evaluate_match_score(lost, found_match)
+        score_without, _, _, _ = service._evaluate_match_score(lost, found_no_match)
         assert score_with > score_without
 
     @pytest.mark.asyncio
@@ -322,7 +322,7 @@ class TestLostFoundService:
             found_at=datetime.now(UTC), latitude=45.0, longitude=-80.0,
             status=ReportStatus.ACTIVE,
         )
-        score, gap_days, reasons = service._evaluate_match_score(lost, found)
+        score, dist_km, gap_days, reasons = service._evaluate_match_score(lost, found)
         assert 0.0 <= score <= 100.0
         assert isinstance(gap_days, float)
         assert isinstance(reasons, list)
@@ -340,7 +340,7 @@ class TestLostFoundService:
             found_at=datetime.now(UTC), latitude=45.0, longitude=-80.0,
             status=ReportStatus.ACTIVE,
         )
-        score, _, _ = service._evaluate_match_score(lost, found)
+        score, _, _, _ = service._evaluate_match_score(lost, found)
         assert score < 50.0
 
 

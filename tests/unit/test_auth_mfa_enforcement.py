@@ -31,7 +31,9 @@ def _make_service(**overrides: object) -> AuthService:
         audit_service=AsyncMock(),
     )
     kwargs.update(overrides)
-    return AuthService(**kwargs)  # type: ignore[arg-type]
+    svc = AuthService(**kwargs)  # type: ignore[arg-type]
+    svc._settings.mfa_mandatory_for_admins = True
+    return svc
 
 
 def _admin_user(**kw: object) -> User:

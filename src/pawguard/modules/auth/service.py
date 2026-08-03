@@ -201,7 +201,7 @@ class AuthService:
 
         session = await self._create_session(user_id=user.id, device=device, ctx=ctx)
 
-        if user.mfa_enabled or self._is_admin(user):
+        if user.mfa_enabled or (self._settings.mfa_mandatory_for_admins and self._is_admin(user)):
             return create_pre_auth_token(user_id=user.id, session_id=session.id)
 
         tokens = await self._issue_tokens(user=user, session=session)

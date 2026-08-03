@@ -411,7 +411,7 @@ class LostFoundService:
 
     def _evaluate_match_score(
         self, lost: LostReport, found: FoundReport
-    ) -> tuple[float, float, list[str]]:
+    ) -> tuple[float, float, float, list[str]]:
         """Compute a confidence score (0-100) for a lost/found pair.
 
         Weight breakdown (total = 100):
@@ -510,19 +510,20 @@ class LostFoundService:
 
         score = round(score, 2)
         temporal_gap_days = round(temporal_gap_days, 2)
-        return score, temporal_gap_days, reasons
+        return score, round(dist, 2), temporal_gap_days, reasons
 
     async def _run_matching_for_lost(self, lost: LostReport) -> None:
         active_founds = await self._repo.list_found_reports(status=ReportStatus.ACTIVE)
         for found in active_founds:
-            score, gap_days, reasons = self._evaluate_match_score(lost, found)
+            score, dist_km, gap_days, reasons = self._evaluate_match_score(lost, found)
             if score >= 50.0:
                 match = ReportMatch(
                     lost_report_id=lost.id,
                     found_report_id=found.id,
                     confidence_score=score,
+                    distance_km=dist_km,
                     temporal_gap_days=gap_days,
-                    match_reasons=", ".join(reasons),
+                    match_reasons=reasons,
                     status=MatchStatus.PENDING,
                 )
                 await self._repo.create_match(match)
@@ -530,14 +531,15 @@ class LostFoundService:
     async def _run_matching_for_found(self, found: FoundReport) -> None:
         active_losts = await self._repo.list_lost_reports(status=ReportStatus.ACTIVE)
         for lost in active_losts:
-            score, gap_days, reasons = self._evaluate_match_score(lost, found)
+            score, dist_km, gap_days, reasons = self._evaluate_match_score(lost, found)
             if score >= 50.0:
                 match = ReportMatch(
                     lost_report_id=lost.id,
                     found_report_id=found.id,
                     confidence_score=score,
+                    distance_km=dist_km,
                     temporal_gap_days=gap_days,
-                    match_reasons=", ".join(reasons),
+                    match_reasons=reasons,
                     status=MatchStatus.PENDING,
                 )
                 await self._repo.create_match(match)
