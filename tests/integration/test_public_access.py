@@ -14,8 +14,9 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from tests.auth_helpers import register_and_auth
 
-from pawguard.modules.auth.models import Role, User
+from pawguard.modules.auth.models import User
 from pawguard.modules.dog.models import DogProfile
 
 REGISTER_PAYLOAD = {
@@ -34,22 +35,10 @@ LOGIN_PAYLOAD = {
 @pytest.mark.asyncio
 class TestPublicAccess:
     async def _auth(self, client: AsyncClient, db_session: AsyncSession) -> dict:
-        """Register, promote to super_admin, login, return auth headers."""
-        await client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
-        stmt = (
-            select(User)
-            .options(selectinload(User.roles))
-            .where(User.email == REGISTER_PAYLOAD["email"])
+        """Register, promote to super_admin, complete MFA, return auth headers."""
+        return await register_and_auth(
+            client, db_session, email=REGISTER_PAYLOAD["email"]
         )
-        user = (await db_session.execute(stmt)).scalar_one()
-        role_stmt = select(Role).where(Role.name == "super_admin")
-        role = (await db_session.execute(role_stmt)).scalar_one()
-        user.roles.append(role)
-        user.is_verified = True
-        await db_session.commit()
-        resp = await client.post("/api/v1/auth/login", json=LOGIN_PAYLOAD)
-        token = resp.json()["data"]["access_token"]
-        return {"Authorization": f"Bearer {token}"}
 
     async def _auth_as_role(
         self,
@@ -58,26 +47,9 @@ class TestPublicAccess:
         role_name: str,
         email: str,
     ) -> dict:
-        payload = {
-            "email": email,
-            "password": "StrongP@ss99",
-            "full_name": "Role Tester",
-            "phone": "+1234567890",
-        }
-        await client.post("/api/v1/auth/register", json=payload)
-        stmt = select(User).options(selectinload(User.roles)).where(User.email == email)
-        user = (await db_session.execute(stmt)).scalar_one()
-        role_stmt = select(Role).where(Role.name == role_name)
-        role = (await db_session.execute(role_stmt)).scalar_one()
-        user.roles.append(role)
-        user.is_verified = True
-        await db_session.commit()
-        resp = await client.post(
-            "/api/v1/auth/login",
-            json={"email": email, "password": "StrongP@ss99"},
+        return await register_and_auth(
+            client, db_session, email=email, role=role_name
         )
-        token = resp.json()["data"]["access_token"]
-        return {"Authorization": f"Bearer {token}"}
 
     # ── 1. Anonymous public directory reads ────────────────────────────────
 

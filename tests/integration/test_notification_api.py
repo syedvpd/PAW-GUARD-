@@ -6,9 +6,9 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from tests.auth_helpers import register_and_auth
 
-from pawguard.modules.auth.models import Permission, Role, User
+from pawguard.modules.auth.models import User
 
 REGISTER_PAYLOAD = {
     "email": "notifapitest@example.com",
@@ -26,29 +26,9 @@ LOGIN_PAYLOAD = {
 @pytest.mark.asyncio
 class TestNotificationAPI:
     async def _auth(self, client: AsyncClient, db_session: AsyncSession) -> dict:
-        await client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
-        stmt = (
-            select(User)
-            .options(selectinload(User.roles))
-            .where(User.email == REGISTER_PAYLOAD["email"])
+        return await register_and_auth(
+            client, db_session, email=REGISTER_PAYLOAD["email"]
         )
-        user = (await db_session.execute(stmt)).scalar_one()
-        role_stmt = select(Role).options(selectinload(Role.permissions)).where(Role.name == "super_admin")
-        role = (await db_session.execute(role_stmt)).scalar_one()
-        perm_stmt = select(Permission).where(Permission.code == "notification:manage")
-        perm = (await db_session.execute(perm_stmt)).scalar_one_or_none()
-        if perm is None:
-            perm = Permission(code="notification:manage", description="Manage notifications")
-            db_session.add(perm)
-            await db_session.flush()
-        if perm not in role.permissions:
-            role.permissions.append(perm)
-        user.roles.append(role)
-        user.is_verified = True
-        await db_session.commit()
-        resp = await client.post("/api/v1/auth/login", json=LOGIN_PAYLOAD)
-        token = resp.json()["data"]["access_token"]
-        return {"Authorization": f"Bearer {token}"}
 
     async def test_list_notifications(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)

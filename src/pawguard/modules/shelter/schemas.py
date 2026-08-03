@@ -10,6 +10,7 @@ from pawguard.modules.shelter.models import (
     FacilityStatus,
     FacilityType,
     KennelSanitationState,
+    SectionType,
     TransferStatus,
 )
 
@@ -50,6 +51,7 @@ class FacilityStatusUpdate(BaseModel):
 
 class ShelterSectionCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=128, examples=["Quarantine"])
+    section_type: SectionType = Field(SectionType.GENERAL, examples=["general"])
     capacity: int = Field(10, ge=1, examples=[15])
 
 
@@ -57,6 +59,7 @@ class ShelterSectionResponse(BaseModel):
     id: uuid.UUID
     facility_id: uuid.UUID
     name: str
+    section_type: SectionType
     capacity: int
     created_at: datetime
     updated_at: datetime
@@ -126,6 +129,25 @@ class DailyCareLogResponse(BaseModel):
     dietary_requirements: str | None
     exercise_hours: float
     behavioral_enrichment: str | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class KennelCleaningLogCreate(BaseModel):
+    method: str | None = Field(None, min_length=1, max_length=64, examples=["pressure wash"])
+    notes: str | None = Field(None, examples=["Full disinfection after parvo case."])
+
+
+class KennelCleaningLogResponse(BaseModel):
+    id: uuid.UUID
+    kennel_id: uuid.UUID
+    cleaned_by: uuid.UUID
+    cleaned_at: datetime
+    sanitation_state_after: KennelSanitationState
+    cleaning_method: str | None
+    notes: str | None
     created_at: datetime
     updated_at: datetime
 

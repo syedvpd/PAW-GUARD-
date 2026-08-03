@@ -13,9 +13,12 @@ from pawguard.core.pagination import PageParams
 from pawguard.core.search import SortParams, apply_sorting, build_search_filter
 from pawguard.modules.medical.models import (
     ClinicalExam,
+    MedicalClearance,
     MedicalTreatment,
+    MedicationAdministrationLog,
     Prescription,
     VaccinationRecord,
+    VaccineProtocol,
 )
 
 
@@ -45,6 +48,75 @@ class MedicalRepository:
         self._session.add(prescription)
         await self._session.flush()
         return prescription
+
+    async def create_administration(
+        self, log: MedicationAdministrationLog
+    ) -> MedicationAdministrationLog:
+        self._session.add(log)
+        await self._session.flush()
+        return log
+
+    async def get_administrations_by_prescription(
+        self, prescription_id: uuid.UUID
+    ) -> Sequence[MedicationAdministrationLog]:
+        stmt = (
+            select(MedicationAdministrationLog)
+            .where(
+                MedicationAdministrationLog.prescription_id == prescription_id,
+                MedicationAdministrationLog.deleted_at.is_(None),
+            )
+            .order_by(MedicationAdministrationLog.administered_at.desc())
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def get_administrations_by_dog(
+        self, dog_id: uuid.UUID
+    ) -> Sequence[MedicationAdministrationLog]:
+        stmt = (
+            select(MedicationAdministrationLog)
+            .where(
+                MedicationAdministrationLog.dog_id == dog_id,
+                MedicationAdministrationLog.deleted_at.is_(None),
+            )
+            .order_by(MedicationAdministrationLog.administered_at.desc())
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def create_vaccine_protocol(self, protocol: VaccineProtocol) -> VaccineProtocol:
+        self._session.add(protocol)
+        await self._session.flush()
+        return protocol
+
+    async def list_vaccine_protocols(self) -> Sequence[VaccineProtocol]:
+        stmt = (
+            select(VaccineProtocol)
+            .where(VaccineProtocol.deleted_at.is_(None))
+            .order_by(VaccineProtocol.name.asc())
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def get_vaccine_protocol_by_name(self, name: str) -> VaccineProtocol | None:
+        stmt = (
+            select(VaccineProtocol)
+            .where(
+                func.lower(func.trim(VaccineProtocol.name)) == name.strip().lower(),
+                VaccineProtocol.deleted_at.is_(None),
+            )
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def create_clearance(self, clearance: MedicalClearance) -> MedicalClearance:
+        self._session.add(clearance)
+        await self._session.flush()
+        return clearance
+
+    async def get_clearances_by_dog(self, dog_id: uuid.UUID) -> Sequence[MedicalClearance]:
+        stmt = (
+            select(MedicalClearance)
+            .where(MedicalClearance.dog_id == dog_id, MedicalClearance.deleted_at.is_(None))
+            .order_by(MedicalClearance.created_at.desc())
+        )
+        return (await self._session.execute(stmt)).scalars().all()
 
     async def get_prescription_by_id(self, p_id: uuid.UUID) -> Prescription | None:
         stmt = (

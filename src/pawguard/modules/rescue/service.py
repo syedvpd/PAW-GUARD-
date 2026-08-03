@@ -20,10 +20,12 @@ from pawguard.modules.dog.models import (
     DogStatus,
 )
 from pawguard.modules.dog.repository import DogRepository
+from pawguard.modules.fleet.models import VehicleStatus
 from pawguard.modules.fleet.repository import FleetRepository
 from pawguard.modules.fleet.service import FleetService
 from pawguard.modules.rescue.models import (
     RescueDispatch,
+    RescueDispatchAgent,
     RescueEscalationType,
     RescuePhysicalCondition,
     RescueReport,
@@ -260,7 +262,9 @@ class RescueService:
         request_id: uuid.UUID,
         *,
         assigned_driver_id: uuid.UUID | None = None,
+        assigned_agent_ids: list[uuid.UUID] | None = None,
         vehicle_id: str | None = None,
+        assigned_vehicle_id: uuid.UUID | None = None,
         equipment_details: str | None = None,
         escalation_type: RescueEscalationType | None = None,
         escalation_notes: str | None = None,
@@ -280,10 +284,33 @@ class RescueService:
         if existing_dispatch is not None:
             raise ConflictError("Dispatch record already exists for this request.")
 
+        # Vehicle assignment (PRR 3.2): the vehicle must exist and be ACTIVE.
+        # Delegates existence lookup to the fleet domain and enforces the
+        # operational rule here in the service layer.
+        if assigned_vehicle_id is not None:
+            vehicle = await self._fleet_service().get_vehicle(assigned_vehicle_id)
+            if vehicle.status != VehicleStatus.ACTIVE:
+                raise ValidationFailedError(
+                    "Only ACTIVE vehicles can be assigned to a rescue dispatch "
+                    f"(vehicle is '{vehicle.status.value}')."
+                )
+
+        # Assemble the full team: the explicit agent list plus the legacy
+        # single-driver field, deduplicated. Every member is mirrored into
+        # the dispatch-agent association table so "one or more agents" holds
+        # for both the new multi-agent flow and the back-compat driver flow.
+        agent_ids: list[uuid.UUID] = []
+        for agent_id in assigned_agent_ids or []:
+            if agent_id not in agent_ids:
+                agent_ids.append(agent_id)
+        if assigned_driver_id is not None and assigned_driver_id not in agent_ids:
+            agent_ids.append(assigned_driver_id)
+
         dispatch = RescueDispatch(
             rescue_request_id=request_id,
             assigned_driver_id=assigned_driver_id,
             vehicle_id=vehicle_id,
+            assigned_vehicle_id=assigned_vehicle_id,
             equipment_details=equipment_details,
             dispatched_at=datetime.now(UTC),
             escalation_type=escalation_type,
@@ -291,6 +318,10 @@ class RescueService:
             notes=notes,
         )
         await self._repo.create_dispatch(dispatch)
+        for agent_id in agent_ids:
+            await self._repo.create_dispatch_agent(
+                RescueDispatchAgent(dispatch_id=dispatch.id, agent_id=agent_id)
+            )
         # Keep the in-memory relationship consistent: the request was fetched
         # before the dispatch existed, so its `dispatch` attribute is already
         # loaded as None and the re-fetch below would not overwrite it (the
@@ -327,7 +358,9 @@ class RescueService:
                 metadata={
                     "rescue_id": str(request_id),
                     "assigned_driver_id": str(assigned_driver_id) if assigned_driver_id else None,
+                    "assigned_agent_ids": [str(i) for i in agent_ids],
                     "vehicle_id": vehicle_id,
+                    "assigned_vehicle_id": str(assigned_vehicle_id) if assigned_vehicle_id else None,
                     "escalation_type": escalation_type.value if escalation_type else None,
                 },
             )
@@ -438,6 +471,9 @@ class RescueService:
                     "requested_status": status.value,
                     "failure_reason": failure_reason,
                 },
+                # Structured before/after snapshots (audit finding #3).
+                before_state={"status": str(old_status)},
+                after_state={"status": str(request.status)},
             )
 
         return res

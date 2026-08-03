@@ -5,12 +5,13 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from pawguard.modules.fleet.models import VehicleStatus
+from pawguard.modules.fleet.models import VehicleStatus, VehicleType
 
 
 class VehicleCreate(BaseModel):
     make_model: str = Field(..., min_length=1, max_length=255, examples=["Ford Transit 2022"])
     license_plate: str = Field(..., min_length=1, max_length=64, examples=["RESCUE-01"])
+    vehicle_type: VehicleType = VehicleType.RESCUE_VAN
     status: VehicleStatus = VehicleStatus.ACTIVE
     mileage: int = Field(0, ge=0, examples=[12500])
     primary_driver_id: uuid.UUID | None = None
@@ -21,6 +22,7 @@ class VehicleUpdate(BaseModel):
         None, min_length=1, max_length=255, examples=["Ford Transit 2022"]
     )
     license_plate: str | None = Field(None, min_length=1, max_length=64, examples=["RESCUE-01"])
+    vehicle_type: VehicleType | None = Field(None, examples=["ambulance"])
     status: VehicleStatus | None = Field(None, examples=["active"])
     mileage: int | None = Field(None, ge=0, examples=[12800])
     primary_driver_id: uuid.UUID | None = None
@@ -42,6 +44,7 @@ class VehicleResponse(BaseModel):
     id: uuid.UUID
     make_model: str
     license_plate: str
+    vehicle_type: VehicleType | None = VehicleType.RESCUE_VAN
     status: VehicleStatus
     mileage: int
     primary_driver_id: uuid.UUID | None
@@ -79,6 +82,10 @@ class EquipmentCheckoutCreate(BaseModel):
     equipment_name: str = Field(..., min_length=1, max_length=255, examples=["Net Gun"])
     assigned_to_agent_id: uuid.UUID | None = None
     assigned_to_vehicle_id: uuid.UUID | None = None
+    expected_return_at: datetime | None = Field(
+        None, examples=["2026-08-17T18:00:00Z"],
+        description="When the equipment is due back. Defaults to a checkout window.",
+    )
     notes: str | None = Field(None, examples=["Checked out for Sector 4 rescue."])
 
 
@@ -93,6 +100,7 @@ class EquipmentCheckoutResponse(BaseModel):
     assigned_to_vehicle_id: uuid.UUID | None
     rescue_dispatch_id: uuid.UUID | None = None
     checked_out_at: datetime
+    expected_return_at: datetime | None
     returned_at: datetime | None
     notes: str | None
     created_at: datetime

@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -123,6 +124,80 @@ class PrescriptionResponse(BaseModel):
     start_at: datetime
     end_at: datetime
     is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MedicationAdministrationCreate(BaseModel):
+    prescription_id: uuid.UUID | None = Field(
+        None, description="Prescription this sign-off belongs to, if any."
+    )
+    dog_id: uuid.UUID
+    medication_name: str = Field(..., min_length=1, max_length=128, examples=["Amoxicillin"])
+    dosage: str = Field(..., min_length=1, max_length=128, examples=["5ml"])
+    route: str = Field(..., min_length=1, max_length=64, examples=["Oral"])
+    administered_at: datetime | None = Field(None, examples=["2026-07-29T10:00:00Z"])
+    notes: str | None = Field(None, examples=["Given with food, tolerated well."])
+
+
+class MedicationAdministrationResponse(BaseModel):
+    id: uuid.UUID
+    prescription_id: uuid.UUID | None
+    dog_id: uuid.UUID
+    medication_name: str
+    dosage: str
+    route: str
+    administered_at: datetime
+    administered_by_id: uuid.UUID
+    notes: str | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class VaccineProtocolCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=128, examples=["Rabies"])
+    default_interval_days: int = Field(..., ge=1, le=3650, examples=[365])
+    is_required: bool = Field(True, examples=[True])
+
+
+class VaccineProtocolResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    default_interval_days: int
+    is_required: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MedicalClearanceCreate(BaseModel):
+    clearance_type: str = Field(
+        default="adoption_surgery",
+        min_length=1,
+        max_length=64,
+        examples=["adoption_surgery"],
+    )
+    status: Literal["approved", "denied", "pending"] = Field(
+        "approved", examples=["approved"]
+    )
+    decision_notes: str | None = Field(None, examples=["Healthy, cleared for adoption."])
+    expires_at: datetime | None = Field(None, examples=["2026-08-03T00:00:00Z"])
+
+
+class MedicalClearanceResponse(BaseModel):
+    id: uuid.UUID
+    dog_id: uuid.UUID
+    authorized_by_id: uuid.UUID
+    clearance_type: str
+    status: str
+    decision_notes: str | None
+    authorized_at: datetime | None
+    expires_at: datetime | None
     created_at: datetime
     updated_at: datetime
 

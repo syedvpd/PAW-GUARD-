@@ -22,6 +22,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from tests.auth_helpers import register_and_auth
 
 from pawguard.modules.auth.models import Permission, Role, User
 from pawguard.modules.dog.models import DogProfile
@@ -93,31 +94,7 @@ class TestVolunteerFosterScoping:
     async def _make_staff_headers(
         self, client: AsyncClient, db_session: AsyncSession, email: str
     ) -> dict:
-        payload = {
-            "email": email,
-            "password": "StrongP@ss99",
-            "full_name": "Staff",
-            "phone": "+1234567890",
-        }
-        await client.post("/api/v1/auth/register", json=payload)
-        staff = (
-            await db_session.execute(
-                select(User)
-                .options(selectinload(User.roles))
-                .where(User.email == payload["email"])
-            )
-        ).scalar_one()
-        admin_role = (
-            await db_session.execute(select(Role).where(Role.name == "super_admin"))
-        ).scalar_one()
-        staff.roles.append(admin_role)
-        staff.is_verified = True
-        await db_session.commit()
-        login_resp = await client.post(
-            "/api/v1/auth/login",
-            json={"email": payload["email"], "password": payload["password"]},
-        )
-        return {"Authorization": f"Bearer {login_resp.json()['data']['access_token']}"}
+        return await register_and_auth(client, db_session, email=email)
 
     async def _create_owned_placement_with_log(
         self,

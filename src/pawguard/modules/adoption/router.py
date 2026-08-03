@@ -25,9 +25,12 @@ from pawguard.modules.adoption.schemas import (
     AdoptionApplicationCreate,
     AdoptionApplicationResponse,
     AdoptionApplicationUpdate,
+    AdoptionFeeUpdate,
+    AdoptionFollowUpResponse,
     AdoptionScoreCreate,
     AdoptionScoreResponse,
     AdoptionStatusUpdate,
+    FollowUpProofCreate,
 )
 from pawguard.modules.adoption.service import AdoptionService
 from pawguard.modules.auth.audit import get_audit_service
@@ -227,7 +230,11 @@ async def get_scores(
     current_user: CurrentUser = Depends(get_current_user),
     service: AdoptionService = Depends(get_adoption_service),
 ) -> ApiResponse[list[AdoptionScoreResponse]]:
-    if not has_permission(current_user.user, "adoption:read"):
+    app = await service.get_application(app_id)
+
+    if app.adopter_id != current_user.user.id and not has_permission(
+        current_user.user, "adoption:read"
+    ):
         raise ForbiddenError("You do not have permission to view these scores.")
     scores = await service.get_scores(app_id)
     return ApiResponse(

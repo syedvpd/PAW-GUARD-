@@ -4,8 +4,10 @@ import re
 import secrets
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from pawguard.core.pagination import PageParams, build_pagination_meta
@@ -78,6 +80,51 @@ def _parse_age_months(estimated_age: str | None) -> int | None:
     if unit in ("month", "mo"):
         return number
     return None
+
+
+async def record_activity(
+    session: AsyncSession,
+    *,
+    dog_id: uuid.UUID,
+    event_type: DogActivityEventType | str,
+    actor_id: uuid.UUID | None = None,
+    message: str | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> DogActivityLog:
+    """Append an immutable row to a dog's activity stream (PRR 3.4).
+
+    Reusable across modules: any domain that mutates a dog's lifecycle
+    (adoption, foster, shelter, medical, transfers, ...) can import this and
+    write to the stream without reaching into dog internals. The row is
+    appended to ``session`` and flushed; the caller owns the transaction.
+
+    ``event_type`` conventions:
+      - Dog-module events use the ``DogActivityEventType`` members
+        (REGISTERED, UPDATED, STATUS_CHANGED, DELETED, WEIGHT_RECORDED,
+        BULK_STATUS_UPDATED, BULK_DELETED).
+      - Cross-module lifecycle events should pass a descriptive snake_case
+        string so the stream reads as one chronological trail, e.g.
+        "transfer_created", "transfer_confirmed", "foster_placed",
+        "foster_ended", "adoption_application_submitted",
+        "adoption_completed", "medical_record_created",
+        "post_adoption_inspection_submitted". Prefer a single past-tense
+        verb + object phrase.
+    ``message`` defaults to a human-readable "<event>." line when the caller
+    does not supply one. Rows are never updated or deleted.
+    """
+    if message is None:
+        value = event_type.value if isinstance(event_type, DogActivityEventType) else event_type
+        message = f"{value.replace('_', ' ')}."
+    repo = DogRepository(session)
+    return await repo.create_activity(
+        DogActivityLog(
+            dog_id=dog_id,
+            actor_id=actor_id,
+            event_type=event_type,
+            message=message,
+            event_metadata=metadata,
+        )
+    )
 
 
 class DogService:
@@ -540,14 +587,13 @@ class DogService:
         event_type: DogActivityEventType,
         message: str,
         actor_id: uuid.UUID | None,
-        metadata: dict[str, object] | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
-        await self._repo.create_activity(
-            DogActivityLog(
-                dog_id=dog_id,
-                actor_id=actor_id,
-                event_type=event_type,
-                message=message,
-                event_metadata=metadata,
-            )
+        await record_activity(
+            self._repo._session,
+            dog_id=dog_id,
+            event_type=event_type,
+            actor_id=actor_id,
+            message=message,
+            metadata=metadata,
         )

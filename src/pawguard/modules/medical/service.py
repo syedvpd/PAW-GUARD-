@@ -5,9 +5,12 @@
 
 import uuid
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
-from pawguard.core.exceptions import ForbiddenError, NotFoundError
+from sqlalchemy.exc import OperationalError, ProgrammingError
+
+from pawguard.core.exceptions import ConflictError, ForbiddenError, NotFoundError
+from pawguard.core.logging import get_logger
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
@@ -18,23 +21,31 @@ from pawguard.modules.inventory.schemas import InventoryConsumptionItem, Invento
 from pawguard.modules.inventory.service import InventoryService
 from pawguard.modules.medical.models import (
     ClinicalExam,
+    MedicalClearance,
     MedicalTreatment,
+    MedicationAdministrationLog,
     Prescription,
     VaccinationRecord,
+    VaccineProtocol,
 )
 from pawguard.modules.medical.repository import MedicalRepository
 from pawguard.modules.medical.schemas import (
     ClinicalExamCreate,
     ClinicalExamResponse,
+    MedicalClearanceCreate,
     MedicalTreatmentCreate,
     MedicalTreatmentResponse,
+    MedicationAdministrationCreate,
     PrescriptionCreate,
     PrescriptionResponse,
     PrescriptionUpdate,
     VaccinationRecordCreate,
     VaccinationRecordResponse,
+    VaccineProtocolCreate,
 )
 from pawguard.services.audit_service import AuditService
+
+logger = get_logger(__name__)
 
 
 class MedicalService:
@@ -150,7 +161,47 @@ class MedicalService:
                 user_agent="",
                 metadata={"vaccination_id": str(rec.id), "dog_id": str(payload.dog_id)},
             )
+        await self.schedule_next_dose(rec)
         return rec
+
+    async def schedule_next_dose(
+        self, record: VaccinationRecord
+    ) -> VaccinationRecord | None:
+        """Auto-create the next protocol-driven vaccination dose (PRR 3.5).
+
+        Looks up the matching ``VaccineProtocol`` by normalized vaccine name.
+        When a protocol exists and the administered record has no explicit
+        ``next_due_at`` yet, the due date is derived from the protocol interval
+        and a placeholder record for the upcoming dose is persisted. The
+        protocol table is optional: missing rows (or an unprovisioned table in
+        environments without migrations) simply disable auto-scheduling.
+        """
+        if record.next_due_at is not None:
+            return None
+
+        try:
+            protocol = await self._repo.get_vaccine_protocol_by_name(record.vaccine_name)
+        except (OperationalError, ProgrammingError):
+            logger.warning(
+                "vaccine_protocol_lookup_unavailable",
+                vaccination_id=str(record.id),
+                vaccine_name=record.vaccine_name,
+            )
+            return None
+        if protocol is None:
+            return None
+
+        next_due = record.administered_at + timedelta(days=protocol.default_interval_days)
+        record.next_due_at = next_due
+        next_rec = VaccinationRecord(
+            dog_id=record.dog_id,
+            administered_by=record.administered_by,
+            vaccine_name=record.vaccine_name,
+            administered_at=next_due,
+            next_due_at=None,
+            lot_number=None,
+        )
+        return await self._repo.create_vaccination(next_rec)
 
     async def prescribe_medication(
         self,
@@ -198,6 +249,7 @@ class MedicalService:
         roles: set[str],
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
+        payload: MedicalClearanceCreate | None = None,
     ) -> bool:
         if not ("super_admin" in roles or "veterinarian" in roles):
             raise ForbiddenError("Adoption medical clearances require a veterinarian's authority.")
@@ -206,18 +258,117 @@ class MedicalService:
         if dog is None:
             raise NotFoundError("Dog profile not found.")
 
-        dog.is_adoptable = True
-        dog.is_quarantine_passed = True
-        await self._dog_repo._session.flush()
+        clearance_payload = payload or MedicalClearanceCreate()
+
+        # The dog-level adoptability flags stay in sync with the persisted
+        # clearance decision (PRR 3.5): only an approval grants them.
+        if clearance_payload.status == "approved":
+            dog.is_adoptable = True
+            dog.is_quarantine_passed = True
+
+        clearance = MedicalClearance(
+            dog_id=dog_id,
+            authorized_by_id=actor_id,
+            clearance_type=clearance_payload.clearance_type,
+            status=clearance_payload.status,
+            decision_notes=clearance_payload.decision_notes,
+            authorized_at=datetime.now(UTC),
+            expires_at=clearance_payload.expires_at,
+        )
+        await self._repo.create_clearance(clearance)
+        await self._repo._session.flush()
         if self._audit and actor_id:
             await self._audit.record(
                 event_type=AuthAuditEventType.MEDICAL_RECORD_UPDATED,
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
-                metadata={"dog_id": str(dog_id)},
+                metadata={
+                    "dog_id": str(dog_id),
+                    "clearance_id": str(clearance.id),
+                    "status": clearance.status,
+                },
             )
         return True
+
+    async def get_clearances_for_dog(self, dog_id: uuid.UUID) -> Sequence[MedicalClearance]:
+        return await self._repo.get_clearances_by_dog(dog_id)
+
+    async def log_medication_administration(
+        self,
+        nurse_id: uuid.UUID,
+        payload: MedicationAdministrationCreate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> MedicationAdministrationLog:
+        dog = await self._dog_repo.get_by_id(payload.dog_id)
+        if dog is None:
+            raise NotFoundError("Dog profile not found.")
+        if payload.prescription_id is not None:
+            rx = await self._repo.get_prescription_by_id(payload.prescription_id)
+            if rx is None:
+                raise NotFoundError("Prescription not found.")
+
+        log = MedicationAdministrationLog(
+            prescription_id=payload.prescription_id,
+            dog_id=payload.dog_id,
+            medication_name=payload.medication_name,
+            dosage=payload.dosage,
+            route=payload.route,
+            administered_at=payload.administered_at or datetime.now(UTC),
+            administered_by_id=nurse_id,
+            notes=payload.notes,
+        )
+        log = await self._repo.create_administration(log)
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.MEDICAL_RECORD_CREATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"administration_id": str(log.id), "dog_id": str(payload.dog_id)},
+            )
+        return log
+
+    async def get_administrations_for_prescription(
+        self, prescription_id: uuid.UUID
+    ) -> Sequence[MedicationAdministrationLog]:
+        return await self._repo.get_administrations_by_prescription(prescription_id)
+
+    async def get_administrations_for_dog(
+        self, dog_id: uuid.UUID
+    ) -> Sequence[MedicationAdministrationLog]:
+        return await self._repo.get_administrations_by_dog(dog_id)
+
+    async def create_vaccine_protocol(
+        self,
+        payload: VaccineProtocolCreate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> VaccineProtocol:
+        existing = await self._repo.get_vaccine_protocol_by_name(payload.name)
+        if existing is not None:
+            raise ConflictError(
+                f"Vaccine protocol '{payload.name}' already exists."
+            )
+        protocol = VaccineProtocol(
+            name=payload.name,
+            default_interval_days=payload.default_interval_days,
+            is_required=payload.is_required,
+        )
+        protocol = await self._repo.create_vaccine_protocol(protocol)
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.MEDICAL_RECORD_CREATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"vaccine_protocol_id": str(protocol.id), "name": protocol.name},
+            )
+        return protocol
+
+    async def list_vaccine_protocols(self) -> Sequence[VaccineProtocol]:
+        return await self._repo.list_vaccine_protocols()
 
     async def get_exams_for_dog(self, dog_id: uuid.UUID) -> Sequence[ClinicalExam]:
         return await self._repo.get_exams_by_dog(dog_id)

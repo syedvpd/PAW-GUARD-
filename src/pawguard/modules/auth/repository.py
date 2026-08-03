@@ -4,6 +4,11 @@ import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import select, update
+
+# The role granted to users on self-service registration / OAuth account
+# creation. Must match the `general_public` role seeded by
+# scripts/seed_roles_and_permissions.py (ROLE_DEFINITIONS).
+DEFAULT_PUBLIC_ROLE = "general_public"
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -47,7 +52,7 @@ class UserRepository:
         return user
 
     async def get_default_role(self) -> Role | None:
-        stmt = select(Role).where(Role.name == "user")
+        stmt = select(Role).where(Role.name == DEFAULT_PUBLIC_ROLE)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def get_role_by_name(self, name: str) -> Role | None:

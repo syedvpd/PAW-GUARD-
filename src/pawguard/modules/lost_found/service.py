@@ -3,6 +3,7 @@
 import math
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from pawguard.core.exceptions import ForbiddenError, NotFoundError, ValidationFailedError

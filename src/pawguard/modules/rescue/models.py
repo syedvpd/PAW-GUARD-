@@ -4,7 +4,17 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, func
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -150,6 +160,16 @@ class RescueDispatch(UUIDPkMixin, TimestampMixin, Base):
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     vehicle_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # FK-validated vehicle reference (PRR 3.2 resource assignment). The
+    # legacy free-text `vehicle_id` column above is kept for back-compat /
+    # display; this column is the source of truth for the ACTIVE vehicle
+    # assigned to the dispatch and is validated by the service layer.
+    assigned_vehicle_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("vehicles.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     equipment_details: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     dispatched_at: Mapped[datetime] = mapped_column(
@@ -171,6 +191,45 @@ class RescueDispatch(UUIDPkMixin, TimestampMixin, Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     rescue_request: Mapped["RescueRequest"] = relationship(back_populates="dispatch")
+    # One-or-more assigned agents (PRR 3.2): the legacy `assigned_driver_id`
+    # column is mirrored into this association table so a dispatch can carry a
+    # full field team and agents can query "my assigned cases".
+    agents: Mapped[list["RescueDispatchAgent"]] = relationship(
+        back_populates="dispatch", cascade="all, delete-orphan"
+    )
+
+
+class RescueDispatchAgent(UUIDPkMixin, TimestampMixin, Base):
+    """Association of a rescue dispatch to one of its assigned field agents.
+
+    A dispatch has one or more agents (PRR 3.2 resource assignment). The
+    legacy single ``assigned_driver_id`` column on the dispatch is mirrored
+    here for back-compat; this table is the source of truth for multi-agent
+    teams and the "assigned to me" case filter.
+    """
+
+    __tablename__ = "rescue_dispatch_agents"
+    __table_args__ = (
+        UniqueConstraint(
+            "dispatch_id", "agent_id", name="uq_rescue_dispatch_agents_dispatch_agent"
+        ),
+    )
+
+    dispatch_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("rescue_dispatches.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    agent_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    role: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    dispatch: Mapped["RescueDispatch"] = relationship(back_populates="agents")
 
 
 class RescueReport(UUIDPkMixin, TimestampMixin, Base):

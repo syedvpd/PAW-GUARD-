@@ -4,7 +4,7 @@ import uuid
 from collections.abc import Sequence
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -12,6 +12,7 @@ from pawguard.core.pagination import PageParams
 from pawguard.core.search import SortParams, apply_sorting, build_search_filter
 from pawguard.modules.rescue.models import (
     RescueDispatch,
+    RescueDispatchAgent,
     RescueReport,
     RescueRequest,
     RescueSeverity,
@@ -78,6 +79,7 @@ class RescueRepository:
         status: RescueStatus | None = None,
         severity: RescueSeverity | None = None,
         urgent_only: bool | None = None,
+        assigned_to_me: uuid.UUID | None = None,
     ) -> tuple[Sequence[RescueRequest], int]:
         stmt = self._base_stmt()
 
@@ -93,6 +95,25 @@ class RescueRepository:
 
         if urgent_only is not None:
             stmt = stmt.where(RescueRequest.is_urgent.is_(urgent_only))
+
+        if assigned_to_me is not None:
+            # "My assigned cases" filter (PRR 3.2 field-agent interface): the
+            # user is on the dispatch team when they are either the legacy
+            # assigned_driver_id or a row in the dispatch-agent association
+            # table. EXISTS keeps the row set distinct (no fan-out) so the
+            # count query below stays correct.
+            agent_scope = exists().where(
+                RescueDispatchAgent.dispatch_id == RescueDispatch.id,
+                RescueDispatchAgent.agent_id == assigned_to_me,
+            )
+            stmt = stmt.join(
+                RescueDispatch, RescueDispatch.rescue_request_id == RescueRequest.id
+            ).where(
+                or_(
+                    RescueDispatch.assigned_driver_id == assigned_to_me,
+                    agent_scope,
+                )
+            )
 
         stmt = apply_sorting(stmt, sort, self.SORTABLE_FIELDS)
 
@@ -133,6 +154,13 @@ class RescueRepository:
         self._session.add(dispatch)
         await self._session.flush()
         return dispatch
+
+    async def create_dispatch_agent(
+        self, agent: RescueDispatchAgent
+    ) -> RescueDispatchAgent:
+        self._session.add(agent)
+        await self._session.flush()
+        return agent
 
     async def get_dispatch_by_request_id(self, request_id: uuid.UUID) -> RescueDispatch | None:
         stmt = select(RescueDispatch).where(RescueDispatch.rescue_request_id == request_id)

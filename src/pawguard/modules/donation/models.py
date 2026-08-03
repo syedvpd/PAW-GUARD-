@@ -30,6 +30,16 @@ class DonationStatus(StrEnum):
     FAILED = "failed"
 
 
+class RecurringFrequency(StrEnum):
+    MONTHLY = "monthly"
+
+
+class RecurringStatus(StrEnum):
+    ACTIVE = "active"
+    PAUSED = "paused"
+    CANCELLED = "cancelled"
+
+
 class SponsorshipStatus(StrEnum):
     ACTIVE = "active"
     PAUSED = "paused"
@@ -99,6 +109,44 @@ class DogSponsorship(UUIDPkMixin, TimestampMixin, Base):
     dog: Mapped["DogProfile"] = relationship("DogProfile", lazy="joined")
 
 
+class RecurringSubscription(UUIDPkMixin, TimestampMixin, Base):
+    """A monthly recurring donation linked to a donor profile (audit 3.11).
+
+    Each due charge is recorded as a PENDING `Donation` (donation_type=RECURRING,
+    recurring_subscription_id set) and confirmed via the existing order/verify/
+    webhook flow. The next_charge_date advances one month once payment succeeds.
+    """
+
+    __tablename__ = "recurring_subscriptions"
+
+    donor_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("donor_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
+    frequency: Mapped[RecurringFrequency] = mapped_column(
+        String(32), default=RecurringFrequency.MONTHLY, nullable=False
+    )
+    status: Mapped[RecurringStatus] = mapped_column(
+        String(32), default=RecurringStatus.ACTIVE, nullable=False, index=True
+    )
+    next_charge_date: Mapped[date_type] = mapped_column(Date, nullable=False)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    cancelled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    donor: Mapped["DonorProfile"] = relationship("DonorProfile", lazy="joined")
+    donations: Mapped[list["Donation"]] = relationship(
+        back_populates="recurring_subscription", lazy="selectin"
+    )
+
+
 class Donation(UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "donations"
 
@@ -113,6 +161,11 @@ class Donation(UUIDPkMixin, TimestampMixin, Base):
     sponsorship_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("dog_sponsorships.id", ondelete="SET NULL"),
+        nullable=True, index=True,
+    )
+    recurring_subscription_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("recurring_subscriptions.id", ondelete="SET NULL"),
         nullable=True, index=True,
     )
     campaign_id: Mapped[uuid.UUID | None] = mapped_column(

@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 
 from pawguard.core.pagination import PageParams
 from pawguard.core.search import SortParams, apply_sorting, build_search_filter
+from pawguard.modules.auth.models import User
 from pawguard.modules.donation.models import (
     CampaignStatus,
     DogSponsorship,
@@ -53,7 +54,7 @@ class DonationRepository:
     async def get_donor_by_id(self, donor_id: uuid.UUID) -> DonorProfile | None:
         stmt = (
             select(DonorProfile)
-            .options(selectinload(DonorProfile.user))
+            .options(selectinload(DonorProfile.user).selectinload(User.roles))
             .where(DonorProfile.id == donor_id, DonorProfile.deleted_at.is_(None))
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
@@ -61,7 +62,7 @@ class DonationRepository:
     async def get_donor_by_user_id(self, user_id: uuid.UUID) -> DonorProfile | None:
         stmt = (
             select(DonorProfile)
-            .options(selectinload(DonorProfile.user))
+            .options(selectinload(DonorProfile.user).selectinload(User.roles))
             .where(DonorProfile.user_id == user_id, DonorProfile.deleted_at.is_(None))
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
@@ -162,7 +163,7 @@ class DonationRepository:
     ) -> tuple[Sequence[DonorProfile], int]:
         stmt = (
             select(DonorProfile)
-            .options(selectinload(DonorProfile.user))
+            .options(selectinload(DonorProfile.user).selectinload(User.roles))
             .where(DonorProfile.deleted_at.is_(None))
         )
 

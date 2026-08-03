@@ -14,20 +14,22 @@ from pawguard.modules.fleet.models import (
     FuelLog,
     Vehicle,
     VehicleStatus,
+    VehicleType,
 )
 
 
 class FleetRepository:
     VEHICLE_SEARCH_FIELDS = ("make_model", "license_plate")
     VEHICLE_SORTABLE_FIELDS = {
-        "make_model", "license_plate", "status", "mileage", "created_at", "updated_at",
+        "make_model", "license_plate", "status", "vehicle_type", "mileage",
+        "created_at", "updated_at",
     }
     MAINTENANCE_SORTABLE_FIELDS = {
         "service_date", "cost", "created_at",
     }
     EQUIPMENT_SEARCH_FIELDS = ("equipment_name", "notes")
     EQUIPMENT_SORTABLE_FIELDS = {
-        "equipment_name", "checked_out_at", "returned_at", "created_at",
+        "equipment_name", "checked_out_at", "expected_return_at", "returned_at", "created_at",
     }
     FUEL_SORTABLE_FIELDS = {"filled_at", "volume_litres", "cost", "mileage_at_fill"}
     FUEL_SEARCH_FIELDS = ("vendor", "notes")
@@ -57,6 +59,7 @@ class FleetRepository:
         sort: SortParams,
         search_term: str | None = None,
         status: VehicleStatus | None = None,
+        vehicle_type: VehicleType | None = None,
     ) -> tuple[Sequence[Vehicle], int]:
         stmt = select(Vehicle).where(Vehicle.deleted_at.is_(None))
 
@@ -66,6 +69,9 @@ class FleetRepository:
 
         if status is not None:
             stmt = stmt.where(Vehicle.status == status)
+
+        if vehicle_type is not None:
+            stmt = stmt.where(Vehicle.vehicle_type == vehicle_type)
 
         stmt = apply_sorting(stmt, sort, self.VEHICLE_SORTABLE_FIELDS)
 

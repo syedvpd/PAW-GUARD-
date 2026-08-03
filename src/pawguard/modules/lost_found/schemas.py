@@ -85,6 +85,12 @@ class ReportMatchResponse(BaseModel):
     claim_reviewed_at: datetime | None
     claim_reviewed_by: uuid.UUID | None
     created_at: datetime
+    # Score-basis transparency (PRR 3.10): computed by the matcher at match time
+    # and attached to the match record by the service. Historical matches that
+    # predate these fields fall back to these defaults.
+    distance_km: float | None = None
+    temporal_gap_days: float | None = None
+    match_reasons: list[str] = []
     lost_report: LostReportResponse | None = None
     found_report: FoundReportResponse | None = None
 

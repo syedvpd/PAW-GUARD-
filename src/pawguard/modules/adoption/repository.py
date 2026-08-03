@@ -5,6 +5,7 @@ Repositories never contain business decisions (RULE-002).
 
 import uuid
 from collections.abc import Sequence
+from datetime import datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,7 +13,14 @@ from sqlalchemy.orm import selectinload
 
 from pawguard.core.pagination import PageParams
 from pawguard.core.search import SortParams, apply_sorting, build_search_filter
-from pawguard.modules.adoption.models import AdoptionApplication, AdoptionScore, AdoptionStatus
+from pawguard.modules.adoption.models import (
+    AdoptionApplication,
+    AdoptionFollowUp,
+    AdoptionScore,
+    AdoptionStatus,
+    FollowUpStatus,
+)
+from pawguard.modules.auth.models import User
 
 
 class AdoptionRepository:
@@ -39,7 +47,7 @@ class AdoptionRepository:
             select(AdoptionApplication)
             .options(
                 selectinload(AdoptionApplication.dog),
-                selectinload(AdoptionApplication.adopter)
+                selectinload(AdoptionApplication.adopter).selectinload(User.roles)
             )
             .where(AdoptionApplication.id == app_id, AdoptionApplication.deleted_at.is_(None))
         )
@@ -50,7 +58,7 @@ class AdoptionRepository:
             select(AdoptionApplication)
             .options(
                 selectinload(AdoptionApplication.dog),
-                selectinload(AdoptionApplication.adopter)
+                selectinload(AdoptionApplication.adopter).selectinload(User.roles)
             )
             .where(AdoptionApplication.dog_id == dog_id, AdoptionApplication.deleted_at.is_(None))
         )
@@ -61,7 +69,7 @@ class AdoptionRepository:
             select(AdoptionApplication)
             .options(
                 selectinload(AdoptionApplication.dog),
-                selectinload(AdoptionApplication.adopter)
+                selectinload(AdoptionApplication.adopter).selectinload(User.roles)
             )
             .where(
                 AdoptionApplication.adopter_id == adopter_id,
@@ -83,7 +91,7 @@ class AdoptionRepository:
             select(AdoptionApplication)
             .options(
                 selectinload(AdoptionApplication.dog),
-                selectinload(AdoptionApplication.adopter)
+                selectinload(AdoptionApplication.adopter).selectinload(User.roles)
             )
             .where(AdoptionApplication.deleted_at.is_(None))
         )
@@ -114,7 +122,7 @@ class AdoptionRepository:
             select(AdoptionApplication)
             .options(
                 selectinload(AdoptionApplication.dog),
-                selectinload(AdoptionApplication.adopter)
+                selectinload(AdoptionApplication.adopter).selectinload(User.roles)
             )
             .where(AdoptionApplication.id.in_(ids), AdoptionApplication.deleted_at.is_(None))
         )
@@ -199,3 +207,73 @@ class AdoptionRepository:
             .limit(1)
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def get_completed_applications(self) -> Sequence[AdoptionApplication]:
+        stmt = (
+            select(AdoptionApplication)
+            .where(
+                AdoptionApplication.status == AdoptionStatus.COMPLETED,
+                AdoptionApplication.deleted_at.is_(None),
+            )
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def get_follow_up_by_id(self, follow_up_id: uuid.UUID) -> AdoptionFollowUp | None:
+        stmt = (
+            select(AdoptionFollowUp)
+            .options(selectinload(AdoptionFollowUp.application))
+            .where(AdoptionFollowUp.id == follow_up_id)
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def get_follow_ups_for_application(
+        self, app_id: uuid.UUID
+    ) -> Sequence[AdoptionFollowUp]:
+        stmt = (
+            select(AdoptionFollowUp)
+            .options(selectinload(AdoptionFollowUp.application))
+            .where(AdoptionFollowUp.adoption_application_id == app_id)
+            .order_by(AdoptionFollowUp.due_day)
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def get_follow_up_for_milestone(
+        self, app_id: uuid.UUID, due_day: int
+    ) -> AdoptionFollowUp | None:
+        stmt = (
+            select(AdoptionFollowUp)
+            .where(
+                AdoptionFollowUp.adoption_application_id == app_id,
+                AdoptionFollowUp.due_day == due_day,
+            )
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def get_due_follow_ups(self, now: datetime) -> Sequence[AdoptionFollowUp]:
+        """Follow-ups that are due (or overdue) and not yet submitted.
+
+        Joins the parent application so callers never have to chase the
+        adopter through a lazy load.
+        """
+        stmt = (
+            select(AdoptionFollowUp)
+            .options(selectinload(AdoptionFollowUp.application))
+            .join(
+                AdoptionApplication,
+                AdoptionApplication.id == AdoptionFollowUp.adoption_application_id,
+            )
+            .where(
+                AdoptionFollowUp.status.in_(
+                    [FollowUpStatus.PENDING, FollowUpStatus.OVERDUE]
+                ),
+                AdoptionFollowUp.due_at <= now,
+                AdoptionApplication.deleted_at.is_(None),
+            )
+            .order_by(AdoptionFollowUp.due_at)
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def create_follow_up(self, follow_up: AdoptionFollowUp) -> AdoptionFollowUp:
+        self._session.add(follow_up)
+        await self._session.flush()
+        return follow_up

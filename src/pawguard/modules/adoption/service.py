@@ -1,7 +1,8 @@
 """AdoptionService: owns all adoption vetting and exclusivity logic (RULE-003)."""
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from logging import getLogger
 
 from pawguard.core.config import get_settings
@@ -10,7 +11,13 @@ from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.pdf_generation import generate_adoption_agreement
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
-from pawguard.modules.adoption.models import AdoptionApplication, AdoptionScore, AdoptionStatus
+from pawguard.modules.adoption.models import (
+    AdoptionApplication,
+    AdoptionFollowUp,
+    AdoptionScore,
+    AdoptionStatus,
+    FollowUpStatus,
+)
 from pawguard.modules.adoption.repository import AdoptionRepository
 from pawguard.modules.adoption.schemas import (
     AdoptionApplicationCreate,
@@ -27,17 +34,24 @@ from pawguard.services.storage_service import StorageService
 
 logger = getLogger(__name__)
 
-# Explicit state machine for the 6-phase vetting pipeline (PRR 3.7). REJECTED
-# is reachable from any pre-completion state (an application can be rejected
-# at document review, interview, or home inspection); nothing is reachable
-# from a terminal state.
+# Post-adoption check-in milestones, in days after completion (PRR 3.7).
+FOLLOW_UP_INTERVALS = (30, 90, 180)
+
+# Explicit state machine for the 6-phase vetting pipeline (PRR 3.7):
+# SUBMITTED -> SCREENING -> INTERVIEW -> HOME_CHECK -> APPROVED -> COMPLETED.
+# REJECTED is reachable from any pre-completion state (an application can be
+# rejected at document review, interview, or home inspection); nothing is
+# reachable from a terminal state. The deprecated legacy VETTING member is a
+# data-compatibility holdover and is deliberately absent from the graph.
 VALID_STATUS_TRANSITIONS: dict[AdoptionStatus, set[AdoptionStatus]] = {
-    AdoptionStatus.SUBMITTED: {AdoptionStatus.VETTING, AdoptionStatus.REJECTED},
-    AdoptionStatus.VETTING: {AdoptionStatus.HOME_CHECK, AdoptionStatus.REJECTED},
+    AdoptionStatus.SUBMITTED: {AdoptionStatus.SCREENING, AdoptionStatus.REJECTED},
+    AdoptionStatus.SCREENING: {AdoptionStatus.INTERVIEW, AdoptionStatus.REJECTED},
+    AdoptionStatus.INTERVIEW: {AdoptionStatus.HOME_CHECK, AdoptionStatus.REJECTED},
     AdoptionStatus.HOME_CHECK: {AdoptionStatus.APPROVED, AdoptionStatus.REJECTED},
     AdoptionStatus.APPROVED: {AdoptionStatus.COMPLETED, AdoptionStatus.REJECTED},
-    AdoptionStatus.REJECTED: set(),
     AdoptionStatus.COMPLETED: set(),
+    AdoptionStatus.REJECTED: set(),
+    AdoptionStatus.VETTING: set(),
 }
 
 
@@ -70,7 +84,7 @@ class AdoptionService:
                 dog_name=dog.name if dog else "Dog",
                 dog_registration_number=dog.registration_number if dog else "",
                 dog_breed=dog.breed if dog else "",
-                fee_amount=0.0,
+                fee_amount=float(application.fee_amount or Decimal("0.00")),
                 org_name=settings.org_name,
                 org_address=settings.org_address,
             )
@@ -298,12 +312,130 @@ class AdoptionService:
                     "old_status": AdoptionStatus(old_status).value,
                     "new_status": status.value,
                 },
+                # Structured before/after snapshots (audit finding #3):
+                # transition origin/destination as queryable state, mirroring
+                # the same values already carried in metadata.
+                before_state={"status": AdoptionStatus(old_status).value},
+                after_state={"status": status.value},
             )
 
         if status == AdoptionStatus.APPROVED and old_status != status:
             await self._generate_agreement(res)
 
         return res
+
+    async def update_adoption_fee(
+        self,
+        app_id: uuid.UUID,
+        fee_amount: Decimal,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> AdoptionApplication:
+        """Set the adoption fee before approval (audit finding: the agreement
+        PDF used to hardcode 0.0 because no fee was ever stored)."""
+        app = await self._repo.get_by_id(app_id)
+        if app is None:
+            raise NotFoundError("Adoption application not found.")
+
+        if app.status == AdoptionStatus.COMPLETED:
+            raise ConflictError("Cannot update the fee after the adoption is completed.")
+
+        app.fee_amount = Decimal(str(fee_amount)).quantize(Decimal("0.01"))
+        await self._repo._session.flush()
+        res = await self._repo.get_by_id(app_id)
+        if res is None:
+            raise NotFoundError("Adoption application not found after fee update.")
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.ADOPTION_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "adoption_id": str(app_id),
+                    "fee_amount": str(app.fee_amount),
+                },
+            )
+
+        return res
+
+    async def get_follow_ups(self, app_id: uuid.UUID) -> list[AdoptionFollowUp]:
+        app = await self._repo.get_by_id(app_id)
+        if app is None:
+            raise NotFoundError("Adoption application not found.")
+        return list(await self._repo.get_follow_ups_for_application(app_id))
+
+    async def record_followup_proof(
+        self,
+        follow_up_id: uuid.UUID,
+        media_keys: list[str] | None = None,
+        notes: str | None = None,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> AdoptionFollowUp:
+        """Record the adopter's proof submission for a follow-up check-in."""
+        follow_up = await self._repo.get_follow_up_by_id(follow_up_id)
+        if follow_up is None:
+            raise NotFoundError("Follow-up not found.")
+
+        if follow_up.status == FollowUpStatus.SUBMITTED:
+            raise ConflictError("This follow-up has already been submitted.")
+
+        follow_up.status = FollowUpStatus.SUBMITTED
+        follow_up.submitted_at = datetime.now(UTC)
+        follow_up.media_keys = media_keys or []
+        if notes is not None:
+            follow_up.notes = notes
+
+        await self._repo._session.flush()
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.ADOPTION_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "follow_up_id": str(follow_up_id),
+                    "application_id": str(follow_up.adoption_application_id),
+                    "media_keys": follow_up.media_keys or [],
+                },
+            )
+
+        return follow_up
+
+    async def find_due_follow_ups(
+        self, now: datetime | None = None
+    ) -> list[AdoptionFollowUp]:
+        """Ensure every completed adoption has 30/90/180-day check-ins, mark
+        due-but-unsubmitted ones OVERDUE, and return everything now due."""
+        now = now or datetime.now(UTC)
+
+        completed_apps = await self._repo.get_completed_applications()
+        for app in completed_apps:
+            if app.completed_at is None:
+                continue
+            for days in FOLLOW_UP_INTERVALS:
+                existing = await self._repo.get_follow_up_for_milestone(app.id, days)
+                if existing is None:
+                    await self._repo.create_follow_up(
+                        AdoptionFollowUp(
+                            adoption_application_id=app.id,
+                            due_day=days,
+                            due_at=app.completed_at + timedelta(days=days),
+                            status=FollowUpStatus.PENDING,
+                        )
+                    )
+
+        due = list(await self._repo.get_due_follow_ups(now))
+        for follow_up in due:
+            if follow_up.status == FollowUpStatus.PENDING and follow_up.due_at < now:
+                follow_up.status = FollowUpStatus.OVERDUE
+
+        return due
 
     async def add_score(
         self,

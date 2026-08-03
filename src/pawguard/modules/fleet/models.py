@@ -18,11 +18,22 @@ class VehicleStatus(StrEnum):
     OUT_OF_SERVICE = "out_of_service"
 
 
+class VehicleType(StrEnum):
+    RESCUE_VAN = "rescue_van"
+    AMBULANCE = "ambulance"
+    MOBILE_VET_UNIT = "mobile_vet_unit"
+    UTILITY = "utility"
+    OTHER = "other"
+
+
 class Vehicle(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "vehicles"
 
     make_model: Mapped[str] = mapped_column(String(255), nullable=False)
     license_plate: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    vehicle_type: Mapped[VehicleType | None] = mapped_column(
+        String(32), default=VehicleType.RESCUE_VAN, nullable=True, index=True
+    )
     status: Mapped[VehicleStatus] = mapped_column(
         String(32), default=VehicleStatus.ACTIVE, nullable=False
     )
@@ -70,6 +81,12 @@ class EquipmentCheckout(UUIDPkMixin, TimestampMixin, Base):
         index=True,
     )
     checked_out_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # When the equipment is expected to come back (PRR 3.13): checkout creation
+    # enforces a value (explicit or a default window) and the return flow flags
+    # late returns in the notes. NULL backfills keep pre-existing rows valid.
+    expected_return_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
     returned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 

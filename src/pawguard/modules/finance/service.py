@@ -222,6 +222,7 @@ class FinanceService:
         tx = await self._repo.get_transaction_by_id(tx_id)
         if not tx:
             raise NotFoundError("Transaction not found.")
+        old_status = tx.status
         tx.status = status
         if status == TransactionStatus.RECONCILED:
             tx.reconciled_at = datetime.now(UTC)
@@ -234,6 +235,9 @@ class FinanceService:
                 ip_address=ip_address or "",
                 user_agent="",
                 metadata={"tx_id": str(tx_id), "status": status.value},
+                # Structured before/after snapshots (audit finding #3).
+                before_state={"status": TransactionStatus(old_status).value},
+                after_state={"status": status.value},
             )
         return tx
 

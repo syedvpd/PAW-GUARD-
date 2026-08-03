@@ -17,6 +17,8 @@ from pawguard.modules.shelter.models import (
     FacilityTransfer,
     FacilityType,
     Kennel,
+    KennelCleaningLog,
+    SectionType,
     ShelterFacility,
     ShelterSection,
 )
@@ -78,6 +80,13 @@ class ShelterRepository:
         stmt = select(Kennel).where(Kennel.id == kennel_id)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    async def get_kennel_for_update(self, kennel_id: uuid.UUID) -> Kennel | None:
+        """Locks the kennel row (SELECT ... FOR UPDATE) for the rest of the
+        transaction - serializes concurrent assignments so the capacity and
+        sanitation check-then-act can't double-book a kennel."""
+        stmt = select(Kennel).where(Kennel.id == kennel_id).with_for_update()
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
     async def list_kennels_by_section(self, section_id: uuid.UUID) -> Sequence[Kennel]:
         stmt = (
             select(Kennel)
@@ -111,6 +120,30 @@ class ShelterRepository:
             .order_by(DailyCareLog.feed_time.desc())
         )
         return (await self._session.execute(stmt)).scalars().all()
+
+    async def create_cleaning_log(self, log: KennelCleaningLog) -> KennelCleaningLog:
+        self._session.add(log)
+        await self._session.flush()
+        return log
+
+    async def list_cleaning_logs_paginated(
+        self,
+        page_params: PageParams,
+        sort: SortParams,
+        kennel_id: uuid.UUID,
+    ) -> tuple[Sequence[KennelCleaningLog], int]:
+        stmt = select(KennelCleaningLog).where(KennelCleaningLog.kennel_id == kennel_id)
+
+        valid_fields = {"cleaned_at", "sanitation_state_after", "created_at"}
+        stmt = apply_sorting(stmt, sort, valid_fields)
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = (await self._session.execute(count_stmt)).scalar_one()
+
+        stmt = stmt.offset(page_params.offset).limit(page_params.limit)
+        results = (await self._session.execute(stmt)).scalars().all()
+
+        return results, total
 
     async def list_facilities_paginated(
         self,
@@ -150,6 +183,7 @@ class ShelterRepository:
         page_params: PageParams,
         sort: SortParams,
         facility_id: uuid.UUID | None = None,
+        section_type: SectionType | None = None,
         search_term: str | None = None,
     ) -> tuple[Sequence[ShelterSection], int]:
         stmt = select(ShelterSection)
@@ -157,11 +191,14 @@ class ShelterRepository:
         if facility_id is not None:
             stmt = stmt.where(ShelterSection.facility_id == facility_id)
 
+        if section_type is not None:
+            stmt = stmt.where(ShelterSection.section_type == section_type)
+
         search_filter = build_search_filter(ShelterSection, search_term, ("name",))
         if search_filter is not None:
             stmt = stmt.where(search_filter)
 
-        valid_fields = {"name", "capacity", "created_at"}
+        valid_fields = {"name", "section_type", "capacity", "created_at"}
         stmt = apply_sorting(stmt, sort, valid_fields)
 
         count_stmt = select(func.count()).select_from(stmt.subquery())

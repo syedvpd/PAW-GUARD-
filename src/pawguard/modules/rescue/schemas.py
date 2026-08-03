@@ -180,7 +180,22 @@ class RescueRequestUpdate(BaseModel):
 
 class RescueDispatchCreate(BaseModel):
     assigned_driver_id: uuid.UUID | None = None
+    # Additional field agents for the dispatch (PRR 3.2 multi-agent teams).
+    # The legacy single-driver flow still works: `assigned_driver_id` is
+    # mirrored into the dispatch-agent association table automatically.
+    assigned_agent_ids: list[uuid.UUID] | None = Field(
+        None,
+        description=(
+            "Field agents assigned to the dispatch. Combined with "
+            "assigned_driver_id to form the full team."
+        ),
+        examples=[[uuid.UUID("a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d")]],
+    )
     vehicle_id: str | None = Field(None, max_length=64)
+    assigned_vehicle_id: uuid.UUID | None = Field(
+        None,
+        description="UUID of the ACTIVE fleet vehicle assigned to this dispatch.",
+    )
     equipment_details: str | None = None
     # Escalation Protocol (PRR 3.3): agents request back-up personnel,
     # veterinary transport, or law enforcement support from the field.
@@ -193,11 +208,32 @@ class RescueDispatchCreate(BaseModel):
     notes: str | None = None
 
 
+class RescueDispatchAgentResponse(BaseModel):
+    id: uuid.UUID
+    dispatch_id: uuid.UUID
+    agent_id: uuid.UUID
+    role: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RescueEscalateCreate(BaseModel):
+    """Escalation Protocol request (PRR 3.3): settable post-dispatch via the
+    dedicated escalate endpoint, not only at dispatch time."""
+
+    escalation_type: RescueEscalationType = Field(..., examples=["backup_personnel"])
+    escalation_notes: str | None = Field(
+        None, examples=["Second team needed - dog is aggressive."]
+    )
+
+
 class RescueDispatchResponse(BaseModel):
     id: uuid.UUID
     rescue_request_id: uuid.UUID
     assigned_driver_id: uuid.UUID | None
     vehicle_id: str | None
+    assigned_vehicle_id: uuid.UUID | None = None
+    agents: list[RescueDispatchAgentResponse] = Field(default_factory=list)
     equipment_details: str | None
     dispatched_at: datetime
     located_at: datetime | None

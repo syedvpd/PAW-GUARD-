@@ -21,9 +21,9 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from tests.auth_helpers import register_and_auth
 
-from pawguard.modules.auth.models import Role, User
+from pawguard.modules.auth.models import User
 from pawguard.modules.donation.models import Donation, DonationStatus, DonorProfile
 from pawguard.modules.finance.models import FinancialTransaction, GeneralLedgerEntry
 
@@ -34,29 +34,7 @@ class TestFinanceReconciliationBatch:
         self, client: AsyncClient, db_session: AsyncSession
     ) -> dict:
         email = f"finstaff{uuid.uuid4().hex[:8]}@recon.test.com"
-        payload = {
-            "email": email,
-            "password": "StrongP@ss99",
-            "full_name": "Finance Staff",
-            "phone": "+1234567890",
-        }
-        await client.post("/api/v1/auth/register", json=payload)
-        user = (
-            await db_session.execute(
-                select(User).options(selectinload(User.roles)).where(User.email == email)
-            )
-        ).scalar_one()
-        admin_role = (
-            await db_session.execute(select(Role).where(Role.name == "super_admin"))
-        ).scalar_one()
-        user.roles.append(admin_role)
-        user.is_verified = True
-        await db_session.commit()
-        resp = await client.post(
-            "/api/v1/auth/login",
-            json={"email": email, "password": "StrongP@ss99"},
-        )
-        return {"Authorization": f"Bearer {resp.json()['data']['access_token']}"}
+        return await register_and_auth(client, db_session, email=email)
 
     async def _create_donations(
         self, db_session: AsyncSession, count: int

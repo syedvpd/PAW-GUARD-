@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from pawguard.modules.adoption.models import AdoptionStatus
+from pawguard.modules.adoption.models import AdoptionStatus, FollowUpStatus
 from pawguard.modules.auth.schemas import UserProfile
 from pawguard.modules.dog.schemas import DogProfileResponse
 
@@ -64,6 +64,7 @@ class AdoptionApplicationResponse(BaseModel):
     home_inspection_scheduled_at: datetime | None
     home_inspection_notes: str | None
     adoption_agreement_url: str | None
+    fee_amount: Decimal | None = Field(None, description="Adoption fee amount")
     completed_at: datetime | None
     created_at: datetime
     updated_at: datetime
@@ -112,3 +113,39 @@ class AdoptionApplicationListQueryParams(BaseModel):
     status: AdoptionStatus | None = None
     dog_id: uuid.UUID | None = None
     adopter_id: uuid.UUID | None = None
+
+
+class AdoptionFeeUpdate(BaseModel):
+    """Staff-only payload for setting the adoption fee before approval."""
+
+    fee_amount: Decimal = Field(
+        ..., ge=0, description="Adoption fee amount", examples=[250.00]
+    )
+
+
+class FollowUpProofCreate(BaseModel):
+    """Proof submission payload for a post-adoption follow-up check-in."""
+
+    media_keys: list[str] = Field(
+        default_factory=list,
+        description="Object keys of uploaded proof media (photos/videos)",
+        examples=[["documents/followup_1a2b3c.jpg"]],
+    )
+    notes: str | None = Field(
+        None, max_length=2000, examples=["Updated photos showing Buddy's progress."]
+    )
+
+
+class AdoptionFollowUpResponse(BaseModel):
+    id: uuid.UUID
+    adoption_application_id: uuid.UUID
+    due_day: int
+    due_at: datetime
+    status: FollowUpStatus
+    submitted_at: datetime | None
+    media_keys: list[str] | None
+    notes: str | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

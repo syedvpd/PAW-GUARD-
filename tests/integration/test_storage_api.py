@@ -4,11 +4,8 @@ import uuid
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
-from pawguard.modules.auth.models import Role, User
+from tests.auth_helpers import register_and_auth
 
 REGISTER_PAYLOAD = {
     "email": "storageapitest@example.com",
@@ -26,21 +23,9 @@ LOGIN_PAYLOAD = {
 @pytest.mark.asyncio
 class TestStorageAPI:
     async def _auth(self, client: AsyncClient, db_session: AsyncSession) -> dict:
-        await client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
-        stmt = (
-            select(User)
-            .options(selectinload(User.roles))
-            .where(User.email == REGISTER_PAYLOAD["email"])
+        return await register_and_auth(
+            client, db_session, email=REGISTER_PAYLOAD["email"]
         )
-        user = (await db_session.execute(stmt)).scalar_one()
-        role_stmt = select(Role).where(Role.name == "super_admin")
-        role = (await db_session.execute(role_stmt)).scalar_one()
-        user.roles.append(role)
-        user.is_verified = True
-        await db_session.commit()
-        resp = await client.post("/api/v1/auth/login", json=LOGIN_PAYLOAD)
-        token = resp.json()["data"]["access_token"]
-        return {"Authorization": f"Bearer {token}"}
 
     async def test_request_upload_url(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
