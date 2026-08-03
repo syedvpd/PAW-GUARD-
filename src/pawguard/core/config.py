@@ -104,7 +104,7 @@ class Settings(BaseSettings):
     # deployments stay zero-config; set this in production so rotating the JWT
     # keypair does not orphan stored MFA secrets.
     mfa_encryption_key: str = ""
-    mfa_mandatory_for_admins: bool = True
+    mfa_mandatory_for_admins: bool = False
 
     # --- OAuth / Social login ---
     # Audience (client id) of the Google / Apple application this backend
