@@ -3,8 +3,10 @@
 import uuid
 from datetime import UTC, datetime
 
+from pawguard.core.config import get_settings
 from pawguard.core.exceptions import ConflictError, NotFoundError
 from pawguard.core.pagination import PageParams, build_pagination_meta
+from pawguard.core.pdf_generation import generate_adoption_agreement
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
 from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
@@ -13,6 +15,8 @@ from pawguard.modules.auth.models import AuthAuditEventType
 from pawguard.modules.auth.repository import RoleRepository, UserRoleRepository
 from pawguard.modules.dog.models import DogStatus
 from pawguard.modules.dog.repository import DogRepository
+from pawguard.modules.storage.models import FileFolder, StoredFile
+from pawguard.services.storage_service import StorageService
 from pawguard.modules.foster.models import (
     FosterPlacement,
     FosterProfile,
@@ -417,20 +421,63 @@ class FosterService:
                 "This dog already has an approved adoption application in progress."
             )
 
+        now = datetime.now(UTC)
         app = AdoptionApplication(
             dog_id=placement.dog_id,
             adopter_id=foster.user_id,
             residential_status="foster",
-            has_landlord_approval=False,
-            has_yard_fence=False,
+            has_landlord_approval=True,  # Prefilled as True since foster is already approved by the org
+            has_yard_fence=True,         # Prefilled as True
             household_members_count=1,
-            existing_pets_medical_details=None,
-            pet_care_experience=None,
-            status=AdoptionStatus.HOME_CHECK,
+            existing_pets_medical_details="None",
+            pet_care_experience="Approved PawGuard Foster Caregiver",
+            status=AdoptionStatus.COMPLETED,
+            completed_at=now,
         )
         await self._adoption_repo.create(app)
+        await self._repo._session.flush()
 
-        now = datetime.now(UTC)
+        # Generate and save adoption agreement PDF (legal lease)
+        storage = StorageService()
+        try:
+            adopter_name = foster.user.full_name if foster.user else "Foster Parent"
+            settings = get_settings()
+            pdf_bytes = generate_adoption_agreement(
+                adopter_name=adopter_name,
+                dog_name=dog.name if dog else "Dog",
+                dog_registration_number=dog.registration_number if dog else "",
+                dog_breed=dog.breed if dog else "",
+                fee_amount=0.0,
+                org_name=settings.org_name,
+                org_address=settings.org_address,
+            )
+            object_key = storage.build_object_key(
+                folder="documents", filename=f"agreement_{app.id}.pdf"
+            )
+            storage.put_object(
+                object_key=object_key,
+                content=pdf_bytes,
+                content_type="application/pdf",
+            )
+            stored = StoredFile(
+                object_key=object_key,
+                original_filename=f"adoption_agreement_{app.id}.pdf",
+                mime_type="application/pdf",
+                file_size=len(pdf_bytes),
+                folder=FileFolder.DOCUMENTS.value,
+                is_uploaded=True,
+                uploaded_at=now,
+                entity_type="adoption_application",
+                entity_id=app.id,
+            )
+            self._repo._session.add(stored)
+            app.adoption_agreement_url = object_key
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Failed to generate agreement for foster-to-adopt application %s: %s", app.id, exc, exc_info=True
+            )
+
         placement.returned_at = now
         placement.is_active = False
         foster.active_count = max(0, foster.active_count - 1)

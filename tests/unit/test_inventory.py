@@ -99,6 +99,22 @@ class TestInventoryService:
         assert item.quantity == 40.0
 
     @pytest.mark.asyncio
+    async def test_record_movement_check_out_expired(self, service, mock_repo):
+        from datetime import date, timedelta
+        item_id = uuid.uuid4()
+        item = InventoryItem(
+            id=item_id, name="Expired Meds", category=ItemCategory.PHARMACEUTICAL,
+            quantity=50.0, unit="vial", reorder_threshold=5.0,
+            expiry_date=date.today() - timedelta(days=5),
+        )
+        mock_repo.get_item.return_value = item
+        payload = InventoryMovementCreate(
+            item_id=item_id, movement_type=MovementType.CHECK_OUT, quantity=10.0,
+        )
+        with pytest.raises(ConflictError, match="Cannot check out expired inventory item"):
+            await service.record_movement(uuid.uuid4(), payload, actor_id=uuid.uuid4())
+
+    @pytest.mark.asyncio
     async def test_record_movement_adjustment(self, service, mock_repo):
         item_id = uuid.uuid4()
         item = InventoryItem(

@@ -183,6 +183,31 @@ class GrievanceService:
         await self._repo._session.flush()
         await self._repo._session.refresh(ticket)
 
+        # Trigger notification alert to the escalated admin (PRD 3.14 gap)
+        try:
+            from pawguard.modules.notifications.repository import NotificationRepository
+            from pawguard.modules.notifications.schemas import NotificationCreate
+            from pawguard.modules.notifications.service import NotificationService
+
+            notification_svc = NotificationService(repository=NotificationRepository(self._repo._session))
+            await notification_svc.create_notification(
+                payload=NotificationCreate(
+                    user_id=payload.escalated_to_admin_id,
+                    title="Grievance Ticket Escalated",
+                    body=f"Grievance ticket {ticket.id} has been escalated to you (Level {ticket.escalation_level}). Reason: {payload.reason or 'None'}.",
+                    notification_type="grievance_escalation",
+                    action_url=f"/api/v1/grievance/{ticket.id}",
+                )
+            )
+        except Exception as notif_exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Failed to send notification for grievance escalation on ticket %s: %s",
+                ticket.id,
+                notif_exc,
+                exc_info=True,
+            )
+
         if self._audit and actor_id:
             await self._audit.record(
                 event_type=AuthAuditEventType.GRIEVANCE_UPDATED,

@@ -305,9 +305,14 @@ class TestFosterToAdopt:
         return FosterService(mock_repo, mock_dog_repo, mock_adoption_repo, mock_audit)
 
     @pytest.mark.asyncio
-    async def test_convert_to_adopt_success(
-        self, service, mock_repo, mock_dog_repo, mock_adoption_repo, mock_audit,
+    @patch("pawguard.modules.foster.service.StorageService")
+    async def test_convert_to_adoption(
+        self, mock_storage_class, service, mock_repo, mock_dog_repo, mock_adoption_repo,
     ):
+        mock_storage = mock_storage_class.return_value
+        mock_storage.build_object_key.return_value = "documents/test_agreement.pdf"
+        mock_storage.put_object.return_value = None
+
         placement_id = uuid.uuid4()
         foster_id = uuid.uuid4()
         dog_id = uuid.uuid4()
@@ -332,13 +337,13 @@ class TestFosterToAdopt:
         mock_adoption_repo.create.return_value = None
         mock_adoption_repo.get_by_id.return_value = AdoptionApplication(
             id=app_id, dog_id=dog_id, adopter_id=user_id,
-            residential_status="foster", status=AdoptionStatus.HOME_CHECK,
+            residential_status="foster", status=AdoptionStatus.COMPLETED,
         )
         result = await service.convert_to_adoption(
             placement_id, actor_id=uuid.uuid4(),
         )
         assert result.id == app_id
-        assert result.status == AdoptionStatus.HOME_CHECK
+        assert result.status == AdoptionStatus.COMPLETED
         assert placement.is_active is False
         assert dog.status == DogStatus.ADOPTED
 

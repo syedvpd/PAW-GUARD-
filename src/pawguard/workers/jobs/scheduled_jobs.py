@@ -207,10 +207,11 @@ async def post_adoption_followups(ctx: dict[str, object]) -> None:
                         body=(
                             f"Your adoption of dog {adoption.dog_id} "
                             f"was completed {days} days ago. "
-                            f"How is everything going? We'd love to hear "
-                            f"from you!"
+                            f"Please submit a photo or video update of your dog "
+                            f"to complete your required follow-up report."
                         ),
                         notification_type="follow_up",
+                        action_url=f"/api/v1/storage/upload?folder=documents&entity_type=adoption_application&entity_id={adoption.id}",
                     )
                 )
         await session.commit()
