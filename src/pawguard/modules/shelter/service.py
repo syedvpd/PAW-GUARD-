@@ -13,6 +13,9 @@ from pawguard.core.search import SortParams
 from pawguard.modules.auth.models import AuthAuditEventType
 from pawguard.modules.dog.models import DogStatus
 from pawguard.modules.dog.repository import DogRepository
+from pawguard.modules.inventory.models import MovementType
+from pawguard.modules.inventory.schemas import InventoryConsumptionItem, InventoryMovementCreate
+from pawguard.modules.inventory.service import InventoryService
 from pawguard.modules.shelter.models import (
     DailyCareLog,
     FacilityStatus,
@@ -44,10 +47,12 @@ class ShelterService:
         repository: ShelterRepository,
         dog_repo: DogRepository,
         audit_service: AuditService | None = None,
+        inventory_service: InventoryService | None = None,
     ) -> None:
         self._repo = repository
         self._dog_repo = dog_repo
         self._audit = audit_service
+        self._inventory = inventory_service
 
     async def create_facility(
         self,
@@ -367,6 +372,14 @@ class ShelterService:
                     "dog_id": str(payload.dog_id),
                 },
             )
+        await self._record_inventory_consumptions(
+            user_id=user_id,
+            consumptions=payload.inventory_consumptions,
+            reference_type="daily_care_log",
+            reference_id=care_log.id,
+            actor_id=actor_id,
+            ip_address=ip_address,
+        )
         return care_log
 
     async def list_facilities(self) -> Sequence[ShelterFacility]:
@@ -454,3 +467,29 @@ class ShelterService:
         status: FacilityStatus,
     ) -> int:
         return await self._repo.bulk_update_facility_status(ids, status)
+
+    async def _record_inventory_consumptions(
+        self,
+        user_id: uuid.UUID,
+        consumptions: list[InventoryConsumptionItem] | None,
+        reference_type: str,
+        reference_id: uuid.UUID,
+        actor_id: uuid.UUID | None,
+        ip_address: str | None,
+    ) -> None:
+        if not self._inventory or not consumptions:
+            return
+        for item in consumptions:
+            await self._inventory.record_movement(
+                user_id=user_id,
+                payload=InventoryMovementCreate(
+                    item_id=item.item_id,
+                    movement_type=MovementType.CHECK_OUT,
+                    quantity=item.quantity,
+                    notes=f"Consumed for {reference_type} {reference_id}",
+                    reference_type=reference_type,
+                    reference_id=reference_id,
+                ),
+                actor_id=actor_id,
+                ip_address=ip_address,
+            )

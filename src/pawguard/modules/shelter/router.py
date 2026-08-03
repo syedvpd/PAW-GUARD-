@@ -23,6 +23,8 @@ from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.rbac import require_permission
 from pawguard.modules.dog.repository import DogRepository
+from pawguard.modules.inventory.repository import InventoryRepository
+from pawguard.modules.inventory.service import InventoryService
 from pawguard.modules.shelter.models import (
     FacilityStatus,
     FacilityType,
@@ -54,7 +56,8 @@ def get_shelter_service(
 ) -> ShelterService:
     repo = ShelterRepository(db)
     dog_repo = DogRepository(db)
-    return ShelterService(repo, dog_repo, audit_service=audit)
+    inventory = InventoryService(InventoryRepository(db), audit_service=audit)
+    return ShelterService(repo, dog_repo, audit_service=audit, inventory_service=inventory)
 
 
 @router.post(

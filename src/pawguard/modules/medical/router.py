@@ -23,6 +23,8 @@ from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.rbac import require_permission
 from pawguard.modules.dog.repository import DogRepository
+from pawguard.modules.inventory.repository import InventoryRepository
+from pawguard.modules.inventory.service import InventoryService
 from pawguard.modules.medical.repository import MedicalRepository
 from pawguard.modules.medical.schemas import (
     ClinicalExamCreate,
@@ -47,7 +49,8 @@ def get_medical_service(
 ) -> MedicalService:
     repo = MedicalRepository(db)
     dog_repo = DogRepository(db)
-    return MedicalService(repo, dog_repo, audit_service=audit)
+    inventory = InventoryService(InventoryRepository(db), audit_service=audit)
+    return MedicalService(repo, dog_repo, audit_service=audit, inventory_service=inventory)
 
 
 @router.post(

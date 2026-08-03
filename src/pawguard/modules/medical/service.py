@@ -13,6 +13,9 @@ from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
 from pawguard.modules.auth.models import AuthAuditEventType
 from pawguard.modules.dog.repository import DogRepository
+from pawguard.modules.inventory.models import MovementType
+from pawguard.modules.inventory.schemas import InventoryConsumptionItem, InventoryMovementCreate
+from pawguard.modules.inventory.service import InventoryService
 from pawguard.modules.medical.models import (
     ClinicalExam,
     MedicalTreatment,
@@ -40,10 +43,12 @@ class MedicalService:
         repository: MedicalRepository,
         dog_repo: DogRepository,
         audit_service: AuditService | None = None,
+        inventory_service: InventoryService | None = None,
     ) -> None:
         self._repo = repository
         self._dog_repo = dog_repo
         self._audit = audit_service
+        self._inventory = inventory_service
 
     async def perform_clinical_exam(
         self,
@@ -107,6 +112,14 @@ class MedicalService:
                 user_agent="",
                 metadata={"treatment_id": str(treatment.id), "dog_id": str(payload.dog_id)},
             )
+        await self._record_inventory_consumptions(
+            user_id=vet_id,
+            consumptions=payload.inventory_consumptions,
+            reference_type="medical_treatment",
+            reference_id=treatment.id,
+            actor_id=actor_id,
+            ip_address=ip_address,
+        )
         return treatment
 
     async def administer_vaccine(
@@ -169,6 +182,14 @@ class MedicalService:
                 user_agent="",
                 metadata={"prescription_id": str(prescription.id), "dog_id": str(payload.dog_id)},
             )
+        await self._record_inventory_consumptions(
+            user_id=vet_id,
+            consumptions=payload.inventory_consumptions,
+            reference_type="prescription",
+            reference_id=prescription.id,
+            actor_id=actor_id,
+            ip_address=ip_address,
+        )
         return prescription
 
     async def authorize_adoption_clearance(
@@ -481,3 +502,29 @@ class MedicalService:
         return (
             await self._repo._session.execute(stmt)
         ).scalar_one_or_none()
+
+    async def _record_inventory_consumptions(
+        self,
+        user_id: uuid.UUID,
+        consumptions: list[InventoryConsumptionItem] | None,
+        reference_type: str,
+        reference_id: uuid.UUID,
+        actor_id: uuid.UUID | None,
+        ip_address: str | None,
+    ) -> None:
+        if not self._inventory or not consumptions:
+            return
+        for item in consumptions:
+            await self._inventory.record_movement(
+                user_id=user_id,
+                payload=InventoryMovementCreate(
+                    item_id=item.item_id,
+                    movement_type=MovementType.CHECK_OUT,
+                    quantity=item.quantity,
+                    notes=f"Consumed for {reference_type} {reference_id}",
+                    reference_type=reference_type,
+                    reference_id=reference_id,
+                ),
+                actor_id=actor_id,
+                ip_address=ip_address,
+            )

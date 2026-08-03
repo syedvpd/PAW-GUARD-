@@ -12,6 +12,7 @@ from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
 from pawguard.modules.dog.models import DogProfile, DogStatus
 from pawguard.modules.dog.repository import DogRepository
+from pawguard.modules.inventory.service import InventoryService
 from pawguard.modules.medical.models import (
     ClinicalExam,
     MedicalTreatment,
@@ -248,3 +249,88 @@ class TestMedicalService:
         sort = SortParams()
         result = await service.list_treatments_paginated(page, sort)
         assert result.meta.total == 1
+
+    @pytest.mark.asyncio
+    async def test_record_treatment_with_inventory_consumption(
+        self, mock_repo, mock_dog_repo, mock_audit
+    ):
+        from unittest.mock import AsyncMock as _AsyncMock
+
+        mock_inventory = _AsyncMock(spec=InventoryService)
+        service = MedicalService(
+            mock_repo, mock_dog_repo, mock_audit, inventory_service=mock_inventory
+        )
+        dog_id = uuid.uuid4()
+        mock_dog_repo.get_by_id.return_value = DogProfile(
+            id=dog_id, registration_number="DOG-001", name="B", breed="Mix",
+            gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+        )
+        treatment_id = uuid.uuid4()
+        mock_repo.create_treatment.return_value = MedicalTreatment(
+            id=treatment_id, dog_id=dog_id, vet_id=uuid.uuid4(),
+            treatment_date=datetime.now(UTC), treatment_type="surgery",
+            description="Leg surgery",
+        )
+        item_id = uuid.uuid4()
+        payload = MedicalTreatmentCreate(
+            dog_id=dog_id, treatment_type="surgery", description="Leg surgery",
+            inventory_consumptions=[{"item_id": item_id, "quantity": 2.0}],
+        )
+        vet_id = uuid.uuid4()
+        await service.record_treatment(vet_id, payload, actor_id=uuid.uuid4())
+        mock_inventory.record_movement.assert_awaited_once()
+        _, kwargs = mock_inventory.record_movement.await_args
+        assert kwargs["user_id"] == vet_id
+        assert kwargs["payload"].reference_type == "medical_treatment"
+        assert kwargs["payload"].reference_id == treatment_id
+        assert kwargs["payload"].item_id == item_id
+        assert kwargs["payload"].quantity == 2.0
+
+    @pytest.mark.asyncio
+    async def test_prescribe_medication_with_inventory_consumption(
+        self, mock_repo, mock_dog_repo, mock_audit
+    ):
+        from unittest.mock import AsyncMock as _AsyncMock
+
+        mock_inventory = _AsyncMock(spec=InventoryService)
+        service = MedicalService(
+            mock_repo, mock_dog_repo, mock_audit, inventory_service=mock_inventory
+        )
+        dog_id = uuid.uuid4()
+        mock_dog_repo.get_by_id.return_value = DogProfile(
+            id=dog_id, registration_number="DOG-001", name="B", breed="Mix",
+            gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+        )
+        rx_id = uuid.uuid4()
+        now = datetime.now(UTC)
+        mock_repo.create_prescription.return_value = Prescription(
+            id=rx_id, dog_id=dog_id, vet_id=uuid.uuid4(),
+            drug_name="Amoxicillin", dosage="500mg", route="Oral",
+            start_at=now, end_at=now, is_active=True,
+        )
+        item_id = uuid.uuid4()
+        payload = PrescriptionCreate(
+            dog_id=dog_id, drug_name="Amoxicillin", dosage="500mg",
+            route="Oral", start_at=now, end_at=now,
+            inventory_consumptions=[{"item_id": item_id, "quantity": 1.0}],
+        )
+        await service.prescribe_medication(uuid.uuid4(), payload, actor_id=uuid.uuid4())
+        mock_inventory.record_movement.assert_awaited_once()
+        _, kwargs = mock_inventory.record_movement.await_args
+        assert kwargs["payload"].reference_type == "prescription"
+        assert kwargs["payload"].reference_id == rx_id
+
+    @pytest.mark.asyncio
+    async def test_no_inventory_calls_without_consumptions(self, service, mock_repo, mock_dog_repo):
+        dog_id = uuid.uuid4()
+        mock_dog_repo.get_by_id.return_value = DogProfile(
+            id=dog_id, registration_number="DOG-001", name="B", breed="Mix",
+            gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+        )
+        mock_repo.create_treatment.return_value = MedicalTreatment(
+            id=uuid.uuid4(), dog_id=dog_id, vet_id=uuid.uuid4(),
+            treatment_date=datetime.now(UTC), treatment_type="surgery",
+            description="Leg surgery",
+        )
+        payload = MedicalTreatmentCreate(dog_id=dog_id, treatment_type="surgery", description="Leg surgery")
+        await service.record_treatment(uuid.uuid4(), payload, actor_id=uuid.uuid4())

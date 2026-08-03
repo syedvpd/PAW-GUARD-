@@ -5,6 +5,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from pawguard.modules.inventory.schemas import InventoryConsumptionItem
+
 
 class ClinicalExamCreate(BaseModel):
     dog_id: uuid.UUID
@@ -43,6 +45,9 @@ class MedicalTreatmentCreate(BaseModel):
     )
     anesthesia_log: str | None = Field(None, examples=["Isoflurane, 45 minutes, stable vitals."])
     post_op_notes: str | None = Field(None, examples=["Recovering well, monitor incision site."])
+    inventory_consumptions: list[InventoryConsumptionItem] | None = Field(
+        None, examples=[[{"item_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6", "quantity": 2.0}]]
+    )
 
 
 class MedicalTreatmentResponse(BaseModel):
@@ -88,6 +93,9 @@ class PrescriptionCreate(BaseModel):
     route: str = Field(..., min_length=1, max_length=64, examples=["Oral"])
     start_at: datetime = Field(..., examples=["2026-07-22T08:00:00Z"])
     end_at: datetime = Field(..., examples=["2026-07-29T08:00:00Z"])
+    inventory_consumptions: list[InventoryConsumptionItem] | None = Field(
+        None, examples=[[{"item_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6", "quantity": 1.0}]]
+    )
 
 
 class PrescriptionUpdate(BaseModel):

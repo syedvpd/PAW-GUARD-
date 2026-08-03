@@ -12,6 +12,7 @@ from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
 from pawguard.modules.dog.models import DogProfile, DogStatus
 from pawguard.modules.dog.repository import DogRepository
+from pawguard.modules.inventory.service import InventoryService
 from pawguard.modules.shelter.models import (
     DailyCareLog,
     FacilityStatus,
@@ -280,6 +281,58 @@ class TestShelterService:
             feed_time=datetime.now(), exercise_hours=1.5,
         )
         payload = DailyCareLogCreate(dog_id=dog_id, exercise_hours=1.5)
+        result = await service.submit_daily_care_log(uuid.uuid4(), payload, actor_id=uuid.uuid4())
+        assert result.exercise_hours == 1.5
+
+    @pytest.mark.asyncio
+    async def test_submit_daily_care_log_with_inventory_consumption(
+        self, mock_repo, mock_dog_repo, mock_audit
+    ):
+        from unittest.mock import AsyncMock as _AsyncMock
+
+        mock_inventory = _AsyncMock(spec=InventoryService)
+        service = ShelterService(
+            mock_repo, mock_dog_repo, mock_audit, inventory_service=mock_inventory
+        )
+        dog_id = uuid.uuid4()
+        mock_dog_repo.get_by_id.return_value = DogProfile(
+            id=dog_id, registration_number="DOG-001", name="Rex", breed="Mix",
+            gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+        )
+        log_id = uuid.uuid4()
+        mock_repo.create_care_log.return_value = DailyCareLog(
+            id=log_id, dog_id=dog_id, logged_by=uuid.uuid4(),
+            feed_time=datetime.now(), exercise_hours=1.5,
+        )
+        item_id = uuid.uuid4()
+        payload = DailyCareLogCreate(
+            dog_id=dog_id, exercise_hours=1.5,
+            inventory_consumptions=[{"item_id": item_id, "quantity": 1.0}],
+        )
+        user_id = uuid.uuid4()
+        await service.submit_daily_care_log(user_id, payload, actor_id=uuid.uuid4())
+        mock_inventory.record_movement.assert_awaited_once()
+        _, kwargs = mock_inventory.record_movement.await_args
+        assert kwargs["user_id"] == user_id
+        assert kwargs["payload"].reference_type == "daily_care_log"
+        assert kwargs["payload"].reference_id == log_id
+        assert kwargs["payload"].item_id == item_id
+
+    @pytest.mark.asyncio
+    async def test_submit_daily_care_log_no_inventory_service(self, service, mock_repo, mock_dog_repo):
+        dog_id = uuid.uuid4()
+        mock_dog_repo.get_by_id.return_value = DogProfile(
+            id=dog_id, registration_number="DOG-001", name="Rex", breed="Mix",
+            gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+        )
+        mock_repo.create_care_log.return_value = DailyCareLog(
+            id=uuid.uuid4(), dog_id=dog_id, logged_by=uuid.uuid4(),
+            feed_time=datetime.now(), exercise_hours=1.5,
+        )
+        payload = DailyCareLogCreate(
+            dog_id=dog_id, exercise_hours=1.5,
+            inventory_consumptions=[{"item_id": uuid.uuid4(), "quantity": 1.0}],
+        )
         result = await service.submit_daily_care_log(uuid.uuid4(), payload, actor_id=uuid.uuid4())
         assert result.exercise_hours == 1.5
 

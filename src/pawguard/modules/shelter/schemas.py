@@ -5,6 +5,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from pawguard.modules.inventory.schemas import InventoryConsumptionItem
 from pawguard.modules.shelter.models import (
     FacilityStatus,
     FacilityType,
@@ -112,6 +113,9 @@ class DailyCareLogCreate(BaseModel):
     )
     exercise_hours: float = Field(0.0, ge=0.0, le=24.0, examples=[1.5])
     behavioral_enrichment: str | None = Field(None, examples=["Puzzle feeder, 20 min outdoor play"])
+    inventory_consumptions: list[InventoryConsumptionItem] | None = Field(
+        None, examples=[[{"item_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6", "quantity": 1.0}]]
+    )
 
 
 class DailyCareLogResponse(BaseModel):
