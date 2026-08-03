@@ -2,6 +2,7 @@
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 from pydantic import AliasChoices, Field, computed_field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -37,7 +38,6 @@ class Settings(BaseSettings):
     @field_validator("database_url", "database_url_frontend", mode="before")
     @classmethod
     def normalize_database_url(cls, v: Any) -> Any:
-        from typing import Any
         if not isinstance(v, str) or not v.strip():
             return v
         
