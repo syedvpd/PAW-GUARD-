@@ -23,6 +23,65 @@ class RescueStatus(StrEnum):
     REJECTED = "rejected"
 
 
+class RescuePhysicalCondition(StrEnum):
+    """Controlled physical-condition categories per PRR 3.2 intake payload.
+
+    Legacy free-text values (e.g. "Injured", "Critical") are normalised to
+    these canonical values by the API schema and the backfill migration, so
+    dashboards and reports can group by a stable, bounded set.
+    """
+
+    CRITICAL = "critical_life_threatening"  # Critical / Life Threatening
+    INJURED = "fractured_injured"  # Fractured / Injured
+    SICK = "contagious_sick"  # Contagious Disease / Sick
+    MALNOURISHED = "malnourished"
+    ABANDONED = "abandoned_stray"  # Abandoned / Stray
+    UNKNOWN = "unknown"  # fallback for unmappable legacy values
+
+
+class RescueSeverity(StrEnum):
+    """Operational priority for a rescue case (PRR 3.2 severity prioritization).
+
+    CRITICAL/HIGH cases feed the public urgent-alert banner (PRR 3.1.1) and the
+    coordinator dispatch queue; the explicit `is_urgent` flag on the request
+    lets coordinators surface a case for community assistance regardless of
+    its severity label.
+    """
+
+    CRITICAL = "critical"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class RescueEscalationType(StrEnum):
+    """Escalation categories a field agent can request from the app
+    (PRR 3.3 Escalation Protocol): back-up personnel, specialized veterinary
+    transport, or local law enforcement support.
+    """
+
+    BACKUP_PERSONNEL = "backup_personnel"
+    VET_TRANSPORT = "vet_transport"
+    LAW_ENFORCEMENT = "law_enforcement"
+    OTHER = "other"
+
+
+class RescueFailureReason(StrEnum):
+    """Standardized outcome codes for failed rescues (PRR 3.3).
+
+    Field agents must log one of these codes instead of free text so failure
+    analytics (Rescue Operational Efficiency Report) can group by a bounded
+    set. Legacy free-text values are normalised to these codes by the API
+    layer and the backfill migration.
+    """
+
+    ANIMAL_FLED = "animal_fled"  # Animal Fled Area
+    AREA_INACCESSIBLE = "area_inaccessible"  # Area Inaccessible
+    FALSE_REPORT = "false_report"  # False Report
+    LOCAL_INTERVENTION_BLOCKED = "local_intervention_blocked"  # Local Intervention Blocked
+    OTHER = "other"  # catch-all for unmappable legacy values
+
+
 class RescueRequest(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "rescue_requests"
 
@@ -39,13 +98,34 @@ class RescueRequest(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     longitude: Mapped[float | None] = mapped_column(Numeric(9, 6), nullable=True)
 
     animal_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
-    physical_condition: Mapped[str] = mapped_column(
-        String(64), nullable=False
-    )  # Critical, Injured, Sick, Malnourished, Stray
+    physical_condition: Mapped[RescuePhysicalCondition] = mapped_column(
+        String(64), nullable=False, default=RescuePhysicalCondition.UNKNOWN
+    )  # RescuePhysicalCondition enum (PRR 3.2 categories)
     behavioral_indicators: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Media evidence from the public intake wizard (PRR 3.2): up to 5 photos +
+    # short video clips, max 50MB combined, enforced by the storage module at
+    # upload time. Holds the confirmed object keys returned by the storage
+    # presigned-upload flow (same JSONB pattern as RescueReport.photos).
+    media_evidence: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+    # Temporal tracking extras (PRR 3.2): environmental factors (e.g. weather,
+    # traffic, hazards) and additional reporter notes captured by the wizard.
+    environmental_factors: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reporter_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     status: Mapped[RescueStatus] = mapped_column(
         String(32), default=RescueStatus.REPORTED, nullable=False, index=True
+    )
+    # Severity prioritization (PRR 3.2) - reporters self-assess on intake,
+    # coordinators refine during verification; CRITICAL/HIGH feed the public
+    # urgent-alert banner and the dispatch queue ordering.
+    severity: Mapped[RescueSeverity] = mapped_column(
+        String(16), default=RescueSeverity.MEDIUM, nullable=False, index=True
+    )
+    # Explicit urgent flag (PRR 3.1.1): surfaces a case for community
+    # assistance / foster placement on the public banner even when its
+    # severity label is not CRITICAL/HIGH.
+    is_urgent: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, index=True
     )
     rejection_rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -79,9 +159,15 @@ class RescueDispatch(UUIDPkMixin, TimestampMixin, Base):
     rescued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     admitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    failure_reason: Mapped[str | None] = mapped_column(
+    failure_reason: Mapped[RescueFailureReason | None] = mapped_column(
         String(255), nullable=True
-    )  # Fled, Inaccessible, False Report, etc.
+    )  # RescueFailureReason outcome code (PRR 3.3)
+    # Escalation Protocol (PRR 3.3): field agents flag the case when they need
+    # back-up personnel, veterinary transport, or law enforcement support.
+    escalation_type: Mapped[RescueEscalationType | None] = mapped_column(
+        String(32), nullable=True, index=True
+    )  # RescueEscalationType request category
+    escalation_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     rescue_request: Mapped["RescueRequest"] = relationship(back_populates="dispatch")

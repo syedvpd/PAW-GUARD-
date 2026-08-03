@@ -16,6 +16,8 @@ from pawguard.core.bulk import (
 )
 from pawguard.core.exceptions import parse_enum
 from pawguard.core.pagination import PageParams, page_params
+from pawguard.core.pii import mask_email, mask_full_name, mask_phone
+from pawguard.core.rate_limiter import rate_limit
 from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.core.search import SortParams, sort_params
 from pawguard.db.session import get_db
@@ -23,9 +25,10 @@ from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.rbac import require_permission
 from pawguard.modules.dog.repository import DogRepository
-from pawguard.modules.rescue.models import RescueStatus
+from pawguard.modules.rescue.models import RescueRequest, RescueSeverity, RescueStatus
 from pawguard.modules.rescue.repository import RescueRepository
 from pawguard.modules.rescue.schemas import (
+    PublicRescueStatusResponse,
     RescueDispatchCreate,
     RescueReportCreate,
     RescueRequestCreate,
@@ -47,10 +50,50 @@ def get_rescue_service(
     return RescueService(repo, audit_service=audit, dog_repo=dog_repo)
 
 
+# Roles allowed to see unmasked reporter PII on rescue cases. Per PRR §6.1
+# reporter identity/contact is masked in general system views and unmasked
+# only for coordinators and administrators.
+_UNMASKED_RESCUE_PII_PERMISSIONS = {"rescue:verify", "rescue:dispatch", "system:admin"}
+
+
+def _mask_reporter_pii(
+    item: RescueRequestResponse, current_user: CurrentUser
+) -> RescueRequestResponse:
+    """Return a copy of the response with reporter PII masked unless the
+    caller holds coordinator/admin permissions."""
+    user_permissions = {p.code for r in current_user.user.roles for p in r.permissions}
+    if _UNMASKED_RESCUE_PII_PERMISSIONS & user_permissions:
+        return item
+    return item.model_copy(
+        update={
+            "reporter_name": mask_full_name(item.reporter_name),
+            "reporter_phone": mask_phone(item.reporter_phone),
+            "reporter_alternate_phone": mask_phone(item.reporter_alternate_phone),
+            "reporter_email": mask_email(item.reporter_email),
+        }
+    )
+
+
+def _masked_rescue_response(
+    rescue: RescueRequest,
+    current_user: CurrentUser,
+    *,
+    message: str,
+) -> ApiResponse[RescueRequestResponse]:
+    """Build the standard rescue response with reporter PII masked per the
+    caller's role - used by EVERY handler that returns a rescue request so
+    the §6.1 masking policy can't be bypassed by switching HTTP verbs."""
+    data = _mask_reporter_pii(
+        RescueRequestResponse.model_validate(rescue), current_user
+    )
+    return ApiResponse(data=data, message=message)
+
+
 @router.post(
     "/report",
     response_model=ApiResponse[RescueRequestResponse],
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(rate_limit("rescue_report", 5, 60))],
 )
 async def report_incident(
     payload: RescueRequestCreate,
@@ -70,6 +113,11 @@ async def report_incident(
         animal_count=payload.animal_count,
         physical_condition=payload.physical_condition,
         behavioral_indicators=payload.behavioral_indicators,
+        severity=payload.severity,
+        is_urgent=payload.is_urgent,
+        media_evidence=payload.media_evidence,
+        environmental_factors=payload.environmental_factors,
+        reporter_notes=payload.reporter_notes,
         actor_id=None,
         ip_address=request.client.host if request.client else None,
     )
@@ -96,11 +144,14 @@ async def verify_request(
         request_id,
         approve=approve,
         rationale=payload.rejection_rationale,
+        severity=payload.severity,
+        is_urgent=payload.is_urgent,
         actor_id=current_user.id,
         ip_address=request.client.host if request.client else None,
     )
-    return ApiResponse(
-        data=RescueRequestResponse.model_validate(rescue),
+    return _masked_rescue_response(
+        rescue,
+        current_user,
         message="Rescue incident verification updated.",
     )
 
@@ -122,12 +173,15 @@ async def dispatch_team(
         assigned_driver_id=payload.assigned_driver_id,
         vehicle_id=payload.vehicle_id,
         equipment_details=payload.equipment_details,
+        escalation_type=payload.escalation_type,
+        escalation_notes=payload.escalation_notes,
         notes=payload.notes,
         actor_id=current_user.id,
         ip_address=request.client.host if request.client else None,
     )
-    return ApiResponse(
-        data=RescueRequestResponse.model_validate(rescue),
+    return _masked_rescue_response(
+        rescue,
+        current_user,
         message="Rescue vehicle and team dispatched successfully.",
     )
 
@@ -150,8 +204,9 @@ async def mark_located(
         actor_id=current_user.id,
         ip_address=request.client.host if request.client else None,
     )
-    return ApiResponse(
-        data=RescueRequestResponse.model_validate(rescue),
+    return _masked_rescue_response(
+        rescue,
+        current_user,
         message="Rescue location reached.",
     )
 
@@ -174,8 +229,9 @@ async def mark_rescued(
         actor_id=current_user.id,
         ip_address=request.client.host if request.client else None,
     )
-    return ApiResponse(
-        data=RescueRequestResponse.model_validate(rescue),
+    return _masked_rescue_response(
+        rescue,
+        current_user,
         message="Animal secured and placed in transit.",
     )
 
@@ -201,8 +257,9 @@ async def mark_admitted(
         actor_id=current_user.id,
         ip_address=request.client.host if request.client else None,
     )
-    return ApiResponse(
-        data=RescueRequestResponse.model_validate(rescue),
+    return _masked_rescue_response(
+        rescue,
+        current_user,
         message="Animal admitted and registered at shelter facility.",
     )
 
@@ -227,10 +284,27 @@ async def fail_rescue(
         actor_id=current_user.id,
         ip_address=request.client.host if request.client else None,
     )
-    return ApiResponse(
-        data=RescueRequestResponse.model_validate(rescue),
+    return _masked_rescue_response(
+        rescue,
+        current_user,
         message="Rescue operation marked failed.",
     )
+
+
+@router.get(
+    "/status",
+    response_model=ApiResponse[PublicRescueStatusResponse],
+    # Public "my submitted case" lookup (PRR 3.2) - no auth, rate-limited.
+    # Declared BEFORE /{request_id} so the UUID path converter cannot shadow it.
+    dependencies=[Depends(rate_limit("rescue_status_lookup", 10, 60))],
+)
+async def get_public_status(
+    ticket_number: str = Query(..., min_length=1, max_length=64),
+    phone: str = Query(..., min_length=1, max_length=32),
+    service: RescueService = Depends(get_rescue_service),
+) -> ApiResponse[PublicRescueStatusResponse]:
+    status = await service.lookup_public_status(ticket_number, phone)
+    return ApiResponse(data=status, message="Rescue case status retrieved.")
 
 
 @router.get(
@@ -240,10 +314,14 @@ async def fail_rescue(
 )
 async def get_request(
     request_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
     service: RescueService = Depends(get_rescue_service),
 ) -> ApiResponse[RescueRequestResponse]:
     request = await service.get_request(request_id)
-    return ApiResponse(data=RescueRequestResponse.model_validate(request))
+    data = _mask_reporter_pii(
+        RescueRequestResponse.model_validate(request), current_user
+    )
+    return ApiResponse(data=data)
 
 
 @router.get(
@@ -258,11 +336,19 @@ async def list_requests(
         None, description="Search by ticket number, reporter name, phone, or location"
     ),
     status: RescueStatus | None = Query(None, description="Filter by status"),
+    severity: RescueSeverity | None = Query(None, description="Filter by severity"),
+    urgent_only: bool | None = Query(
+        None, description="Filter to urgent-flagged cases (PRR 3.1.1)"
+    ),
+    current_user: CurrentUser = Depends(get_current_user),
     service: RescueService = Depends(get_rescue_service),
 ) -> PaginatedResponse[RescueRequestResponse]:
-    return await service.list_requests_paginated(
-        page=page, sort=sort, search_term=search, status=status
+    result = await service.list_requests_paginated(
+        page=page, sort=sort, search_term=search, status=status,
+        severity=severity, urgent_only=urgent_only,
     )
+    data = [_mask_reporter_pii(item, current_user) for item in result.data]
+    return PaginatedResponse(data=data, meta=result.meta)
 
 
 @router.delete(

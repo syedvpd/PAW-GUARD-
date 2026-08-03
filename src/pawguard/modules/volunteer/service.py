@@ -7,6 +7,7 @@ from pawguard.core.exceptions import ConflictError, ForbiddenError, NotFoundErro
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginationMeta
 from pawguard.core.search import SortParams
+from pawguard.modules.auth.models import AuthAuditEventType
 from pawguard.modules.auth.repository import RoleRepository, UserRoleRepository
 from pawguard.modules.volunteer.models import (
     ShiftAttendance,
@@ -20,16 +21,25 @@ from pawguard.modules.volunteer.schemas import (
     VolunteerProfileUpdate,
     VolunteerShiftCreate,
 )
+from pawguard.services.audit_service import AuditService
 
 
 class VolunteerService:
-    def __init__(self, repository: VolunteerRepository) -> None:
+    def __init__(
+        self, repository: VolunteerRepository, audit_service: AuditService | None = None
+    ) -> None:
         self._repo = repository
+        self._audit = audit_service
         self._roles = RoleRepository(repository._session)
         self._user_roles = UserRoleRepository(repository._session)
 
     async def apply_to_volunteer(
-        self, user_id: uuid.UUID, payload: VolunteerProfileCreate
+        self,
+        user_id: uuid.UUID,
+        payload: VolunteerProfileCreate,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
     ) -> VolunteerProfile:
         existing = await self._repo.get_profile_by_user_id(user_id)
         if existing is not None:
@@ -50,6 +60,20 @@ class VolunteerService:
         res = await self._repo.get_profile_by_id(profile.id)
         if res is None:
             raise NotFoundError("Failed to fetch newly created volunteer profile.")
+
+        # Self-service public application - always audited so coordinators can
+        # trace who registered, from where, and when (PRR §6.1).
+        if self._audit:
+            await self._audit.record(
+                event_type=AuthAuditEventType.VOLUNTEER_APPLICATION_SUBMITTED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "profile_id": str(res.id),
+                    "user_id": str(user_id),
+                },
+            )
         return res
 
     async def update_profile(

@@ -20,6 +20,7 @@ from pawguard.modules.volunteer.schemas import (
     VolunteerShiftCreate,
 )
 from pawguard.modules.volunteer.service import VolunteerService
+from pawguard.services.audit_service import AuditService
 
 
 class TestVolunteerService:
@@ -48,6 +49,32 @@ class TestVolunteerService:
         )
         result = await service.apply_to_volunteer(user_id, payload)
         assert result.status == VolunteerStatus.APPLIED
+
+    @pytest.mark.asyncio
+    async def test_apply_to_volunteer_records_audit(self, mock_repo):
+        """Self-service applications are public mutations - they must be
+        audited with the actor id and IP (PRR §6.1)."""
+        mock_audit = AsyncMock(spec=AuditService)
+        svc = VolunteerService(mock_repo, audit_service=mock_audit)
+        user_id = uuid.uuid4()
+        actor_id = uuid.uuid4()
+        mock_repo.get_profile_by_user_id.return_value = None
+        mock_repo.create_profile.return_value = None
+        mock_repo.get_profile_by_id.return_value = VolunteerProfile(
+            id=uuid.uuid4(), user_id=user_id, status=VolunteerStatus.APPLIED,
+            emergency_contact_name="Jane", emergency_contact_phone="+123",
+        )
+        payload = VolunteerProfileCreate(
+            emergency_contact_name="Jane", emergency_contact_phone="+123",
+        )
+        await svc.apply_to_volunteer(
+            user_id, payload, actor_id=actor_id, ip_address="203.0.113.9",
+        )
+        mock_audit.record.assert_awaited_once()
+        kwargs = mock_audit.record.call_args.kwargs
+        assert kwargs["event_type"].value == "volunteer_application_submitted"
+        assert kwargs["actor_id"] == actor_id
+        assert kwargs["ip_address"] == "203.0.113.9"
 
     @pytest.mark.asyncio
     async def test_apply_to_volunteer_already_exists(self, service, mock_repo):

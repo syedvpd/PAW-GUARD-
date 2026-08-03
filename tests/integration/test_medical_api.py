@@ -43,7 +43,7 @@ class TestMedicalAPI:
         return {"Authorization": f"Bearer {token}"}
 
     async def _create_dog(self, client: AsyncClient, headers: dict, name: str = "MedDog") -> str:
-        payload = {"name": name, "breed": "Lab", "gender": "male", "estimated_age": "3y", "weight": 22, "color": "golden", "temperament": "calm", "is_quarantine_passed": True}
+        payload = {"name": name, "breed": "Lab", "gender": "male", "estimated_age": "3y", "weight": 22, "color": "golden", "temperament": "friendly", "is_quarantine_passed": True}
         resp = await client.post("/api/v1/dogs", json=payload, headers=headers)
         return resp.json()["data"]["id"]
 

@@ -167,11 +167,6 @@ class StorageService:
         )
 
     async def bulk_delete_files(self, ids: list[uuid.UUID]) -> int:
-        count = 0
-        for file_id in ids:
-            stored = await self._repo.get_by_id(file_id)
-            if stored is not None:
-                stored.deleted_at = datetime.now(UTC)
-                count += 1
+        count = await self._repo.bulk_soft_delete(ids)
         await self._repo._session.flush()
         return count

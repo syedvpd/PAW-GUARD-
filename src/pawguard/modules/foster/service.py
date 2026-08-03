@@ -198,6 +198,10 @@ class FosterService:
             is_active=True,
             notes=payload.notes,
         )
+        # Attach the already-loaded dog: the placement is built in Python and
+        # only flushed (never SELECTed), so its `dog` relationship would
+        # otherwise lazy-load - which crashes in Pydantic's synchronous
+        # response validation (MissingGreenlet) and needs no extra query.
         await self._repo.create_placement(placement)
 
         foster.active_count += 1
@@ -205,6 +209,19 @@ class FosterService:
             foster.is_available = False
 
         dog.status = DogStatus.FOSTERED
+
+        # Re-fetch so the response serializer sees a fully-loaded object: the
+        # placement is built in Python and only flushed (never SELECTed), so
+        # its `dog` relationship would otherwise lazy-load - which crashes in
+        # Pydantic's synchronous response validation (MissingGreenlet) - and
+        # the flush just expired the dog's `updated_at` (onupdate=func.now()).
+        # get_placement_by_id joins the dog (lazy="joined"), loading every
+        # column in one SELECT.
+        await self._repo._session.flush()
+        res = await self._repo.get_placement_by_id(placement.id)
+        if res is None:
+            raise NotFoundError("Failed to fetch newly created foster placement.")
+
         if self._audit and actor_id:
             await self._audit.record(
                 event_type=AuthAuditEventType.FOSTER_PLACEMENT_CREATED,
@@ -212,13 +229,13 @@ class FosterService:
                 ip_address=ip_address or "",
                 user_agent="",
                 metadata={
-                    "placement_id": str(placement.id),
+                    "placement_id": str(res.id),
                     "dog_id": str(payload.dog_id),
                     "foster_id": str(foster_id),
                 },
             )
 
-        return placement
+        return res
 
     async def return_dog(
         self,
@@ -250,16 +267,25 @@ class FosterService:
         dog = await self._dog_repo.get_by_id(placement.dog_id)
         if dog is not None:
             dog.status = DogStatus.SHELTER
+
+        # Re-fetch so the serializer sees non-expired columns (dog.updated_at
+        # is expired by the flush via onupdate=func.now()) and the dog
+        # relationship is loaded (see place_dog's MissingGreenlet note).
+        await self._repo._session.flush()
+        res = await self._repo.get_placement_by_id(placement_id)
+        if res is None:
+            raise NotFoundError("Failed to fetch foster placement after return.")
+
         if self._audit and actor_id:
             await self._audit.record(
                 event_type=AuthAuditEventType.FOSTER_PLACEMENT_ENDED,
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
-                metadata={"placement_id": str(placement_id), "dog_id": str(placement.dog_id)},
+                metadata={"placement_id": str(res.id), "dog_id": str(res.dog_id)},
             )
 
-        return placement
+        return res
 
     async def log_daily_progress(
         self,
@@ -340,21 +366,23 @@ class FosterService:
             )
         return dispatch
 
-    async def list_supply_dispatches(
-        self, placement_id: uuid.UUID
-    ) -> list[FosterSupplyDispatch]:
+    async def get_placement(self, placement_id: uuid.UUID) -> FosterPlacement:
         placement = await self._repo.get_placement_by_id(placement_id)
         if placement is None:
             raise NotFoundError("Foster placement not found.")
+        return placement
+
+    async def list_supply_dispatches(
+        self, placement_id: uuid.UUID
+    ) -> list[FosterSupplyDispatch]:
+        await self.get_placement(placement_id)
         dispatches = await self._repo.get_supply_dispatches_for_placement(placement_id)
         return list(dispatches)
 
     async def get_progress_logs(
         self, placement_id: uuid.UUID
     ) -> list[FosterProgressLog]:
-        placement = await self._repo.get_placement_by_id(placement_id)
-        if placement is None:
-            raise NotFoundError("Foster placement not found.")
+        await self.get_placement(placement_id)
         logs = await self._repo.get_progress_logs_for_placement(placement_id)
         return list(logs)
 

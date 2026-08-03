@@ -204,6 +204,8 @@ Key configuration is managed through `.env`. See `src/pawguard/core/config.py` f
 | `JWT_PRIVATE_KEY_PATH` | `./secrets/private_key.pem` | Path to RS256 private key |
 | `JWT_PUBLIC_KEY_PATH` | `./secrets/public_key.pem` | Path to RS256 public key |
 | `CORS_ORIGINS` | `http://localhost:3000` | Comma-separated allowed origins |
+| `GOOGLE_OAUTH_CLIENT_ID` | _(empty)_ | Google OAuth app client id; ID tokens whose aud does not match are rejected. OAuth login fails closed when unset. |
+| `APPLE_OAUTH_CLIENT_ID` | _(empty)_ | Apple Sign-in client id (services id); audience-verified. OAuth login fails closed when unset. |
 
 ---
 
@@ -250,6 +252,17 @@ uv run pytest tests/test_auth.py -v
 uv run pytest -k "test_login" -v
 ```
 
+> **Windows / Git Bash:** if you run tests from Git Bash and hit
+> `AssertionError: A path prefix must start with '/'` at import time, an
+> exported `API_V1_PREFIX=/api/v1` is being mangled by MSYS path conversion
+> into `C:/Program Files/Git/api/v1` when native Python is spawned. Fix it
+> with `unset API_V1_PREFIX` (the `.env` value is already `/api/v1`) or
+> `export MSYS_NO_PATHCONV=1` before running pytest.
+>
+> Integration tests require a migrated PostgreSQL instance: point
+> `DATABASE_URL` / `DATABASE_URL_FRONTEND` in `.env` at a local database and
+> run `uv run alembic upgrade head` first.
+
 ### Quality Gates
 
 ```bash
@@ -290,7 +303,7 @@ When running in `local` or `staging` environments:
 
 ```bash
 # Start the ARQ worker
-uv run python -m pawguard.workers.arq_worker
+uv run arq pawguard.workers.arq_worker.WorkerSettings
 ```
 
 Workers handle async tasks: email delivery, push notifications, report generation, image processing.

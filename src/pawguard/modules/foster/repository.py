@@ -100,7 +100,11 @@ class FosterRepository:
         return placement
 
     async def get_placement_by_id(self, placement_id: uuid.UUID) -> FosterPlacement | None:
-        stmt = select(FosterPlacement).where(FosterPlacement.id == placement_id)
+        stmt = (
+            select(FosterPlacement)
+            .options(selectinload(FosterPlacement.foster))
+            .where(FosterPlacement.id == placement_id)
+        )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def get_active_placement_for_dog(self, dog_id: uuid.UUID) -> FosterPlacement | None:

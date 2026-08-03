@@ -6,6 +6,7 @@ Routers only validate and call services (RULE-004).
 import contextlib
 import uuid
 from datetime import date
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,15 +17,16 @@ from pawguard.core.bulk import (
     BulkStatusUpdateRequest,
     BulkStatusUpdateResponse,
 )
-from pawguard.core.exceptions import ValidationFailedError, parse_enum
+from pawguard.core.exceptions import ForbiddenError, ValidationFailedError, parse_enum
 from pawguard.core.pagination import PageParams, page_params
 from pawguard.core.payments import PaymentGatewayError, get_payment_gateway
+from pawguard.core.rate_limiter import rate_limit
 from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.core.search import SortParams, sort_params
 from pawguard.db.session import get_db
 from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
-from pawguard.modules.auth.rbac import require_permission
+from pawguard.modules.auth.rbac import has_permission, require_permission
 from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.donation.models import DonationStatus, DonationType, SponsorshipStatus
 from pawguard.modules.donation.repository import DonationRepository
@@ -78,10 +80,17 @@ def get_donation_service(
 )
 async def register_donor(
     payload: DonorProfileCreate,
+    request: Request,
     current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(rate_limit("donor_register", 10, 3600))] = None,
     service: DonationService = Depends(get_donation_service),
 ) -> ApiResponse[DonorProfileResponse]:
-    donor = await service.register_donor(current_user.id, payload)
+    donor = await service.register_donor(
+        current_user.id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
     return ApiResponse(
         data=DonorProfileResponse.model_validate(donor),
         message="Donor profile registered successfully.",
@@ -162,13 +171,20 @@ async def record_manual_donation(
 )
 async def initiate_donation_checkout(
     payload: DonationCreate,
+    request: Request,
     current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(rate_limit("donation_checkout", 10, 60))] = None,
     service: DonationService = Depends(get_donation_service),
 ) -> ApiResponse[DonationOrderResponse]:
     """Create a PENDING donation plus a payment-provider order. The client
     opens the provider's checkout with the returned order details, then calls
     `/donations/verify` once the user completes payment."""
-    order = await service.initiate_online_donation(current_user.id, payload)
+    order = await service.initiate_online_donation(
+        current_user.id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
     return ApiResponse(data=order, message="Donation order created. Complete payment to confirm.")
 
 
@@ -180,8 +196,13 @@ async def verify_donation_checkout(
     payload: DonationVerifyRequest,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(rate_limit("donation_verify", 10, 60))] = None,
     service: DonationService = Depends(get_donation_service),
 ) -> ApiResponse[DonationResponse]:
+    donation = await service.get_donation(payload.donation_id)
+    is_owner = donation.donor is not None and donation.donor.user_id == current_user.user.id
+    if not is_owner and not has_permission(current_user.user, "donation:read"):
+        raise ForbiddenError("You do not have permission to verify this donation.")
     donation = await service.verify_donation_payment(
         donation_id=payload.donation_id,
         gateway_order_id=payload.gateway_order_id,
@@ -282,9 +303,8 @@ async def get_donation_receipt(
     service: DonationService = Depends(get_donation_service),
 ) -> ApiResponse[DownloadUrlResponse]:
     donation = await service.get_donation(donation_id)
-    user_permissions = {p.code for r in current_user.user.roles for p in r.permissions}
-    if donation.donor_id != current_user.user.id and "donation:read" not in user_permissions:
-        from pawguard.core.exceptions import ForbiddenError
+    is_owner = donation.donor is not None and donation.donor.user_id == current_user.user.id
+    if not is_owner and not has_permission(current_user.user, "donation:read"):
         raise ForbiddenError("You do not have permission to view this receipt.")
     if not donation.receipt_file_key:
         from pawguard.core.exceptions import NotFoundError
@@ -379,6 +399,7 @@ async def create_sponsorship(
     payload: SponsorshipCreate,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(rate_limit("sponsorship_create", 10, 3600))] = None,
     service: DonationService = Depends(get_donation_service),
 ) -> ApiResponse[SponsorshipResponse]:
     sponsorship = await service.create_sponsorship(
@@ -403,6 +424,10 @@ async def update_sponsorship_status(
     current_user: CurrentUser = Depends(get_current_user),
     service: DonationService = Depends(get_donation_service),
 ) -> ApiResponse[SponsorshipResponse]:
+    sponsorship = await service.get_sponsorship(sponsorship_id)
+    is_owner = sponsorship.donor is not None and sponsorship.donor.user_id == current_user.user.id
+    if not is_owner and not has_permission(current_user.user, "donation:manage"):
+        raise ForbiddenError("You do not have permission to update this sponsorship.")
     if payload.status == SponsorshipStatus.PAUSED:
         sponsorship = await service.pause_sponsorship(
             sponsorship_id, actor_id=current_user.id,
@@ -456,7 +481,11 @@ async def list_all_sponsorships(
 )
 async def get_sponsorship(
     sponsorship_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
     service: DonationService = Depends(get_donation_service),
 ) -> ApiResponse[SponsorshipResponse]:
     sponsorship = await service.get_sponsorship(sponsorship_id)
+    is_owner = sponsorship.donor is not None and sponsorship.donor.user_id == current_user.user.id
+    if not is_owner and not has_permission(current_user.user, "donation:read"):
+        raise ForbiddenError("You do not have permission to view this sponsorship.")
     return ApiResponse(data=SponsorshipResponse.model_validate(sponsorship))

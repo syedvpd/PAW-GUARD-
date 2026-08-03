@@ -9,7 +9,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from pawguard.db.base import Base
-from pawguard.db.mixins import TimestampMixin, UUIDPkMixin
+from pawguard.db.mixins import SoftDeleteMixin, TimestampMixin, UUIDPkMixin
 
 # Default response-SLA window (PRR 3.14: "mandatory response SLAs").
 DEFAULT_SLA_HOURS = 72
@@ -23,7 +23,7 @@ class GrievanceStatus(StrEnum):
     CLOSED = "closed"
 
 
-class GrievanceTicket(UUIDPkMixin, TimestampMixin, Base):
+class GrievanceTicket(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "grievance_tickets"
 
     reporter_name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -38,7 +38,6 @@ class GrievanceTicket(UUIDPkMixin, TimestampMixin, Base):
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     resolution_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # SLA / escalation tracking (PRR 3.14).
     sla_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -68,7 +67,7 @@ class GrievanceComment(UUIDPkMixin, TimestampMixin, Base):
     is_internal: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 
-class ServiceFeedback(UUIDPkMixin, TimestampMixin, Base):
+class ServiceFeedback(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "service_feedbacks"
 
     rescue_case_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -81,4 +80,3 @@ class ServiceFeedback(UUIDPkMixin, TimestampMixin, Base):
     )
     rating: Mapped[int] = mapped_column(Integer, nullable=False)
     comments: Mapped[str | None] = mapped_column(Text, nullable=True)
-    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

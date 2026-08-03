@@ -48,8 +48,16 @@ class _NullRedis:
     async def ping(self) -> bool:
         return False
 
-    async def scan_iter(self, match: str = "", count: int | None = None) -> list[str]:
-        return []
+    async def scan_iter(self, match: str = "", count: int | None = None):
+        """No-op async generator mirroring redis-py's scan_iter protocol.
+
+        ``CacheService.delete_prefix`` consumes scan_iter with ``async for``.
+        If this returned a coroutine yielding a list, ``async for`` would raise
+        TypeError the moment Redis is unavailable (e.g. RBAC cache invalidation
+        or portal stats purges in dev/CI) instead of gracefully no-op'ing.
+        """
+        return
+        yield  # pragma: no cover — marks this function as an async generator
 
 
 async def _ensure_client() -> RedisClient:

@@ -1,6 +1,7 @@
 """API router for Grievance & Feedback module (RULE-004)."""
 
 import uuid
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +14,7 @@ from pawguard.core.bulk import (
 )
 from pawguard.core.exceptions import parse_enum
 from pawguard.core.pagination import PageParams, page_params
+from pawguard.core.rate_limiter import rate_limit
 from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.db.session import get_db
 from pawguard.modules.auth.audit import get_audit_service
@@ -52,6 +54,7 @@ def get_grievance_service(
 )
 async def submit_complaint(
     payload: GrievanceCreate,
+    _: Annotated[None, Depends(rate_limit("grievance_submit", 10, 3600))] = None,
     service: GrievanceService = Depends(get_grievance_service),
 ) -> ApiResponse[GrievanceResponse]:
     ticket = await service.submit_complaint(payload)
@@ -237,6 +240,7 @@ async def list_comments(
 )
 async def submit_feedback(
     payload: ServiceFeedbackCreate,
+    _: Annotated[None, Depends(rate_limit("grievance_feedback", 10, 3600))] = None,
     service: GrievanceService = Depends(get_grievance_service),
 ) -> ApiResponse[ServiceFeedbackResponse]:
     fb = await service.submit_feedback(payload)

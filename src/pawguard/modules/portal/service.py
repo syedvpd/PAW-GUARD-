@@ -4,7 +4,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.exceptions import ConflictError, NotFoundError
@@ -14,15 +14,17 @@ from pawguard.core.search import SortParams
 from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
 from pawguard.modules.auth.models import AuthAuditEventType
 from pawguard.modules.dog.models import DogProfile, DogStatus
-from pawguard.modules.donation.models import Donation, DonorProfile
-from pawguard.modules.foster.models import FosterProfile
+from pawguard.modules.donation.models import Donation, DonationStatus, DonorProfile
+from pawguard.modules.foster.models import FosterProfile, FosterStatus
 from pawguard.modules.lost_found.models import FoundReport, LostReport
 from pawguard.modules.portal.models import (
     BlogPost,
     ContactLocation,
     ContentStatus,
     FAQEntry,
+    LegalDocument,
     SuccessStory,
+    UrgentAlert,
     VeterinaryPartner,
 )
 from pawguard.modules.portal.repository import PortalRepository
@@ -33,17 +35,37 @@ from pawguard.modules.portal.schemas import (
     ContactLocationUpdate,
     FAQEntryCreate,
     FAQEntryUpdate,
+    LegalDocumentCreate,
+    LegalDocumentUpdate,
     PublicHeroStats,
     SuccessStoryCreate,
     SuccessStoryUpdate,
+    TransparencyStats,
+    UrgentAlertCreate,
+    UrgentAlertUpdate,
     UserDashboardSummary,
     VeterinaryPartnerCreate,
     VeterinaryPartnerUpdate,
 )
-from pawguard.modules.rescue.models import RescueRequest, RescueStatus
+from pawguard.modules.rescue.models import (
+    RescueRequest,
+    RescueSeverity,
+    RescueStatus,
+)
 from pawguard.modules.settings.models import SystemSetting
-from pawguard.modules.volunteer.models import VolunteerProfile
+from pawguard.modules.volunteer.models import VolunteerProfile, VolunteerStatus
 from pawguard.services.audit_service import AuditService
+from pawguard.services.cache_service import CacheService
+
+# Public aggregate stats are expensive to compute (multiple count/sum scans)
+# and change slowly; cache them briefly to keep the anonymous landing page
+# cheap. The TTL is a safety net for cross-module data (dogs, donations,
+# rescues); CMS content changes within this module purge the keys immediately
+# via _invalidate_stats_cache(). The CacheService already namespaces with
+# "portal", so bare keys are used here.
+HERO_STATS_CACHE_KEY = "hero_stats"
+TRANSPARENCY_STATS_CACHE_KEY = "transparency_stats"
+PUBLIC_STATS_CACHE_TTL_SECONDS = 300
 
 
 class PortalService:
@@ -52,20 +74,31 @@ class PortalService:
         repository: PortalRepository,
         session: AsyncSession,
         audit_service: AuditService | None = None,
+        cache_service: CacheService | None = None,
     ) -> None:
         self._repo = repository
         self._session = session
         self._audit = audit_service
+        self._cache = cache_service
 
     def _apply_publish(
         self,
         status: ContentStatus,
-        entity: SuccessStory | BlogPost,
+        entity: SuccessStory | BlogPost | LegalDocument,
     ) -> None:
         if status == ContentStatus.PUBLISHED and entity.published_at is None:
             entity.published_at = datetime.now(UTC)
         if status == ContentStatus.DRAFT:
             entity.published_at = None
+
+    async def _invalidate_stats_cache(self) -> None:
+        """Purge cached public aggregates after a CMS write so the landing
+        page reflects the change immediately instead of waiting out the TTL.
+        No-op when caching is disabled (Redis unavailable)."""
+        if self._cache is None:
+            return
+        await self._cache.delete(HERO_STATS_CACHE_KEY)
+        await self._cache.delete(TRANSPARENCY_STATS_CACHE_KEY)
 
     # ── Success stories ──────────────────────────────────────────────────────
 
@@ -298,9 +331,13 @@ class PortalService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> VeterinaryPartner:
-        return await self._repo.create_vet(
+        result = await self._repo.create_vet(
             VeterinaryPartner(**payload.model_dump())
         )
+        await self._session.flush()
+        # veterinary_partners feeds the transparency aggregate - purge it.
+        await self._invalidate_stats_cache()
+        return result
 
     async def update_vet(
         self,
@@ -320,6 +357,8 @@ class PortalService:
             setattr(partner, field, value)
         await self._session.flush()
         await self._session.refresh(partner)
+        # veterinary_partners feeds the transparency aggregate - purge it.
+        await self._invalidate_stats_cache()
         return partner
 
     async def list_vets(
@@ -647,6 +686,11 @@ class PortalService:
     # ── Public hero stats ────────────────────────────────────────────────────
 
     async def get_hero_stats(self) -> PublicHeroStats:
+        if self._cache is not None:
+            cached = await self._cache.get(HERO_STATS_CACHE_KEY)
+            if cached is not None:
+                return PublicHeroStats(**cached)
+
         total_rescued = (
             await self._session.execute(
                 select(func.count())
@@ -686,6 +730,9 @@ class PortalService:
                 )
             )
         ).scalar_one()
+        # PRR 3.1.1 urgent-alert banner: CRITICAL/HIGH severity cases still in
+        # the intake pipeline, plus anything the coordinators explicitly
+        # flagged urgent for community assistance / foster placement.
         urgent = (
             await self._session.execute(
                 select(func.count())
@@ -698,15 +745,372 @@ class PortalService:
                         ]
                     ),
                     RescueRequest.deleted_at.is_(None),
+                    or_(
+                        RescueRequest.severity.in_(
+                            [RescueSeverity.CRITICAL, RescueSeverity.HIGH]
+                        ),
+                        RescueRequest.is_urgent.is_(True),
+                    ),
                 )
             )
         ).scalar_one()
-        return PublicHeroStats(
+        stats = PublicHeroStats(
             total_rescued=total_rescued,
             active_care_count=active_care,
             successful_adoptions=adoptions,
             urgent_rescue_count=urgent,
         )
+        if self._cache is not None:
+            await self._cache.set(
+                HERO_STATS_CACHE_KEY,
+                stats.model_dump(),
+                ttl_seconds=PUBLIC_STATS_CACHE_TTL_SECONDS,
+            )
+        return stats
+
+    # ── Transparency stats ──────────────────────────────────────────────────
+
+    async def get_transparency_stats(self) -> TransparencyStats:
+        """Public impact metrics for the transparency page (PRR §6.1)."""
+        if self._cache is not None:
+            cached = await self._cache.get(TRANSPARENCY_STATS_CACHE_KEY)
+            if cached is not None:
+                return TransparencyStats(**cached)
+
+        funds_raised = (
+            await self._session.execute(
+                select(
+                    func.coalesce(func.sum(Donation.amount), 0)
+                ).where(Donation.status == DonationStatus.SUCCESS)
+            )
+        ).scalar_one()
+        donations = (
+            await self._session.execute(
+                select(func.count())
+                .select_from(Donation)
+                .where(Donation.status == DonationStatus.SUCCESS)
+            )
+        ).scalar_one()
+        rescues = (
+            await self._session.execute(
+                select(func.count())
+                .select_from(RescueRequest)
+                .where(
+                    RescueRequest.status.in_(
+                        [RescueStatus.RESCUED, RescueStatus.ADMITTED]
+                    ),
+                    RescueRequest.deleted_at.is_(None),
+                )
+            )
+        ).scalar_one()
+        adoptions = (
+            await self._session.execute(
+                select(func.count())
+                .select_from(AdoptionApplication)
+                .where(
+                    AdoptionApplication.status == AdoptionStatus.COMPLETED,
+                    AdoptionApplication.deleted_at.is_(None),
+                )
+            )
+        ).scalar_one()
+        volunteers = (
+            await self._session.execute(
+                select(func.count())
+                .select_from(VolunteerProfile)
+                .where(
+                    VolunteerProfile.status.in_(
+                        [
+                            VolunteerStatus.ONBOARDED,
+                            VolunteerStatus.ACTIVE,
+                        ]
+                    ),
+                    VolunteerProfile.deleted_at.is_(None),
+                )
+            )
+        ).scalar_one()
+        foster_homes = (
+            await self._session.execute(
+                select(func.count())
+                .select_from(FosterProfile)
+                .where(
+                    FosterProfile.status == FosterStatus.APPROVED,
+                    FosterProfile.deleted_at.is_(None),
+                )
+            )
+        ).scalar_one()
+        vets = (
+            await self._session.execute(
+                select(func.count())
+                .select_from(VeterinaryPartner)
+                .where(
+                    VeterinaryPartner.is_active.is_(True),
+                    VeterinaryPartner.deleted_at.is_(None),
+                )
+            )
+        ).scalar_one()
+        dogs_in_care = (
+            await self._session.execute(
+                select(func.count())
+                .select_from(DogProfile)
+                .where(
+                    DogProfile.deleted_at.is_(None),
+                    DogProfile.status.in_(
+                        [
+                            DogStatus.RESCUED,
+                            DogStatus.SHELTER,
+                            DogStatus.FOSTERED,
+                            DogStatus.CLINIC,
+                        ]
+                    ),
+                )
+            )
+        ).scalar_one()
+
+        stats = TransparencyStats(
+            total_funds_raised=float(funds_raised),
+            total_donations=donations,
+            total_rescues_completed=rescues,
+            successful_adoptions=adoptions,
+            active_volunteers=volunteers,
+            active_foster_homes=foster_homes,
+            veterinary_partners=vets,
+            dogs_in_care=dogs_in_care,
+        )
+        if self._cache is not None:
+            await self._cache.set(
+                TRANSPARENCY_STATS_CACHE_KEY,
+                stats.model_dump(),
+                ttl_seconds=PUBLIC_STATS_CACHE_TTL_SECONDS,
+            )
+        return stats
+
+    # ── Legal documents ─────────────────────────────────────────────────────
+
+    async def create_legal_doc(
+        self,
+        payload: LegalDocumentCreate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> LegalDocument:
+        existing = await self._repo.get_legal_doc_by_slug(payload.slug)
+        if existing is not None:
+            raise ConflictError(
+                f"Legal document slug '{payload.slug}' already exists."
+            )
+        doc = LegalDocument(**payload.model_dump())
+        self._apply_publish(doc.status, doc)
+        result = await self._repo.create_legal_doc(doc)
+        await self._session.flush()
+        await self._invalidate_stats_cache()
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.PORTAL_POST_CREATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"legal_doc_id": str(result.id)},
+            )
+        return result
+
+    async def update_legal_doc(
+        self,
+        doc_id: uuid.UUID,
+        payload: LegalDocumentUpdate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> LegalDocument:
+        doc = await self._repo.get_legal_doc(doc_id)
+        if doc is None:
+            raise NotFoundError("Legal document not found.")
+        slug_taken = (
+            payload.slug
+            and payload.slug != doc.slug
+            and await self._repo.get_legal_doc_by_slug(payload.slug)
+            is not None
+        )
+        if slug_taken:
+            raise ConflictError(
+                f"Legal document slug '{payload.slug}' already exists."
+            )
+        for field, value in payload.model_dump(exclude_unset=True).items():
+            setattr(doc, field, value)
+        if payload.status is not None:
+            self._apply_publish(payload.status, doc)
+        await self._session.flush()
+        await self._session.refresh(doc)
+        await self._invalidate_stats_cache()
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.PORTAL_POST_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"legal_doc_id": str(doc_id)},
+            )
+        return doc
+
+    async def get_legal_doc_by_slug(
+        self,
+        slug: str,
+        *,
+        published_only: bool,
+    ) -> LegalDocument:
+        doc = await self._repo.get_legal_doc_by_slug(slug)
+        if doc is None or (
+            published_only and doc.status != ContentStatus.PUBLISHED
+        ):
+            raise NotFoundError("Legal document not found.")
+        return doc
+
+    async def list_legal_docs(
+        self,
+        *,
+        published_only: bool,
+    ) -> list[LegalDocument]:
+        return list(
+            await self._repo.list_legal_docs(published_only=published_only)
+        )
+
+    async def list_legal_docs_paginated(
+        self,
+        *,
+        page_params: PageParams | None = None,
+        status: ContentStatus | None = None,
+        document_type: str | None = None,
+        search: str | None = None,
+        sort: SortParams | None = None,
+    ) -> tuple[list[LegalDocument], PaginationMeta]:
+        total = await self._repo.count_legal_docs(
+            status=status,
+            document_type=document_type,
+            search=search,
+        )
+        docs = await self._repo.list_legal_docs(
+            page_params=page_params,
+            status=status,
+            document_type=document_type,
+            search=search,
+            sort=sort,
+        )
+        meta = build_pagination_meta(
+            total=total, params=page_params or PageParams()
+        )
+        return list(docs), meta
+
+    async def soft_delete_legal_doc(
+        self,
+        doc_id: uuid.UUID,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> None:
+        doc = await self._repo.get_legal_doc(doc_id)
+        if doc is None:
+            raise NotFoundError("Legal document not found.")
+        await self._repo.soft_delete_legal_doc(doc_id)
+        await self._session.flush()
+        await self._invalidate_stats_cache()
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.PORTAL_POST_DELETED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"legal_doc_id": str(doc_id)},
+            )
+
+    # ── Urgent alerts ───────────────────────────────────────────────────────
+
+    async def create_urgent_alert(
+        self,
+        payload: UrgentAlertCreate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> UrgentAlert:
+        alert = UrgentAlert(**payload.model_dump())
+        result = await self._repo.create_urgent_alert(alert)
+        await self._session.flush()
+        await self._invalidate_stats_cache()
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.PORTAL_POST_CREATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"urgent_alert_id": str(result.id)},
+            )
+        return result
+
+    async def update_urgent_alert(
+        self,
+        alert_id: uuid.UUID,
+        payload: UrgentAlertUpdate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> UrgentAlert:
+        alert = await self._repo.get_urgent_alert(alert_id)
+        if alert is None:
+            raise NotFoundError("Urgent alert not found.")
+        for field, value in payload.model_dump(exclude_unset=True).items():
+            setattr(alert, field, value)
+        await self._session.flush()
+        await self._session.refresh(alert)
+        await self._invalidate_stats_cache()
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.PORTAL_POST_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"urgent_alert_id": str(alert_id)},
+            )
+        return alert
+
+    async def get_active_alerts(self) -> list[UrgentAlert]:
+        return list(await self._repo.list_active_alerts())
+
+    async def list_urgent_alerts_paginated(
+        self,
+        *,
+        page_params: PageParams | None = None,
+        is_active: bool | None = None,
+        search: str | None = None,
+        sort: SortParams | None = None,
+    ) -> tuple[list[UrgentAlert], PaginationMeta]:
+        total = await self._repo.count_urgent_alerts(
+            is_active=is_active,
+            search=search,
+        )
+        alerts = await self._repo.list_urgent_alerts(
+            page_params=page_params,
+            is_active=is_active,
+            search=search,
+            sort=sort,
+        )
+        meta = build_pagination_meta(
+            total=total, params=page_params or PageParams()
+        )
+        return list(alerts), meta
+
+    async def soft_delete_urgent_alert(
+        self,
+        alert_id: uuid.UUID,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> None:
+        alert = await self._repo.get_urgent_alert(alert_id)
+        if alert is None:
+            raise NotFoundError("Urgent alert not found.")
+        await self._repo.soft_delete_urgent_alert(alert_id)
+        await self._session.flush()
+        await self._invalidate_stats_cache()
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.PORTAL_POST_DELETED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"urgent_alert_id": str(alert_id)},
+            )
 
     # ── User dashboard ───────────────────────────────────────────────────────
 

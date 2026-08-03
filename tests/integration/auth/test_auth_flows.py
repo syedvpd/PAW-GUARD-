@@ -112,6 +112,31 @@ class TestLogin:
         # Web clients do not get tokens in the body
         assert body["data"]["refresh_token"] is None
 
+    async def test_web_logout_clears_cookies(self, client: AsyncClient) -> None:
+        """L-3: logout must clear the cookies it set.
+
+        Set and clear must use the same cookie domain attribute, otherwise the
+        browser would ignore the deletion (host-only cookie vs domain-scoped
+        delete) and the session cookie would linger after logout.
+        """
+        await client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+        login_resp = await client.post(
+            "/api/v1/auth/login",
+            json=LOGIN_PAYLOAD,
+            headers={CLIENT_TYPE_HEADER: ClientType.WEB.value},
+        )
+        assert login_resp.status_code == 200
+        assert "pg_access_token" in client.cookies
+
+        logout_resp = await client.post("/api/v1/auth/logout")
+        assert logout_resp.status_code == 200
+
+        # The deletion Set-Cookie headers must be present (empty value + expiry).
+        set_cookies = logout_resp.headers.get_list("set-cookie")
+        assert any("pg_access_token=" in c and "max-age=0" in c.lower() for c in set_cookies)
+        assert any("pg_refresh_token=" in c and "max-age=0" in c.lower() for c in set_cookies)
+        assert "pg_access_token" not in client.cookies
+
 
 @pytest.mark.asyncio
 class TestRefresh:
@@ -168,6 +193,24 @@ class TestAuthenticatedEndpoints:
         resp = await client.get("/api/v1/auth/me")
         assert resp.status_code == 401
 
+    async def test_email_verify_request_is_rate_limited(self, client: AsyncClient) -> None:
+        """L-4: /email/verify/request must be throttled like its confirm sibling.
+
+        An authenticated caller can otherwise spam verification emails at will.
+        The limiter allows 10 requests per 300s window; the 11th is 429.
+        """
+        await client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+        login_resp = await client.post("/api/v1/auth/login", json=LOGIN_PAYLOAD)
+        access_token = login_resp.json()["data"]["access_token"]
+        headers = {"Authorization": f"Bearer {access_token}"}
+
+        for _ in range(10):
+            resp = await client.post("/api/v1/auth/email/verify/request", headers=headers)
+            assert resp.status_code == 200
+
+        throttled = await client.post("/api/v1/auth/email/verify/request", headers=headers)
+        assert throttled.status_code == 429
+
     async def test_logout(self, client: AsyncClient) -> None:
         await client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
         login_resp = await client.post("/api/v1/auth/login", json=LOGIN_PAYLOAD)
@@ -185,6 +228,14 @@ class TestAuthenticatedEndpoints:
             "/api/v1/auth/refresh", json={"refresh_token": refresh_token}
         )
         assert refresh_resp.status_code == 401
+
+        # The access token is dead immediately too: get_current_user validates
+        # the backing session, so logout revokes access now, not at expiry.
+        me_resp = await client.get(
+            "/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert me_resp.status_code == 401
 
     async def test_list_sessions(self, client: AsyncClient) -> None:
         await client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)

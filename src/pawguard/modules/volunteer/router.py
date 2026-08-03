@@ -4,8 +4,9 @@ Routers only validate and call services (RULE-004).
 """
 
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.bulk import (
@@ -16,9 +17,11 @@ from pawguard.core.bulk import (
 )
 from pawguard.core.exceptions import parse_enum
 from pawguard.core.pagination import PageParams, page_params
+from pawguard.core.rate_limiter import rate_limit
 from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.core.search import SortParams, sort_params
 from pawguard.db.session import get_db
+from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.rbac import require_permission
 from pawguard.modules.volunteer.models import VolunteerStatus
@@ -32,13 +35,17 @@ from pawguard.modules.volunteer.schemas import (
     VolunteerShiftResponse,
 )
 from pawguard.modules.volunteer.service import VolunteerService
+from pawguard.services.audit_service import AuditService
 
 router = APIRouter(prefix="/volunteers", tags=["volunteers"])
 
 
-def get_volunteer_service(db: AsyncSession = Depends(get_db)) -> VolunteerService:
+def get_volunteer_service(
+    db: AsyncSession = Depends(get_db),
+    audit: AuditService = Depends(get_audit_service),
+) -> VolunteerService:
     repo = VolunteerRepository(db)
-    return VolunteerService(repo)
+    return VolunteerService(repo, audit_service=audit)
 
 
 @router.post(
@@ -48,10 +55,18 @@ def get_volunteer_service(db: AsyncSession = Depends(get_db)) -> VolunteerServic
 )
 async def apply_to_volunteer(
     payload: VolunteerProfileCreate,
+    request: Request,
     current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(rate_limit("volunteer_apply", 5, 3600))] = None,
     service: VolunteerService = Depends(get_volunteer_service),
 ) -> ApiResponse[VolunteerProfileResponse]:
-    profile = await service.apply_to_volunteer(current_user.id, payload)
+    ip = request.client.host if request.client else None
+    profile = await service.apply_to_volunteer(
+        current_user.id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
     return ApiResponse(
         data=VolunteerProfileResponse.model_validate(profile),
         message="Volunteer application submitted successfully.",
@@ -179,7 +194,7 @@ async def list_shift_attendance(
 @router.get(
     "",
     response_model=PaginatedResponse[VolunteerProfileResponse],
-    dependencies=[Depends(require_permission("volunteer:read"))],
+    dependencies=[Depends(require_permission("volunteer:update"))],
 )
 async def list_profiles(
     params: PageParams = Depends(page_params),

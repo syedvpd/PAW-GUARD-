@@ -6,7 +6,6 @@
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import Any
 
 from pawguard.core.exceptions import ForbiddenError, NotFoundError
 from pawguard.core.pagination import PageParams, build_pagination_meta
@@ -432,22 +431,7 @@ class MedicalService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> int:
-        from datetime import UTC, datetime
-        count = 0
-        for e_id in ids:
-            if entity_type == "exams":
-                obj: Any = await self._get_exam_by_id(e_id)
-            elif entity_type == "treatments":
-                obj = await self._get_treatment_by_id(e_id)
-            elif entity_type == "vaccinations":
-                obj = await self._get_vaccination_by_id(e_id)
-            elif entity_type == "prescriptions":
-                obj = await self._repo.get_prescription_by_id(e_id)
-            else:
-                continue
-            if obj is not None:
-                obj.deleted_at = datetime.now(UTC)
-                count += 1
+        count = await self._repo.bulk_soft_delete(entity_type, ids)
         await self._repo._session.flush()
         if self._audit and actor_id:
             await self._audit.record(

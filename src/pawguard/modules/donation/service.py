@@ -111,7 +111,14 @@ class DonationService:
         except Exception:
             logger.warning("Failed to generate receipt for donation %s", donation.id, exc_info=True)
 
-    async def register_donor(self, user_id: uuid.UUID, payload: DonorProfileCreate) -> DonorProfile:
+    async def register_donor(
+        self,
+        user_id: uuid.UUID,
+        payload: DonorProfileCreate,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> DonorProfile:
         existing = await self._repo.get_donor_by_user_id(user_id)
         if existing is not None:
             raise ConflictError("You are already registered as a donor.")
@@ -121,7 +128,22 @@ class DonationService:
             tax_identifier=payload.tax_identifier,
             notes=payload.notes,
         )
-        return await self._repo.create_donor_profile(profile)
+        result = await self._repo.create_donor_profile(profile)
+
+        # Self-service donor registration is a public mutation: keep an audit
+        # trail of who registered, from where, and when (PRR §6.1).
+        if self._audit:
+            await self._audit.record(
+                event_type=AuthAuditEventType.DONOR_REGISTERED,
+                actor_id=actor_id or user_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "donor_id": str(result.id),
+                    "user_id": str(user_id),
+                },
+            )
+        return result
 
     async def get_or_create_donor(self, user_id: uuid.UUID) -> DonorProfile:
         donor = await self._repo.get_donor_by_user_id(user_id)
@@ -186,7 +208,12 @@ class DonationService:
         return donation
 
     async def initiate_online_donation(
-        self, user_id: uuid.UUID, payload: DonationCreate
+        self,
+        user_id: uuid.UUID,
+        payload: DonationCreate,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
     ) -> DonationOrderResponse:
         """Create a PENDING donation and an order with the configured payment
         gateway. The client uses the returned order details to open the
@@ -229,6 +256,21 @@ class DonationService:
             raise ValidationFailedError(str(exc)) from exc
 
         await self._repo.update_gateway_fields(donation.id, gateway_order_id=order.order_id)
+
+        if self._audit:
+            await self._audit.record(
+                event_type=AuthAuditEventType.DONATION_ORDER_CREATED,
+                actor_id=actor_id or user_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "donation_id": str(donation.id),
+                    "donor_id": str(donor.id),
+                    "gateway_order_id": order.order_id,
+                    "amount": str(payload.amount),
+                    "currency": payload.currency,
+                },
+            )
 
         return DonationOrderResponse(
             donation_id=donation.id,

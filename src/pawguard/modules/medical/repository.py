@@ -224,3 +224,23 @@ class MedicalRepository:
         )
         result = await self._session.execute(stmt)
         return result.rowcount  # type: ignore[attr-defined,no-any-return]
+
+    async def bulk_soft_delete(self, entity_type: str, ids: list[uuid.UUID]) -> int:
+        from datetime import UTC, datetime
+
+        model_map = {
+            "exams": ClinicalExam,
+            "treatments": MedicalTreatment,
+            "vaccinations": VaccinationRecord,
+            "prescriptions": Prescription,
+        }
+        model = model_map.get(entity_type)
+        if model is None:
+            return 0
+        stmt = (
+            update(model)
+            .where(model.id.in_(ids), model.deleted_at.is_(None))
+            .values(deleted_at=datetime.now(UTC))
+        )
+        result = await self._session.execute(stmt)
+        return result.rowcount  # type: ignore[attr-defined,no-any-return]

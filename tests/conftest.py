@@ -51,10 +51,15 @@ class FakeRedis:
     async def delete(self, key: str) -> None:
         self._store.pop(key, None)
 
-    async def scan_iter(self, match: str = "") -> list[str]:  # noqa: A002
+    async def scan_iter(self, match: str = ""):  # noqa: A002
         import fnmatch
 
-        return [k for k in self._store if fnmatch.fnmatch(k, match)]
+        # Async generator to mirror redis-py's protocol — CacheService
+        # consumes scan_iter with ``async for`` (see _NullRedis in
+        # pawguard/redis/client.py for the production-side counterpart).
+        for k in self._store:
+            if fnmatch.fnmatch(k, match):
+                yield k
 
     async def ping(self) -> bool:
         return True
@@ -77,15 +82,24 @@ async def engine() -> AsyncGenerator[AsyncEngine]:
         poolclass=NullPool,
         connect_args={"statement_cache_size": 0},
     )
-    # Schema must already be migrated (`alembic upgrade head`) before running
-    # these tests. Do NOT create tables from ORM metadata here: this database
-    # is shared with local dev (no separate test DB is configured), and
-    # Base.metadata.create_all only creates missing tables - it never adds
-    # new columns to existing ones, and it bypasses alembic_version tracking
-    # entirely. That previously desynced alembic_version from the real
-    # physical schema and left new columns (e.g. inventory_items.unit_cost)
-    # silently missing. If a required table doesn't exist, the fix is to add
-    # or run a migration, not to route around Alembic here.
+    # Seed roles/permissions so DB-backed tests are self-contained. CI's fresh
+    # database is only migrated (`alembic upgrade head`) and never seeded, yet
+    # many integration tests look up seeded roles (e.g. super_admin) by name;
+    # the production seeder runs in the app lifespan, which the ASGI test
+    # client does not execute. reconcile_roles() is additive + idempotent, and
+    # committing here makes the roles visible across the per-test rolled-back
+    # transactions created by db_session.
+    #
+    # Do NOT create tables from ORM metadata here: the schema must come from
+    # `alembic upgrade head`, never Base.metadata.create_all (it bypasses
+    # alembic_version tracking and silently misses new columns).
+    from scripts.seed_roles_and_permissions import reconcile_roles
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    async with async_sessionmaker(bind=eng, expire_on_commit=False)() as seed_session:
+        await reconcile_roles(seed_session, verbose=False)
+        await seed_session.commit()
+
     yield eng
     await eng.dispose()
 

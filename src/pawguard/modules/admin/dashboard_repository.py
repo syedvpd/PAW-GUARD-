@@ -73,7 +73,7 @@ class DashboardRepository:
 
     async def count_grievances_by_status(self) -> dict[str, int]:
         stmt = select(GrievanceTicket.status, func.count(GrievanceTicket.id))
-        stmt = stmt.where(GrievanceTicket.is_deleted.is_(False)).group_by(GrievanceTicket.status)
+        stmt = stmt.where(GrievanceTicket.deleted_at.is_(None)).group_by(GrievanceTicket.status)
         rows = (await self._session.execute(stmt)).all()
         return {r.status: r.count for r in rows}  # type: ignore[misc]
 
@@ -234,7 +234,7 @@ class DashboardRepository:
 
     async def get_open_grievances(self) -> int:
         stmt = select(func.count(GrievanceTicket.id)).where(
-            GrievanceTicket.is_deleted.is_(False),
+            GrievanceTicket.deleted_at.is_(None),
             GrievanceTicket.status.in_(
                 [
                     GrievanceStatus.OPEN,
@@ -338,7 +338,7 @@ class DashboardRepository:
 
     async def get_feedback_summary(self) -> dict[str, Any]:
         total = (await self._session.execute(
-            select(func.count(ServiceFeedback.id)).where(ServiceFeedback.is_deleted.is_(False))
+            select(func.count(ServiceFeedback.id)).where(ServiceFeedback.deleted_at.is_(None))
         )).scalar_one()
         avg_rating = (await self._session.execute(
             select(func.coalesce(func.avg(ServiceFeedback.rating), 0))

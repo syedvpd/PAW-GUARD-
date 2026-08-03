@@ -69,6 +69,26 @@ class TestDonationService:
         assert result.user_id == user_id
 
     @pytest.mark.asyncio
+    async def test_register_donor_records_audit(self, service, mock_repo, mock_audit):
+        """Self-service donor registration is a public mutation - it must be
+        audited with the acting user and IP (PRR §6.1)."""
+        user_id = uuid.uuid4()
+        mock_repo.get_donor_by_user_id.return_value = None
+        donor_id = uuid.uuid4()
+        mock_repo.create_donor_profile.return_value = DonorProfile(
+            id=donor_id, user_id=user_id,
+        )
+        payload = DonorProfileCreate(tax_identifier="TAX-123")
+        await service.register_donor(
+            user_id, payload, actor_id=user_id, ip_address="203.0.113.9",
+        )
+        mock_audit.record.assert_awaited_once()
+        kwargs = mock_audit.record.call_args.kwargs
+        assert kwargs["event_type"].value == "donor_registered"
+        assert kwargs["actor_id"] == user_id
+        assert kwargs["ip_address"] == "203.0.113.9"
+
+    @pytest.mark.asyncio
     async def test_register_donor_already_exists(self, service, mock_repo):
         user_id = uuid.uuid4()
         mock_repo.get_donor_by_user_id.return_value = DonorProfile(id=uuid.uuid4(), user_id=user_id)
@@ -108,6 +128,52 @@ class TestDonationService:
         result = await service.make_donation(user_id, payload, actor_id=uuid.uuid4())
         assert result.amount == 100.0
         assert result.status == DonationStatus.SUCCESS
+
+    @pytest.mark.asyncio
+    async def test_initiate_online_donation_records_audit(
+        self, mock_repo, mock_dog_repo, mock_audit
+    ):
+        """Creating a checkout order is a public mutation - it must be audited
+        (the payment itself is audited separately as DONATION_RECEIVED)."""
+        from pawguard.core.payments import PaymentOrder
+
+        user_id = uuid.uuid4()
+        donor_id = uuid.uuid4()
+        mock_repo.get_donor_by_user_id.return_value = DonorProfile(
+            id=donor_id, user_id=user_id,
+        )
+        donation_id = uuid.uuid4()
+        # The real repo assigns the id on flush; the mock must do the same or
+        # DonationOrderResponse(donation_id=donation.id) receives None.
+        mock_repo.create_donation.side_effect = lambda d: setattr(d, "id", donation_id)
+        mock_repo.update_gateway_fields.return_value = None
+
+        mock_gateway = AsyncMock()
+        mock_gateway.provider_name = "razorpay"
+        mock_gateway.create_order.return_value = PaymentOrder(
+            provider="razorpay",
+            order_id="order_abc123",
+            amount=100.0,
+            currency="INR",
+            checkout_key="key",
+            receipt="receipt-1",
+        )
+
+        svc = DonationService(
+            mock_repo, mock_dog_repo, payment_gateway=mock_gateway,
+            audit_service=mock_audit,
+        )
+        payload = DonationCreate(
+            amount=100.0, currency="INR", donation_type=DonationType.ONE_TIME,
+        )
+        await svc.initiate_online_donation(
+            user_id, payload, actor_id=user_id, ip_address="203.0.113.9",
+        )
+        mock_audit.record.assert_awaited_once()
+        kwargs = mock_audit.record.call_args.kwargs
+        assert kwargs["event_type"].value == "donation_order_created"
+        assert kwargs["actor_id"] == user_id
+        assert kwargs["metadata"]["gateway_order_id"] == "order_abc123"
 
     @pytest.mark.asyncio
     async def test_make_donation_records_audit(self, service, mock_repo, mock_dog_repo, mock_audit):

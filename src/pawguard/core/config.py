@@ -66,6 +66,20 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = 30
     pre_auth_token_expire_minutes: int = 5
 
+    # --- MFA ---
+    # Optional independent key used to encrypt TOTP secrets at rest (Fernet).
+    # When unset, the key is derived from the JWT private key so existing
+    # deployments stay zero-config; set this in production so rotating the JWT
+    # keypair does not orphan stored MFA secrets.
+    mfa_encryption_key: str = ""
+
+    # --- OAuth / Social login ---
+    # Audience (client id) of the Google / Apple application this backend
+    # verifies provider ID tokens against. OAuth login FAILS CLOSED when
+    # unset: a provider token whose `aud` does not match is rejected.
+    google_oauth_client_id: str = ""
+    apple_oauth_client_id: str = ""
+
     # --- Cookies ---
     cookie_domain: str = "localhost"
     cookie_secure: bool = False

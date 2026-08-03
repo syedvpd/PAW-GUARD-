@@ -152,6 +152,12 @@ class TestFosterService:
         mock_repo.get_active_placement_for_dog.return_value = None
         uuid.uuid4()
         mock_repo.create_placement.return_value = None
+        # place_dog re-fetches the placement before returning (so the response
+        # serializer sees non-expired columns) - configure that mock too.
+        mock_repo.get_placement_by_id.return_value = FosterPlacement(
+            id=uuid.uuid4(), foster_id=foster_id, dog_id=dog_id,
+            is_active=True, placed_at=datetime.now(),
+        )
         payload = FosterPlacementCreate(dog_id=dog_id)
         result = await service.place_dog(foster_id, payload, actor_id=uuid.uuid4())
         assert result.dog_id == dog_id

@@ -44,7 +44,6 @@ SHELTER_TRANSFER = "shelter:transfer"
 # ── Medical / Veterinary ─────────────────────────────────────────────────────
 MEDICAL_CREATE = "medical:create"
 MEDICAL_READ = "medical:read"
-MEDICAL_WRITE = "medical:write"
 MEDICAL_UPDATE = "medical:update"
 MEDICAL_CLEARANCE = "medical:clearance"
 MEDICAL_DELETE = "medical:delete"
@@ -102,6 +101,7 @@ DASHBOARD_DONOR = "dashboard:donor"
 # ── Donation / Sponsorship ───────────────────────────────────────────────────
 DONATION_READ = "donation:read"
 DONATION_MANAGE = "donation:manage"
+DONATION_UPDATE = "donation:update"
 
 # ── Public portal ────────────────────────────────────────────────────────────
 PUBLIC_READ = "public:read"
@@ -120,7 +120,3 @@ GRIEVANCE_COMMENT = "grievance:comment"
 # ── Notifications ─────────────────────────────────────────────────────────────
 NOTIFICATION_READ = "notification:read"
 NOTIFICATION_MANAGE = "notification:manage"
-
-# ── OAuth / Social Login ──────────────────────────────────────────────────────
-OAUTH_LINK = "oauth:link"
-OAUTH_UNLINK = "oauth:unlink"

@@ -149,6 +149,14 @@ class AdoptionService:
                 "This dog is already under an approved adoption application process."
             )
 
+        existing_app = await self._repo.get_application_by_adopter_and_dog(
+            adopter_id, payload.dog_id
+        )
+        if existing_app is not None:
+            raise ConflictError(
+                "You have already submitted an application for this dog."
+            )
+
         app = AdoptionApplication(
             dog_id=payload.dog_id,
             adopter_id=adopter_id,
@@ -435,12 +443,7 @@ class AdoptionService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> int:
-        count = 0
-        for app_id in ids:
-            app = await self._repo.get_by_id(app_id)
-            if app is not None:
-                app.deleted_at = datetime.now(UTC)
-                count += 1
+        count = await self._repo.bulk_soft_delete(ids)
 
         await self._repo._session.flush()
 

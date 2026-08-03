@@ -1,6 +1,8 @@
 import uuid
 from datetime import UTC, date, datetime
 
+import sqlalchemy as sa
+
 from pawguard.core.exceptions import ConflictError, NotFoundError
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
@@ -143,14 +145,9 @@ class FinanceService:
         )
         if not credit_account:
             raise NotFoundError("Credit account not found.")
-        tx_count = await self._repo._session.execute(
-            __import__('sqlalchemy').select(
-                __import__('sqlalchemy').func.count(FinancialTransaction.id)
-            )
-        )
-        count = tx_count.scalar_one() + 1
+        sequence = await self._repo.next_transaction_sequence()
         tx_number = (
-            f"TXN-{datetime.now(UTC).strftime('%Y%m%d')}-{count:05d}"
+            f"TXN-{datetime.now(UTC).strftime('%Y%m%d')}-{sequence:05d}"
         )
         tx = FinancialTransaction(
             transaction_number=tx_number,
@@ -275,17 +272,33 @@ class FinanceService:
         self, *, actor_id=None, ip_address=None
     ) -> dict:
         unreconciled = await self._repo.get_unreconciled_donations()
+        income_account = (
+            await self._repo._session.execute(
+                sa.select(ChartOfAccounts).where(
+                    ChartOfAccounts.account_type == AccountType.INCOME,
+                    ChartOfAccounts.category
+                    == AccountCategory.DONATION_INCOME,
+                    ChartOfAccounts.deleted_at.is_(None),
+                ).limit(1)
+            )
+        ).scalar_one_or_none()
+        cash_account = (
+            await self._repo._session.execute(
+                sa.select(ChartOfAccounts).where(
+                    ChartOfAccounts.account_type == AccountType.ASSET,
+                    ChartOfAccounts.category.in_(
+                        [AccountCategory.CASH, AccountCategory.BANK]
+                    ),
+                    ChartOfAccounts.deleted_at.is_(None),
+                ).limit(1)
+            )
+        ).scalar_one_or_none()
         count = 0
         for donation in unreconciled:
-            tx_count = await self._repo._session.execute(
-                __import__('sqlalchemy').select(
-                    __import__('sqlalchemy').func.count(FinancialTransaction.id)
-                )
-            )
-            c = tx_count.scalar_one() + 1
+            sequence = await self._repo.next_transaction_sequence()
             tx = FinancialTransaction(
                 transaction_number=(
-                    f"DR-{datetime.now(UTC).strftime('%Y%m%d')}-{c:05d}"
+                    f"DR-{datetime.now(UTC).strftime('%Y%m%d')}-{sequence:05d}"
                 ),
                 transaction_type=TransactionType.RECONCILIATION,
                 transaction_date=datetime.now(UTC).date(),
@@ -297,24 +310,6 @@ class FinanceService:
                 reconciled_at=datetime.now(UTC),
             )
             await self._repo.create_transaction(tx)
-            income_accounts = await self._repo._session.execute(
-                __import__('sqlalchemy').select(ChartOfAccounts).where(
-                    ChartOfAccounts.account_type == AccountType.INCOME,
-                    ChartOfAccounts.category == AccountCategory.DONATION_INCOME,
-                    ChartOfAccounts.deleted_at.is_(None),
-                ).limit(1)
-            )
-            income_account = income_accounts.scalar_one_or_none()
-            cash_accounts = await self._repo._session.execute(
-                __import__('sqlalchemy').select(ChartOfAccounts).where(
-                    ChartOfAccounts.account_type == AccountType.ASSET,
-                    ChartOfAccounts.category.in_(
-                        [AccountCategory.CASH, AccountCategory.BANK]
-                    ),
-                    ChartOfAccounts.deleted_at.is_(None),
-                ).limit(1)
-            )
-            cash_account = cash_accounts.scalar_one_or_none()
             if income_account and cash_account:
                 entry1 = GeneralLedgerEntry(
                     account_id=cash_account.id,
@@ -572,12 +567,7 @@ class FinanceService:
         actor_id=None,
         ip_address=None,
     ) -> int:
-        count = 0
-        for aid in ids:
-            acct = await self._repo.get_account_by_id(aid)
-            if acct:
-                acct.deleted_at = datetime.now(UTC)
-                count += 1
+        count = await self._repo.bulk_soft_delete(ChartOfAccounts, ids)
         await self._repo._session.flush()
         return count
 
@@ -588,11 +578,6 @@ class FinanceService:
         actor_id=None,
         ip_address=None,
     ) -> int:
-        count = 0
-        for tid in ids:
-            tx = await self._repo.get_transaction_by_id(tid)
-            if tx:
-                tx.deleted_at = datetime.now(UTC)
-                count += 1
+        count = await self._repo.bulk_soft_delete(FinancialTransaction, ids)
         await self._repo._session.flush()
         return count

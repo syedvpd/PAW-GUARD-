@@ -25,8 +25,14 @@ class NotificationRepository:
         await self._session.refresh(notification)
         return notification
 
-    async def create_broadcast(self, notification: Notification) -> Notification:
-        return await self.create(notification)
+    async def create_many(
+        self, notifications: list[Notification]
+    ) -> list[Notification]:
+        self._session.add_all(notifications)
+        await self._session.flush()
+        for n in notifications:
+            await self._session.refresh(n)
+        return notifications
 
     async def list_paginated(
         self,

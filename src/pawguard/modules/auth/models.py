@@ -37,6 +37,7 @@ class AuthAuditEventType(StrEnum):
     DOG_REGISTERED = "dog_registered"
     DOG_UPDATED = "dog_updated"
     DOG_STATUS_CHANGED = "dog_status_changed"
+    DOG_WEIGHT_RECORDED = "dog_weight_recorded"
     DOG_DELETED = "dog_deleted"
     BULK_DOG_STATUS_UPDATED = "bulk_dog_status_updated"
     BULK_DOG_DELETED = "bulk_dog_deleted"
@@ -95,6 +96,8 @@ class AuthAuditEventType(StrEnum):
     VOLUNTEER_SHIFT_UPDATED = "volunteer_shift_updated"
     VOLUNTEER_DELETED = "volunteer_deleted"
     DONATION_RECEIVED = "donation_received"
+    DONATION_ORDER_CREATED = "donation_order_created"
+    DONOR_REGISTERED = "donor_registered"
     DONATION_REFUNDED = "donation_refunded"
     DONATION_RECEIPT_ISSUED = "donation_receipt_issued"
     DONATION_STATUS_CHANGED = "donation_status_changed"
@@ -188,7 +191,6 @@ class User(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    mfa_secret_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     failed_login_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -306,13 +308,6 @@ class EmailVerificationToken(UUIDPkMixin, Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-
-
-class OAuthProvider(StrEnum):
-    GOOGLE = "google"
-    APPLE = "apple"
-    FACEBOOK = "facebook"
-    MICROSOFT = "microsoft"
 
 
 class OAuthAccount(UUIDPkMixin, TimestampMixin, Base):

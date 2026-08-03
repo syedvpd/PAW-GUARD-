@@ -37,14 +37,24 @@ class _RateLimitDependency:
             raise TooManyRequestsError("Too many requests. Please try again later.")
 
 
-def _resolve_user_key(request: Request) -> str:
-    user_id = getattr(request.state, "user_id", None)
-    if user_id is not None:
-        return str(user_id)
+def resolve_client_ip(request: Request) -> str:
+    """Best-effort real client IP, trusting the first X-Forwarded-For hop.
+
+    Reverse proxies append the caller's IP as the *leftmost* entry of
+    X-Forwarded-For; naive ``request.client.host`` would resolve to the proxy
+    itself and collapse every user into one rate-limit bucket / audit row.
+    """
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded:
         return forwarded.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
+
+
+def _resolve_user_key(request: Request) -> str:
+    user_id = getattr(request.state, "user_id", None)
+    if user_id is not None:
+        return str(user_id)
+    return resolve_client_ip(request)
 
 
 def rate_limit(

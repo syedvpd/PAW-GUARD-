@@ -112,9 +112,25 @@ class AdoptionRepository:
     async def list_by_ids(self, ids: list[uuid.UUID]) -> Sequence[AdoptionApplication]:
         stmt = (
             select(AdoptionApplication)
+            .options(
+                selectinload(AdoptionApplication.dog),
+                selectinload(AdoptionApplication.adopter)
+            )
             .where(AdoptionApplication.id.in_(ids), AdoptionApplication.deleted_at.is_(None))
         )
         return (await self._session.execute(stmt)).scalars().all()
+
+    async def bulk_soft_delete(self, ids: list[uuid.UUID]) -> int:
+        from datetime import UTC, datetime
+
+        from sqlalchemy import update
+        stmt = (
+            update(AdoptionApplication)
+            .where(AdoptionApplication.id.in_(ids), AdoptionApplication.deleted_at.is_(None))
+            .values(deleted_at=datetime.now(UTC))
+        )
+        result = await self._session.execute(stmt)
+        return result.rowcount  # type: ignore[attr-defined,no-any-return]
 
     # Statuses that exclusively lock a dog against other applications. Per the
     # PRR, exclusivity starts once an application reaches home-inspection
@@ -134,6 +150,21 @@ class AdoptionRepository:
                 AdoptionApplication.status.in_(self.LOCKING_STATUSES),
                 AdoptionApplication.deleted_at.is_(None)
             )
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def get_application_by_adopter_and_dog(
+        self, adopter_id: uuid.UUID, dog_id: uuid.UUID
+    ) -> AdoptionApplication | None:
+        stmt = (
+            select(AdoptionApplication)
+            .where(
+                AdoptionApplication.adopter_id == adopter_id,
+                AdoptionApplication.dog_id == dog_id,
+                AdoptionApplication.deleted_at.is_(None),
+            )
+            .order_by(AdoptionApplication.created_at.desc())
+            .limit(1)
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 

@@ -3,9 +3,91 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
-from pawguard.modules.rescue.models import RescueStatus
+from pawguard.modules.rescue.models import (
+    RescueEscalationType,
+    RescueFailureReason,
+    RescuePhysicalCondition,
+    RescueSeverity,
+    RescueStatus,
+)
+
+# Legacy free-text physical-condition values accepted from existing public
+# clients, normalised to the canonical PRR 3.2 enum values. New submissions
+# may use either the legacy labels or the canonical values.
+_LEGACY_CONDITION_ALIASES: dict[str, RescuePhysicalCondition] = {
+    "critical": RescuePhysicalCondition.CRITICAL,
+    "critical/life threatening": RescuePhysicalCondition.CRITICAL,
+    "life threatening": RescuePhysicalCondition.CRITICAL,
+    "injured": RescuePhysicalCondition.INJURED,
+    "fractured": RescuePhysicalCondition.INJURED,
+    "fractured/injured": RescuePhysicalCondition.INJURED,
+    "injured/fractured": RescuePhysicalCondition.INJURED,
+    "sick": RescuePhysicalCondition.SICK,
+    "contagious": RescuePhysicalCondition.SICK,
+    "contagious disease/sick": RescuePhysicalCondition.SICK,
+    "malnourished": RescuePhysicalCondition.MALNOURISHED,
+    "stray": RescuePhysicalCondition.ABANDONED,
+    "abandoned": RescuePhysicalCondition.ABANDONED,
+    "abandoned/stray": RescuePhysicalCondition.ABANDONED,
+}
+
+
+def _normalise_physical_condition(value: object) -> RescuePhysicalCondition | object:
+    """Coerce legacy labels and canonical values to the enum.
+
+    Runs before Pydantic's type coercion so free-text values from existing
+    public clients don't start failing with 422; unknown strings are passed
+    through unchanged and surface as a normal enum validation error.
+    """
+    if isinstance(value, RescuePhysicalCondition):
+        return value
+    if isinstance(value, str):
+        key = value.strip().lower()
+        if key in _LEGACY_CONDITION_ALIASES:
+            return _LEGACY_CONDITION_ALIASES[key]
+        try:
+            return RescuePhysicalCondition(key)
+        except ValueError:
+            return value
+    return value
+
+
+# Legacy free-text failed-rescue reasons accepted from existing clients,
+# normalised to the canonical PRR 3.3 outcome codes. Unknown strings are
+# normalised to OTHER so a field agent can always log a failed rescue.
+_LEGACY_FAILURE_REASON_ALIASES: dict[str, RescueFailureReason] = {
+    "animal fled": RescueFailureReason.ANIMAL_FLED,
+    "animal fled area": RescueFailureReason.ANIMAL_FLED,
+    "fled": RescueFailureReason.ANIMAL_FLED,
+    "area inaccessible": RescueFailureReason.AREA_INACCESSIBLE,
+    "inaccessible": RescueFailureReason.AREA_INACCESSIBLE,
+    "false report": RescueFailureReason.FALSE_REPORT,
+    "false alarm": RescueFailureReason.FALSE_REPORT,
+    "local intervention blocked": RescueFailureReason.LOCAL_INTERVENTION_BLOCKED,
+    "intervention blocked": RescueFailureReason.LOCAL_INTERVENTION_BLOCKED,
+    "blocked": RescueFailureReason.LOCAL_INTERVENTION_BLOCKED,
+}
+
+
+def normalise_failure_reason(value: object) -> RescueFailureReason:
+    """Coerce a legacy reason string (or canonical value) to the enum.
+
+    Unknown/missing strings fall back to OTHER so a failed rescue can always
+    be logged in the field; canonical values pass through unchanged.
+    """
+    if isinstance(value, RescueFailureReason):
+        return value
+    if isinstance(value, str):
+        key = value.strip().lower()
+        if key in _LEGACY_FAILURE_REASON_ALIASES:
+            return _LEGACY_FAILURE_REASON_ALIASES[key]
+        try:
+            return RescueFailureReason(key)
+        except ValueError:
+            return RescueFailureReason.OTHER
+    return RescueFailureReason.OTHER
 
 
 class RescueRequestCreate(BaseModel):
@@ -21,21 +103,93 @@ class RescueRequestCreate(BaseModel):
     longitude: float | None = Field(None, ge=-180.0, le=180.0, examples=[78.3741])
 
     animal_count: int = Field(1, ge=1, examples=[1])
-    physical_condition: str = Field(
-        ..., min_length=1, max_length=64, examples=["Injured/Fractured"]
-    )  # e.g. "Critical/Life Threatening", "Injured", etc.
+    physical_condition: RescuePhysicalCondition = Field(
+        ..., examples=["fractured_injured"]
+    )  # PRR 3.2 categories; legacy labels are normalised automatically
     behavioral_indicators: str | None = Field(None, examples=["Timid, appears malnourished"])
+    # Reporter self-assessment on intake; coordinators refine during
+    # verification (PRR 3.2 severity prioritization).
+    severity: RescueSeverity = Field(
+        RescueSeverity.MEDIUM, examples=["high"]
+    )
+    is_urgent: bool = Field(
+        False, examples=[False]
+    )  # PRR 3.1.1 urgent-alert banner flag
+    # Media evidence from the intake wizard (PRR 3.2): up to 5 photos + short
+    # video clips (50MB combined) as object keys from the storage module's
+    # presigned-upload flow.
+    media_evidence: list[str] | None = Field(
+        None,
+        max_length=5,
+        description=(
+            "Up to 5 media object keys (photos / short video) from the "
+            "storage presigned-upload flow."
+        ),
+        examples=[["rescue/2026/08/barnaby_1.jpg"]],
+    )
+    # Temporal tracking extras (PRR 3.2): environmental factors and
+    # additional reporter notes captured by the intake wizard.
+    environmental_factors: str | None = Field(
+        None, examples=["Heavy rain, flooding on Sector 4 roads"]
+    )
+    reporter_notes: str | None = Field(None, examples=["Dog appears friendly but scared"])
+
+    # The 5-item cap is enforced by Field(max_length=5) above; this validator
+    # only normalises the keys (strip whitespace, reject empties).
+    @field_validator("media_evidence")
+    @classmethod
+    def _validate_media_evidence(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return value
+        cleaned: list[str] = []
+        for key in value:
+            key = key.strip()
+            if not key:
+                raise ValueError("Media object keys cannot be empty.")
+            cleaned.append(key)
+        return cleaned
+
+    _normalise_condition = field_validator("physical_condition", mode="before")(
+        _normalise_physical_condition
+    )
+
+
+class PublicRescueStatusResponse(BaseModel):
+    """Public case-status lookup response (PRR 3.2 "my submitted case" view).
+
+    Deliberately minimal: no reporter identity, no full address, no dispatch
+    details - just what the reporter already knows plus the pipeline status so
+    they can see where their case stands.
+    """
+
+    ticket_number: str
+    status: RescueStatus
+    severity: RescueSeverity
+    animal_count: int
+    created_at: datetime
+    updated_at: datetime
 
 
 class RescueRequestUpdate(BaseModel):
     status: RescueStatus | None = None
     rejection_rationale: str | None = None
+    # Coordinator severity refinement at verification (PRR 3.2).
+    severity: RescueSeverity | None = Field(None, examples=["critical"])
+    is_urgent: bool | None = Field(None, examples=[True])
 
 
 class RescueDispatchCreate(BaseModel):
     assigned_driver_id: uuid.UUID | None = None
     vehicle_id: str | None = Field(None, max_length=64)
     equipment_details: str | None = None
+    # Escalation Protocol (PRR 3.3): agents request back-up personnel,
+    # veterinary transport, or law enforcement support from the field.
+    escalation_type: RescueEscalationType | None = Field(
+        None, examples=["backup_personnel"]
+    )
+    escalation_notes: str | None = Field(
+        None, examples=["Second team needed - dog is aggressive."]
+    )
     notes: str | None = None
 
 
@@ -50,8 +204,14 @@ class RescueDispatchResponse(BaseModel):
     rescued_at: datetime | None
     admitted_at: datetime | None
     failed_at: datetime | None
-    failure_reason: str | None
+    failure_reason: RescueFailureReason | None
+    escalation_type: RescueEscalationType | None
+    escalation_notes: str | None
     notes: str | None
+
+    _normalise_failure = field_validator("failure_reason", mode="before")(
+        lambda v: None if v is None else normalise_failure_reason(v)
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -85,13 +245,22 @@ class RescueRequestResponse(BaseModel):
     latitude: float | None
     longitude: float | None
     animal_count: int
-    physical_condition: str
+    physical_condition: RescuePhysicalCondition
     behavioral_indicators: str | None
+    severity: RescueSeverity
+    is_urgent: bool
+    media_evidence: list[str] | None
+    environmental_factors: str | None
+    reporter_notes: str | None
     status: RescueStatus
     rejection_rationale: str | None
     created_at: datetime
     updated_at: datetime
     dispatch: RescueDispatchResponse | None = None
     reports: list[RescueReportResponse] = []
+
+    _normalise_condition = field_validator("physical_condition", mode="before")(
+        _normalise_physical_condition
+    )
 
     model_config = ConfigDict(from_attributes=True)

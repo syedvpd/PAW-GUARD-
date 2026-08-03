@@ -63,6 +63,7 @@ class TestAdoptionService:
             gender="male", status=DogStatus.SHELTER, is_adoptable=True,
         )
         mock_repo.get_approved_application_for_dog.return_value = None
+        mock_repo.get_application_by_adopter_and_dog.return_value = None
         mock_repo.create.return_value = None
         app_id = uuid.uuid4()
         mock_repo.get_by_id.return_value = AdoptionApplication(
@@ -110,6 +111,28 @@ class TestAdoptionService:
         payload = AdoptionApplicationCreate(dog_id=dog_id, residential_status="owned")
         with pytest.raises(ConflictError, match="already under an approved"):
             await service.apply_for_adoption(uuid.uuid4(), payload)
+
+    @pytest.mark.asyncio
+    async def test_apply_for_adoption_duplicate_application(
+        self, service, mock_dog_repo, mock_repo
+    ):
+        """A second application by the same adopter for the same dog is
+        rejected with 409 Conflict (PRR 3.7 one-active-application rule)."""
+        dog_id = uuid.uuid4()
+        mock_dog_repo.get_by_id.return_value = DogProfile(
+            id=dog_id, registration_number="DOG-001", name="B", breed="Mix",
+            gender="female", status=DogStatus.SHELTER, is_adoptable=True,
+        )
+        mock_repo.get_approved_application_for_dog.return_value = None
+        mock_repo.get_application_by_adopter_and_dog.return_value = AdoptionApplication(
+            id=uuid.uuid4(), dog_id=dog_id, adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.SUBMITTED, residential_status="owned",
+        )
+        payload = AdoptionApplicationCreate(dog_id=dog_id, residential_status="owned")
+        with pytest.raises(ConflictError, match="already submitted"):
+            await service.apply_for_adoption(uuid.uuid4(), payload)
+        mock_repo.get_application_by_adopter_and_dog.assert_awaited_once()
+        mock_repo.create.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_update_application(self, service, mock_repo):

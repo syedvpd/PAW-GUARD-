@@ -105,7 +105,7 @@ class TestNewModules:
     async def test_medical_flow(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
 
-        dog_payload = {"name": "MedDog", "breed": "Lab", "gender": "male", "estimated_age": "3y", "weight": 20, "color": "black", "temperament": "calm"}
+        dog_payload = {"name": "MedDog", "breed": "Lab", "gender": "male", "estimated_age": "3y", "weight": 20, "color": "black", "temperament": "friendly"}
         resp = await client.post("/api/v1/dogs", json=dog_payload, headers=headers)
         assert resp.status_code == 201
         dog_id = resp.json()["data"]["id"]
