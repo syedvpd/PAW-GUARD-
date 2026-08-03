@@ -25,12 +25,25 @@ from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.core.search import SortParams, sort_params
 from pawguard.db.session import get_db
 from pawguard.modules.auth.audit import get_audit_service
-from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
+from pawguard.modules.auth.dependencies import (
+    CurrentUser,
+    get_current_user,
+    get_optional_current_user,
+)
 from pawguard.modules.auth.rbac import has_permission, require_permission
 from pawguard.modules.dog.repository import DogRepository
-from pawguard.modules.donation.models import DonationStatus, DonationType, SponsorshipStatus
+from pawguard.modules.donation.models import (
+    CampaignStatus,
+    CampaignType,
+    DonationStatus,
+    DonationType,
+    SponsorshipStatus,
+)
 from pawguard.modules.donation.repository import DonationRepository
 from pawguard.modules.donation.schemas import (
+    DonationCampaignCreate,
+    DonationCampaignResponse,
+    DonationCampaignUpdate,
     DonationCreate,
     DonationOrderResponse,
     DonationResponse,
@@ -489,3 +502,121 @@ async def get_sponsorship(
     if not is_owner and not has_permission(current_user.user, "donation:read"):
         raise ForbiddenError("You do not have permission to view this sponsorship.")
     return ApiResponse(data=SponsorshipResponse.model_validate(sponsorship))
+
+
+# ── Donation campaigns (PRR 3.1.7 / 3.11) ─────────────────────────────────
+
+
+@router.get(
+    "/campaigns",
+    response_model=ApiResponse[list[DonationCampaignResponse]],
+)
+async def list_public_campaigns(
+    service: DonationService = Depends(get_donation_service),
+) -> ApiResponse[list[DonationCampaignResponse]]:
+    """Public listing of currently accepting donation campaigns."""
+    campaigns = await service.list_active_campaigns()
+    return ApiResponse(
+        data=[await service._to_campaign_response(c) for c in campaigns],
+    )
+
+
+@router.get(
+    "/campaigns/manage",
+    response_model=PaginatedResponse[DonationCampaignResponse],
+    dependencies=[Depends(require_permission("donation:read"))],
+)
+async def list_all_campaigns(
+    page: PageParams = Depends(page_params),
+    sort: SortParams = Depends(sort_params),
+    search: str | None = Query(None, description="Search campaigns by name/description"),
+    status: CampaignStatus | None = Query(None, description="Filter by status"),
+    campaign_type: CampaignType | None = Query(None, description="Filter by type"),
+    service: DonationService = Depends(get_donation_service),
+) -> PaginatedResponse[DonationCampaignResponse]:
+    return await service.list_campaigns_paginated(
+        page=page,
+        sort=sort,
+        search_term=search,
+        status=status,
+        campaign_type=campaign_type.value if campaign_type else None,
+    )
+
+
+@router.post(
+    "/campaigns",
+    response_model=ApiResponse[DonationCampaignResponse],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("donation:manage"))],
+)
+async def create_campaign(
+    payload: DonationCampaignCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: DonationService = Depends(get_donation_service),
+) -> ApiResponse[DonationCampaignResponse]:
+    campaign = await service.create_campaign(
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(
+        data=await service._to_campaign_response(campaign),
+        message="Donation campaign created successfully.",
+    )
+
+
+@router.get(
+    "/campaigns/{campaign_id}",
+    response_model=ApiResponse[DonationCampaignResponse],
+)
+async def get_campaign(
+    campaign_id: uuid.UUID,
+    current_user: CurrentUser | None = Depends(get_optional_current_user),
+    service: DonationService = Depends(get_donation_service),
+) -> ApiResponse[DonationCampaignResponse]:
+    campaign = await service.get_campaign(campaign_id)
+    return ApiResponse(data=await service._to_campaign_response(campaign))
+
+
+@router.patch(
+    "/campaigns/{campaign_id}",
+    response_model=ApiResponse[DonationCampaignResponse],
+    dependencies=[Depends(require_permission("donation:update"))],
+)
+async def update_campaign(
+    campaign_id: uuid.UUID,
+    payload: DonationCampaignUpdate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: DonationService = Depends(get_donation_service),
+) -> ApiResponse[DonationCampaignResponse]:
+    campaign = await service.update_campaign(
+        campaign_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(
+        data=await service._to_campaign_response(campaign),
+        message="Donation campaign updated successfully.",
+    )
+
+
+@router.delete(
+    "/campaigns/{campaign_id}",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(require_permission("donation:update"))],
+)
+async def delete_campaign(
+    campaign_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: DonationService = Depends(get_donation_service),
+) -> ApiResponse[None]:
+    await service.soft_delete_campaign(
+        campaign_id,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(message="Donation campaign deleted successfully.")

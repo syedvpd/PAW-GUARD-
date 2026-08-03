@@ -21,6 +21,7 @@ from pawguard.workers.jobs.scheduled_jobs import (
     check_vaccination_renewals,
     post_adoption_followups,
     process_sponsorship_charges,
+    send_post_service_feedback_surveys,
 )
 
 
@@ -278,6 +279,131 @@ class TestScheduledJobs:
         assert "user_roles" in rendered
         assert "role_permissions" in rendered
         assert "permissions" in rendered
+
+    @pytest.mark.asyncio
+    @patch("pawguard.workers.jobs.scheduled_jobs.AsyncSessionLocal")
+    @patch("pawguard.workers.jobs.scheduled_jobs.NotificationService")
+    async def test_send_post_service_feedback_surveys(self, mock_notif_cls, mock_session_factory):
+        """Completed adoptions (7-14 days old) with no feedback and no prior
+        survey prompt should get a feedback_survey notification to the adopter."""
+        adoption = MagicMock()
+        adoption.id = uuid.uuid4()
+        adoption.adopter_id = uuid.uuid4()
+        adoption.dog_id = uuid.uuid4()
+        adoption.completed_at = datetime.now(UTC) - timedelta(days=10)
+
+        adoptions_result = MagicMock()
+        adoptions_result.scalars.return_value.all.return_value = [adoption]
+        no_feedback_result = MagicMock()
+        no_feedback_result.scalars.return_value.all.return_value = []
+        no_prior_result = MagicMock()
+        no_prior_result.scalars.return_value.all.return_value = []
+
+        mock_session = AsyncMock()
+        mock_session.execute.side_effect = [
+            adoptions_result,
+            no_feedback_result,
+            no_prior_result,
+        ]
+        mock_session_factory.return_value.__aenter__ = AsyncMock(
+            return_value=mock_session
+        )
+        mock_session_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_notif = AsyncMock()
+        mock_notif_cls.return_value = mock_notif
+
+        await send_post_service_feedback_surveys({})
+
+        assert mock_notif.create_notification.call_count == 1
+        payload = mock_notif.create_notification.call_args.kwargs["payload"]
+        assert isinstance(payload, NotificationCreate)
+        assert payload.user_id == adoption.adopter_id
+        assert payload.notification_type == "feedback_survey"
+        assert str(adoption.id) in payload.action_url
+        assert "rate" in payload.body
+
+    @pytest.mark.asyncio
+    @patch("pawguard.workers.jobs.scheduled_jobs.AsyncSessionLocal")
+    @patch("pawguard.workers.jobs.scheduled_jobs.NotificationService")
+    async def test_send_post_service_feedback_surveys_skips_submitted_and_prior(
+        self, mock_notif_cls, mock_session_factory
+    ):
+        """Adoptions that already have feedback, or already received a survey,
+        must not be prompted again."""
+        adoption_with_feedback = MagicMock()
+        adoption_with_feedback.id = uuid.uuid4()
+        adoption_with_feedback.adopter_id = uuid.uuid4()
+        adoption_with_feedback.dog_id = uuid.uuid4()
+
+        adoption_with_prior = MagicMock()
+        adoption_with_prior.id = uuid.uuid4()
+        adoption_with_prior.adopter_id = uuid.uuid4()
+        adoption_with_prior.dog_id = uuid.uuid4()
+
+        adoption_new = MagicMock()
+        adoption_new.id = uuid.uuid4()
+        adoption_new.adopter_id = uuid.uuid4()
+        adoption_new.dog_id = uuid.uuid4()
+
+        adoptions_result = MagicMock()
+        adoptions_result.scalars.return_value.all.return_value = [
+            adoption_with_feedback,
+            adoption_with_prior,
+            adoption_new,
+        ]
+        feedback_result = MagicMock()
+        feedback_result.scalars.return_value.all.return_value = [
+            adoption_with_feedback.id
+        ]
+        prior_result = MagicMock()
+        prior_result.scalars.return_value.all.return_value = [
+            f"/api/v1/grievance/feedback?adoption_application_id={adoption_with_prior.id}"
+        ]
+
+        mock_session = AsyncMock()
+        mock_session.execute.side_effect = [
+            adoptions_result,
+            feedback_result,
+            prior_result,
+        ]
+        mock_session_factory.return_value.__aenter__ = AsyncMock(
+            return_value=mock_session
+        )
+        mock_session_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_notif = AsyncMock()
+        mock_notif_cls.return_value = mock_notif
+
+        await send_post_service_feedback_surveys({})
+
+        assert mock_notif.create_notification.call_count == 1
+        payload = mock_notif.create_notification.call_args.kwargs["payload"]
+        assert payload.user_id == adoption_new.adopter_id
+
+    @pytest.mark.asyncio
+    @patch("pawguard.workers.jobs.scheduled_jobs.AsyncSessionLocal")
+    @patch("pawguard.workers.jobs.scheduled_jobs.NotificationService")
+    async def test_send_post_service_feedback_surveys_no_pending(
+        self, mock_notif_cls, mock_session_factory
+    ):
+        """No completed adoptions in the window should create no notifications."""
+        empty_result = MagicMock()
+        empty_result.scalars.return_value.all.return_value = []
+
+        mock_session = AsyncMock()
+        mock_session.execute.return_value = empty_result
+        mock_session_factory.return_value.__aenter__ = AsyncMock(
+            return_value=mock_session
+        )
+        mock_session_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_notif = AsyncMock()
+        mock_notif_cls.return_value = mock_notif
+
+        await send_post_service_feedback_surveys({})
+
+        mock_notif.create_notification.assert_not_called()
 
     @pytest.mark.asyncio
     @patch("pawguard.workers.jobs.scheduled_jobs.get_payment_gateway")

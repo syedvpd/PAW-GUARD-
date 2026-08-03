@@ -4,7 +4,6 @@ These run periodically via ARQ's scheduled_jobs feature and are kept off
 the request path per TRANSACTION RULES.
 """
 
-import calendar
 import uuid
 from datetime import UTC, date, datetime, timedelta
 
@@ -13,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.payments import PaymentGatewayError, get_payment_gateway
 from pawguard.db.session import AsyncSessionLocal
-from pawguard.modules.adoption.models import AdoptionApplication
+from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
 from pawguard.modules.auth import permission_codes as pc
 from pawguard.modules.auth.models import Permission, Role, User
 from pawguard.modules.donation.models import (
@@ -22,8 +21,10 @@ from pawguard.modules.donation.models import (
     DonationType,
 )
 from pawguard.modules.donation.repository import DonationRepository
+from pawguard.modules.grievance.models import ServiceFeedback
 from pawguard.modules.inventory.models import InventoryItem
 from pawguard.modules.medical.models import VaccinationRecord
+from pawguard.modules.notifications.models import Notification
 from pawguard.modules.notifications.repository import NotificationRepository
 from pawguard.modules.notifications.schemas import NotificationCreate
 from pawguard.modules.notifications.service import NotificationService
@@ -214,6 +215,79 @@ async def post_adoption_followups(ctx: dict[str, object]) -> None:
                         action_url=f"/api/v1/storage/upload?folder=documents&entity_type=adoption_application&entity_id={adoption.id}",
                     )
                 )
+        await session.commit()
+
+
+async def send_post_service_feedback_surveys(ctx: dict[str, object]) -> None:
+    """Auto-prompt adopters for post-adoption feedback (PRR 3.14).
+
+    Adoptions completed 7-14 days ago that have neither submitted feedback nor
+    already received a survey prompt get an in-app notification linking to the
+    feedback form. Rescue-case feedback stays manual: rescue reporters have no
+    user account to target (reporting is public/anonymous), so an in-app
+    auto-prompt is impossible for them.
+    """
+    now = datetime.now(UTC)
+    earliest = now - timedelta(days=14)
+    latest = now - timedelta(days=7)
+
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(AdoptionApplication).where(
+                and_(
+                    AdoptionApplication.deleted_at.is_(None),
+                    AdoptionApplication.status == AdoptionStatus.COMPLETED,
+                    AdoptionApplication.completed_at.isnot(None),
+                    AdoptionApplication.completed_at >= earliest,
+                    AdoptionApplication.completed_at < latest,
+                )
+            )
+        )
+        adoptions = result.scalars().all()
+
+        if not adoptions:
+            return
+
+        adoption_ids = [adoption.id for adoption in adoptions]
+
+        submitted_result = await session.execute(
+            select(ServiceFeedback.adoption_application_id).where(
+                ServiceFeedback.adoption_application_id.in_(adoption_ids),
+                ServiceFeedback.deleted_at.is_(None),
+            )
+        )
+        submitted_ids = set(submitted_result.scalars().all())
+
+        pending = [a for a in adoptions if a.id not in submitted_ids]
+        if not pending:
+            return
+
+        prior_result = await session.execute(
+            select(Notification.action_url).where(
+                Notification.notification_type == "feedback_survey",
+                Notification.deleted_at.is_(None),
+            )
+        )
+        prior_urls = {url for url in prior_result.scalars().all() if url is not None}
+
+        notification_svc = NotificationService(repository=NotificationRepository(session))
+        for adoption in pending:
+            action_url = f"/api/v1/grievance/feedback?adoption_application_id={adoption.id}"
+            if action_url in prior_urls:
+                continue
+            await notification_svc.create_notification(
+                payload=NotificationCreate(
+                    user_id=adoption.adopter_id,
+                    title="How was your adoption experience?",
+                    body=(
+                        f"It's been a couple of weeks since your adoption of dog "
+                        f"{adoption.dog_id}. Please take a minute to rate your "
+                        f"experience so we can keep improving our services."
+                    ),
+                    notification_type="feedback_survey",
+                    action_url=action_url,
+                )
+            )
         await session.commit()
 
 

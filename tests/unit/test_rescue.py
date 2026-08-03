@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from pydantic import ValidationError
@@ -207,6 +207,130 @@ class TestRescueService:
         created = mock_repo.create_dispatch.call_args[0][0]
         assert created.escalation_type is None
         assert created.escalation_notes is None
+
+    @pytest.mark.asyncio
+    @patch("pawguard.modules.rescue.service.FleetService")
+    async def test_dispatch_team_auto_checks_out_equipment(self, mock_fleet_cls, service, mock_repo):
+        """Equipment named on the dispatch is auto-checked-out against the
+        dispatch and linked to the assigned driver (PRR 3.3)."""
+        request_id = uuid.uuid4()
+        driver_id = uuid.uuid4()
+        request = RescueRequest(
+            id=request_id, ticket_number="RES-001", reporter_name="A",
+            reporter_phone="+1", location_address="Addr",
+            physical_condition=RescuePhysicalCondition.UNKNOWN,
+            status=RescueStatus.VERIFIED,
+        )
+        mock_repo.get_request_by_id.side_effect = [request, request]
+        mock_repo.get_dispatch_by_request_id.return_value = None
+        mock_repo.create_dispatch.side_effect = lambda d: d
+
+        mock_fleet = AsyncMock()
+        mock_fleet_cls.return_value = mock_fleet
+
+        result = await service.dispatch_team(
+            request_id,
+            assigned_driver_id=driver_id,
+            equipment_details="Net Gun, Crate\nTrap; Blanket",
+            actor_id=uuid.uuid4(),
+        )
+        assert result.status == RescueStatus.DISPATCHED
+        created_dispatch = mock_repo.create_dispatch.call_args[0][0]
+        mock_fleet.checkout_equipment_for_dispatch.assert_awaited_once()
+        kwargs = mock_fleet.checkout_equipment_for_dispatch.call_args.kwargs
+        assert kwargs["rescue_dispatch_id"] == created_dispatch.id
+        assert kwargs["equipment_names"] == ["Net Gun", "Crate", "Trap", "Blanket"]
+        assert kwargs["assigned_to_agent_id"] == driver_id
+
+    @pytest.mark.asyncio
+    @patch("pawguard.modules.rescue.service.FleetService")
+    async def test_dispatch_team_no_equipment_skips_checkout(self, mock_fleet_cls, service, mock_repo):
+        """A dispatch with no equipment_details creates no checkout rows."""
+        request_id = uuid.uuid4()
+        request = RescueRequest(
+            id=request_id, ticket_number="RES-001", reporter_name="A",
+            reporter_phone="+1", location_address="Addr",
+            physical_condition=RescuePhysicalCondition.UNKNOWN,
+            status=RescueStatus.VERIFIED,
+        )
+        mock_repo.get_request_by_id.side_effect = [request, request]
+        mock_repo.get_dispatch_by_request_id.return_value = None
+        mock_repo.create_dispatch.return_value = None
+
+        mock_fleet = AsyncMock()
+        mock_fleet_cls.return_value = mock_fleet
+
+        await service.dispatch_team(request_id, actor_id=uuid.uuid4())
+
+        mock_fleet.checkout_equipment_for_dispatch.assert_not_called()
+
+    @pytest.mark.asyncio
+    @patch("pawguard.modules.rescue.service.FleetService")
+    async def test_update_dispatch_status_admitted_releases_equipment(self, mock_fleet_cls, service, mock_repo):
+        """Marking a rescue ADMITTED releases the dispatched equipment (PRR 3.3)."""
+        request_id = uuid.uuid4()
+        request = RescueRequest(
+            id=request_id, ticket_number="RES-001", reporter_name="A",
+            reporter_phone="+1", location_address="Addr",
+            physical_condition=RescuePhysicalCondition.UNKNOWN,
+            status=RescueStatus.RESCUED, reports=[],
+        )
+        dispatch = RescueDispatch(rescue_request_id=request_id)
+        mock_repo.get_request_by_id.side_effect = [request, request]
+        mock_repo.get_dispatch_by_request_id.return_value = dispatch
+        mock_repo.create_report.return_value = None
+
+        mock_fleet = AsyncMock()
+        mock_fleet_cls.return_value = mock_fleet
+
+        result = await service.update_dispatch_status(
+            request_id, status=RescueStatus.ADMITTED, agent_id=uuid.uuid4(),
+            actor_id=uuid.uuid4(),
+        )
+        assert result.status == RescueStatus.ADMITTED
+        mock_fleet.release_equipment_for_dispatch.assert_awaited_once()
+        release_kwargs = mock_fleet.release_equipment_for_dispatch.call_args.kwargs
+        assert release_kwargs["rescue_dispatch_id"] == dispatch.id
+
+    @pytest.mark.asyncio
+    @patch("pawguard.modules.rescue.service.FleetService")
+    async def test_update_dispatch_status_failed_releases_equipment(self, mock_fleet_cls, service, mock_repo):
+        """A failed (REJECTED) rescue releases the dispatched equipment too."""
+        request_id = uuid.uuid4()
+        request = RescueRequest(
+            id=request_id, ticket_number="RES-001", reporter_name="A",
+            reporter_phone="+1", location_address="Addr",
+            physical_condition=RescuePhysicalCondition.UNKNOWN,
+            status=RescueStatus.DISPATCHED,
+        )
+        dispatch = RescueDispatch(rescue_request_id=request_id)
+        mock_repo.get_request_by_id.side_effect = [request, request]
+        mock_repo.get_dispatch_by_request_id.return_value = dispatch
+
+        mock_fleet = AsyncMock()
+        mock_fleet_cls.return_value = mock_fleet
+
+        result = await service.update_dispatch_status(
+            request_id, status=RescueStatus.REJECTED, agent_id=uuid.uuid4(),
+            failure_reason="Animal fled", actor_id=uuid.uuid4(),
+        )
+        assert result.status == RescueStatus.VERIFIED
+        mock_fleet.release_equipment_for_dispatch.assert_awaited_once()
+        assert (
+            mock_fleet.release_equipment_for_dispatch.call_args.kwargs["rescue_dispatch_id"]
+            == dispatch.id
+        )
+
+    def test_parse_equipment_details(self):
+        from pawguard.modules.rescue.service import _parse_equipment_details
+
+        assert _parse_equipment_details("Net Gun, Crate\nTrap; Blanket") == [
+            "Net Gun", "Crate", "Trap", "Blanket",
+        ]
+        assert _parse_equipment_details("  Net Gun  ,,  Crate  ") == ["Net Gun", "Crate"]
+        assert _parse_equipment_details("") == []
+        assert _parse_equipment_details(None) == []
+
 
     @pytest.mark.asyncio
     async def test_dispatch_team_already_dispatched(self, service, mock_repo):

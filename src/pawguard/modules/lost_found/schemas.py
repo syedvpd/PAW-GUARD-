@@ -77,8 +77,40 @@ class ReportMatchResponse(BaseModel):
     found_report_id: uuid.UUID
     confidence_score: float
     status: MatchStatus
+    microchip_doc_url: str | None
+    vet_bill_url: str | None
+    photo_proof_url: str | None
+    verification_notes: str | None
+    claim_submitted_at: datetime | None
+    claim_reviewed_at: datetime | None
+    claim_reviewed_by: uuid.UUID | None
     created_at: datetime
     lost_report: LostReportResponse | None = None
     found_report: FoundReportResponse | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class OwnershipClaimSubmit(BaseModel):
+    """Ownership-verification claim: the claimant uploads supporting documents
+    (microchip registration, vet bill, photos) and the staff reviews them."""
+
+    microchip_doc_url: str | None = Field(
+        None, max_length=512, examples=["https://example.com/microchip.pdf"]
+    )
+    vet_bill_url: str | None = Field(
+        None, max_length=512, examples=["https://example.com/vet-bill.pdf"]
+    )
+    photo_proof_url: str | None = Field(
+        None, max_length=512, examples=["https://example.com/owner-photo.jpg"]
+    )
+    verification_notes: str | None = Field(
+        None, examples=["Buddy was chipped at PawHealth Clinic in 2023."]
+    )
+
+
+class OwnershipClaimReview(BaseModel):
+    approve: bool = Field(..., examples=[True])
+    verification_notes: str | None = Field(
+        None, examples=["Microchip ID matches the owner registration record."]
+    )

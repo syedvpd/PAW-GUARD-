@@ -264,6 +264,71 @@ class TestFleetService:
             await service.return_equipment(checkout_id, EquipmentReturnRequest())
 
     @pytest.mark.asyncio
+    async def test_checkout_equipment_for_dispatch(self, service, mock_repo):
+        """Dispatch equipment auto-checkout creates rows linked to the dispatch,
+        trims names, and leaves them outstanding."""
+        dispatch_id = uuid.uuid4()
+        agent_id = uuid.uuid4()
+        mock_repo.create_equipment_checkout.side_effect = [
+            EquipmentCheckout(id=uuid.uuid4(), equipment_name="Net Gun", checked_out_at=datetime.now(UTC)),
+            EquipmentCheckout(id=uuid.uuid4(), equipment_name="Crate", checked_out_at=datetime.now(UTC)),
+            EquipmentCheckout(id=uuid.uuid4(), equipment_name="Trap", checked_out_at=datetime.now(UTC)),
+        ]
+        records = await service.checkout_equipment_for_dispatch(
+            rescue_dispatch_id=dispatch_id,
+            equipment_names=["Net Gun", " Crate ", "Trap"],
+            assigned_to_agent_id=agent_id,
+            actor_id=uuid.uuid4(),
+        )
+        assert len(records) == 3
+        assert mock_repo.create_equipment_checkout.call_count == 3
+        created = mock_repo.create_equipment_checkout.call_args_list[1].args[0]
+        assert created.equipment_name == "Crate"
+        assert created.rescue_dispatch_id == dispatch_id
+        assert created.assigned_to_agent_id == agent_id
+        assert created.returned_at is None
+
+    @pytest.mark.asyncio
+    async def test_checkout_equipment_for_dispatch_empty_names(self, service, mock_repo):
+        """No equipment names means no checkout rows."""
+        records = await service.checkout_equipment_for_dispatch(
+            rescue_dispatch_id=uuid.uuid4(), equipment_names=[],
+        )
+        assert records == []
+        mock_repo.create_equipment_checkout.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_checkout_equipment_for_dispatch_vehicle_not_found(self, service, mock_repo):
+        """Auto-checkout still validates the target vehicle like manual checkout."""
+        mock_repo.get_vehicle.return_value = None
+        with pytest.raises(NotFoundError):
+            await service.checkout_equipment_for_dispatch(
+                rescue_dispatch_id=uuid.uuid4(),
+                equipment_names=["Net Gun"],
+                assigned_to_vehicle_id=uuid.uuid4(),
+            )
+
+    @pytest.mark.asyncio
+    async def test_release_equipment_for_dispatch(self, service, mock_repo, mock_audit):
+        """Release marks outstanding dispatch equipment returned and audits."""
+        dispatch_id = uuid.uuid4()
+        mock_repo.release_equipment_for_dispatch.return_value = 3
+        count = await service.release_equipment_for_dispatch(
+            rescue_dispatch_id=dispatch_id, actor_id=uuid.uuid4(),
+        )
+        assert count == 3
+        assert mock_repo.release_equipment_for_dispatch.call_args[0][0] == dispatch_id
+        mock_audit.record.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_release_equipment_for_dispatch_none_outstanding(self, service, mock_repo, mock_audit):
+        """No outstanding equipment for the dispatch -> no audit noise."""
+        mock_repo.release_equipment_for_dispatch.return_value = 0
+        count = await service.release_equipment_for_dispatch(rescue_dispatch_id=uuid.uuid4())
+        assert count == 0
+        mock_audit.record.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_list_equipment_checkouts_paginated(self, service, mock_repo):
         record = EquipmentCheckout(
             id=uuid.uuid4(), equipment_name="Trap", checked_out_at=datetime.now(UTC),

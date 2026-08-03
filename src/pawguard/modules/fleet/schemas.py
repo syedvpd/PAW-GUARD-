@@ -91,6 +91,7 @@ class EquipmentCheckoutResponse(BaseModel):
     equipment_name: str
     assigned_to_agent_id: uuid.UUID | None
     assigned_to_vehicle_id: uuid.UUID | None
+    rescue_dispatch_id: uuid.UUID | None = None
     checked_out_at: datetime
     returned_at: datetime | None
     notes: str | None

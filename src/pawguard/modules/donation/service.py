@@ -110,7 +110,11 @@ class DonationService:
                         payload=NotificationCreate(
                             user_id=donation.donor.user_id,
                             title="Tax Receipt Available",
-                            body=f"Your tax-deductible receipt for donation {donation.transaction_id or donation.id} is ready for download.",
+                            body=(
+                                "Your tax-deductible receipt for donation "
+                                f"{donation.transaction_id or donation.id} is "
+                                "ready for download."
+                            ),
                             notification_type="tax_receipt",
                             action_url=f"/api/v1/donations/{donation.id}/receipt",
                         )

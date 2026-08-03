@@ -15,8 +15,6 @@ from pawguard.modules.auth.models import AuthAuditEventType
 from pawguard.modules.auth.repository import RoleRepository, UserRoleRepository
 from pawguard.modules.dog.models import DogStatus
 from pawguard.modules.dog.repository import DogRepository
-from pawguard.modules.storage.models import FileFolder, StoredFile
-from pawguard.services.storage_service import StorageService
 from pawguard.modules.foster.models import (
     FosterPlacement,
     FosterProfile,
@@ -33,7 +31,9 @@ from pawguard.modules.foster.schemas import (
     FosterProgressLogCreate,
     FosterSupplyDispatchCreate,
 )
+from pawguard.modules.storage.models import FileFolder, StoredFile
 from pawguard.services.audit_service import AuditService
+from pawguard.services.storage_service import StorageService
 
 
 class FosterService:
@@ -426,7 +426,8 @@ class FosterService:
             dog_id=placement.dog_id,
             adopter_id=foster.user_id,
             residential_status="foster",
-            has_landlord_approval=True,  # Prefilled as True since foster is already approved by the org
+            has_landlord_approval=True,
+            # Prefilled as True since the foster is already approved by the org
             has_yard_fence=True,         # Prefilled as True
             household_members_count=1,
             existing_pets_medical_details="None",
@@ -475,7 +476,8 @@ class FosterService:
         except Exception as exc:
             import logging
             logging.getLogger(__name__).warning(
-                "Failed to generate agreement for foster-to-adopt application %s: %s", app.id, exc, exc_info=True
+                "Failed to generate agreement for foster-to-adopt application "
+                "%s: %s", app.id, exc, exc_info=True,
             )
 
         placement.returned_at = now

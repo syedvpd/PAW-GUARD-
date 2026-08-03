@@ -1,6 +1,10 @@
+import asyncio
+import json
+from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.responses import ApiResponse
@@ -23,6 +27,56 @@ async def get_rescue_dashboard(
 ):
     data = await dasvc.rescue_dashboard(db)
     return ApiResponse(data=data)
+
+
+@router.get(
+    "/rescue/stream",
+    responses={
+        200: {
+            "description": "Server-Sent Events stream of the live rescue dashboard",
+            "content": {"text/event-stream": {}},
+        }
+    },
+    dependencies=[Depends(require_permission("dashboard:rescue"))],
+)
+async def stream_rescue_dashboard(
+    request: Request,
+    interval: int = Query(10, ge=5, le=300, description="Snapshot interval (seconds)"),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> StreamingResponse:
+    """Real-time rescue dashboard feed (PRR 3.2).
+
+    Emits an SSE `snapshot` event every `interval` seconds with the current
+    rescue dashboard data plus a timestamp, so command-centre screens update
+    without polling. A heartbeat comment is sent when a snapshot fails so the
+    client knows the stream is still alive.
+    """
+
+    async def _event_stream():
+        while True:
+            if await request.is_disconnected():
+                break
+            try:
+                data = await dasvc.rescue_dashboard(db)
+                payload = json.dumps(
+                    {"data": data, "ts": datetime.now(UTC).isoformat()},
+                    default=str,
+                )
+                yield f"event: snapshot\ndata: {payload}\n\n"
+            except Exception:
+                yield ": snapshot unavailable, stream alive\n\n"
+            await asyncio.sleep(interval)
+
+    return StreamingResponse(
+        _event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get(

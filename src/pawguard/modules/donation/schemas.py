@@ -8,7 +8,13 @@ from pydantic import BaseModel, ConfigDict, Field
 from pawguard.core.config import get_settings
 from pawguard.modules.auth.schemas import UserProfile
 from pawguard.modules.dog.schemas import DogProfileResponse
-from pawguard.modules.donation.models import DonationStatus, DonationType, SponsorshipStatus
+from pawguard.modules.donation.models import (
+    CampaignStatus,
+    CampaignType,
+    DonationStatus,
+    DonationType,
+    SponsorshipStatus,
+)
 
 
 def _default_currency() -> str:
@@ -39,6 +45,9 @@ class DonorProfileResponse(BaseModel):
 
 class DonationCreate(BaseModel):
     dog_id: uuid.UUID | None = None
+    campaign_id: uuid.UUID | None = Field(
+        None, description="Attach this donation to a fundraising campaign."
+    )
     amount: float = Field(..., ge=1.0, examples=[50.0])
     currency: str = Field(
         default_factory=_default_currency, min_length=3, max_length=3, examples=["USD"]
@@ -57,6 +66,7 @@ class DonationResponse(BaseModel):
     id: uuid.UUID
     donor_id: uuid.UUID
     dog_id: uuid.UUID | None
+    campaign_id: uuid.UUID | None
     amount: float
     currency: str
     donation_type: DonationType
@@ -115,5 +125,48 @@ class SponsorshipResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     dog: DogProfileResponse | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DonationCampaignCreate(BaseModel):
+    name: str = Field(..., min_length=3, max_length=128, examples=["Rescue the Pack"])
+    description: str | None = Field(None, examples=["Funds emergency rescue equipment."])
+    target_amount: float = Field(..., ge=1.0, examples=[5000.0])
+    currency: str = Field(
+        default_factory=_default_currency, min_length=3, max_length=3, examples=["USD"]
+    )
+    campaign_type: CampaignType = CampaignType.GENERAL
+    status: CampaignStatus = CampaignStatus.DRAFT
+    start_date: date = Field(..., examples=["2026-08-01"])
+    end_date: date | None = Field(None, examples=["2026-09-30"])
+
+
+class DonationCampaignUpdate(BaseModel):
+    name: str | None = Field(None, min_length=3, max_length=128)
+    description: str | None = None
+    target_amount: float | None = Field(None, ge=1.0)
+    currency: str | None = Field(None, min_length=3, max_length=3)
+    campaign_type: CampaignType | None = None
+    status: CampaignStatus | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+
+
+class DonationCampaignResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    description: str | None
+    target_amount: float
+    currency: str
+    campaign_type: CampaignType
+    status: CampaignStatus
+    start_date: date
+    end_date: date | None
+    raised_amount: float
+    donor_count: int
+    progress_percentage: float
+    goal_reached_at: datetime | None
+    created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

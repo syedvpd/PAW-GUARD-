@@ -36,6 +36,20 @@ class SponsorshipStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
+class CampaignType(StrEnum):
+    EMERGENCY = "emergency"
+    RESCUE = "rescue"
+    OPERATIONS = "operations"
+    GENERAL = "general"
+
+
+class CampaignStatus(StrEnum):
+    DRAFT = "draft"
+    ACTIVE = "active"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+
 class DonorProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "donor_profiles"
 
@@ -101,6 +115,11 @@ class Donation(UUIDPkMixin, TimestampMixin, Base):
         ForeignKey("dog_sponsorships.id", ondelete="SET NULL"),
         nullable=True, index=True,
     )
+    campaign_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("donation_campaigns.id", ondelete="SET NULL"),
+        nullable=True, index=True,
+    )
 
     amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
@@ -122,3 +141,42 @@ class Donation(UUIDPkMixin, TimestampMixin, Base):
     donor: Mapped["DonorProfile"] = relationship(back_populates="donations")
     dog: Mapped["DogProfile"] = relationship("DogProfile", lazy="joined")
     sponsorship: Mapped["DogSponsorship | None"] = relationship("DogSponsorship", lazy="joined")
+    campaign: Mapped["DonationCampaign | None"] = relationship(
+        back_populates="donations", lazy="joined"
+    )
+
+
+class DonationCampaign(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+    """A goal-oriented fundraising drive (PRR 3.1.7 / 3.11).
+
+    Donations can be attributed to a campaign via `Donation.campaign_id`.
+    A campaign automatically transitions to COMPLETED once its goal is
+    reached or its end date passes.
+    """
+
+    __tablename__ = "donation_campaigns"
+
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    target_amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
+    campaign_type: Mapped[CampaignType] = mapped_column(
+        String(32), default=CampaignType.GENERAL, nullable=False
+    )
+    status: Mapped[CampaignStatus] = mapped_column(
+        String(32), default=CampaignStatus.DRAFT, nullable=False, index=True
+    )
+    start_date: Mapped[date_type] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date_type | None] = mapped_column(Date, nullable=True)
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    goal_reached_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    donations: Mapped[list["Donation"]] = relationship(
+        back_populates="campaign", lazy="selectin"
+    )

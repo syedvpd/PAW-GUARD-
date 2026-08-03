@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pawguard.core.pii import mask_report_data
 from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
 from pawguard.modules.dog.models import DogProfile, DogStatus
-from pawguard.modules.donation.models import Donation
+from pawguard.modules.donation.models import Donation, DonationCampaign
 from pawguard.modules.finance.models import FinancialTransaction
 from pawguard.modules.foster.models import FosterPlacement
 from pawguard.modules.inventory.models import InventoryItem
@@ -43,14 +43,15 @@ class ReportService:
         headers = raw_data["headers"]
         rows = raw_data["rows"]
         subtitle = raw_data.get("subtitle")
+        sections = raw_data.get("sections") or None
 
         if fmt == ReportFormat.CSV:
-            content = generate_csv(headers, rows)
+            content = generate_csv(headers, rows, sections=sections)
             ext = "csv"
             content_type = "text/csv"
         elif fmt == ReportFormat.EXCEL:
             content = generate_excel(
-                report_type.value, headers, rows, title=title
+                report_type.value, headers, rows, title=title, sections=sections
             )
             ext = "xlsx"
             content_type = (
@@ -58,7 +59,7 @@ class ReportService:
                 ".spreadsheetml.sheet"
             )
         else:
-            content = generate_pdf(title, headers, rows, subtitle=subtitle)
+            content = generate_pdf(title, headers, rows, subtitle=subtitle, sections=sections)
             ext = "pdf"
             content_type = "application/pdf"
 
@@ -135,17 +136,54 @@ class ReportService:
         if filters and "status" in filters:
             stmt = stmt.where(Donation.status == filters["status"])
         results = (await self._session.execute(stmt)).scalars().all()
+        headers = [
+            "ID", "Donor", "Amount", "Currency", "Type", "Status",
+            "Campaign", "Date"
+        ]
+        rows = [
+            [str(d.id), str(d.donor_id), float(d.amount), d.currency,
+             d.donation_type, d.status,
+             d.campaign.name if d.campaign else "", d.created_at.date()]
+            for d in results
+        ]
+
+        # Campaign progress metrics (PRR 4.1): how each drive is performing
+        # toward its fundraising goal.
+        campaign_stmt = select(DonationCampaign).where(
+            DonationCampaign.deleted_at.is_(None)
+        )
+        campaigns = (await self._session.execute(campaign_stmt)).scalars().all()
+        campaign_rows = []
+        for c in campaigns:
+            raised = (
+                await self._session.execute(
+                    select(func.coalesce(func.sum(Donation.amount), 0)).where(
+                        Donation.campaign_id == c.id,
+                        Donation.status == "success",
+                    )
+                )
+            ).scalar_one()
+            raised = float(raised)
+            pct = (raised / float(c.target_amount) * 100.0) if float(c.target_amount) else 0.0
+            campaign_rows.append(
+                [c.name, c.campaign_type, c.status,
+                 f"{float(c.target_amount):.2f}", f"{raised:.2f}",
+                 f"{min(pct, 100.0):.1f}%"]
+            )
+
         return {
             "title": "Donation Report",
             "subtitle": f"{start or 'N/A'} to {end or 'N/A'}",
-            "headers": [
-                "ID", "Donor", "Amount", "Currency", "Type", "Status", "Date"
-            ],
-            "rows": [
-                [str(d.id), str(d.donor_id), float(d.amount), d.currency,
-                 d.donation_type, d.status, d.created_at.date()]
-                for d in results
-            ],
+            "headers": headers,
+            "rows": rows,
+            "sections": [                {
+                    "title": "Campaign Progress",
+                    "headers": [
+                        "Campaign", "Type", "Status", "Target", "Raised", "Progress",
+                    ],
+                    "rows": campaign_rows,
+                }
+            ] if campaign_rows else [],
         }
 
     async def _adoption_report(
@@ -249,11 +287,41 @@ class ReportService:
             for r in results
         ]
         rows = mask_report_data(rows, headers, {"Reporter"})
+
+        # Geo heatmap (PRR 3.2): aggregate rescue cases by ~1km grid cell so
+        # staff can spot incident hotspots. Cells without coordinates are
+        # excluded from the map but reported as a count.
+        geo_counts: dict[tuple[float, float], int] = {}
+        cases_without_coords = 0
+        for r in results:
+            if r.latitude is None or r.longitude is None:
+                cases_without_coords += 1
+                continue
+            lat = round(float(r.latitude), 2)
+            lng = round(float(r.longitude), 2)
+            geo_counts[(lat, lng)] = geo_counts.get((lat, lng), 0) + 1
+        geo_rows = [
+            [f"{lat:.2f}", f"{lng:.2f}", count]
+            for (lat, lng), count in sorted(
+                geo_counts.items(), key=lambda item: item[1], reverse=True
+            )
+        ]
+        geo_title = "Geo Heatmap (Rescue Locations)"
+        if cases_without_coords:
+            geo_title += f" — {cases_without_coords} case(s) without coordinates"
+
         return {
             "title": "Rescue Report",
             "subtitle": f"{start or 'N/A'} to {end or 'N/A'}",
             "headers": headers,
             "rows": rows,
+            "sections": [
+                {
+                    "title": geo_title,
+                    "headers": ["Latitude", "Longitude", "Cases"],
+                    "rows": geo_rows,
+                }
+            ] if geo_rows else [],
         }
 
     async def _finance_report(

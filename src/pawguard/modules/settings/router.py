@@ -21,6 +21,8 @@ from pawguard.modules.settings.schemas import (
     GeneralSettingsResponse,
     PasswordPolicyResponse,
     PasswordPolicyUpdate,
+    PublicContentResponse,
+    PublicContentUpdate,
     SystemSettingCreate,
     SystemSettingResponse,
     SystemSettingUpdate,
@@ -29,6 +31,7 @@ from pawguard.modules.settings.service import (
     AppConfigService,
     BusinessRuleService,
     PasswordPolicyService,
+    PublicContentService,
     SystemSettingService,
 )
 
@@ -45,6 +48,10 @@ def get_password_policy_service(db: AsyncSession = Depends(get_db)) -> PasswordP
 
 def get_business_rule_service(db: AsyncSession = Depends(get_db)) -> BusinessRuleService:
     return BusinessRuleService(BusinessRuleRepository(db))
+
+
+def get_public_content_service(db: AsyncSession = Depends(get_db)) -> PublicContentService:
+    return PublicContentService(SystemSettingRepository(db))
 
 
 @router.get(
@@ -75,6 +82,34 @@ async def get_email_settings() -> ApiResponse[dict[str, Any]]:
 async def get_storage_settings() -> ApiResponse[dict[str, Any]]:
     data = AppConfigService().get_storage_settings()
     return ApiResponse(data=data)
+
+
+@router.get(
+    "/public-content",
+    response_model=ApiResponse[PublicContentResponse],
+    dependencies=[Depends(require_permission("public:read"))],
+)
+async def get_public_content(
+    service: PublicContentService = Depends(get_public_content_service),
+) -> ApiResponse[PublicContentResponse]:
+    content = await service.get_content()
+    return ApiResponse(data=content)
+
+
+@router.put(
+    "/public-content",
+    response_model=ApiResponse[PublicContentResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def update_public_content(
+    payload: PublicContentUpdate,
+    service: PublicContentService = Depends(get_public_content_service),
+) -> ApiResponse[PublicContentResponse]:
+    content = await service.update_content(payload)
+    return ApiResponse(
+        data=content,
+        message="Public content updated.",
+    )
 
 
 @router.get(

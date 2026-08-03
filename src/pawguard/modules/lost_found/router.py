@@ -28,6 +28,8 @@ from pawguard.modules.lost_found.schemas import (
     FoundReportResponse,
     LostReportCreate,
     LostReportResponse,
+    OwnershipClaimReview,
+    OwnershipClaimSubmit,
     ReportMatchResponse,
 )
 from pawguard.modules.lost_found.service import LostFoundService
@@ -191,6 +193,62 @@ async def get_matches_for_lost(
 
 
 @router.post(
+    "/matches/{match_id}/claim",
+    response_model=ApiResponse[ReportMatchResponse],
+)
+async def submit_ownership_claim(
+    match_id: uuid.UUID,
+    payload: OwnershipClaimSubmit,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(rate_limit("ownership_claim", 5, 3600))] = None,
+    service: LostFoundService = Depends(get_lost_found_service),
+) -> ApiResponse[ReportMatchResponse]:
+    """A potential owner submits verification documents against a match. Only
+    the reporters of either side of the match may claim it (PRR 3.10)."""
+    ip = request.client.host if request.client else None
+    match = await service.submit_ownership_claim(
+        match_id,
+        current_user.user.id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=ReportMatchResponse.model_validate(match),
+        message="Ownership claim submitted for staff verification.",
+    )
+
+
+@router.post(
+    "/matches/{match_id}/claim/review",
+    response_model=ApiResponse[ReportMatchResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def review_ownership_claim(
+    match_id: uuid.UUID,
+    payload: OwnershipClaimReview,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: LostFoundService = Depends(get_lost_found_service),
+) -> ApiResponse[ReportMatchResponse]:
+    """Staff verifies a submitted claim. Approval confirms the match and
+    resolves both reports; rejection marks the match rejected. The reviewer
+    and time are captured in the audit trail."""
+    ip = request.client.host if request.client else None
+    match = await service.review_ownership_claim(
+        match_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=ReportMatchResponse.model_validate(match),
+        message="Ownership claim reviewed.",
+    )
+
+
+@router.post(
     "/matches/{match_id}/resolve",
     response_model=ApiResponse[ReportMatchResponse],
     dependencies=[Depends(require_permission("system:admin"))],
@@ -202,18 +260,27 @@ async def resolve_match(
     current_user: CurrentUser = Depends(get_current_user),
     service: LostFoundService = Depends(get_lost_found_service),
 ) -> ApiResponse[ReportMatchResponse]:
-    status_val = MatchStatus.CONFIRMED if approve else MatchStatus.REJECTED
-    match = await service.update_match_status(match_id, status_val)
-
-    if approve:
-        actor_id = current_user.id
-        ip_address = request.client.host if request.client else None
-        await service.resolve_lost_report(
-            match.lost_report_id, actor_id=actor_id, ip_address=ip_address,
+    match = await service.get_match(match_id)
+    # When a claim has been submitted, route through the audited claim-review
+    # workflow so the reviewer + timestamps are recorded (PRR 3.10).
+    if match.claim_submitted_at is not None:
+        match = await service.review_ownership_claim(
+            match_id,
+            OwnershipClaimReview(approve=approve),
+            actor_id=current_user.id,
+            ip_address=request.client.host if request.client else None,
         )
-        await service.resolve_found_report(
-            match.found_report_id, actor_id=actor_id, ip_address=ip_address,
-        )
+    else:
+        status_val = MatchStatus.CONFIRMED if approve else MatchStatus.REJECTED
+        match = await service.update_match_status(match_id, status_val)
+        if approve:
+            ip_address = request.client.host if request.client else None
+            await service.resolve_lost_report(
+                match.lost_report_id, actor_id=current_user.id, ip_address=ip_address,
+            )
+            await service.resolve_found_report(
+                match.found_report_id, actor_id=current_user.id, ip_address=ip_address,
+            )
 
     return ApiResponse(
         data=ReportMatchResponse.model_validate(match),

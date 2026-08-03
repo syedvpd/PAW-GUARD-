@@ -256,6 +256,78 @@ class FleetService:
             )
         return record
 
+    async def checkout_equipment_for_dispatch(
+        self,
+        *,
+        rescue_dispatch_id: uuid.UUID,
+        equipment_names: list[str],
+        assigned_to_agent_id: uuid.UUID | None = None,
+        assigned_to_vehicle_id: uuid.UUID | None = None,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> list[EquipmentCheckout]:
+        """Auto-checkout equipment recorded on a rescue dispatch (PRR 3.3).
+
+        The rescue module orchestrates the dispatch and delegates the fleet
+        records here so equipment business rules stay in the fleet domain.
+        The shared session keeps the checkouts atomic with the dispatch.
+        """
+        names = [name.strip() for name in equipment_names if name and name.strip()]
+        if not names:
+            return []
+        if assigned_to_vehicle_id is not None:
+            vehicle = await self._repo.get_vehicle(assigned_to_vehicle_id)
+            if vehicle is None:
+                raise NotFoundError("Vehicle not found.")
+        checked_out_at = datetime.now(UTC)
+        records = []
+        for name in names:
+            record = await self._repo.create_equipment_checkout(
+                EquipmentCheckout(
+                    equipment_name=name,
+                    assigned_to_agent_id=assigned_to_agent_id,
+                    assigned_to_vehicle_id=assigned_to_vehicle_id,
+                    rescue_dispatch_id=rescue_dispatch_id,
+                    checked_out_at=checked_out_at,
+                )
+            )
+            records.append(record)
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.FLEET_EQUIPMENT_CHECKED_OUT,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "rescue_dispatch_id": str(rescue_dispatch_id),
+                    "equipment_count": len(records),
+                    "equipment_names": names,
+                },
+            )
+        return records
+
+    async def release_equipment_for_dispatch(
+        self,
+        *,
+        rescue_dispatch_id: uuid.UUID,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> int:
+        """Mark every outstanding equipment checkout for a dispatch as returned."""
+        released = await self._repo.release_equipment_for_dispatch(rescue_dispatch_id)
+        if released and self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.FLEET_EQUIPMENT_RETURNED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "rescue_dispatch_id": str(rescue_dispatch_id),
+                    "returned_count": released,
+                },
+            )
+        return released
+
     async def return_equipment(
         self,
         checkout_id: uuid.UUID,

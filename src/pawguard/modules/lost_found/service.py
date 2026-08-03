@@ -3,8 +3,9 @@
 import math
 import uuid
 from collections.abc import Sequence
+from datetime import UTC, datetime
 
-from pawguard.core.exceptions import NotFoundError
+from pawguard.core.exceptions import ForbiddenError, NotFoundError, ValidationFailedError
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
@@ -23,6 +24,8 @@ from pawguard.modules.lost_found.schemas import (
     FoundReportResponse,
     LostReportCreate,
     LostReportResponse,
+    OwnershipClaimReview,
+    OwnershipClaimSubmit,
     ReportMatchResponse,
 )
 from pawguard.services.audit_service import AuditService
@@ -249,6 +252,134 @@ class LostFoundService:
         if match is None:
             raise NotFoundError("Report match record not found.")
         match.status = status
+        return match
+
+    async def get_match(self, match_id: uuid.UUID) -> ReportMatch:
+        match = await self._repo.get_match_by_id(match_id)
+        if match is None:
+            raise NotFoundError("Report match record not found.")
+        return match
+
+    # --- Ownership-Verification Claim Workflow (PRR 3.10) -----------------
+
+    async def submit_ownership_claim(
+        self,
+        match_id: uuid.UUID,
+        claimant_user_id: uuid.UUID,
+        payload: OwnershipClaimSubmit,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> ReportMatch:
+        """A potential owner files a claim with supporting documents against a
+        matched lost/found pair. Only the reporters of either side of the match
+        may claim it (PRR 3.10 ownership verification)."""
+        match = await self._repo.get_match_by_id(match_id)
+        if match is None:
+            raise NotFoundError("Report match record not found.")
+
+        is_lost_owner = (
+            match.lost_report is not None
+            and match.lost_report.user_id == claimant_user_id
+        )
+        is_found_reporter = (
+            match.found_report is not None
+            and match.found_report.user_id == claimant_user_id
+        )
+        if not is_lost_owner and not is_found_reporter:
+            raise ForbiddenError(
+                "Only a reporter on this match may submit an ownership claim."
+            )
+
+        if match.status != MatchStatus.PENDING:
+            raise ValidationFailedError(
+                "This match has already been reviewed; claims are closed."
+            )
+        if not (payload.microchip_doc_url or payload.vet_bill_url or payload.photo_proof_url):
+            raise ValidationFailedError(
+                "At least one proof document is required to verify ownership."
+            )
+
+        match.microchip_doc_url = payload.microchip_doc_url
+        match.vet_bill_url = payload.vet_bill_url
+        match.photo_proof_url = payload.photo_proof_url
+        match.verification_notes = payload.verification_notes
+        match.claim_submitted_at = datetime.now(UTC)
+        await self._repo._session.flush()
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.LOST_FOUND_CLAIM_SUBMITTED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "match_id": str(match.id),
+                    "lost_report_id": str(match.lost_report_id),
+                    "found_report_id": str(match.found_report_id),
+                    "claimant_user_id": str(claimant_user_id),
+                    "proof_types": [
+                        doc for doc in (
+                            "microchip_doc" if payload.microchip_doc_url else None,
+                            "vet_bill" if payload.vet_bill_url else None,
+                            "photo_proof" if payload.photo_proof_url else None,
+                        ) if doc
+                    ],
+                },
+            )
+        return match
+
+    async def review_ownership_claim(
+        self,
+        match_id: uuid.UUID,
+        payload: OwnershipClaimReview,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> ReportMatch:
+        """Staff reviews a submitted claim: approve -> confirm the match and
+        resolve both reports; reject -> mark the match rejected. The reviewer
+        and review time are recorded for the audit trail (PRR 3.10)."""
+        match = await self._repo.get_match_by_id(match_id)
+        if match is None:
+            raise NotFoundError("Report match record not found.")
+        if match.claim_submitted_at is None:
+            raise ValidationFailedError(
+                "No ownership claim has been submitted for this match yet."
+            )
+        if match.status != MatchStatus.PENDING:
+            raise ValidationFailedError(
+                "This match has already been reviewed."
+            )
+
+        now = datetime.now(UTC)
+        new_status = MatchStatus.CONFIRMED if payload.approve else MatchStatus.REJECTED
+        match.status = new_status
+        match.claim_reviewed_at = now
+        match.claim_reviewed_by = actor_id
+        if payload.verification_notes:
+            match.verification_notes = payload.verification_notes
+        await self._repo._session.flush()
+
+        if payload.approve:
+            await self.resolve_lost_report(
+                match.lost_report_id, actor_id=actor_id, ip_address=ip_address,
+            )
+            await self.resolve_found_report(
+                match.found_report_id, actor_id=actor_id, ip_address=ip_address,
+            )
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.LOST_FOUND_CLAIM_REVIEWED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "match_id": str(match.id),
+                    "new_status": new_status.value,
+                    "reviewed_by": str(actor_id),
+                    "reviewed_at": now.isoformat(),
+                },
+            )
         return match
 
     # --- Algorithmic Cross-Matching Engine ---

@@ -55,6 +55,11 @@ class MFAAlreadyEnabledError(AppException):
     code = "MFA_ALREADY_ENABLED"
 
 
+class MFADisableNotAllowedError(AppException):
+    status_code = status.HTTP_409_CONFLICT
+    code = "MFA_DISABLE_NOT_ALLOWED"
+
+
 class InvalidTokenError(AppException):
     status_code = status.HTTP_400_BAD_REQUEST
     code = "INVALID_TOKEN"

@@ -178,6 +178,23 @@ class VolunteerRepository:
             stmt = stmt.offset(page_params.offset).limit(page_params.limit)
         return (await self._session.execute(stmt)).scalars().all()
 
+    async def list_attendance_for_volunteer(
+        self, volunteer_id: uuid.UUID
+    ) -> Sequence[ShiftAttendance]:
+        """Completed (checked-out) attendance records for a volunteer, with the
+        shift loaded so service-certificate generation can aggregate verified
+        hours and role coverage (PRR 3.9)."""
+        stmt = (
+            select(ShiftAttendance)
+            .options(selectinload(ShiftAttendance.shift))
+            .where(
+                ShiftAttendance.volunteer_id == volunteer_id,
+                ShiftAttendance.check_out_at.isnot(None),
+            )
+            .order_by(ShiftAttendance.check_out_at.asc())
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
     async def soft_delete_profile(self, profile_id: uuid.UUID) -> None:
         now = datetime.now(UTC)
         stmt = (

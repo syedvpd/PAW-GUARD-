@@ -189,12 +189,18 @@ class GrievanceService:
             from pawguard.modules.notifications.schemas import NotificationCreate
             from pawguard.modules.notifications.service import NotificationService
 
-            notification_svc = NotificationService(repository=NotificationRepository(self._repo._session))
+            notification_svc = NotificationService(
+                repository=NotificationRepository(self._repo._session)
+            )
             await notification_svc.create_notification(
                 payload=NotificationCreate(
                     user_id=payload.escalated_to_admin_id,
                     title="Grievance Ticket Escalated",
-                    body=f"Grievance ticket {ticket.id} has been escalated to you (Level {ticket.escalation_level}). Reason: {payload.reason or 'None'}.",
+                    body=(
+                        f"Grievance ticket {ticket.id} has been escalated to "
+                        f"you (Level {ticket.escalation_level}). Reason: "
+                        f"{payload.reason or 'None'}."
+                    ),
                     notification_type="grievance_escalation",
                     action_url=f"/api/v1/grievance/{ticket.id}",
                 )

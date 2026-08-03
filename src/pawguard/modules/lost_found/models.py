@@ -107,6 +107,12 @@ class ReportMatch(UUIDPkMixin, TimestampMixin, Base):
     vet_bill_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     photo_proof_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     verification_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    claim_submitted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    claim_reviewed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     claim_reviewed_by: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

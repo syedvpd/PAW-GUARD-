@@ -60,6 +60,15 @@ class EquipmentCheckout(UUIDPkMixin, TimestampMixin, Base):
     assigned_to_vehicle_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("vehicles.id", ondelete="SET NULL"), nullable=True
     )
+    # Populated when the checkout was auto-created for a rescue dispatch
+    # (PRR 3.3): links the equipment to the dispatch and lets the fleet module
+    # release it automatically when the dispatch completes.
+    rescue_dispatch_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("rescue_dispatches.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     checked_out_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     returned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)

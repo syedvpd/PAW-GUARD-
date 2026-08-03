@@ -29,6 +29,7 @@ from pawguard.core.security import (
     needs_rehash,
     verify_password,
 )
+from pawguard.modules.auth import permission_codes as pc
 from pawguard.modules.auth.exceptions import (
     AccountInactiveError,
     AccountLockedError,
@@ -39,6 +40,8 @@ from pawguard.modules.auth.exceptions import (
     InvalidSessionError,
     InvalidTokenError,
     MFAAlreadyEnabledError,
+    MFADisableNotAllowedError,
+    MFARequiredError,
     RefreshTokenReuseDetectedError,
 )
 from pawguard.modules.auth.models import (
@@ -198,7 +201,7 @@ class AuthService:
 
         session = await self._create_session(user_id=user.id, device=device, ctx=ctx)
 
-        if user.mfa_enabled:
+        if user.mfa_enabled or self._is_admin(user):
             return create_pre_auth_token(user_id=user.id, session_id=session.id)
 
         tokens = await self._issue_tokens(user=user, session=session)
@@ -227,6 +230,20 @@ class AuthService:
             raise InvalidSessionError("Session is no longer valid.")
 
         device_record = await self._mfa.get_for_user(user.id)
+
+        if self._is_admin(user) and not user.mfa_enabled:
+            # Mandatory MFA for admins: an admin without an enrolled device
+            # cannot complete login - they must enroll first (PRR security).
+            await self._audit.record(
+                event_type=AuthAuditEventType.MFA_FAILED,
+                actor_id=user.id,
+                ip_address=ctx.ip_address,
+                user_agent=ctx.user_agent,
+            )
+            raise MFARequiredError(
+                "Admin accounts must enroll in MFA before completing login."
+            )
+
         if device_record is None or not self._verify_totp(device_record, code):
             await self._audit.record(
                 event_type=AuthAuditEventType.MFA_FAILED,
@@ -573,9 +590,26 @@ class AuthService:
             device.secret_encrypted = encrypt_mfa_secret(secret)
         return verified
 
+    @staticmethod
+    def _is_admin(user: User) -> bool:
+        """True when the user holds the `system:admin` permission via any role.
+
+        Used to enforce mandatory MFA for admin accounts: admins always hit
+        the MFA challenge at login and can never disable MFA.
+        """
+        for role in user.roles:
+            for permission in role.permissions:
+                if permission.code == pc.SYSTEM_ADMIN:
+                    return True
+        return False
+
     # --- MFA disable ---
 
     async def disable_mfa(self, *, user: User, ctx: RequestContext) -> None:
+        if self._is_admin(user):
+            raise MFADisableNotAllowedError(
+                "Admin accounts are required to keep MFA enabled and cannot disable it."
+            )
         device = await self._mfa.get_for_user(user.id)
         if device is not None:
             device.is_verified = False

@@ -1,5 +1,6 @@
 """RescueService: owns all rescue business behavior (RULE-003)."""
 
+import re
 import secrets
 import uuid
 from collections.abc import Sequence
@@ -19,6 +20,8 @@ from pawguard.modules.dog.models import (
     DogStatus,
 )
 from pawguard.modules.dog.repository import DogRepository
+from pawguard.modules.fleet.repository import FleetRepository
+from pawguard.modules.fleet.service import FleetService
 from pawguard.modules.rescue.models import (
     RescueDispatch,
     RescueEscalationType,
@@ -39,6 +42,21 @@ from pawguard.services.audit_service import AuditService
 # Collisions on the 4-digit ticket suffix are rare but possible under high
 # intake volume; retry a bounded number of times before giving up cleanly.
 _MAX_TICKET_RETRIES = 5
+
+
+def _parse_equipment_details(equipment_details: str | None) -> list[str]:
+    """Split the dispatch's free-text equipment field into item names.
+
+    Dispatch coordinators enter equipment as a list (newline, comma, or
+    semicolon separated); each entry becomes an EquipmentCheckout row.
+    """
+    if not equipment_details:
+        return []
+    return [
+        name.strip()
+        for name in re.split(r"[,;\n]+", equipment_details)
+        if name and name.strip()
+    ]
 
 
 def _generate_ticket_number(now: datetime | None = None) -> str:
@@ -73,6 +91,17 @@ class RescueService:
         self._repo = repository
         self._audit = audit_service
         self._dog_repo = dog_repo
+
+    def _fleet_service(self) -> FleetService:
+        """Cross-domain delegation (fleet) sharing this request's session.
+
+        The dispatch and its equipment checkouts commit atomically: both
+        records belong to the same transaction and are flushed together.
+        """
+        return FleetService(
+            repository=FleetRepository(self._repo._session),
+            audit_service=self._audit,
+        )
 
     async def report_incident(
         self,
@@ -269,6 +298,20 @@ class RescueService:
         # response serializes `dispatch: None` even though the row exists.
         request.dispatch = dispatch
 
+        # Auto-checkout the equipment named on the dispatch (PRR 3.3) so the
+        # fleet ledger tracks what left the shelter for this rescue. Uses the
+        # shared session, so it commits atomically with the dispatch.
+        equipment_names = _parse_equipment_details(equipment_details)
+        if equipment_names:
+            await self._fleet_service().checkout_equipment_for_dispatch(
+                rescue_dispatch_id=dispatch.id,
+                equipment_names=equipment_names,
+                assigned_to_agent_id=assigned_driver_id,
+                assigned_to_vehicle_id=None,
+                actor_id=actor_id,
+                ip_address=ip_address,
+            )
+
         request.status = RescueStatus.DISPATCHED
         await self._repo._session.flush()
         res = await self._repo.get_request_by_id(request_id)
@@ -334,6 +377,14 @@ class RescueService:
             dispatch.admitted_at = now
             request.status = RescueStatus.ADMITTED
 
+            # Release equipment checked out for this dispatch (PRR 3.3): the
+            # rescue is complete, so nothing should remain outstanding.
+            await self._fleet_service().release_equipment_for_dispatch(
+                rescue_dispatch_id=dispatch.id,
+                actor_id=agent_id,
+                ip_address=ip_address,
+            )
+
             # Create internal report
             report = RescueReport(
                 rescue_request_id=request_id,
@@ -358,6 +409,13 @@ class RescueService:
             # unknown values normalise to the enum (OTHER catch-all).
             dispatch.failure_reason = normalise_failure_reason(failure_reason).value
             request.status = RescueStatus.VERIFIED  # Return back to verified queue
+
+            # Release equipment checked out for the aborted dispatch (PRR 3.3).
+            await self._fleet_service().release_equipment_for_dispatch(
+                rescue_dispatch_id=dispatch.id,
+                actor_id=agent_id,
+                ip_address=ip_address,
+            )
 
         else:
             raise ConflictError(f"Unsupported status update: {status}")

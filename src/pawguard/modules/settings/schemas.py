@@ -134,3 +134,20 @@ class StorageSettingsResponse(BaseModel):
     s3_bucket_name: str
     s3_region: str
     presigned_url_expiry_seconds: int
+
+
+class PublicContentResponse(BaseModel):
+    about_us: str
+    mission: str
+    updated_at: datetime | None
+
+
+class PublicContentUpdate(BaseModel):
+    about_us: str | None = Field(
+        None, min_length=1, max_length=20000,
+        examples=["PawGuard rescues, rehabilitates and rehomes street dogs."],
+    )
+    mission: str | None = Field(
+        None, min_length=1, max_length=20000,
+        examples=["To give every stray dog a safe home and a second chance."],
+    )

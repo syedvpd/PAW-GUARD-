@@ -155,6 +155,33 @@ class FleetRepository:
         await self._session.flush()
         return record
 
+    async def list_checkouts_for_dispatch(
+        self, rescue_dispatch_id: uuid.UUID
+    ) -> Sequence[EquipmentCheckout]:
+        stmt = (
+            select(EquipmentCheckout)
+            .where(
+                EquipmentCheckout.rescue_dispatch_id == rescue_dispatch_id,
+                EquipmentCheckout.returned_at.is_(None),
+            )
+            .order_by(EquipmentCheckout.checked_out_at)
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def release_equipment_for_dispatch(self, rescue_dispatch_id: uuid.UUID) -> int:
+        from datetime import UTC, datetime
+
+        stmt = (
+            update(EquipmentCheckout)
+            .where(
+                EquipmentCheckout.rescue_dispatch_id == rescue_dispatch_id,
+                EquipmentCheckout.returned_at.is_(None),
+            )
+            .values(returned_at=datetime.now(UTC))
+        )
+        result = await self._session.execute(stmt)
+        return result.rowcount  # type: ignore[attr-defined,no-any-return]
+
     async def get_equipment_checkout(self, checkout_id: uuid.UUID) -> EquipmentCheckout | None:
         stmt = select(EquipmentCheckout).where(EquipmentCheckout.id == checkout_id)
         return (await self._session.execute(stmt)).scalar_one_or_none()

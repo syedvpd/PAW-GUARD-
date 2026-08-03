@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from pawguard.modules.dashboards.router import stream_rescue_dashboard
 from pawguard.modules.dashboards.service import (
     adoption_dashboard,
     donor_dashboard,
@@ -227,3 +228,28 @@ class TestDashboards:
         assert "rescue" in result
         assert "shelter" in result
         assert "inventory" in result
+
+    @pytest.mark.asyncio
+    async def test_rescue_dashboard_stream_snapshot(self, session):
+        session.execute.side_effect = [
+            _fake_result(scalar_one_val=10),
+            _fake_result(scalar_one_val=3),
+            _fake_result(scalar_one_val=2),
+            _fake_result(scalar_one_val=5),
+            _fake_result(scalars_all=[]),
+        ]
+        request = AsyncMock()
+        request.is_disconnected = AsyncMock(return_value=False)
+
+        response = await stream_rescue_dashboard(
+            request=request, interval=1, db=session, current_user=None
+        )
+
+        assert response.media_type == "text/event-stream"
+        assert response.headers["cache-control"] == "no-cache"
+        first = await response.body_iterator.__anext__()
+        assert first.startswith("event: snapshot\n")
+        assert "data: {" in first
+        assert '"total_calls": 10' in first
+        assert '"ts"' in first
+        await response.body_iterator.aclose()

@@ -42,6 +42,7 @@ from pawguard.workers.jobs.scheduled_jobs import (
     check_vaccination_renewals,
     post_adoption_followups,
     process_sponsorship_charges,
+    send_post_service_feedback_surveys,
 )
 
 settings = get_settings()
@@ -61,12 +62,14 @@ class WorkerSettings:
         check_vaccination_renewals,
         post_adoption_followups,
         process_sponsorship_charges,
+        send_post_service_feedback_surveys,
     ]
     cron_jobs = [
         cron(check_inventory_low_stock, hour={0, 12}, minute={0}),
         cron(check_inventory_expiry, hour={9}, minute={0}),
         cron(check_vaccination_renewals, hour={9}, minute={30}),
         cron(post_adoption_followups, hour={10}, minute={0}),
+        cron(send_post_service_feedback_surveys, hour={10}, minute={30}),
         cron(process_sponsorship_charges, hour={8}, minute={0}),
     ]
     on_startup = startup

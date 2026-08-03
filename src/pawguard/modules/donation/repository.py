@@ -3,6 +3,7 @@
 Repositories never contain business decisions (RULE-002).
 """
 
+import calendar
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -208,21 +209,24 @@ class DonationRepository:
         result = await self._session.execute(stmt)
         updated = result.scalar_one_or_none()
 
-        if updated and updated.status == DonationStatus.SUCCESS and old_status != DonationStatus.SUCCESS:
-            if sponsorship_id:
-                from pawguard.modules.donation.models import DogSponsorship
-                import calendar
-                
-                sp = await self._session.get(DogSponsorship, sponsorship_id)
-                if sp and sp.next_charge_date:
-                    month = sp.next_charge_date.month + 1
-                    year = sp.next_charge_date.year
-                    if month > 12:
-                        month = 1
-                        year += 1
-                    day = min(sp.next_charge_date.day, calendar.monthrange(year, month)[1])
-                    next_date = sp.next_charge_date.replace(year=year, month=month, day=day)
-                    sp.next_charge_date = next_date
+        if (
+            updated
+            and updated.status == DonationStatus.SUCCESS
+            and old_status != DonationStatus.SUCCESS
+            and sponsorship_id
+        ):
+            from pawguard.modules.donation.models import DogSponsorship
+
+            sp = await self._session.get(DogSponsorship, sponsorship_id)
+            if sp and sp.next_charge_date:
+                month = sp.next_charge_date.month + 1
+                year = sp.next_charge_date.year
+                if month > 12:
+                    month = 1
+                    year += 1
+                day = min(sp.next_charge_date.day, calendar.monthrange(year, month)[1])
+                next_date = sp.next_charge_date.replace(year=year, month=month, day=day)
+                sp.next_charge_date = next_date
 
         return updated
 
