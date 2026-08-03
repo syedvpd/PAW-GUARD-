@@ -75,9 +75,7 @@ class NotificationService:
             )
             for uid in user_ids
         ]
-        created: list[Notification] = []
-        for n in notifications:
-            created.append(await self._repo.create_broadcast(n))
+        created = await self._repo.create_many(notifications)
         await self._repo._session.flush()
         if self._audit and actor_id:
             await self._audit.record(
@@ -201,9 +199,7 @@ class NotificationService:
             )
             for uid in user_ids
         ]
-        created: list[Notification] = []
-        for n in notifications:
-            created.append(await self._repo.create_broadcast(n))
+        created = await self._repo.create_many(notifications)
         await self._repo._session.flush()
         if self._audit and actor_id:
             await self._audit.record(

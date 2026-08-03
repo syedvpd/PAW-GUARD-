@@ -14,13 +14,12 @@ app startup).
 import uuid
 
 import pytest
+from scripts.seed_roles_and_permissions import reconcile_roles
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from pawguard.modules.auth.models import Permission, Role
-
-from scripts.seed_roles_and_permissions import reconcile_roles
 
 # A synthetic role name that will never collide with a real seeded role, so
 # these tests can't interact with production-shaped data even though they

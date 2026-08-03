@@ -7,7 +7,6 @@ Reads DATABASE_URL and DATABASE_URL_FRONTEND from Settings (.env or env vars).
 Runs `alembic upgrade head` against each database in sequence.
 """
 
-import os
 import sys
 from pathlib import Path
 

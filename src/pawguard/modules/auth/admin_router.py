@@ -6,9 +6,10 @@ Super Administrators can access these.
 
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from pawguard.core.rate_limiter import resolve_client_ip
 from pawguard.core.responses import ApiResponse
 from pawguard.db.session import get_db
 from pawguard.modules.auth.admin_schemas import (
@@ -20,6 +21,7 @@ from pawguard.modules.auth.admin_schemas import (
     RoleResponse,
     RoleUpdateRequest,
 )
+from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.rbac import require_permission
 from pawguard.modules.auth.repository import (
     PermissionRepository,
@@ -28,18 +30,23 @@ from pawguard.modules.auth.repository import (
     UserRoleRepository,
 )
 from pawguard.modules.auth.service import AdminService
+from pawguard.redis.client import RedisClient, get_redis
 from pawguard.services.audit_service import AuditService
 
 admin_router = APIRouter(prefix="/admin", tags=["admin"])
 
 
-def _get_admin_service(db: AsyncSession = Depends(get_db)) -> AdminService:
+def _get_admin_service(
+    db: AsyncSession = Depends(get_db),
+    redis: RedisClient = Depends(get_redis),
+) -> AdminService:
     return AdminService(
         user_repo=UserRepository(db),
         role_repo=RoleRepository(db),
         permission_repo=PermissionRepository(db),
         user_role_repo=UserRoleRepository(db),
         audit_service=AuditService(db),
+        redis=redis,
     )
 
 
@@ -65,12 +72,17 @@ async def list_roles(
 )
 async def create_role(
     payload: RoleCreateRequest,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     service: AdminService = Depends(_get_admin_service),
 ) -> ApiResponse[RoleResponse]:
     role = await service.create_role(
         name=payload.name,
         description=payload.description,
         permission_codes=payload.permission_codes,
+        actor_id=current_user.id,
+        ip_address=resolve_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
     )
     return ApiResponse(data=role)
 
@@ -96,10 +108,17 @@ async def get_role(
 async def update_role(
     role_id: uuid.UUID,
     payload: RoleUpdateRequest,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     service: AdminService = Depends(_get_admin_service),
 ) -> ApiResponse[RoleResponse]:
     role = await service.update_role(
-        role_id, description=payload.description, permission_codes=payload.permission_codes
+        role_id,
+        description=payload.description,
+        permission_codes=payload.permission_codes,
+        actor_id=current_user.id,
+        ip_address=resolve_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
     )
     return ApiResponse(data=role)
 
@@ -111,9 +130,16 @@ async def update_role(
 )
 async def delete_role(
     role_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     service: AdminService = Depends(_get_admin_service),
 ) -> ApiResponse[None]:
-    await service.delete_role(role_id)
+    await service.delete_role(
+        role_id,
+        actor_id=current_user.id,
+        ip_address=resolve_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
     return ApiResponse(message="Role deleted.")
 
 
@@ -153,6 +179,8 @@ async def list_users(
 )
 async def create_user(
     payload: AdminUserCreateRequest,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     service: AdminService = Depends(_get_admin_service),
 ) -> ApiResponse[AdminUserResponse]:
     user = await service.create_user(
@@ -161,6 +189,9 @@ async def create_user(
         full_name=payload.full_name,
         phone=payload.phone,
         role_names=payload.role_names,
+        actor_id=current_user.id,
+        ip_address=resolve_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
     )
     return ApiResponse(data=user)
 
@@ -186,6 +217,8 @@ async def get_user(
 async def update_user(
     user_id: uuid.UUID,
     payload: AdminUserUpdateRequest,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     service: AdminService = Depends(_get_admin_service),
 ) -> ApiResponse[AdminUserResponse]:
     user = await service.update_user(
@@ -194,6 +227,9 @@ async def update_user(
         phone=payload.phone,
         is_active=payload.is_active,
         role_names=payload.role_names,
+        actor_id=current_user.id,
+        ip_address=resolve_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
     )
     return ApiResponse(data=user)
 
@@ -205,7 +241,14 @@ async def update_user(
 )
 async def delete_user(
     user_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     service: AdminService = Depends(_get_admin_service),
 ) -> ApiResponse[None]:
-    await service.delete_user(user_id)
+    await service.delete_user(
+        user_id,
+        actor_id=current_user.id,
+        ip_address=resolve_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
     return ApiResponse(message="User soft-deleted.")

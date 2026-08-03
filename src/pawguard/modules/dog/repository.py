@@ -6,18 +6,26 @@ Repositories never contain business decisions (RULE-002).
 import uuid
 from collections.abc import Sequence
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.pagination import PageParams
 from pawguard.core.search import SortParams, apply_sorting, build_search_filter
-from pawguard.modules.dog.models import DogProfile, DogStatus
+from pawguard.modules.dog.models import (
+    DogActivityLog,
+    DogBreedClassification,
+    DogProfile,
+    DogStatus,
+    DogWeightLog,
+)
+from pawguard.modules.shelter.models import ShelterFacility
 
 
 class DogRepository:
     SEARCH_FIELDS = ("name", "breed", "registration_number", "microchip_id", "color")
     SORTABLE_FIELDS = {
-        "name", "breed", "status", "created_at", "updated_at", "estimated_age", "weight",
+        "name", "breed", "status", "created_at", "updated_at", "estimated_age",
+        "age_months", "weight",
     }
 
     def __init__(self, session: AsyncSession) -> None:
@@ -31,6 +39,16 @@ class DogRepository:
 
     async def get_by_id(self, dog_id: uuid.UUID) -> DogProfile | None:
         stmt = select(DogProfile).where(DogProfile.id == dog_id, DogProfile.deleted_at.is_(None))
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def get_any_by_id(self, dog_id: uuid.UUID) -> DogProfile | None:
+        """Fetch a dog regardless of soft-delete state.
+
+        Used by the activity-stream reader so a dog's "permanent, audit-ready
+        digital trail ... through final resolution" (PRR 3.4) stays readable
+        even after the profile itself is soft-deleted.
+        """
+        stmt = select(DogProfile).where(DogProfile.id == dog_id)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def get_by_id_for_update(self, dog_id: uuid.UUID) -> DogProfile | None:
@@ -47,6 +65,13 @@ class DogRepository:
     async def get_by_registration(self, reg_num: str) -> DogProfile | None:
         stmt = select(DogProfile).where(
             DogProfile.registration_number == reg_num, DogProfile.deleted_at.is_(None)
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def get_by_microchip(self, microchip_id: str) -> DogProfile | None:
+        """Find a non-deleted dog holding a given microchip id (UNIQUE column)."""
+        stmt = select(DogProfile).where(
+            DogProfile.microchip_id == microchip_id, DogProfile.deleted_at.is_(None)
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
@@ -68,8 +93,14 @@ class DogRepository:
         status: DogStatus | None = None,
         is_adoptable: bool | None = None,
         breed: str | None = None,
+        breed_classification: DogBreedClassification | None = None,
         gender: str | None = None,
         temperament: str | None = None,
+        min_age_months: int | None = None,
+        max_age_months: int | None = None,
+        min_weight: float | None = None,
+        max_weight: float | None = None,
+        location: str | None = None,
     ) -> tuple[Sequence[DogProfile], int]:
         stmt = select(DogProfile).where(DogProfile.deleted_at.is_(None))
 
@@ -83,10 +114,34 @@ class DogRepository:
             stmt = stmt.where(DogProfile.is_adoptable == is_adoptable)
         if breed is not None:
             stmt = stmt.where(DogProfile.breed.ilike(f"%{breed}%"))
+        if breed_classification is not None:
+            stmt = stmt.where(DogProfile.breed_classification == breed_classification)
         if gender is not None:
             stmt = stmt.where(DogProfile.gender == gender)
         if temperament is not None:
-            stmt = stmt.where(DogProfile.temperament.ilike(f"%{temperament}%"))
+            stmt = stmt.where(DogProfile.temperament == temperament)
+
+        # Public adoption-directory filters (PRR 3.1.4: age, size, location).
+        if min_age_months is not None:
+            stmt = stmt.where(DogProfile.age_months >= min_age_months)
+        if max_age_months is not None:
+            stmt = stmt.where(DogProfile.age_months <= max_age_months)
+        if min_weight is not None:
+            stmt = stmt.where(DogProfile.weight >= min_weight)
+        if max_weight is not None:
+            stmt = stmt.where(DogProfile.weight <= max_weight)
+        if location:
+            # Free-text match on the holding shelter facility's name/address
+            # (JOIN is safe: shelter_facility_id is a nullable FK, so dogs
+            # without a facility are excluded only when the filter is active).
+            stmt = stmt.join(
+                ShelterFacility, DogProfile.shelter_facility_id == ShelterFacility.id
+            ).where(
+                or_(
+                    ShelterFacility.name.ilike(f"%{location}%"),
+                    ShelterFacility.address.ilike(f"%{location}%"),
+                )
+            )
 
         stmt = apply_sorting(stmt, sort, self.SORTABLE_FIELDS)
 
@@ -118,3 +173,49 @@ class DogRepository:
         )
         result = await self._session.execute(stmt)
         return result.rowcount  # type: ignore[attr-defined,no-any-return]
+
+    async def bulk_soft_delete(self, ids: list[uuid.UUID]) -> int:
+        from datetime import UTC, datetime
+
+        from sqlalchemy import update
+        stmt = (
+            update(DogProfile)
+            .where(DogProfile.id.in_(ids), DogProfile.deleted_at.is_(None))
+            .values(deleted_at=datetime.now(UTC))
+        )
+        result = await self._session.execute(stmt)
+        return result.rowcount  # type: ignore[attr-defined,no-any-return]
+
+    # --- Activity stream (PRR 3.4: immutable chronological trail) ---
+
+    async def create_activity(self, log: DogActivityLog) -> DogActivityLog:
+        self._session.add(log)
+        await self._session.flush()
+        return log
+
+    async def list_activity_by_dog(
+        self, dog_id: uuid.UUID
+    ) -> Sequence[DogActivityLog]:
+        stmt = (
+            select(DogActivityLog)
+            .where(DogActivityLog.dog_id == dog_id)
+            .order_by(DogActivityLog.created_at.asc())
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
+    # --- Weight history (PRR 3.4: append-only measurement log) ---
+
+    async def create_weight_log(self, log: DogWeightLog) -> DogWeightLog:
+        self._session.add(log)
+        await self._session.flush()
+        return log
+
+    async def list_weight_logs(
+        self, dog_id: uuid.UUID
+    ) -> Sequence[DogWeightLog]:
+        stmt = (
+            select(DogWeightLog)
+            .where(DogWeightLog.dog_id == dog_id)
+            .order_by(DogWeightLog.measured_at.asc())
+        )
+        return (await self._session.execute(stmt)).scalars().all()

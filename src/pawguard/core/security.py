@@ -5,6 +5,7 @@ sits between this module and `argon2-cffi` / `pyjwt` — business logic (session
 audit) lives in `modules/auth/service.py`, this module only provides pure primitives.
 """
 
+import base64
 import hashlib
 import secrets
 from dataclasses import dataclass
@@ -16,6 +17,7 @@ from uuid import UUID
 import jwt
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHash, VerificationError, VerifyMismatchError
+from cryptography.fernet import Fernet, InvalidToken
 
 from pawguard.core.config import get_settings
 
@@ -73,6 +75,48 @@ def generate_opaque_token() -> str:
 
 def hash_opaque_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+# --- TOTP secret encryption at rest (Fernet) ---
+#
+# MFA TOTP secrets must never be stored in plaintext: a database read would let
+# an attacker forge codes. Fernet tokens always start with this prefix (the
+# urlsafe base64 of the version byte 0x80), while the raw pyotp base32 secrets
+# written by earlier versions never do — the prefix is how the two are told apart.
+
+_MFA_LEGACY_PLAINTEXT_PREFIX = "gAAAA"
+
+
+class MFAEncryptionError(Exception):
+    """Raised when a stored MFA secret cannot be decrypted (e.g. key rotation)."""
+
+
+def _mfa_encryption_key_material() -> str:
+    settings = get_settings()
+    return settings.mfa_encryption_key or settings.jwt_private_key
+
+
+def _mfa_fernet() -> Fernet:
+    digest = hashlib.sha256(_mfa_encryption_key_material().encode("utf-8")).digest()
+    return Fernet(base64.urlsafe_b64encode(digest))
+
+
+def is_encrypted_mfa_secret(stored: str) -> bool:
+    return stored.startswith(_MFA_LEGACY_PLAINTEXT_PREFIX)
+
+
+def encrypt_mfa_secret(secret: str) -> str:
+    return _mfa_fernet().encrypt(secret.encode("utf-8")).decode("ascii")
+
+
+def decrypt_mfa_secret(stored: str) -> str:
+    """Return the plaintext secret, transparently handling legacy plaintext rows."""
+    if not is_encrypted_mfa_secret(stored):
+        return stored
+    try:
+        return _mfa_fernet().decrypt(stored.encode("ascii")).decode("utf-8")
+    except (InvalidToken, ValueError) as exc:
+        raise MFAEncryptionError("Stored MFA secret cannot be decrypted.") from exc
 
 
 # --- JWT access tokens (RS256) ---

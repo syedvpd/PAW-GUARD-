@@ -37,6 +37,7 @@ class AuthAuditEventType(StrEnum):
     DOG_REGISTERED = "dog_registered"
     DOG_UPDATED = "dog_updated"
     DOG_STATUS_CHANGED = "dog_status_changed"
+    DOG_WEIGHT_RECORDED = "dog_weight_recorded"
     DOG_DELETED = "dog_deleted"
     BULK_DOG_STATUS_UPDATED = "bulk_dog_status_updated"
     BULK_DOG_DELETED = "bulk_dog_deleted"
@@ -85,6 +86,8 @@ class AuthAuditEventType(StrEnum):
     LOST_FOUND_UPDATED = "lost_found_updated"
     LOST_FOUND_RESOLVED = "lost_found_resolved"
     LOST_FOUND_DELETED = "lost_found_deleted"
+    LOST_FOUND_CLAIM_SUBMITTED = "lost_found_claim_submitted"
+    LOST_FOUND_CLAIM_REVIEWED = "lost_found_claim_reviewed"
     NOTIFICATION_SENT = "notification_sent"
     PORTAL_POST_CREATED = "portal_post_created"
     PORTAL_POST_UPDATED = "portal_post_updated"
@@ -94,7 +97,10 @@ class AuthAuditEventType(StrEnum):
     VOLUNTEER_SHIFT_CREATED = "volunteer_shift_created"
     VOLUNTEER_SHIFT_UPDATED = "volunteer_shift_updated"
     VOLUNTEER_DELETED = "volunteer_deleted"
+    VOLUNTEER_CERTIFICATE_ISSUED = "volunteer_certificate_issued"
     DONATION_RECEIVED = "donation_received"
+    DONATION_ORDER_CREATED = "donation_order_created"
+    DONOR_REGISTERED = "donor_registered"
     DONATION_REFUNDED = "donation_refunded"
     DONATION_RECEIPT_ISSUED = "donation_receipt_issued"
     DONATION_STATUS_CHANGED = "donation_status_changed"
@@ -104,6 +110,10 @@ class AuthAuditEventType(StrEnum):
     SPONSORSHIP_CANCELLED = "sponsorship_cancelled"
     SPONSORSHIP_PAUSED = "sponsorship_paused"
     SPONSORSHIP_CHARGED = "sponsorship_charged"
+    DONATION_CAMPAIGN_CREATED = "donation_campaign_created"
+    DONATION_CAMPAIGN_UPDATED = "donation_campaign_updated"
+    DONATION_CAMPAIGN_COMPLETED = "donation_campaign_completed"
+    DONATION_CAMPAIGN_DELETED = "donation_campaign_deleted"
     SETTINGS_UPDATED = "settings_updated"
     REGISTERED = "registered"
     ACCOUNT_LOCKED = "account_locked"
@@ -307,13 +317,6 @@ class EmailVerificationToken(UUIDPkMixin, Base):
     )
 
 
-class OAuthProvider(StrEnum):
-    GOOGLE = "google"
-    APPLE = "apple"
-    FACEBOOK = "facebook"
-    MICROSOFT = "microsoft"
-
-
 class OAuthAccount(UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "oauth_accounts"
 
@@ -349,6 +352,12 @@ class AuthAuditLog(UUIDPkMixin, Base):
     ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
     user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
     event_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    # Structured state snapshots for state-transition events (status changes,
+    # workflow transitions). Generic pre/post payloads give audit reviewers a
+    # queryable before/after picture without digging through free-form JSONB
+    # metadata. Nullable - most auth events have no meaningful state to diff.
+    before_state: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    after_state: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )

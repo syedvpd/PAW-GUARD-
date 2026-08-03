@@ -13,14 +13,16 @@ from pawguard.core.bulk import (
     BulkDeleteRequest,
     BulkDeleteResponse,
 )
+from pawguard.core.exceptions import ForbiddenError
 from pawguard.core.pagination import PageParams, page_params
+from pawguard.core.rate_limiter import rate_limit
 from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.core.search import SortParams, sort_params
 from pawguard.db.session import get_db
 from pawguard.modules.adoption.repository import AdoptionRepository
 from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
-from pawguard.modules.auth.rbac import require_permission
+from pawguard.modules.auth.rbac import has_permission, require_permission
 from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.foster.models import FosterStatus
 from pawguard.modules.foster.repository import FosterRepository
@@ -61,6 +63,7 @@ async def apply_to_foster(
     payload: FosterProfileCreate,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(rate_limit("foster_apply", 5, 3600))] = None,
     service: FosterService = Depends(get_foster_service),
 ) -> ApiResponse[FosterProfileResponse]:
     ip = request.client.host if request.client else None
@@ -176,7 +179,7 @@ async def return_dog(
 @router.get(
     "",
     response_model=PaginatedResponse[FosterProfileResponse],
-    dependencies=[Depends(require_permission("foster:read"))],
+    dependencies=[Depends(require_permission("foster:update"))],
 )
 async def list_profiles(
     page: PageParams = Depends(page_params),
@@ -249,12 +252,16 @@ async def log_progress(
 @router.get(
     "/placements/{placement_id}/progress",
     response_model=ApiResponse[list[FosterProgressLogResponse]],
-    dependencies=[Depends(require_permission("foster:read"))],
 )
 async def get_progress_logs(
     placement_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
     service: FosterService = Depends(get_foster_service),
 ) -> ApiResponse[list[FosterProgressLogResponse]]:
+    placement = await service.get_placement(placement_id)
+    is_owner = placement.foster.user_id == current_user.user.id
+    if not is_owner and not has_permission(current_user.user, "foster:update"):
+        raise ForbiddenError("You do not have permission to view these progress logs.")
     logs = await service.get_progress_logs(placement_id)
     return ApiResponse(
         data=[FosterProgressLogResponse.model_validate(log) for log in logs],
@@ -290,12 +297,16 @@ async def log_supply_dispatch(
 @router.get(
     "/placements/{placement_id}/supplies",
     response_model=ApiResponse[list[FosterSupplyDispatchResponse]],
-    dependencies=[Depends(require_permission("foster:read"))],
 )
 async def list_supply_dispatches(
     placement_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
     service: FosterService = Depends(get_foster_service),
 ) -> ApiResponse[list[FosterSupplyDispatchResponse]]:
+    placement = await service.get_placement(placement_id)
+    is_owner = placement.foster.user_id == current_user.user.id
+    if not is_owner and not has_permission(current_user.user, "foster:update"):
+        raise ForbiddenError("You do not have permission to view these supply dispatches.")
     dispatches = await service.list_supply_dispatches(placement_id)
     return ApiResponse(
         data=[FosterSupplyDispatchResponse.model_validate(d) for d in dispatches],

@@ -25,6 +25,8 @@ from pawguard.redis.client import ping_redis
 
 logger = get_logger(__name__)
 
+logger = get_logger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
@@ -37,19 +39,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
 
 async def _seed_roles() -> None:
-    """Seed roles + permissions on first startup (no-op if already seeded)."""
-    from sqlalchemy import select
+    """Reconcile roles + permissions on every startup (additive + idempotent).
+
+    Uses reconcile_roles(), not a create-if-empty seeder: the old first-startup
+    guard short-circuited once any Role row existed, so permission codes added
+    to ROLE_DEFINITIONS later never reached an already-seeded database.
+    Reconciliation only creates missing roles/permissions and grants missing
+    grants (never revokes), so it is cheap enough to run on every startup.
+    """
+    from scripts.seed_roles_and_permissions import reconcile_roles
 
     from pawguard.db.session import AsyncSessionLocal
-    from pawguard.modules.auth.models import Role
 
     async with AsyncSessionLocal() as session:
-        exists = (await session.execute(select(Role).limit(1))).scalar_one_or_none()
-        if exists is not None:
-            return
-
-    from scripts.seed_roles_and_permissions import seed_db
-    await seed_db("Startup", get_settings().database_url)
+        await reconcile_roles(session, verbose=False)
+        await session.commit()
 
 
 def create_app() -> FastAPI:

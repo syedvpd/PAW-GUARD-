@@ -16,6 +16,8 @@ from pawguard.modules.settings.schemas import (
     BusinessRuleUpdate,
     GeneralSettingsResponse,
     PasswordPolicyUpdate,
+    PublicContentResponse,
+    PublicContentUpdate,
     SystemSettingCreate,
     SystemSettingUpdate,
 )
@@ -126,6 +128,76 @@ class BusinessRuleService:
 
     async def delete_rule(self, rule_id: uuid.UUID) -> None:
         await self._repo.delete(rule_id)
+
+
+ABOUT_US_KEY = "public_about_us"
+MISSION_KEY = "public_mission"
+PUBLIC_CONTENT_CATEGORY = "content"
+PUBLIC_CONTENT_KEYS = (ABOUT_US_KEY, MISSION_KEY)
+
+DEFAULT_ABOUT_US = (
+    "PawGuard is a community-driven rescue organisation that rescues, "
+    "rehabilitates and rehomes stray animals. Our shelters, rescue teams and "
+    "volunteers work around the clock to give every animal a second chance."
+)
+DEFAULT_MISSION = (
+    "To protect every stray animal and build a compassionate, adoption-ready "
+    "community through rescue, medical care and responsible rehoming."
+)
+
+
+class PublicContentService:
+    """Owns the publicly visible About & Mission copy (RULE-003).
+
+    Content is stored as `SystemSetting` rows (`content` category) so admins
+    can edit it from the Admin Portal without a deploy. Missing settings fall
+    back to the built-in defaults, keeping the public endpoint stable.
+    """
+
+    def __init__(self, repository: SystemSettingRepository) -> None:
+        self._repo = repository
+
+    async def get_content(self) -> PublicContentResponse:
+        about = await self._repo.get_by_key(ABOUT_US_KEY)
+        mission = await self._repo.get_by_key(MISSION_KEY)
+        updated = None
+        for setting in (about, mission):
+            if setting is not None and (
+                updated is None or setting.updated_at > updated
+            ):
+                updated = setting.updated_at
+        return PublicContentResponse(
+            about_us=about.value if about else DEFAULT_ABOUT_US,
+            mission=mission.value if mission else DEFAULT_MISSION,
+            updated_at=updated,
+        )
+
+    async def update_content(self, payload: PublicContentUpdate) -> PublicContentResponse:
+        updates = {
+            key: value
+            for key, value in (
+                (ABOUT_US_KEY, payload.about_us),
+                (MISSION_KEY, payload.mission),
+            )
+            if value is not None
+        }
+        if not updates:
+            return await self.get_content()
+        for key, value in updates.items():
+            existing = await self._repo.get_by_key(key)
+            if existing is None:
+                label = key.removeprefix("public_").replace("_", " ")
+                await self._repo.create(
+                    SystemSetting(
+                        key=key,
+                        value=value,
+                        category=PUBLIC_CONTENT_CATEGORY,
+                        description=f"Public-facing {label} content.",
+                    )
+                )
+            else:
+                existing.value = value
+        return await self.get_content()
 
 
 class AppConfigService:

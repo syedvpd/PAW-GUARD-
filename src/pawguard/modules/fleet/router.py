@@ -19,7 +19,7 @@ from pawguard.db.session import get_db
 from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.rbac import require_permission
-from pawguard.modules.fleet.models import VehicleStatus
+from pawguard.modules.fleet.models import VehicleStatus, VehicleType
 from pawguard.modules.fleet.repository import FleetRepository
 from pawguard.modules.fleet.schemas import (
     EquipmentCheckoutCreate,
@@ -76,6 +76,7 @@ async def list_vehicles(
     sort: SortParams = Depends(sort_params),
     search: str | None = Query(None, description="Search by make/model, license plate"),
     status: VehicleStatus | None = Query(None, description="Filter by status"),
+    vehicle_type: VehicleType | None = Query(None, description="Filter by vehicle type"),
     service: FleetService = Depends(get_fleet_service),
 ) -> PaginatedResponse[VehicleResponse]:
     return await service.list_vehicles_paginated(
@@ -83,6 +84,7 @@ async def list_vehicles(
         sort=sort,
         search_term=search,
         status=status,
+        vehicle_type=vehicle_type,
     )
 
 

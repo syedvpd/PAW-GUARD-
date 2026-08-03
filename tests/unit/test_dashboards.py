@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from pawguard.modules.dashboards.router import stream_rescue_dashboard
 from pawguard.modules.dashboards.service import (
     adoption_dashboard,
     donor_dashboard,

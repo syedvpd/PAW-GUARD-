@@ -4,12 +4,10 @@ import uuid
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from tests.auth_helpers import register_and_auth
 
 from pawguard.modules.adoption.models import AdoptionStatus
-from pawguard.modules.auth.models import Role, User
 
 REGISTER_PAYLOAD = {
     "email": "adoptapitest@example.com",
@@ -27,24 +25,12 @@ LOGIN_PAYLOAD = {
 @pytest.mark.asyncio
 class TestAdoptionAPI:
     async def _auth(self, client: AsyncClient, db_session: AsyncSession) -> dict:
-        await client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
-        stmt = (
-            select(User)
-            .options(selectinload(User.roles))
-            .where(User.email == REGISTER_PAYLOAD["email"])
+        return await register_and_auth(
+            client, db_session, email=REGISTER_PAYLOAD["email"]
         )
-        user = (await db_session.execute(stmt)).scalar_one()
-        role_stmt = select(Role).where(Role.name == "super_admin")
-        role = (await db_session.execute(role_stmt)).scalar_one()
-        user.roles.append(role)
-        user.is_verified = True
-        await db_session.commit()
-        resp = await client.post("/api/v1/auth/login", json=LOGIN_PAYLOAD)
-        token = resp.json()["data"]["access_token"]
-        return {"Authorization": f"Bearer {token}"}
 
     async def _create_dog(self, client: AsyncClient, headers: dict) -> str:
-        payload = {"name": "AdoptDog", "breed": "Lab", "gender": "male", "estimated_age": "2y", "weight": 20, "color": "black", "temperament": "calm", "is_adoptable": True, "is_quarantine_passed": True}
+        payload = {"name": "AdoptDog", "breed": "Lab", "gender": "male", "estimated_age": "2y", "weight": 20, "color": "black", "temperament": "friendly", "is_adoptable": True, "is_quarantine_passed": True}
         resp = await client.post("/api/v1/dogs", json=payload, headers=headers)
         dog_id = resp.json()["data"]["id"]
         # is_adoptable is forced False at registration; grant vet clearance
@@ -115,7 +101,8 @@ class TestAdoptionAPI:
         app_id = create_resp.json()["data"]["id"]
         # Status is a state machine now (submitted -> vetting -> home_check ->
         # approved); walk through the pipeline instead of jumping directly.
-        await client.put(f"/api/v1/adoptions/{app_id}", json={"status": "vetting"}, headers=headers)
+        await client.put(f"/api/v1/adoptions/{app_id}", json={"status": "screening"}, headers=headers)
+        await client.put(f"/api/v1/adoptions/{app_id}", json={"status": "interview"}, headers=headers)
         await client.put(f"/api/v1/adoptions/{app_id}", json={"status": "home_check"}, headers=headers)
         resp = await client.put(f"/api/v1/adoptions/{app_id}", json={"status": "approved"}, headers=headers)
         assert resp.status_code == 200
@@ -132,9 +119,9 @@ class TestAdoptionAPI:
         payload = {"dog_id": dog_id, "residential_status": "owned", "has_landlord_approval": True, "has_yard_fence": True, "household_members_count": 4}
         create_resp = await client.post("/api/v1/adoptions", json=payload, headers=headers)
         app_id = create_resp.json()["data"]["id"]
-        resp = await client.patch(f"/api/v1/adoptions/{app_id}/status", json={"status": "vetting"}, headers=headers)
+        resp = await client.patch(f"/api/v1/adoptions/{app_id}/status", json={"status": "screening"}, headers=headers)
         assert resp.status_code == 200
-        assert resp.json()["data"]["status"] == AdoptionStatus.VETTING.value
+        assert resp.json()["data"]["status"] == AdoptionStatus.SCREENING.value
 
     async def test_soft_delete_adoption(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
@@ -155,6 +142,6 @@ class TestAdoptionAPI:
         a1 = (await client.post("/api/v1/adoptions", json=payload, headers=headers)).json()["data"]
         payload["dog_id"] = dog2_id
         a2 = (await client.post("/api/v1/adoptions", json=payload, headers=headers)).json()["data"]
-        resp = await client.post("/api/v1/adoptions/bulk/status-update", json={"ids": [a1["id"], a2["id"]], "status": "vetting"}, headers=headers)
+        resp = await client.post("/api/v1/adoptions/bulk/status-update", json={"ids": [a1["id"], a2["id"]], "status": "screening"}, headers=headers)
         assert resp.status_code == 200
         assert resp.json()["data"]["updated_count"] == 2

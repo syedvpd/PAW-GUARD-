@@ -2,8 +2,9 @@
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
-from pydantic import AliasChoices, Field, computed_field
+from pydantic import AliasChoices, Field, computed_field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from pawguard.core.constants import Environment
@@ -12,7 +13,7 @@ from pawguard.core.constants import Environment
 def _resolve_key(inline_pem: str, key_path: str, env_var_name: str) -> str:
     """Prefer an inline PEM from the environment; fall back to the file on disk.
 
-    Env vars can't carry literal newlines, so `\\n` escapes are unescaped here.
+    Env vars can't carry literal newlines, so `\n` escapes are unescaped here.
     """
     if inline_pem.strip():
         return inline_pem.replace("\\n", "\n")
@@ -33,6 +34,37 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @field_validator("database_url", "database_url_frontend", mode="before")
+    @classmethod
+    def normalize_database_url(cls, v: Any) -> Any:
+        if not isinstance(v, str) or not v.strip():
+            return v
+        
+        # 1. Normalize protocol to postgresql+asyncpg
+        if v.startswith("postgres://"):
+            v = "postgresql+asyncpg://" + v[len("postgres://"):]
+        elif v.startswith("postgresql://"):
+            v = "postgresql+asyncpg://" + v[len("postgresql://"):]
+            
+        # 2. Ensure database name is postgres if it ends with / or has no path
+        parts = v.split("://", 1)
+        if len(parts) == 2:
+            proto, rest = parts
+            at_idx = rest.find("@")
+            start_search = at_idx if at_idx != -1 else 0
+            slash_idx = rest.find("/", start_search)
+            if slash_idx == -1:
+                v = v + "/postgres"
+            else:
+                path_part = rest[slash_idx:]
+                db_name_part = path_part.split("?")[0]
+                if db_name_part == "/" or db_name_part == "":
+                    query = ""
+                    if "?" in path_part:
+                        query = "?" + path_part.split("?", 1)[1]
+                    v = proto + "://" + rest[:slash_idx] + "/postgres" + query
+        return v
 
     # --- App ---
     app_name: str = "PawGuard"
@@ -65,6 +97,21 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 30
     pre_auth_token_expire_minutes: int = 5
+
+    # --- MFA ---
+    # Optional independent key used to encrypt TOTP secrets at rest (Fernet).
+    # When unset, the key is derived from the JWT private key so existing
+    # deployments stay zero-config; set this in production so rotating the JWT
+    # keypair does not orphan stored MFA secrets.
+    mfa_encryption_key: str = ""
+    mfa_mandatory_for_admins: bool = True
+
+    # --- OAuth / Social login ---
+    # Audience (client id) of the Google / Apple application this backend
+    # verifies provider ID tokens against. OAuth login FAILS CLOSED when
+    # unset: a provider token whose `aud` does not match is rejected.
+    google_oauth_client_id: str = ""
+    apple_oauth_client_id: str = ""
 
     # --- Cookies ---
     cookie_domain: str = "localhost"

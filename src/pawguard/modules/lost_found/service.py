@@ -3,8 +3,9 @@
 import math
 import uuid
 from collections.abc import Sequence
+from datetime import UTC, datetime
 
-from pawguard.core.exceptions import NotFoundError
+from pawguard.core.exceptions import ForbiddenError, NotFoundError, ValidationFailedError
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
@@ -23,6 +24,8 @@ from pawguard.modules.lost_found.schemas import (
     FoundReportResponse,
     LostReportCreate,
     LostReportResponse,
+    OwnershipClaimReview,
+    OwnershipClaimSubmit,
     ReportMatchResponse,
 )
 from pawguard.services.audit_service import AuditService
@@ -45,6 +48,9 @@ class LostFoundService:
             breed=payload.breed.lower(),
             color=payload.color.lower(),
             microchip_id=payload.microchip_id,
+            collar_color=payload.collar_color,
+            collar_description=payload.collar_description,
+            marker_description=payload.marker_description,
             location_address=payload.location_address,
             latitude=payload.latitude,
             longitude=payload.longitude,
@@ -73,6 +79,9 @@ class LostFoundService:
             user_id=user_id,
             breed_observed=payload.breed_observed.lower(),
             color_observed=payload.color_observed.lower(),
+            collar_color=payload.collar_color,
+            collar_description=payload.collar_description,
+            marker_description=payload.marker_description,
             location_address=payload.location_address,
             latitude=payload.latitude,
             longitude=payload.longitude,
@@ -251,6 +260,134 @@ class LostFoundService:
         match.status = status
         return match
 
+    async def get_match(self, match_id: uuid.UUID) -> ReportMatch:
+        match = await self._repo.get_match_by_id(match_id)
+        if match is None:
+            raise NotFoundError("Report match record not found.")
+        return match
+
+    # --- Ownership-Verification Claim Workflow (PRR 3.10) -----------------
+
+    async def submit_ownership_claim(
+        self,
+        match_id: uuid.UUID,
+        claimant_user_id: uuid.UUID,
+        payload: OwnershipClaimSubmit,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> ReportMatch:
+        """A potential owner files a claim with supporting documents against a
+        matched lost/found pair. Only the reporters of either side of the match
+        may claim it (PRR 3.10 ownership verification)."""
+        match = await self._repo.get_match_by_id(match_id)
+        if match is None:
+            raise NotFoundError("Report match record not found.")
+
+        is_lost_owner = (
+            match.lost_report is not None
+            and match.lost_report.user_id == claimant_user_id
+        )
+        is_found_reporter = (
+            match.found_report is not None
+            and match.found_report.user_id == claimant_user_id
+        )
+        if not is_lost_owner and not is_found_reporter:
+            raise ForbiddenError(
+                "Only a reporter on this match may submit an ownership claim."
+            )
+
+        if match.status != MatchStatus.PENDING:
+            raise ValidationFailedError(
+                "This match has already been reviewed; claims are closed."
+            )
+        if not (payload.microchip_doc_url or payload.vet_bill_url or payload.photo_proof_url):
+            raise ValidationFailedError(
+                "At least one proof document is required to verify ownership."
+            )
+
+        match.microchip_doc_url = payload.microchip_doc_url
+        match.vet_bill_url = payload.vet_bill_url
+        match.photo_proof_url = payload.photo_proof_url
+        match.verification_notes = payload.verification_notes
+        match.claim_submitted_at = datetime.now(UTC)
+        await self._repo._session.flush()
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.LOST_FOUND_CLAIM_SUBMITTED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "match_id": str(match.id),
+                    "lost_report_id": str(match.lost_report_id),
+                    "found_report_id": str(match.found_report_id),
+                    "claimant_user_id": str(claimant_user_id),
+                    "proof_types": [
+                        doc for doc in (
+                            "microchip_doc" if payload.microchip_doc_url else None,
+                            "vet_bill" if payload.vet_bill_url else None,
+                            "photo_proof" if payload.photo_proof_url else None,
+                        ) if doc
+                    ],
+                },
+            )
+        return match
+
+    async def review_ownership_claim(
+        self,
+        match_id: uuid.UUID,
+        payload: OwnershipClaimReview,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> ReportMatch:
+        """Staff reviews a submitted claim: approve -> confirm the match and
+        resolve both reports; reject -> mark the match rejected. The reviewer
+        and review time are recorded for the audit trail (PRR 3.10)."""
+        match = await self._repo.get_match_by_id(match_id)
+        if match is None:
+            raise NotFoundError("Report match record not found.")
+        if match.claim_submitted_at is None:
+            raise ValidationFailedError(
+                "No ownership claim has been submitted for this match yet."
+            )
+        if match.status != MatchStatus.PENDING:
+            raise ValidationFailedError(
+                "This match has already been reviewed."
+            )
+
+        now = datetime.now(UTC)
+        new_status = MatchStatus.CONFIRMED if payload.approve else MatchStatus.REJECTED
+        match.status = new_status
+        match.claim_reviewed_at = now
+        match.claim_reviewed_by = actor_id
+        if payload.verification_notes:
+            match.verification_notes = payload.verification_notes
+        await self._repo._session.flush()
+
+        if payload.approve:
+            await self.resolve_lost_report(
+                match.lost_report_id, actor_id=actor_id, ip_address=ip_address,
+            )
+            await self.resolve_found_report(
+                match.found_report_id, actor_id=actor_id, ip_address=ip_address,
+            )
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.LOST_FOUND_CLAIM_REVIEWED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "match_id": str(match.id),
+                    "new_status": new_status.value,
+                    "reviewed_by": str(actor_id),
+                    "reviewed_at": now.isoformat(),
+                },
+            )
+        return match
+
     # --- Algorithmic Cross-Matching Engine ---
 
     def _calculate_distance_km(
@@ -272,22 +409,42 @@ class LostFoundService:
         c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
         return r * c
 
-    def _evaluate_match_score(self, lost: LostReport, found: FoundReport) -> float:
+    def _evaluate_match_score(
+        self, lost: LostReport, found: FoundReport
+    ) -> tuple[float, float, float, list[str]]:
+        """Compute a confidence score (0-100) for a lost/found pair.
+
+        Weight breakdown (total = 100):
+            Breed match:            25.0
+            Color match:            25.0
+            Distance (Haversine):   20.0
+            Temporal alignment:     15.0
+            Collar color match:     10.0
+            Marker overlap:          5.0
+
+        Returns:
+            (confidence_score, temporal_gap_days, match_reasons)
+        """
         score = 0.0
+        reasons: list[str] = []
 
-        # 1. Breed match (max 33.33)
+        # 1. Breed match (max 25.0)
         if lost.breed == found.breed_observed:
-            score += 33.33
+            score += 25.0
+            reasons.append("breed_exact")
         elif lost.breed in found.breed_observed or found.breed_observed in lost.breed:
-            score += 15.0  # partial match
+            score += 15.0
+            reasons.append("breed_partial")
 
-        # 2. Color match (max 33.33)
+        # 2. Color match (max 25.0)
         if lost.color == found.color_observed:
-            score += 33.33
+            score += 25.0
+            reasons.append("color_exact")
         elif lost.color in found.color_observed or found.color_observed in lost.color:
-            score += 15.0  # partial match
+            score += 15.0
+            reasons.append("color_partial")
 
-        # 3. Distance Match (max 33.34)
+        # 3. Distance Match (max 20.0)
         dist = self._calculate_distance_km(
             float(lost.latitude) if lost.latitude is not None else None,
             float(lost.longitude) if lost.longitude is not None else None,
@@ -295,23 +452,78 @@ class LostFoundService:
             float(found.longitude) if found.longitude is not None else None,
         )
         if dist <= 2.0:
-            score += 33.34
-        elif dist <= 5.0:
             score += 20.0
+            reasons.append("distance_near")
+        elif dist <= 5.0:
+            score += 12.0
+            reasons.append("distance_close")
         elif dist <= 10.0:
-            score += 10.0
+            score += 6.0
+            reasons.append("distance_moderate")
 
-        return round(score, 2)
+        # 4. Temporal alignment (max 15.0)
+        lost_dt = lost.lost_at
+        found_dt = found.found_at
+        temporal_gap_days = abs((lost_dt - found_dt).total_seconds()) / 86400.0
+        if temporal_gap_days <= 1:
+            score += 15.0
+            reasons.append("temporal_same_day")
+        elif temporal_gap_days <= 3:
+            score += 12.0
+            reasons.append("temporal_within_3_days")
+        elif temporal_gap_days <= 7:
+            score += 9.0
+            reasons.append("temporal_within_week")
+        elif temporal_gap_days <= 14:
+            score += 6.0
+            reasons.append("temporal_within_2_weeks")
+        elif temporal_gap_days <= 30:
+            score += 3.0
+            reasons.append("temporal_within_month")
+
+        # 5. Collar color match (max 10.0)
+        if (
+            lost.collar_color
+            and found.collar_color
+            and lost.collar_color.lower() == found.collar_color.lower()
+        ):
+            score += 10.0
+            reasons.append("collar_color_match")
+
+        # 6. Marker description overlap (max 5.0)
+        if lost.marker_description and found.marker_description:
+            lost_markers = {
+                m.strip().lower()
+                for m in lost.marker_description.split(",")
+                if m.strip()
+            }
+            found_markers = {
+                m.strip().lower()
+                for m in found.marker_description.split(",")
+                if m.strip()
+            }
+            overlap = lost_markers & found_markers
+            if overlap:
+                marker_score = min(len(overlap) * 2.5, 5.0)
+                score += marker_score
+                reasons.append("markers_overlap")
+
+        score = round(score, 2)
+        temporal_gap_days = round(temporal_gap_days, 2)
+        return score, round(dist, 2), temporal_gap_days, reasons
 
     async def _run_matching_for_lost(self, lost: LostReport) -> None:
         active_founds = await self._repo.list_found_reports(status=ReportStatus.ACTIVE)
         for found in active_founds:
-            score = self._evaluate_match_score(lost, found)
+            score, dist_km, gap_days, reasons = self._evaluate_match_score(lost, found)
             if score >= 50.0:
                 match = ReportMatch(
                     lost_report_id=lost.id,
                     found_report_id=found.id,
                     confidence_score=score,
+                    distance_km=dist_km,
+                    temporal_gap_days=gap_days,
+                    match_reasons=reasons,
                     status=MatchStatus.PENDING,
                 )
                 await self._repo.create_match(match)
@@ -319,12 +531,15 @@ class LostFoundService:
     async def _run_matching_for_found(self, found: FoundReport) -> None:
         active_losts = await self._repo.list_lost_reports(status=ReportStatus.ACTIVE)
         for lost in active_losts:
-            score = self._evaluate_match_score(lost, found)
+            score, dist_km, gap_days, reasons = self._evaluate_match_score(lost, found)
             if score >= 50.0:
                 match = ReportMatch(
                     lost_report_id=lost.id,
                     found_report_id=found.id,
                     confidence_score=score,
+                    distance_km=dist_km,
+                    temporal_gap_days=gap_days,
+                    match_reasons=reasons,
                     status=MatchStatus.PENDING,
                 )
                 await self._repo.create_match(match)

@@ -20,12 +20,16 @@ from pawguard.core.security import (
     create_access_token,
     create_pre_auth_token,
     decode_token,
+    decrypt_mfa_secret,
+    encrypt_mfa_secret,
     generate_opaque_token,
     hash_opaque_token,
     hash_password,
+    is_encrypted_mfa_secret,
     needs_rehash,
     verify_password,
 )
+from pawguard.modules.auth import permission_codes as pc
 from pawguard.modules.auth.exceptions import (
     AccountInactiveError,
     AccountLockedError,
@@ -36,6 +40,8 @@ from pawguard.modules.auth.exceptions import (
     InvalidSessionError,
     InvalidTokenError,
     MFAAlreadyEnabledError,
+    MFADisableNotAllowedError,
+    MFARequiredError,
     RefreshTokenReuseDetectedError,
 )
 from pawguard.modules.auth.models import (
@@ -64,6 +70,7 @@ from pawguard.modules.auth.repository import (
 )
 from pawguard.modules.auth.schemas import DeviceContext, MFADisableRequest
 from pawguard.services.audit_service import AuditService
+from pawguard.services.cache_service import CacheService
 
 MAX_FAILED_LOGIN_ATTEMPTS = 5
 ACCOUNT_LOCKOUT_MINUTES = 15
@@ -117,7 +124,13 @@ class AuthService:
     # --- Registration ---
 
     async def register(
-        self, *, email: str, password: str, full_name: str, phone: str | None
+        self,
+        *,
+        email: str,
+        password: str,
+        full_name: str,
+        phone: str | None,
+        ctx: RequestContext,
     ) -> User:
         normalized_email = email.lower()
         existing = await self._users.get_by_email(normalized_email)
@@ -141,6 +154,8 @@ class AuthService:
         await self._audit.record(
             event_type=AuthAuditEventType.REGISTERED,
             actor_id=fresh.id if fresh else user.id,
+            ip_address=ctx.ip_address,
+            user_agent=ctx.user_agent,
         )
         return fresh or user
 
@@ -156,7 +171,7 @@ class AuthService:
             verify_password, password, user.hashed_password
         ):
             if user is not None:
-                await self._register_failed_attempt(user)
+                await self._register_failed_attempt(user, ctx)
             await self._audit.record(
                 event_type=AuthAuditEventType.LOGIN_FAILED,
                 actor_id=user.id if user else None,
@@ -185,7 +200,7 @@ class AuthService:
 
         session = await self._create_session(user_id=user.id, device=device, ctx=ctx)
 
-        if user.mfa_enabled:
+        if user.mfa_enabled or (self._settings.mfa_mandatory_for_admins and self._is_admin(user)):
             return create_pre_auth_token(user_id=user.id, session_id=session.id)
 
         tokens = await self._issue_tokens(user=user, session=session)
@@ -214,6 +229,20 @@ class AuthService:
             raise InvalidSessionError("Session is no longer valid.")
 
         device_record = await self._mfa.get_for_user(user.id)
+
+        if self._is_admin(user) and not user.mfa_enabled:
+            # Mandatory MFA for admins: an admin without an enrolled device
+            # cannot complete login - they must enroll first (PRR security).
+            await self._audit.record(
+                event_type=AuthAuditEventType.MFA_FAILED,
+                actor_id=user.id,
+                ip_address=ctx.ip_address,
+                user_agent=ctx.user_agent,
+            )
+            raise MFARequiredError(
+                "Admin accounts must enroll in MFA before completing login."
+            )
+
         if device_record is None or not self._verify_totp(device_record, code):
             await self._audit.record(
                 event_type=AuthAuditEventType.MFA_FAILED,
@@ -268,6 +297,8 @@ class AuthService:
         session = await self._sessions.get_by_id(existing.session_id)
         if session is None or not session.is_active:
             raise InvalidSessionError("Session is no longer valid.")
+        if session.expires_at < datetime.now(UTC):
+            raise InvalidSessionError("Session has expired.")
 
         user = await self._users.get_by_id(session.user_id)
         if user is None or not user.is_active:
@@ -451,13 +482,18 @@ class AuthService:
             raise MFAAlreadyEnabledError("MFA is already enabled for this account.")
 
         secret = pyotp.random_base32()
+        encrypted_secret = encrypt_mfa_secret(secret)
         existing = await self._mfa.get_for_user(user.id)
         if existing is None:
             await self._mfa.create(
-                MFADevice(user_id=user.id, device_type="totp", secret_encrypted=secret)
+                MFADevice(
+                    user_id=user.id,
+                    device_type="totp",
+                    secret_encrypted=encrypted_secret,
+                )
             )
         else:
-            existing.secret_encrypted = secret
+            existing.secret_encrypted = encrypted_secret
             existing.is_verified = False
 
         uri = pyotp.totp.TOTP(secret).provisioning_uri(name=user.email, issuer_name="PawGuard")
@@ -535,18 +571,38 @@ class AuthService:
             user=user,
         )
 
-    async def _register_failed_attempt(self, user: User) -> None:
+    async def _register_failed_attempt(self, user: User, ctx: RequestContext) -> None:
         user.failed_login_count += 1
         if user.failed_login_count >= MAX_FAILED_LOGIN_ATTEMPTS:
             user.locked_until = datetime.now(UTC) + timedelta(minutes=ACCOUNT_LOCKOUT_MINUTES)
             await self._audit.record(
                 event_type=AuthAuditEventType.ACCOUNT_LOCKED,
                 actor_id=user.id,
+                ip_address=ctx.ip_address,
+                user_agent=ctx.user_agent,
             )
 
     @staticmethod
     def _verify_totp(device: MFADevice, code: str) -> bool:
-        return pyotp.totp.TOTP(device.secret_encrypted).verify(code, valid_window=1)
+        stored = device.secret_encrypted
+        secret = decrypt_mfa_secret(stored)
+        verified = pyotp.totp.TOTP(secret).verify(code, valid_window=1)
+        if verified and not is_encrypted_mfa_secret(stored):
+            device.secret_encrypted = encrypt_mfa_secret(secret)
+        return verified
+
+    @staticmethod
+    def _is_admin(user: User) -> bool:
+        """True when the user holds the `system:admin` permission via any role.
+
+        Used to enforce mandatory MFA for admin accounts: admins always hit
+        the MFA challenge at login and can never disable MFA.
+        """
+        for role in user.roles:
+            for permission in role.permissions:
+                if permission.code == pc.SYSTEM_ADMIN:
+                    return True
+        return False
 
     # --- MFA disable ---
 
@@ -726,6 +782,11 @@ class AuthService:
         import httpx
 
         if provider == "google":
+            expected_aud = get_settings().google_oauth_client_id
+            if not expected_aud:
+                raise InvalidCredentialsError(
+                    "Google OAuth is not configured on this server."
+                )
             async with httpx.AsyncClient() as client:
                 resp = await client.get(
                     f"https://oauth2.googleapis.com/tokeninfo?id_token={token}",
@@ -734,6 +795,14 @@ class AuthService:
                 if resp.status_code != 200:
                     raise InvalidCredentialsError("Invalid Google token.")
                 data = resp.json()
+                if data.get("aud") != expected_aud:
+                    # A valid signature alone is not enough: the token must
+                    # have been issued for OUR client, otherwise any app's
+                    # Google ID token could log in as any user (account
+                    # takeover via cross-app token confusion).
+                    raise InvalidCredentialsError(
+                        "Google token was not issued for this application."
+                    )
                 if not data.get("email_verified") and not data.get("sub"):
                     raise InvalidCredentialsError("Google email not verified.")
                 return {
@@ -744,6 +813,12 @@ class AuthService:
                 }
         elif provider == "apple":
             import jwt as pyjwt
+
+            expected_aud = get_settings().apple_oauth_client_id
+            if not expected_aud:
+                raise InvalidCredentialsError(
+                    "Apple OAuth is not configured on this server."
+                )
             async with httpx.AsyncClient() as client:
                 resp = await client.get("https://appleid.apple.com/auth/keys", timeout=10)
                 if resp.status_code != 200:
@@ -756,8 +831,11 @@ class AuthService:
                     raise InvalidCredentialsError("Invalid Apple token (key not found).")
                 public_key = pyjwt.algorithms.RSAAlgorithm.from_jwk(matching_key)
                 payload = pyjwt.decode(
-                    token, public_key, algorithms=["RS256"],  # type: ignore[arg-type]
-                    options={"verify_aud": False},
+                    token,
+                    public_key,
+                    algorithms=["RS256"],  # type: ignore[arg-type]
+                    audience=expected_aud,
+                    options={"verify_aud": True},
                 )
             return {
                 "sub": payload["sub"],
@@ -768,7 +846,12 @@ class AuthService:
             raise InvalidCredentialsError(f"Unsupported OAuth provider: {provider}")
 
     async def update_profile(
-        self, user_id: uuid.UUID, *, full_name: str | None = None, phone: str | None = None
+        self,
+        user_id: uuid.UUID,
+        *,
+        full_name: str | None = None,
+        phone: str | None = None,
+        ctx: RequestContext,
     ) -> User:
         user = await self._users.get_by_id(user_id)
         if user is None:
@@ -781,6 +864,8 @@ class AuthService:
         await self._audit.record(
             event_type=AuthAuditEventType.PROFILE_UPDATED,
             actor_id=user_id,
+            ip_address=ctx.ip_address,
+            user_agent=ctx.user_agent,
         )
         return user
 
@@ -798,12 +883,27 @@ class AdminService:
         permission_repo: PermissionRepository,
         user_role_repo: UserRoleRepository,
         audit_service: AuditService,
+        redis: RedisClient | None = None,
     ) -> None:
         self._users = user_repo
         self._roles = role_repo
         self._permissions = permission_repo
         self._user_roles = user_role_repo
         self._audit = audit_service
+        self._redis = redis
+
+    async def _invalidate_rbac_cache(self) -> None:
+        """Drop cached role->permission sets so RBAC changes apply immediately.
+
+        ``RequirePermission`` caches permission codes per role-name combination
+        under namespace ``rbac`` (keys ``roles:<names>``, 300s TTL). Without
+        invalidation a permission change would linger for the whole TTL, so
+        every role mutation purges the namespace (CACHE CONTRACT: permissions
+        are never cached without invalidation).
+        """
+        if self._redis is None:
+            return
+        await CacheService(self._redis, namespace="rbac").delete_prefix("roles")
 
     # ── Role management ──────────────────────────────────────────────────────
 
@@ -817,7 +917,14 @@ class AdminService:
         return role
 
     async def create_role(
-        self, *, name: str, description: str | None, permission_codes: list[str]
+        self,
+        *,
+        name: str,
+        description: str | None,
+        permission_codes: list[str],
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
     ) -> Role:
         existing = await self._roles.get_by_name(name)
         if existing is not None:
@@ -831,9 +938,12 @@ class AdminService:
             await self._roles.set_permissions(role.id, [p.id for p in perms])
         await self._audit.record(
             event_type=AuthAuditEventType.ADMIN_ROLE_CREATED,
-            actor_id=None,
+            actor_id=actor_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
             metadata={"role_name": name, "permission_codes": permission_codes},
         )
+        await self._invalidate_rbac_cache()
         # Re-fetch with permissions eager-loaded: set_permissions() writes
         # the RolePermission association directly rather than through the
         # ORM relationship, and role.permissions was never loaded on this
@@ -850,6 +960,9 @@ class AdminService:
         *,
         description: str | None,
         permission_codes: list[str] | None,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
     ) -> Role:
         role = await self._roles.get_by_id(role_id)
         if role is None:
@@ -864,9 +977,12 @@ class AdminService:
             await self._roles.set_permissions(role.id, [p.id for p in perms])
         await self._audit.record(
             event_type=AuthAuditEventType.ADMIN_ROLE_UPDATED,
-            actor_id=None,
+            actor_id=actor_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
             metadata={"role_id": str(role_id), "role_name": role.name},
         )
+        await self._invalidate_rbac_cache()
         if permission_codes is not None:
             # role.permissions was loaded before set_permissions() bypassed
             # the ORM relationship to write RolePermission rows directly, so
@@ -876,7 +992,14 @@ class AdminService:
             return refreshed
         return role
 
-    async def delete_role(self, role_id: uuid.UUID) -> None:
+    async def delete_role(
+        self,
+        role_id: uuid.UUID,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+    ) -> None:
         role = await self._roles.get_by_id(role_id)
         if role is None:
             raise NotFoundError(f"Role {role_id} not found.")
@@ -885,9 +1008,12 @@ class AdminService:
         await self._roles.delete(role_id)
         await self._audit.record(
             event_type=AuthAuditEventType.ADMIN_ROLE_DELETED,
-            actor_id=None,
+            actor_id=actor_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
             metadata={"role_id": str(role_id), "role_name": role.name},
         )
+        await self._invalidate_rbac_cache()
 
     # ── Permission management ────────────────────────────────────────────────
 
@@ -913,6 +1039,9 @@ class AdminService:
         full_name: str,
         phone: str | None,
         role_names: list[str],
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
     ) -> User:
         normalized_email = email.lower()
         existing = await self._users.get_by_email(normalized_email)
@@ -942,7 +1071,9 @@ class AdminService:
         fresh = await self._users.get_by_id(user.id)
         await self._audit.record(
             event_type=AuthAuditEventType.ADMIN_USER_CREATED,
-            actor_id=None,
+            actor_id=actor_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
             metadata={"user_id": str(user.id), "email": normalized_email, "role_names": role_names},
         )
         return fresh or user
@@ -955,6 +1086,9 @@ class AdminService:
         phone: str | None = None,
         is_active: bool | None = None,
         role_names: list[str] | None = None,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
     ) -> User:
         user = await self._users.get_by_id(user_id)
         if user is None:
@@ -978,21 +1112,29 @@ class AdminService:
         fresh = await self._users.get_by_id(user_id)
         await self._audit.record(
             event_type=AuthAuditEventType.ADMIN_USER_UPDATED,
-            actor_id=None,
+            actor_id=actor_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
             metadata={"user_id": str(user_id)},
         )
         return fresh or user
 
-    async def delete_user(self, user_id: uuid.UUID) -> None:
+    async def delete_user(
+        self,
+        user_id: uuid.UUID,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+    ) -> None:
         user = await self._users.get_by_id(user_id)
         if user is None:
             raise NotFoundError(f"User {user_id} not found.")
         user.deleted_at = datetime.now(UTC)
         await self._audit.record(
             event_type=AuthAuditEventType.ADMIN_USER_DELETED,
-            actor_id=None,
+            actor_id=actor_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
             metadata={"user_id": str(user_id), "email": user.email},
         )
-
-    async def assign_roles(self, user_id: uuid.UUID, role_names: list[str]) -> User:
-        return await self.update_user(user_id, role_names=role_names)

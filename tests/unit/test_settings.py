@@ -6,8 +6,20 @@ import pytest
 
 from pawguard.modules.settings.models import SystemSetting
 from pawguard.modules.settings.repository import SystemSettingRepository
-from pawguard.modules.settings.schemas import SystemSettingCreate, SystemSettingUpdate
-from pawguard.modules.settings.service import AppConfigService, SystemSettingService
+from pawguard.modules.settings.schemas import (
+    PublicContentUpdate,
+    SystemSettingCreate,
+    SystemSettingUpdate,
+)
+from pawguard.modules.settings.service import (
+    ABOUT_US_KEY,
+    DEFAULT_ABOUT_US,
+    DEFAULT_MISSION,
+    MISSION_KEY,
+    AppConfigService,
+    PublicContentService,
+    SystemSettingService,
+)
 
 
 class TestSystemSettingService:
@@ -65,6 +77,77 @@ class TestSystemSettingService:
         ]
         results = await service.list_all()
         assert len(results) == 2
+
+
+class TestPublicContentService:
+    @pytest.fixture
+    def mock_repo(self):
+        return AsyncMock(spec=SystemSettingRepository)
+
+    @pytest.fixture
+    def service(self, mock_repo):
+        return PublicContentService(mock_repo)
+
+    def _setting(self, key, value):
+        return SystemSetting(key=key, value=value, category="content")
+
+    async def test_get_content_uses_defaults_when_missing(self, service, mock_repo):
+        mock_repo.get_by_key.return_value = None
+        result = await service.get_content()
+        assert result.about_us == DEFAULT_ABOUT_US
+        assert result.mission == DEFAULT_MISSION
+        assert result.updated_at is None
+
+    async def test_get_content_returns_stored_values(self, service, mock_repo):
+        def _side_effect(key, *args, **kwargs):
+            if key == ABOUT_US_KEY:
+                return self._setting(ABOUT_US_KEY, "Custom about")
+            return self._setting(MISSION_KEY, "Custom mission")
+
+        mock_repo.get_by_key.side_effect = _side_effect
+        result = await service.get_content()
+        assert result.about_us == "Custom about"
+        assert result.mission == "Custom mission"
+
+    async def test_update_content_creates_missing_settings(self, service, mock_repo):
+        stored: dict[str, str] = {}
+
+        async def _get_by_key(key, *args, **kwargs):
+            return self._setting(key, stored[key]) if key in stored else None
+
+        async def _create(setting):
+            stored[setting.key] = setting.value
+            return setting
+
+        mock_repo.get_by_key.side_effect = _get_by_key
+        mock_repo.create.side_effect = _create
+
+        result = await service.update_content(
+            PublicContentUpdate(about_us="New about", mission="New mission")
+        )
+        assert stored == {ABOUT_US_KEY: "New about", MISSION_KEY: "New mission"}
+        assert result.about_us == "New about"
+        assert result.mission == "New mission"
+
+    async def test_update_content_updates_existing_settings(self, service, mock_repo):
+        stored = {
+            ABOUT_US_KEY: self._setting(ABOUT_US_KEY, "old about"),
+            MISSION_KEY: self._setting(MISSION_KEY, "old mission"),
+        }
+        mock_repo.get_by_key.side_effect = lambda key, *a, **k: stored.get(key)
+
+        result = await service.update_content(PublicContentUpdate(about_us="Edited"))
+        assert mock_repo.create.await_count == 0
+        assert result.about_us == "Edited"
+        assert result.mission == "old mission"
+        assert stored[ABOUT_US_KEY].value == "Edited"
+
+    async def test_update_content_partial_noop_returns_current(self, service, mock_repo):
+        mock_repo.get_by_key.return_value = None
+        result = await service.update_content(PublicContentUpdate())
+        assert mock_repo.create.await_count == 0
+        assert result.about_us == DEFAULT_ABOUT_US
+        assert result.mission == DEFAULT_MISSION
 
 
 class TestAppConfigService:

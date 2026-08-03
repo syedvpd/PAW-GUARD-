@@ -23,18 +23,26 @@ from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.rbac import require_permission
 from pawguard.modules.dog.repository import DogRepository
+from pawguard.modules.inventory.repository import InventoryRepository
+from pawguard.modules.inventory.service import InventoryService
 from pawguard.modules.medical.repository import MedicalRepository
 from pawguard.modules.medical.schemas import (
     ClinicalExamCreate,
     ClinicalExamResponse,
+    MedicalClearanceCreate,
+    MedicalClearanceResponse,
     MedicalTreatmentCreate,
     MedicalTreatmentResponse,
+    MedicationAdministrationCreate,
+    MedicationAdministrationResponse,
     PrescriptionCreate,
     PrescriptionResponse,
     PrescriptionStatusUpdate,
     PrescriptionUpdate,
     VaccinationRecordCreate,
     VaccinationRecordResponse,
+    VaccineProtocolCreate,
+    VaccineProtocolResponse,
 )
 from pawguard.modules.medical.service import MedicalService
 from pawguard.services.audit_service import AuditService
@@ -47,7 +55,8 @@ def get_medical_service(
 ) -> MedicalService:
     repo = MedicalRepository(db)
     dog_repo = DogRepository(db)
-    return MedicalService(repo, dog_repo, audit_service=audit)
+    inventory = InventoryService(InventoryRepository(db), audit_service=audit)
+    return MedicalService(repo, dog_repo, audit_service=audit, inventory_service=inventory)
 
 
 @router.post(
@@ -148,15 +157,119 @@ async def authorize_adoption_clearance(
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: MedicalService = Depends(get_medical_service),
+    payload: MedicalClearanceCreate | None = None,
 ) -> ApiResponse[bool]:
     roles = {r.name for r in current_user.user.roles}
     ip = request.client.host if request.client else None
     success = await service.authorize_adoption_clearance(
-        dog_id, roles, actor_id=current_user.id, ip_address=ip,
+        dog_id, roles, actor_id=current_user.id, ip_address=ip, payload=payload,
     )
     return ApiResponse(
         data=success,
         message="Adoption medical clearance granted successfully.",
+    )
+
+
+@router.get(
+    "/clearances/dogs/{dog_id}",
+    response_model=ApiResponse[list[MedicalClearanceResponse]],
+    dependencies=[Depends(require_permission("medical:read"))],
+)
+async def get_dog_clearances(
+    dog_id: uuid.UUID,
+    service: MedicalService = Depends(get_medical_service),
+) -> ApiResponse[list[MedicalClearanceResponse]]:
+    clearances = await service.get_clearances_for_dog(dog_id)
+    return ApiResponse(
+        data=[MedicalClearanceResponse.model_validate(c) for c in clearances],
+    )
+
+
+@router.post(
+    "/administrations",
+    response_model=ApiResponse[MedicationAdministrationResponse],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("medical:update"))],
+)
+async def log_medication_administration(
+    payload: MedicationAdministrationCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: MedicalService = Depends(get_medical_service),
+) -> ApiResponse[MedicationAdministrationResponse]:
+    ip = request.client.host if request.client else None
+    log = await service.log_medication_administration(
+        current_user.user.id, payload, actor_id=current_user.id, ip_address=ip,
+    )
+    return ApiResponse(
+        data=MedicationAdministrationResponse.model_validate(log),
+        message="Medication administration sign-off logged successfully.",
+    )
+
+
+@router.get(
+    "/prescriptions/{prescription_id}/administrations",
+    response_model=ApiResponse[list[MedicationAdministrationResponse]],
+    dependencies=[Depends(require_permission("medical:read"))],
+)
+async def get_prescription_administrations(
+    prescription_id: uuid.UUID,
+    service: MedicalService = Depends(get_medical_service),
+) -> ApiResponse[list[MedicationAdministrationResponse]]:
+    logs = await service.get_administrations_for_prescription(prescription_id)
+    return ApiResponse(
+        data=[MedicationAdministrationResponse.model_validate(log) for log in logs],
+    )
+
+
+@router.get(
+    "/dogs/{dog_id}/administrations",
+    response_model=ApiResponse[list[MedicationAdministrationResponse]],
+    dependencies=[Depends(require_permission("medical:read"))],
+)
+async def get_dog_administrations(
+    dog_id: uuid.UUID,
+    service: MedicalService = Depends(get_medical_service),
+) -> ApiResponse[list[MedicationAdministrationResponse]]:
+    logs = await service.get_administrations_for_dog(dog_id)
+    return ApiResponse(
+        data=[MedicationAdministrationResponse.model_validate(log) for log in logs],
+    )
+
+
+@router.post(
+    "/vaccine-protocols",
+    response_model=ApiResponse[VaccineProtocolResponse],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("medical:update"))],
+)
+async def create_vaccine_protocol(
+    payload: VaccineProtocolCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: MedicalService = Depends(get_medical_service),
+) -> ApiResponse[VaccineProtocolResponse]:
+    ip = request.client.host if request.client else None
+    protocol = await service.create_vaccine_protocol(
+        payload, actor_id=current_user.id, ip_address=ip,
+    )
+    return ApiResponse(
+        data=VaccineProtocolResponse.model_validate(protocol),
+        message="Vaccine protocol created successfully.",
+    )
+
+
+@router.get(
+    "/vaccine-protocols",
+    response_model=ApiResponse[list[VaccineProtocolResponse]],
+    dependencies=[Depends(require_permission("medical:read"))],
+)
+async def list_vaccine_protocols(
+    service: MedicalService = Depends(get_medical_service),
+) -> ApiResponse[list[VaccineProtocolResponse]]:
+    protocols = await service.list_vaccine_protocols()
+    return ApiResponse(
+        data=[VaccineProtocolResponse.model_validate(p) for p in protocols],
     )
 
 

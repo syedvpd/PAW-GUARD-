@@ -23,6 +23,8 @@ class AuditService:
         ip_address: str | None = None,
         user_agent: str | None = None,
         metadata: dict[str, Any] | None = None,
+        before_state: dict[str, Any] | None = None,
+        after_state: dict[str, Any] | None = None,
     ) -> AuthAuditLog:
         entry = AuthAuditLog(
             user_id=actor_id,
@@ -30,6 +32,8 @@ class AuditService:
             ip_address=ip_address,
             user_agent=user_agent,
             event_metadata=metadata,
+            before_state=before_state,
+            after_state=after_state,
         )
         self._session.add(entry)
         await self._session.flush()

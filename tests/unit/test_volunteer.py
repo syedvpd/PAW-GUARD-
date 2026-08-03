@@ -2,11 +2,17 @@
 
 import uuid
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from pawguard.core.exceptions import ConflictError, ForbiddenError, NotFoundError
+from pawguard.core.exceptions import (
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+    ValidationFailedError,
+)
+from pawguard.modules.auth.models import User
 from pawguard.modules.volunteer.models import (
     ShiftAttendance,
     VolunteerProfile,
@@ -20,6 +26,8 @@ from pawguard.modules.volunteer.schemas import (
     VolunteerShiftCreate,
 )
 from pawguard.modules.volunteer.service import VolunteerService
+from pawguard.services.audit_service import AuditService
+from pawguard.services.storage_service import StorageService
 
 
 class TestVolunteerService:
@@ -27,6 +35,9 @@ class TestVolunteerService:
     def mock_repo(self):
         repo = AsyncMock(spec=VolunteerRepository)
         repo._session = AsyncMock()
+        # `session.add` is synchronous; keep it a plain Mock so the service's
+        # synchronous `.add(stored)` call doesn't leak an un-awaited coroutine.
+        repo._session.add = Mock()
         return repo
 
     @pytest.fixture
@@ -48,6 +59,32 @@ class TestVolunteerService:
         )
         result = await service.apply_to_volunteer(user_id, payload)
         assert result.status == VolunteerStatus.APPLIED
+
+    @pytest.mark.asyncio
+    async def test_apply_to_volunteer_records_audit(self, mock_repo):
+        """Self-service applications are public mutations - they must be
+        audited with the actor id and IP (PRR §6.1)."""
+        mock_audit = AsyncMock(spec=AuditService)
+        svc = VolunteerService(mock_repo, audit_service=mock_audit)
+        user_id = uuid.uuid4()
+        actor_id = uuid.uuid4()
+        mock_repo.get_profile_by_user_id.return_value = None
+        mock_repo.create_profile.return_value = None
+        mock_repo.get_profile_by_id.return_value = VolunteerProfile(
+            id=uuid.uuid4(), user_id=user_id, status=VolunteerStatus.APPLIED,
+            emergency_contact_name="Jane", emergency_contact_phone="+123",
+        )
+        payload = VolunteerProfileCreate(
+            emergency_contact_name="Jane", emergency_contact_phone="+123",
+        )
+        await svc.apply_to_volunteer(
+            user_id, payload, actor_id=actor_id, ip_address="203.0.113.9",
+        )
+        mock_audit.record.assert_awaited_once()
+        kwargs = mock_audit.record.call_args.kwargs
+        assert kwargs["event_type"].value == "volunteer_application_submitted"
+        assert kwargs["actor_id"] == actor_id
+        assert kwargs["ip_address"] == "203.0.113.9"
 
     @pytest.mark.asyncio
     async def test_apply_to_volunteer_already_exists(self, service, mock_repo):
@@ -355,3 +392,95 @@ class TestVolunteerService:
         mock_repo.list_attendance_for_shift.return_value = [att]
         records, meta = await service.list_attendance(uuid.uuid4())
         assert len(records) == 1
+
+
+class TestServiceCertificate:
+    @pytest.fixture
+    def mock_repo(self):
+        repo = AsyncMock(spec=VolunteerRepository)
+        repo._session = AsyncMock()
+        # `session.add` is synchronous; keep it a plain Mock so the service's
+        # synchronous `.add(stored)` call doesn't leak an un-awaited coroutine.
+        repo._session.add = Mock()
+        return repo
+
+    @pytest.fixture
+    def mock_audit(self):
+        return AsyncMock(spec=AuditService)
+
+    @pytest.fixture
+    def service(self, mock_repo, mock_audit):
+        return VolunteerService(mock_repo, audit_service=mock_audit)
+
+    def _profile(self, **kw):
+        vals = dict(
+            id=uuid.uuid4(), user_id=uuid.uuid4(), status=VolunteerStatus.ACTIVE,
+            emergency_contact_name="Jane", emergency_contact_phone="+1",
+            user=User(id=kw.get("user_id", uuid.uuid4()), full_name="Jane Doe",
+                      email="jane@example.com"),
+        )
+        vals.update(kw)
+        return VolunteerProfile(**vals)
+
+    def _attendance(self, volunteer_id, hours, role="Walking", **kw):
+        now = datetime.now(UTC)
+        return ShiftAttendance(
+            id=uuid.uuid4(), shift_id=uuid.uuid4(), volunteer_id=volunteer_id,
+            check_in_at=now, check_out_at=now, hours_logged=hours,
+            shift=VolunteerShift(id=uuid.uuid4(), role_name=role, start_at=now, end_at=now),
+            **kw,
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_service_summary(self, service, mock_repo):
+        profile = self._profile()
+        mock_repo.get_profile_by_id.return_value = profile
+        mock_repo.list_attendance_for_volunteer.return_value = [
+            self._attendance(profile.id, 2.0, role="Walking"),
+            self._attendance(profile.id, 3.5, role="Feeding"),
+        ]
+        summary = await service.get_service_summary(profile.id)
+        assert summary.total_hours == 5.5
+        assert summary.shifts_count == 2
+        assert summary.role_summary == "Feeding, Walking"
+
+    @pytest.mark.asyncio
+    async def test_issue_certificate_success(self, service, mock_repo, mock_audit):
+        profile = self._profile()
+        mock_repo.get_profile_by_id.return_value = profile
+        mock_repo.list_attendance_for_volunteer.return_value = [
+            self._attendance(profile.id, 3.0, role="Walking"),
+        ]
+        mock_storage = AsyncMock(spec=StorageService)
+        mock_storage.build_object_key.return_value = "certificates/service_certificate_test.pdf"
+        mock_storage.put_object.return_value = None
+
+        pdf_bytes, object_key = await service.issue_service_certificate(
+            profile.id,
+            actor_id=uuid.uuid4(),
+            ip_address="203.0.113.9",
+            storage_service=mock_storage,
+        )
+        assert len(pdf_bytes) > 0
+        assert object_key == "certificates/service_certificate_test.pdf"
+        mock_storage.put_object.assert_called_once()
+        assert mock_storage.put_object.call_args.kwargs["content_type"] == "application/pdf"
+        mock_audit.record.assert_awaited_once()
+        kwargs = mock_audit.record.call_args.kwargs
+        assert kwargs["event_type"].value == "volunteer_certificate_issued"
+        assert kwargs["metadata"]["total_hours"] == "3.0"
+        assert kwargs["metadata"]["shifts_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_issue_certificate_no_shifts(self, service, mock_repo):
+        profile = self._profile()
+        mock_repo.get_profile_by_id.return_value = profile
+        mock_repo.list_attendance_for_volunteer.return_value = []
+        with pytest.raises(ValidationFailedError, match="at least one attended shift"):
+            await service.issue_service_certificate(profile.id)
+
+    @pytest.mark.asyncio
+    async def test_issue_certificate_profile_not_found(self, service, mock_repo):
+        mock_repo.get_profile_by_id.return_value = None
+        with pytest.raises(NotFoundError):
+            await service.issue_service_certificate(uuid.uuid4())

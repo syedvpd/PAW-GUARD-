@@ -26,6 +26,11 @@ def _jpeg_bytes() -> bytes:
     Image.new("RGB", (8, 8), color=(0, 128, 255)).save(buf, format="JPEG")
     return buf.getvalue()
 
+# A real 1x1 PNG so python-magic's signature detection recognizes it.
+_PNG_BYTES = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+)
+
 
 def _make_file(**kw):
     now = datetime.now(UTC)
@@ -134,3 +139,25 @@ class TestStorageService:
 
         mock_s3.delete_object.assert_called_once_with(object_key=stored.object_key)
         assert stored.is_uploaded is False
+
+    @pytest.mark.asyncio
+    async def test_confirm_upload_rejects_oversized_batch(
+        self, service, mock_repo, mock_s3
+    ):
+        """When batch_file_ids are provided the combined size is checked
+        against the 50 MB cap before the individual file is confirmed."""
+        file_id = uuid.uuid4()
+        stored = _make_file(id=file_id, mime_type="image/png", file_size=1024)
+        mock_repo.get_by_id.return_value = stored
+        mock_repo.list_by_ids.return_value = [
+            _make_file(id=uuid.uuid4(), file_size=30 * 1024 * 1024),
+            _make_file(id=uuid.uuid4(), file_size=25 * 1024 * 1024),
+        ]
+        mock_s3.get_object_size.return_value = 1024
+        mock_s3.get_object_prefix_bytes.return_value = _PNG_BYTES
+
+        with pytest.raises(ValidationFailedError, match="exceeds the 50 MB limit"):
+            await service.confirm_upload(
+                file_id,
+                batch_file_ids=[f.id for f in mock_repo.list_by_ids.return_value],
+            )

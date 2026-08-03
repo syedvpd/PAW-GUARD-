@@ -21,6 +21,7 @@ class ReportType(StrEnum):
     ANIMAL_POPULATION = "animal_population"
     FOSTER = "foster"
     VOLUNTEER = "volunteer"
+    SHELTER = "shelter"
 
 
 class ReportRequest(BaseModel):

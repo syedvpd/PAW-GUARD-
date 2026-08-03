@@ -30,9 +30,33 @@ class DonationStatus(StrEnum):
     FAILED = "failed"
 
 
+class RecurringFrequency(StrEnum):
+    MONTHLY = "monthly"
+
+
+class RecurringStatus(StrEnum):
+    ACTIVE = "active"
+    PAUSED = "paused"
+    CANCELLED = "cancelled"
+
+
 class SponsorshipStatus(StrEnum):
     ACTIVE = "active"
     PAUSED = "paused"
+    CANCELLED = "cancelled"
+
+
+class CampaignType(StrEnum):
+    EMERGENCY = "emergency"
+    RESCUE = "rescue"
+    OPERATIONS = "operations"
+    GENERAL = "general"
+
+
+class CampaignStatus(StrEnum):
+    DRAFT = "draft"
+    ACTIVE = "active"
+    COMPLETED = "completed"
     CANCELLED = "cancelled"
 
 
@@ -91,6 +115,44 @@ class DogSponsorship(UUIDPkMixin, TimestampMixin, Base):
     dog: Mapped["DogProfile"] = relationship("DogProfile", lazy="joined")
 
 
+class RecurringSubscription(UUIDPkMixin, TimestampMixin, Base):
+    """A monthly recurring donation linked to a donor profile (audit 3.11).
+
+    Each due charge is recorded as a PENDING `Donation` (donation_type=RECURRING,
+    recurring_subscription_id set) and confirmed via the existing order/verify/
+    webhook flow. The next_charge_date advances one month once payment succeeds.
+    """
+
+    __tablename__ = "recurring_subscriptions"
+
+    donor_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("donor_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
+    frequency: Mapped[RecurringFrequency] = mapped_column(
+        String(32), default=RecurringFrequency.MONTHLY, nullable=False
+    )
+    status: Mapped[RecurringStatus] = mapped_column(
+        String(32), default=RecurringStatus.ACTIVE, nullable=False, index=True
+    )
+    next_charge_date: Mapped[date_type] = mapped_column(Date, nullable=False)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    cancelled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    donor: Mapped["DonorProfile"] = relationship("DonorProfile", lazy="joined")
+    donations: Mapped[list["Donation"]] = relationship(
+        back_populates="recurring_subscription", lazy="selectin"
+    )
+
+
 class Donation(UUIDPkMixin, TimestampMixin, Base):
     __tablename__ = "donations"
 
@@ -109,6 +171,16 @@ class Donation(UUIDPkMixin, TimestampMixin, Base):
     sponsorship_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("dog_sponsorships.id", ondelete="SET NULL"),
+        nullable=True, index=True,
+    )
+    recurring_subscription_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("recurring_subscriptions.id", ondelete="SET NULL"),
+        nullable=True, index=True,
+    )
+    campaign_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("donation_campaigns.id", ondelete="SET NULL"),
         nullable=True, index=True,
     )
 
@@ -132,3 +204,45 @@ class Donation(UUIDPkMixin, TimestampMixin, Base):
     donor: Mapped["DonorProfile"] = relationship(back_populates="donations")
     dog: Mapped["DogProfile"] = relationship("DogProfile", lazy="joined")
     sponsorship: Mapped["DogSponsorship | None"] = relationship("DogSponsorship", lazy="joined")
+    recurring_subscription: Mapped["RecurringSubscription | None"] = relationship(
+        "RecurringSubscription", back_populates="donations", lazy="joined"
+    )
+    campaign: Mapped["DonationCampaign | None"] = relationship(
+        back_populates="donations", lazy="joined"
+    )
+
+
+class DonationCampaign(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+    """A goal-oriented fundraising drive (PRR 3.1.7 / 3.11).
+
+    Donations can be attributed to a campaign via `Donation.campaign_id`.
+    A campaign automatically transitions to COMPLETED once its goal is
+    reached or its end date passes.
+    """
+
+    __tablename__ = "donation_campaigns"
+
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    target_amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
+    campaign_type: Mapped[CampaignType] = mapped_column(
+        String(32), default=CampaignType.GENERAL, nullable=False
+    )
+    status: Mapped[CampaignStatus] = mapped_column(
+        String(32), default=CampaignStatus.DRAFT, nullable=False, index=True
+    )
+    start_date: Mapped[date_type] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date_type | None] = mapped_column(Date, nullable=True)
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    goal_reached_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    donations: Mapped[list["Donation"]] = relationship(
+        back_populates="campaign", lazy="selectin"
+    )

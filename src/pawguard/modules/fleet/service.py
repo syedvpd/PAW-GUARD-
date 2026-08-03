@@ -1,7 +1,7 @@
 """FleetService: owns vehicle fleet business behaviour (RULE-003)."""
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from pawguard.core.exceptions import ConflictError, NotFoundError
 from pawguard.core.pagination import PageParams, build_pagination_meta
@@ -14,6 +14,7 @@ from pawguard.modules.fleet.models import (
     FuelLog,
     Vehicle,
     VehicleStatus,
+    VehicleType,
 )
 from pawguard.modules.fleet.repository import FleetRepository
 from pawguard.modules.fleet.schemas import (
@@ -29,6 +30,8 @@ from pawguard.modules.fleet.schemas import (
     VehicleUpdate,
 )
 from pawguard.services.audit_service import AuditService
+
+DEFAULT_CHECKOUT_DURATION = timedelta(days=14)
 
 
 class FleetService:
@@ -140,12 +143,14 @@ class FleetService:
         sort: SortParams,
         search_term: str | None = None,
         status: VehicleStatus | None = None,
+        vehicle_type: VehicleType | None = None,
     ) -> PaginatedResponse[VehicleResponse]:
         results, total = await self._repo.paginate_vehicles(
             page=page,
             sort=sort,
             search_term=search_term,
             status=status,
+            vehicle_type=vehicle_type,
         )
         return PaginatedResponse(
             data=[VehicleResponse.model_validate(v) for v in results],
@@ -237,10 +242,13 @@ class FleetService:
             vehicle = await self._repo.get_vehicle(payload.assigned_to_vehicle_id)
             if vehicle is None:
                 raise NotFoundError("Vehicle not found.")
+        checked_out_at = datetime.now(UTC)
+        expected_return_at = self._resolve_expected_return_at(payload.expected_return_at)
         record = await self._repo.create_equipment_checkout(
             EquipmentCheckout(
-                **payload.model_dump(),
-                checked_out_at=datetime.now(UTC),
+                **payload.model_dump(exclude={"expected_return_at"}),
+                checked_out_at=checked_out_at,
+                expected_return_at=expected_return_at,
             )
         )
         if self._audit and actor_id:
@@ -252,9 +260,103 @@ class FleetService:
                 metadata={
                     "checkout_id": str(record.id),
                     "equipment_name": record.equipment_name,
+                    "expected_return_at": record.expected_return_at.isoformat()
+                    if record.expected_return_at
+                    else None,
                 },
             )
         return record
+
+    @staticmethod
+    def _resolve_expected_return_at(value: datetime | None) -> datetime:
+        """Return the enforced due date for a checkout.
+
+        Either an explicit future timestamp is honoured, or a default
+        ``DEFAULT_CHECKOUT_DURATION`` window is applied from checkout time.
+        A past timestamp is rejected (PRR 3.13 expiry enforcement).
+        """
+        now = datetime.now(UTC)
+        if value is not None:
+            value_utc = value if value.tzinfo else value.replace(tzinfo=UTC)
+            if value_utc <= now:
+                raise ConflictError(
+                    "expected_return_at must be in the future for a new checkout."
+                )
+            return value_utc
+        return now + DEFAULT_CHECKOUT_DURATION
+
+    async def checkout_equipment_for_dispatch(
+        self,
+        *,
+        rescue_dispatch_id: uuid.UUID,
+        equipment_names: list[str],
+        assigned_to_agent_id: uuid.UUID | None = None,
+        assigned_to_vehicle_id: uuid.UUID | None = None,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> list[EquipmentCheckout]:
+        """Auto-checkout equipment recorded on a rescue dispatch (PRR 3.3).
+
+        The rescue module orchestrates the dispatch and delegates the fleet
+        records here so equipment business rules stay in the fleet domain.
+        The shared session keeps the checkouts atomic with the dispatch.
+        """
+        names = [name.strip() for name in equipment_names if name and name.strip()]
+        if not names:
+            return []
+        if assigned_to_vehicle_id is not None:
+            vehicle = await self._repo.get_vehicle(assigned_to_vehicle_id)
+            if vehicle is None:
+                raise NotFoundError("Vehicle not found.")
+        checked_out_at = datetime.now(UTC)
+        records = []
+        for name in names:
+            record = await self._repo.create_equipment_checkout(
+                EquipmentCheckout(
+                    equipment_name=name,
+                    assigned_to_agent_id=assigned_to_agent_id,
+                    assigned_to_vehicle_id=assigned_to_vehicle_id,
+                    rescue_dispatch_id=rescue_dispatch_id,
+                    checked_out_at=checked_out_at,
+                    expected_return_at=checked_out_at + DEFAULT_CHECKOUT_DURATION,
+                )
+            )
+            records.append(record)
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.FLEET_EQUIPMENT_CHECKED_OUT,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "rescue_dispatch_id": str(rescue_dispatch_id),
+                    "equipment_count": len(records),
+                    "equipment_names": names,
+                },
+            )
+        return records
+
+    async def release_equipment_for_dispatch(
+        self,
+        *,
+        rescue_dispatch_id: uuid.UUID,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> int:
+        """Mark every outstanding equipment checkout for a dispatch as returned."""
+        released = await self._repo.release_equipment_for_dispatch(rescue_dispatch_id)
+        if released and self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.FLEET_EQUIPMENT_RETURNED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "rescue_dispatch_id": str(rescue_dispatch_id),
+                    "returned_count": released,
+                },
+            )
+        return released
 
     async def return_equipment(
         self,
@@ -271,6 +373,19 @@ class FleetService:
         record.returned_at = datetime.now(UTC)
         if payload.notes:
             record.notes = payload.notes
+        # Late return (PRR 3.13): never reject, but flag it on the ledger so
+        # staff can follow up. The dispatch auto-release path skips this note
+        # because dispatch equipment has no manual returner.
+        if (
+            record.rescue_dispatch_id is None
+            and record.expected_return_at is not None
+            and record.returned_at > record.expected_return_at
+        ):
+            late_note = (
+                f"Returned late - expected {record.expected_return_at.isoformat()}, "
+                f"returned {record.returned_at.isoformat()}."
+            )
+            record.notes = f"{record.notes}\n{late_note}" if record.notes else late_note
         if self._audit and actor_id:
             await self._audit.record(
                 event_type=AuthAuditEventType.FLEET_EQUIPMENT_RETURNED,

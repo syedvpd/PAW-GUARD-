@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -108,6 +108,11 @@ class FinanceRepository:
             ChartOfAccounts.deleted_at.is_(None)
         ).order_by(ChartOfAccounts.account_code)
         return (await self._session.execute(stmt)).scalars().all()
+
+    async def next_transaction_sequence(self) -> int:
+        stmt = text("SELECT nextval('financial_transaction_seq')")
+        result = await self._session.execute(stmt)
+        return int(result.scalar_one())
 
     async def create_transaction(
         self, tx: FinancialTransaction
@@ -500,6 +505,17 @@ class FinanceRepository:
             model.id.in_(ids), model.deleted_at.is_(None)
         )
         return (await self._session.execute(stmt)).scalars().all()
+
+    async def bulk_soft_delete(self, model, ids: list[uuid.UUID]) -> int:
+        from datetime import UTC, datetime
+
+        stmt = (
+            update(model)
+            .where(model.id.in_(ids), model.deleted_at.is_(None))
+            .values(deleted_at=datetime.now(UTC))
+        )
+        result = await self._session.execute(stmt)
+        return result.rowcount or 0
 
     async def bulk_update_status(
         self, model: type[Any], ids: list[uuid.UUID],

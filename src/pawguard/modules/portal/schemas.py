@@ -6,7 +6,11 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from pawguard.modules.portal.models import ContentStatus
+from pawguard.modules.portal.models import (
+    AlertSeverity,
+    ContentStatus,
+    LegalDocumentType,
+)
 
 
 class SuccessStoryCreate(BaseModel):
@@ -236,6 +240,99 @@ class PublicHeroStats(BaseModel):
     active_care_count: int
     successful_adoptions: int
     urgent_rescue_count: int
+
+
+class LegalDocumentCreate(BaseModel):
+    slug: str = Field(
+        ..., min_length=1, max_length=255, pattern=r"^[a-z0-9-]+$",
+        examples=["terms-of-service"],
+    )
+    title: str = Field(
+        ..., min_length=1, max_length=255, examples=["Terms of Service"]
+    )
+    document_type: LegalDocumentType = LegalDocumentType.OTHER
+    body: str = Field(
+        ..., min_length=1, examples=["1. Acceptance of Terms..."]
+    )
+    version: str = Field("1.0", max_length=32, examples=["1.0"])
+    status: ContentStatus = ContentStatus.DRAFT
+
+
+class LegalDocumentUpdate(BaseModel):
+    slug: str | None = Field(
+        None, min_length=1, max_length=255, pattern=r"^[a-z0-9-]+$",
+        examples=["terms-of-service"],
+    )
+    title: str | None = Field(None, min_length=1, max_length=255, examples=["Terms of Service"])
+    document_type: LegalDocumentType | None = Field(None, examples=["terms"])
+    body: str | None = Field(None, min_length=1, examples=["1. Acceptance of Terms..."])
+    version: str | None = Field(None, max_length=32, examples=["2.0"])
+    status: ContentStatus | None = Field(None, examples=["published"])
+
+
+class LegalDocumentResponse(BaseModel):
+    id: uuid.UUID
+    slug: str
+    title: str
+    document_type: LegalDocumentType
+    body: str
+    version: str
+    status: ContentStatus
+    published_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UrgentAlertCreate(BaseModel):
+    title: str = Field(
+        ..., min_length=1, max_length=255, examples=["Flooding in Sector 4"]
+    )
+    message: str = Field(
+        ..., min_length=1, examples=["Roads are flooded; rescue teams are on standby."]
+    )
+    severity: AlertSeverity = AlertSeverity.INFO
+    is_active: bool = True
+    starts_at: datetime | None = Field(None, examples=["2026-08-02T09:00:00Z"])
+    ends_at: datetime | None = Field(None, examples=["2026-08-03T09:00:00Z"])
+    sort_order: int = Field(0, examples=[1])
+
+
+class UrgentAlertUpdate(BaseModel):
+    title: str | None = Field(None, min_length=1, max_length=255, examples=["Flooding in Sector 4"])
+    message: str | None = Field(None, min_length=1, examples=["Updated alert message."])
+    severity: AlertSeverity | None = Field(None, examples=["critical"])
+    is_active: bool | None = Field(None, examples=[True])
+    starts_at: datetime | None = Field(None, examples=["2026-08-02T09:00:00Z"])
+    ends_at: datetime | None = Field(None, examples=["2026-08-03T09:00:00Z"])
+    sort_order: int | None = Field(None, examples=[1])
+
+
+class UrgentAlertResponse(BaseModel):
+    id: uuid.UUID
+    title: str
+    message: str
+    severity: AlertSeverity
+    is_active: bool
+    starts_at: datetime | None
+    ends_at: datetime | None
+    sort_order: int
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TransparencyStats(BaseModel):
+    total_funds_raised: float
+    total_donations: int
+    total_rescues_completed: int
+    successful_adoptions: int
+    active_volunteers: int
+    active_foster_homes: int
+    veterinary_partners: int
+    dogs_in_care: int
 
 
 class UserDashboardSummary(BaseModel):

@@ -4,10 +4,10 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from tests.auth_helpers import promote_and_auth
 
 from pawguard.modules.adoption.models import AdoptionStatus
-from pawguard.modules.auth.models import Role, User
+from pawguard.modules.auth.models import User
 from pawguard.modules.dog.models import DogStatus
 from pawguard.modules.lost_found.models import MatchStatus
 from pawguard.modules.rescue.models import RescueStatus
@@ -34,25 +34,16 @@ class TestEndToEndModuleFlows:
         reg_resp = await client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
         assert reg_resp.status_code == 201
 
-        # 2. Promote user to super_admin in DB
-        stmt_user = (
-            select(User)
-            .options(selectinload(User.roles))
-            .where(User.email == REGISTER_PAYLOAD["email"])
+        # 2. Promote user to super_admin in DB and complete the mandatory
+        #    admin MFA challenge so the bearer token carries admin claims.
+        headers = await promote_and_auth(
+            client, db_session, email=REGISTER_PAYLOAD["email"]
         )
-        user = (await db_session.execute(stmt_user)).scalar_one()
-
-        stmt_role = select(Role).where(Role.name == "super_admin")
-        super_admin_role = (await db_session.execute(stmt_role)).scalar_one()
-
-        user.roles.append(super_admin_role)
-        user.is_verified = True
-        await db_session.commit()
-
-        login_resp = await client.post("/api/v1/auth/login", json=LOGIN_PAYLOAD)
-        assert login_resp.status_code == 200
-        token = login_resp.json()["data"]["access_token"]
-        headers = {"Authorization": f"Bearer {token}"}
+        user = (
+            await db_session.execute(
+                select(User).where(User.email == REGISTER_PAYLOAD["email"])
+            )
+        ).scalar_one()
 
         # 3. Emergency Rescue Flow
         report_payload = {
@@ -163,15 +154,18 @@ class TestEndToEndModuleFlows:
         app_id = app_data["id"]
         assert app_data["status"] == AdoptionStatus.SUBMITTED.value
 
-        # Walk the vetting pipeline (submitted -> vetting -> home_check ->
-        # approved) - status is a state machine, no direct jumps allowed.
-        vetting_resp = await client.put(
-            f"/api/v1/adoptions/{app_id}", json={"status": "vetting"}, headers=headers
+        # Walk the 6-phase vetting pipeline (submitted -> screening ->
+        # interview -> home_check -> approved -> completed).
+        screening_resp = await client.put(
+            f"/api/v1/adoptions/{app_id}", json={"status": "screening"}, headers=headers
         )
-        assert vetting_resp.status_code == 200
+        assert screening_resp.status_code == 200
 
-        # Home inspection approval is where exclusivity locks the dog, per
-        # the PRR (not final approval).
+        interview_resp = await client.put(
+            f"/api/v1/adoptions/{app_id}", json={"status": "interview"}, headers=headers
+        )
+        assert interview_resp.status_code == 200
+
         home_check_resp = await client.put(
             f"/api/v1/adoptions/{app_id}", json={"status": "home_check"}, headers=headers
         )

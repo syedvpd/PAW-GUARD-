@@ -81,3 +81,69 @@ class Prescription(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
+class MedicationAdministrationLog(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+    """Daily nurse sign-off register for medication administrations (PRR 3.5).
+
+    Every administered dose is signed off against its prescription (when one
+    exists) and dog, producing an immutable trail for the shift register.
+    """
+
+    __tablename__ = "medication_administration_logs"
+
+    prescription_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("prescriptions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    dog_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("dog_profiles.id", ondelete="CASCADE"), nullable=False
+    )
+    medication_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    dosage: Mapped[str] = mapped_column(String(128), nullable=False)  # e.g., "5ml" or "1 tablet"
+    route: Mapped[str] = mapped_column(String(64), nullable=False)  # Oral, IV, IM, etc.
+    administered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    administered_by_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class VaccineProtocol(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+    """Optional, staff-managed protocol that drives vaccination auto-scheduling.
+
+    The table is intentionally optional: lookups are nullable so environments
+    that have not yet provisioned protocols keep working without auto-schedule.
+    """
+
+    __tablename__ = "vaccine_protocols"
+
+    name: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
+    default_interval_days: Mapped[int] = mapped_column(Integer, nullable=False)
+    is_required: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+
+class MedicalClearance(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+    """Persisted veterinary clearance decisions for adoption / surgery (PRR 3.5).
+
+    Replaces the bare ``is_adoptable`` side-effect on the dog profile: the
+    attending vet, the decision, and its rationale are recorded as a clearance
+    record while the dog flag remains in sync.
+    """
+
+    __tablename__ = "medical_clearances"
+
+    dog_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("dog_profiles.id", ondelete="CASCADE"), nullable=False
+    )
+    authorized_by_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    # adoption_surgery, pre_adoption_medical, surgical_review, ...
+    clearance_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    # approved / denied / pending
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    decision_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    authorized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

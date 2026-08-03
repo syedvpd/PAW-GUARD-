@@ -39,14 +39,15 @@ class TestNotificationService:
         assert result.title == "Test"
 
     async def test_broadcast(self, service, mock_repo):
-        mock_repo.create_broadcast.return_value = Notification(
-            user_id=uuid.uuid4(), title="Broadcast", body="Body"
-        )
+        mock_repo.create_many.return_value = [
+            Notification(user_id=uuid.uuid4(), title="Broadcast", body="Body"),
+            Notification(user_id=uuid.uuid4(), title="Broadcast", body="Body"),
+        ]
         payload = BroadcastCreate(title="Broadcast", body="Body")
         user_ids = [uuid.uuid4(), uuid.uuid4()]
         results = await service.broadcast(payload, user_ids, actor_id=uuid.uuid4(), ip_address="127.0.0.1")
         assert len(results) == 2
-        assert mock_repo.create_broadcast.call_count == 2
+        mock_repo.create_many.assert_awaited_once()
 
     async def test_count_unread(self, service, mock_repo):
         mock_repo.count_unread.return_value = 5

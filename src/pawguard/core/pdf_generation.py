@@ -1,12 +1,20 @@
-"""PDF generation utilities for tax receipts and adoption agreements using reportlab."""
+"""PDF generation utilities for tax receipts, adoption agreements, and
+volunteer service certificates using reportlab."""
 
 import io
 from datetime import datetime
 
+from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import inch
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import (
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
 
 
 def generate_tax_receipt(
@@ -135,6 +143,90 @@ def generate_adoption_agreement(
     elements.append(
         Paragraph(
             f"Print Name: {adopter_name}",
+            styles["Normal"],
+        )
+    )
+
+    doc.build(elements)
+    return buf.getvalue()
+
+
+def generate_volunteer_certificate(
+    *,
+    volunteer_name: str,
+    total_hours: float,
+    shifts_count: int,
+    period_start: datetime | None,
+    period_end: datetime | None,
+    role_summary: str,
+    org_name: str,
+    org_address: str,
+    issued_at: datetime,
+) -> bytes:
+    """Certificate of volunteer service (PRR 3.9): verified hours + shifts
+    served, issued to the volunteer for the covered service period."""
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        leftMargin=0.75 * inch, rightMargin=0.75 * inch,
+        topMargin=0.75 * inch, bottomMargin=0.75 * inch,
+    )
+    styles = getSampleStyleSheet()
+    elements = []
+
+    elements.append(Paragraph(org_name, styles["Title"]))
+    elements.append(Paragraph(org_address, styles["Normal"]))
+    elements.append(Spacer(1, 0.3 * inch))
+
+    elements.append(Paragraph("Certificate of Volunteer Service", styles["Heading1"]))
+    elements.append(Spacer(1, 0.3 * inch))
+
+    elements.append(
+        Paragraph(
+            "This certificate is proudly presented to",
+            styles["Normal"],
+        )
+    )
+    elements.append(Spacer(1, 0.1 * inch))
+    elements.append(Paragraph(volunteer_name, styles["Heading2"]))
+    elements.append(Spacer(1, 0.3 * inch))
+
+    details = Table(
+        [
+            ["Total Service Hours", f"{total_hours:,.1f} hours"],
+            ["Shifts Served", str(shifts_count)],
+            ["Period", (
+                f"{period_start.strftime('%B %d, %Y')} – "
+                f"{period_end.strftime('%B %d, %Y')}"
+                if period_start and period_end else "Ongoing"
+            )],
+            ["Areas of Service", role_summary or "General volunteer service"],
+        ],
+        colWidths=[2.5 * inch, 3 * inch],
+    )
+    details.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+        ("FONTNAME", (1, 0), (1, -1), "Helvetica"),
+        ("FONTSIZE", (0, 0), (-1, -1), 11),
+        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#F2F2F2")),
+    ]))
+    elements.append(details)
+    elements.append(Spacer(1, 0.4 * inch))
+
+    elements.append(
+        Paragraph(
+            "We extend our deepest gratitude for your dedication and "
+            "compassion in caring for the animals in our community.",
+            styles["Normal"],
+        )
+    )
+    elements.append(Spacer(1, 0.4 * inch))
+    elements.append(
+        Paragraph(
+            f"Issued on {issued_at.strftime('%B %d, %Y')}",
             styles["Normal"],
         )
     )

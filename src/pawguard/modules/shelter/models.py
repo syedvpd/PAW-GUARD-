@@ -32,6 +32,15 @@ class KennelSanitationState(StrEnum):
     OUT_OF_SERVICE = "out_of_service"
 
 
+class SectionType(StrEnum):
+    QUARANTINE = "quarantine"
+    ISOLATION = "isolation"
+    SURGICAL = "surgical"
+    PUPPY = "puppy"
+    GENERAL = "general"
+    ADOPTION = "adoption"
+
+
 class TransferStatus(StrEnum):
     PENDING = "pending"
     COMPLETED = "completed"
@@ -64,6 +73,9 @@ class ShelterSection(UUIDPkMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(
         String(128), nullable=False
     )  # Quarantine, Isolation, general, etc.
+    section_type: Mapped[SectionType] = mapped_column(
+        String(32), default=SectionType.GENERAL, nullable=True, index=True
+    )
     capacity: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
 
 
@@ -133,3 +145,20 @@ class DailyCareLog(UUIDPkMixin, TimestampMixin, Base):
     dietary_requirements: Mapped[str | None] = mapped_column(Text, nullable=True)
     exercise_hours: Mapped[float] = mapped_column(Numeric(4, 2), default=0.0, nullable=False)
     behavioral_enrichment: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class KennelCleaningLog(UUIDPkMixin, TimestampMixin, Base):
+    __tablename__ = "kennel_cleaning_logs"
+
+    kennel_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("kennels.id", ondelete="CASCADE"), nullable=False
+    )
+    cleaned_by: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    cleaned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    sanitation_state_after: Mapped[KennelSanitationState] = mapped_column(
+        String(32), default=KennelSanitationState.CLEAN, nullable=False
+    )
+    cleaning_method: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
