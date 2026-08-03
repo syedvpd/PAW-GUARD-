@@ -194,6 +194,9 @@ class Donation(UUIDPkMixin, TimestampMixin, Base):
     donor: Mapped["DonorProfile"] = relationship(back_populates="donations")
     dog: Mapped["DogProfile"] = relationship("DogProfile", lazy="joined")
     sponsorship: Mapped["DogSponsorship | None"] = relationship("DogSponsorship", lazy="joined")
+    recurring_subscription: Mapped["RecurringSubscription | None"] = relationship(
+        "RecurringSubscription", back_populates="donations", lazy="joined"
+    )
     campaign: Mapped["DonationCampaign | None"] = relationship(
         back_populates="donations", lazy="joined"
     )
