@@ -43,6 +43,12 @@ class RequirePermission:
         self.permission_code = permission_code
 
     async def __call__(self, current: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+        # Admin bypass — super_admin, system:admin, and admin roles have unrestricted access
+        admin_roles = {"super_admin", "system:admin", "admin", "rescue_centre_admin"}
+        if any(r in admin_roles for r in current.claims.roles):
+            return current
+
+
         cache = CacheService(current.redis, namespace="rbac")
         cache_key = f"roles:{':'.join(sorted(current.claims.roles))}"
 
@@ -51,11 +57,12 @@ class RequirePermission:
             codes = sorted(await get_role_permission_codes(current.db, current.claims.roles))
             await cache.set(cache_key, codes, ttl_seconds=PERMISSIONS_CACHE_TTL_SECONDS)
 
-        if self.permission_code not in codes:
+        if self.permission_code not in codes and "system:admin" not in codes:
             raise InsufficientPermissionsError(
                 f"Missing required permission: {self.permission_code}"
             )
         return current
+
 
 
 def require_permission(permission_code: str) -> RequirePermission:
