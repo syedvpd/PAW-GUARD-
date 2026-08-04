@@ -49,29 +49,33 @@ class StorageService:
         *,
         user_id: uuid.UUID | None = None,
     ) -> UploadUrlResponse:
-        object_key = self._s3.build_object_key(
-            folder=payload.folder.value, filename=payload.original_filename
-        )
-        stored = StoredFile(
-            user_id=user_id,
-            object_key=object_key,
-            original_filename=payload.original_filename,
-            mime_type=payload.mime_type,
-            file_size=payload.file_size,
-            folder=payload.folder.value,
-            entity_type=payload.entity_type,
-            entity_id=payload.entity_id,
-        )
-        stored = await self._repo.create(stored)
+        try:
+            object_key = self._s3.build_object_key(
+                folder=payload.folder.value, filename=payload.original_filename
+            )
+            stored = StoredFile(
+                user_id=user_id,
+                object_key=object_key,
+                original_filename=payload.original_filename,
+                mime_type=payload.mime_type,
+                file_size=payload.file_size,
+                folder=payload.folder.value,
+                entity_type=payload.entity_type,
+                entity_id=payload.entity_id,
+            )
+            stored = await self._repo.create(stored)
 
-        upload_url = self._s3.generate_presigned_upload_url(
-            object_key=object_key, content_type=payload.mime_type
-        )
-        return UploadUrlResponse(
-            upload_url=upload_url,
-            object_key=object_key,
-            file_id=stored.id,
-        )
+            upload_url = self._s3.generate_presigned_upload_url(
+                object_key=object_key, content_type=payload.mime_type
+            )
+            return UploadUrlResponse(
+                upload_url=upload_url,
+                object_key=object_key,
+                file_id=stored.id,
+            )
+        except Exception as exc:
+            raise ValidationFailedError(f"Storage error: {type(exc).__name__} - {exc}") from exc
+
 
     async def confirm_upload(
         self, file_id: uuid.UUID, batch_file_ids: list[uuid.UUID] | None = None
