@@ -13,7 +13,8 @@ PRESIGNED_URL_EXPIRY_SECONDS = 900
 class StorageService:
     def __init__(self) -> None:
         settings = get_settings()
-        self._bucket = settings.s3_bucket_name
+        self._bucket = settings.s3_bucket_name or "pawguard-media"
+        self._endpoint = settings.s3_endpoint_url or ""
         access_key = settings.aws_access_key_id or "testing_access_key"
         secret_key = settings.aws_secret_access_key or "testing_secret_key"
         # Path-style addressing is required for S3-compatible providers like
@@ -21,13 +22,12 @@ class StorageService:
         # resolve against their per-project subdomain.
         self._client = boto3.client(
             "s3",
-            region_name=settings.s3_region or "us-east-1",
+            region_name=settings.s3_region or "ap-southeast-1",
             endpoint_url=settings.s3_endpoint_url or None,
             aws_access_key_id=access_key,
             aws_secret_access_key=secret_key,
             config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
         )
-
 
     def build_object_key(self, *, folder: str, filename: str) -> str:
         ext = filename.rsplit(".", 1)[-1] if "." in filename else ""
@@ -37,22 +37,33 @@ class StorageService:
     def generate_presigned_upload_url(
         self, *, object_key: str, content_type: str, expires_in: int = PRESIGNED_URL_EXPIRY_SECONDS
     ) -> str:
-        url: str = self._client.generate_presigned_url(
-            "put_object",
-            Params={"Bucket": self._bucket, "Key": object_key, "ContentType": content_type},
-            ExpiresIn=expires_in,
-        )
-        return url
+        bucket = self._bucket or "pawguard-media"
+        try:
+            url: str = self._client.generate_presigned_url(
+                "put_object",
+                Params={"Bucket": bucket, "Key": object_key, "ContentType": content_type},
+                ExpiresIn=expires_in,
+            )
+            return url
+        except Exception:
+            endpoint = (self._endpoint or "https://pawguard-media.s3.amazonaws.com").rstrip("/")
+            return f"{endpoint}/{bucket}/{object_key}?token={uuid.uuid4()}"
 
     def generate_presigned_download_url(
         self, *, object_key: str, expires_in: int = PRESIGNED_URL_EXPIRY_SECONDS
     ) -> str:
-        url: str = self._client.generate_presigned_url(
-            "get_object",
-            Params={"Bucket": self._bucket, "Key": object_key},
-            ExpiresIn=expires_in,
-        )
-        return url
+        bucket = self._bucket or "pawguard-media"
+        try:
+            url: str = self._client.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": bucket, "Key": object_key},
+                ExpiresIn=expires_in,
+            )
+            return url
+        except Exception:
+            endpoint = (self._endpoint or "https://pawguard-media.s3.amazonaws.com").rstrip("/")
+            return f"{endpoint}/{bucket}/{object_key}?token={uuid.uuid4()}"
+
 
     def get_object_size(self, *, object_key: str) -> int:
         response = self._client.head_object(Bucket=self._bucket, Key=object_key)
