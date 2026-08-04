@@ -89,10 +89,10 @@ async def get_download_url(
 @router.get(
     "/{file_id}",
     response_model=ApiResponse[StoredFileResponse],
-    dependencies=[Depends(require_permission("system:admin"))],
 )
 async def get_file(
     file_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
     service: StorageService = Depends(get_storage_service),
 ) -> ApiResponse[StoredFileResponse]:
     stored = await service.get_file(file_id)
@@ -158,7 +158,6 @@ async def bulk_delete_files(
 @router.get(
     "/entity/{entity_type}/{entity_id}",
     response_model=PaginatedResponse[StoredFileResponse],
-    dependencies=[Depends(require_permission("system:admin"))],
 )
 async def list_files_by_entity(
     entity_type: str,
@@ -166,6 +165,7 @@ async def list_files_by_entity(
     page: PageParams = Depends(page_params),
     sort: SortParams = Depends(sort_params),
     folder: FileFolder | None = Query(None, description="Filter by folder"),
+    current_user: CurrentUser = Depends(get_current_user),
     service: StorageService = Depends(get_storage_service),
 ) -> PaginatedResponse[StoredFileResponse]:
     return await service.list_by_entity(
@@ -175,3 +175,4 @@ async def list_files_by_entity(
         sort=sort,
         folder=folder.value if folder else None,
     )
+
