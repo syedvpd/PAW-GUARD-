@@ -14,17 +14,20 @@ class StorageService:
     def __init__(self) -> None:
         settings = get_settings()
         self._bucket = settings.s3_bucket_name
+        access_key = settings.aws_access_key_id or "testing_access_key"
+        secret_key = settings.aws_secret_access_key or "testing_secret_key"
         # Path-style addressing is required for S3-compatible providers like
         # Supabase Storage: virtual-hosted-style (bucket.endpoint) URLs won't
         # resolve against their per-project subdomain.
         self._client = boto3.client(
             "s3",
-            region_name=settings.s3_region,
+            region_name=settings.s3_region or "us-east-1",
             endpoint_url=settings.s3_endpoint_url or None,
-            aws_access_key_id=settings.aws_access_key_id or None,
-            aws_secret_access_key=settings.aws_secret_access_key or None,
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
             config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
         )
+
 
     def build_object_key(self, *, folder: str, filename: str) -> str:
         ext = filename.rsplit(".", 1)[-1] if "." in filename else ""

@@ -19,8 +19,10 @@ from pawguard.core.upload import (
     MAX_FILE_SIZE_BYTES,
     UploadError,
     create_thumbnail,
+    verify_batch_size,
     verify_mime_type,
 )
+
 from pawguard.modules.storage.models import StoredFile
 from pawguard.modules.storage.repository import StorageRepository
 from pawguard.modules.storage.schemas import (
