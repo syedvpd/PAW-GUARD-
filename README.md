@@ -59,7 +59,7 @@ Business logic **never** lives in routers or repositories. See [AGENTS.md](AGENT
 | # | Module | Status |
 |---|---|---|
 | 1 | `auth` | Authentication, authorisation, RBAC, permissions, MFA, audit trail |
-| 2 | `dog` | Dog profiles, medical history, behaviour, media |
+| 2 | `dog` | Dog profiles, medical history, behavior, media | Dog microchip auto-generation, duplicate intake prevention, adoption directory |
 | 3 | `rescue` | Rescue intake, triage, field operations |
 | 4 | `medical` | Medical records, vaccinations, surgeries, treatments |
 | 5 | `adoption` | Adoption applications, approvals, contracts, follow-ups |
