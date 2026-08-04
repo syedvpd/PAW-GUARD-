@@ -36,7 +36,6 @@ def get_storage_service(
     "/upload-url",
     response_model=ApiResponse[UploadUrlResponse],
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_permission("system:admin"))],
 )
 async def request_upload_url(
     payload: StoredFileCreate,
@@ -52,7 +51,6 @@ async def request_upload_url(
 @router.put(
     "/{file_id}/confirm",
     response_model=ApiResponse[StoredFileResponse],
-    dependencies=[Depends(require_permission("system:admin"))],
 )
 async def confirm_upload(
     file_id: uuid.UUID,
@@ -60,6 +58,7 @@ async def confirm_upload(
         None,
         description="Comma-separated batch file IDs for combined size check",
     ),
+    current_user: CurrentUser = Depends(get_current_user),
     service: StorageService = Depends(get_storage_service),
 ) -> ApiResponse[StoredFileResponse]:
     ids = (
@@ -77,10 +76,10 @@ async def confirm_upload(
 @router.get(
     "/{file_id}/download-url",
     response_model=ApiResponse[DownloadUrlResponse],
-    dependencies=[Depends(require_permission("system:admin"))],
 )
 async def get_download_url(
     file_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
     service: StorageService = Depends(get_storage_service),
 ) -> ApiResponse[DownloadUrlResponse]:
     result = await service.get_download_url(file_id)
