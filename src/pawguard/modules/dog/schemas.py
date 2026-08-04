@@ -22,12 +22,12 @@ class DogProfileCreate(BaseModel):
     microchip_id: str | None = Field(
         None,
         max_length=64,
-        examples=["985141002345678"],
         description=(
             "Optional 15-digit chip number. When omitted, PawGuard auto-generates "
             "a unique value at registration."
         ),
     )
+
     name: str = Field(..., min_length=1, max_length=255, examples=["Barnaby"])
     breed: str = Field("indie_mix", max_length=128, examples=["Indie Mix"])
     breed_classification: DogBreedClassification | None = Field(
