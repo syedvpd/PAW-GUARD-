@@ -11,6 +11,7 @@ from pawguard.core.pagination import PageParams
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
 from pawguard.modules.auth.models import User
+from pawguard.modules.auth.schemas import UserProfile
 from pawguard.modules.dog.models import DogProfile, DogStatus
 from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.donation.models import (
@@ -37,7 +38,6 @@ from pawguard.modules.donation.schemas import (
 )
 from pawguard.modules.donation.service import DonationService
 from pawguard.modules.notifications.service import NotificationService
-from pawguard.modules.auth.schemas import UserProfile
 from pawguard.services.audit_service import AuditService
 from pawguard.services.storage_service import StorageService
 
@@ -919,8 +919,9 @@ class TestRecurringSubscriptionService:
         )
 
         from unittest.mock import patch
-        from pawguard.modules.donation.repository import DonationRepository
+
         from sqlalchemy.ext.asyncio import AsyncSession
+
 
         mock_session = AsyncMock(spec=AsyncSession)
         with patch("pawguard.modules.donation.service.DonationRepository", return_value=mock_repo):
@@ -952,8 +953,9 @@ class TestRecurringSubscriptionService:
         mock_repo.has_pending_donation_for_subscription.return_value = True
 
         from unittest.mock import patch
-        from pawguard.modules.donation.repository import DonationRepository
+
         from sqlalchemy.ext.asyncio import AsyncSession
+
 
         mock_session = AsyncMock(spec=AsyncSession)
         with patch("pawguard.modules.donation.service.DonationRepository", return_value=mock_repo):

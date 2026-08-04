@@ -29,10 +29,13 @@ from pawguard.modules.auth.models import AuthAuditEventType
 from pawguard.modules.dog.models import DogStatus
 from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.storage.models import FileFolder, StoredFile
+from pawguard.redis.client import RedisClient
 from pawguard.services.audit_service import AuditService
+from pawguard.services.cache_service import CacheService
 from pawguard.services.storage_service import StorageService
 
 logger = getLogger(__name__)
+
 
 # Post-adoption check-in milestones, in days after completion (PRR 3.7).
 FOLLOW_UP_INTERVALS = (30, 90, 180)
@@ -62,11 +65,15 @@ class AdoptionService:
         dog_repo: DogRepository,
         audit_service: AuditService | None = None,
         storage_service: StorageService | None = None,
+        redis_client: RedisClient | None = None,
     ) -> None:
         self._repo = repository
         self._dog_repo = dog_repo
+        self._redis = redis_client
         self._audit = audit_service
         self._storage = storage_service
+
+
 
     async def _generate_agreement(self, application: AdoptionApplication) -> None:
         if self._storage is None:
@@ -150,53 +157,71 @@ class AdoptionService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> AdoptionApplication:
-        dog = await self._dog_repo.get_by_id(payload.dog_id)
-        if dog is None:
-            raise NotFoundError("Dog profile not found.")
-
-        if not dog.is_adoptable:
-            raise ConflictError("This dog is not currently cleared for adoption.")
-
-        existing_approved = await self._repo.get_approved_application_for_dog(payload.dog_id)
-        if existing_approved is not None:
-            raise ConflictError(
-                "This dog is already under an approved adoption application process."
+        lock_token = str(uuid.uuid4())
+        lock_acquired = False
+        cache_svc = None
+        if self._redis is not None:
+            cache_svc = CacheService(self._redis, namespace="adoptions")
+            lock_acquired = await cache_svc.acquire_lock(
+                f"lock:dog:{payload.dog_id}", lock_token, expire_ms=10000
             )
+            if not lock_acquired:
+                raise ConflictError(
+                    "This dog is currently being processed for adoption. Please try again later."
+                )
 
-        existing_app = await self._repo.get_application_by_adopter_and_dog(
-            adopter_id, payload.dog_id
-        )
-        if existing_app is not None:
-            raise ConflictError(
-                "You have already submitted an application for this dog."
+        try:
+            dog = await self._dog_repo.get_by_id(payload.dog_id)
+            if dog is None:
+                raise NotFoundError("Dog profile not found.")
+
+            if not dog.is_adoptable:
+                raise ConflictError("This dog is not currently cleared for adoption.")
+
+            existing_approved = await self._repo.get_approved_application_for_dog(payload.dog_id)
+            if existing_approved is not None:
+                raise ConflictError(
+                    "This dog is already under an approved adoption application process."
+                )
+
+            existing_app = await self._repo.get_application_by_adopter_and_dog(
+                adopter_id, payload.dog_id
             )
+            if existing_app is not None:
+                raise ConflictError(
+                    "You have already submitted an application for this dog."
+                )
 
-        app = AdoptionApplication(
-            dog_id=payload.dog_id,
-            adopter_id=adopter_id,
-            residential_status=payload.residential_status,
-            has_landlord_approval=payload.has_landlord_approval,
-            has_yard_fence=payload.has_yard_fence,
-            household_members_count=payload.household_members_count,
-            existing_pets_medical_details=payload.existing_pets_medical_details,
-            pet_care_experience=payload.pet_care_experience,
-            status=AdoptionStatus.SUBMITTED,
-        )
-        await self._repo.create(app)
-        res = await self._repo.get_by_id(app.id)
-        if res is None:
-            raise NotFoundError("Failed to fetch newly created adoption application.")
-
-        if self._audit and actor_id:
-            await self._audit.record(
-                event_type=AuthAuditEventType.ADOPTION_SUBMITTED,
-                actor_id=actor_id,
-                ip_address=ip_address or "",
-                user_agent="",
-                metadata={"adoption_id": str(res.id), "dog_id": str(payload.dog_id)},
+            app = AdoptionApplication(
+                dog_id=payload.dog_id,
+                adopter_id=adopter_id,
+                residential_status=payload.residential_status,
+                has_landlord_approval=payload.has_landlord_approval,
+                has_yard_fence=payload.has_yard_fence,
+                household_members_count=payload.household_members_count,
+                existing_pets_medical_details=payload.existing_pets_medical_details,
+                pet_care_experience=payload.pet_care_experience,
+                status=AdoptionStatus.SUBMITTED,
             )
+            await self._repo.create(app)
+            res = await self._repo.get_by_id(app.id)
+            if res is None:
+                raise NotFoundError("Failed to fetch newly created adoption application.")
 
-        return res
+            if self._audit and actor_id:
+                await self._audit.record(
+                    event_type=AuthAuditEventType.ADOPTION_SUBMITTED,
+                    actor_id=actor_id,
+                    ip_address=ip_address or "",
+                    user_agent="",
+                    metadata={"adoption_id": str(res.id), "dog_id": str(payload.dog_id)},
+                )
+
+            return res
+        finally:
+            if lock_acquired and cache_svc is not None:
+                await cache_svc.release_lock(f"lock:dog:{payload.dog_id}", lock_token)
+
 
     async def update_application(
         self,
@@ -219,24 +244,42 @@ class AdoptionService:
             if new_status in (
                 AdoptionStatus.HOME_CHECK, AdoptionStatus.APPROVED, AdoptionStatus.COMPLETED,
             ):
-                # Lock the dog row first: this serializes concurrent approvals
-                # for the same dog so the check-then-act below can't race.
-                dog = await self._dog_repo.get_by_id_for_update(app.dog_id)
-
-                existing_approved = await self._repo.get_approved_application_for_dog(app.dog_id)
-                if existing_approved is not None and existing_approved.id != app_id:
-                    raise ConflictError(
-                        "Another application has already reached home inspection or "
-                        "approval for this dog."
+                lock_token = str(uuid.uuid4())
+                lock_acquired = False
+                cache_svc = None
+                if self._redis is not None:
+                    cache_svc = CacheService(self._redis, namespace="adoptions")
+                    lock_acquired = await cache_svc.acquire_lock(
+                        f"lock:dog:{app.dog_id}", lock_token, expire_ms=10000
                     )
+                    if not lock_acquired:
+                        raise ConflictError(
+                            "This dog is currently being processed. Please try again later."
+                        )
 
-                if dog is not None:
-                    dog.is_adoptable = False
-                    if new_status == AdoptionStatus.COMPLETED:
-                        dog.status = DogStatus.ADOPTED
+                try:
+                    # Lock the dog row first: this serializes concurrent approvals
+                    # for the same dog so the check-then-act below can't race.
+                    dog = await self._dog_repo.get_by_id_for_update(app.dog_id)
+
+                    existing_approved = await self._repo.get_approved_application_for_dog(app.dog_id)
+                    if existing_approved is not None and existing_approved.id != app_id:
+                        raise ConflictError(
+                            "Another application has already reached home inspection or "
+                            "approval for this dog."
+                        )
+
+                    if dog is not None:
+                        dog.is_adoptable = False
+                        if new_status == AdoptionStatus.COMPLETED:
+                            dog.status = DogStatus.ADOPTED
+                finally:
+                    if lock_acquired and cache_svc is not None:
+                        await cache_svc.release_lock(f"lock:dog:{app.dog_id}", lock_token)
 
             if new_status == AdoptionStatus.COMPLETED:
                 app.completed_at = datetime.now(UTC)
+
 
         for key, value in update_data.items():
             setattr(app, key, value)
@@ -276,21 +319,39 @@ class AdoptionService:
         self._check_transition(old_status, status)
 
         if status in (AdoptionStatus.HOME_CHECK, AdoptionStatus.APPROVED, AdoptionStatus.COMPLETED):
-            # Lock the dog row first: this serializes concurrent approvals for
-            # the same dog so the check-then-act below can't race.
-            dog = await self._dog_repo.get_by_id_for_update(app.dog_id)
-
-            existing_approved = await self._repo.get_approved_application_for_dog(app.dog_id)
-            if existing_approved is not None and existing_approved.id != app_id:
-                raise ConflictError(
-                    "Another application has already reached home inspection or "
-                    "approval for this dog."
+            lock_token = str(uuid.uuid4())
+            lock_acquired = False
+            cache_svc = None
+            if self._redis is not None:
+                cache_svc = CacheService(self._redis, namespace="adoptions")
+                lock_acquired = await cache_svc.acquire_lock(
+                    f"lock:dog:{app.dog_id}", lock_token, expire_ms=10000
                 )
+                if not lock_acquired:
+                    raise ConflictError(
+                        "This dog is currently being processed. Please try again later."
+                    )
 
-            if dog is not None:
-                dog.is_adoptable = False
-                if status == AdoptionStatus.COMPLETED:
-                    dog.status = DogStatus.ADOPTED
+            try:
+                # Lock the dog row first: this serializes concurrent approvals for
+                # the same dog so the check-then-act below can't race.
+                dog = await self._dog_repo.get_by_id_for_update(app.dog_id)
+
+                existing_approved = await self._repo.get_approved_application_for_dog(app.dog_id)
+                if existing_approved is not None and existing_approved.id != app_id:
+                    raise ConflictError(
+                        "Another application has already reached home inspection or "
+                        "approval for this dog."
+                    )
+
+                if dog is not None:
+                    dog.is_adoptable = False
+                    if status == AdoptionStatus.COMPLETED:
+                        dog.status = DogStatus.ADOPTED
+            finally:
+                if lock_acquired and cache_svc is not None:
+                    await cache_svc.release_lock(f"lock:dog:{app.dog_id}", lock_token)
+
 
         if status == AdoptionStatus.COMPLETED:
             app.completed_at = datetime.now(UTC)

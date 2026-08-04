@@ -33,7 +33,14 @@ class _NullRedis:
     async def get(self, key: str) -> None:
         return None
 
-    async def set(self, key: str, value: Any, ex: int | None = None) -> None:
+    async def set(
+        self,
+        key: str,
+        value: Any,
+        ex: int | None = None,
+        px: int | None = None,
+        nx: bool | None = None,
+    ) -> Any:
         return None
 
     async def delete(self, key: str) -> None:
@@ -43,6 +50,9 @@ class _NullRedis:
         return 0
 
     async def expire(self, key: str, seconds: int) -> None:
+        return None
+
+    async def eval(self, script: str, numkeys: int, *keys_and_args: Any) -> Any:
         return None
 
     async def ping(self) -> bool:
@@ -58,6 +68,7 @@ class _NullRedis:
         """
         return
         yield  # pragma: no cover — marks this function as an async generator
+
 
 
 async def _ensure_client() -> RedisClient:

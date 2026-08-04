@@ -18,11 +18,7 @@ from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.core.search import SortParams, sort_params
 from pawguard.db.session import get_db
 from pawguard.modules.auth.audit import get_audit_service
-from pawguard.modules.auth.dependencies import (
-    CurrentUser,
-    get_current_user,
-    get_optional_current_user,
-)
+from pawguard.modules.auth.dependencies import CurrentUser
 from pawguard.modules.auth.rbac import require_permission
 from pawguard.modules.dog.models import (
     DogBreedClassification,
@@ -70,14 +66,9 @@ def _public_dog_view(dog: DogProfileResponse) -> DogProfileResponse:
 
 
 def _public_view_enabled(current_user: CurrentUser | None) -> bool:
-    """Anonymous visitors - and signed-in users without the public:read
-    permission - only see the adoptable, identifier-stripped catalog. Users
-    who hold public:read (assigned to every seeded role) keep the full view,
-    preserving the previous permission gate exactly."""
-    if current_user is None:
-        return True
-    perms = {p.code for r in current_user.user.roles for p in r.permissions}
-    return "public:read" not in perms
+    """Public endpoint - always return true for public access.
+    The adoption directory only shows adoptable dogs with public view."""
+    return True
 
 
 @router.post(
@@ -132,10 +123,7 @@ async def list_dogs(
     current_user: CurrentUser | None = Depends(get_optional_current_user),
     service: DogService = Depends(get_dog_service),
 ) -> PaginatedResponse[DogProfileResponse]:
-    public_view = _public_view_enabled(current_user)
-    # The public adoption directory (PRR 3.1.4) only shows adoptable dogs.
-    if public_view:
-        is_adoptable = True
+    # Public endpoint - no permission check required
     result = await service.list_dogs_paginated(
         page=page,
         sort=sort,
@@ -153,8 +141,8 @@ async def list_dogs(
         location=location,
     )
     data = [DogProfileResponse.model_validate(d) for d in result.data]
-    if public_view:
-        data = [_public_dog_view(d) for d in data]
+    # Public adoption directory only shows adoptable dogs
+    data = [_public_dog_view(d) for d in data]
     return PaginatedResponse(data=data, meta=result.meta)
 
 
@@ -164,17 +152,14 @@ async def list_dogs(
 )
 async def get_dog(
     dog_id: uuid.UUID,
-    current_user: CurrentUser | None = Depends(get_optional_current_user),
     service: DogService = Depends(get_dog_service),
 ) -> ApiResponse[DogProfileResponse]:
     dog = await service.get_dog(dog_id)
-    public_view = _public_view_enabled(current_user)
-    # Public visitors must not see non-adoptable (internal) dogs by ID.
-    if public_view and not dog.is_adoptable:
+    # Public endpoint - only show adoptable dogs
+    if not dog.is_adoptable:
         raise NotFoundError("Dog profile not found.")
     data = DogProfileResponse.model_validate(dog)
-    if public_view:
-        data = _public_dog_view(data)
+    data = _public_dog_view(data)
     return ApiResponse(data=data)
 
 

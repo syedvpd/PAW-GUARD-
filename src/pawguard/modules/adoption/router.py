@@ -44,20 +44,26 @@ from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.rbac import has_permission, require_permission
 from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.storage.schemas import DownloadUrlResponse
+from pawguard.redis.client import RedisClient, get_redis
 from pawguard.services.audit_service import AuditService
 from pawguard.services.storage_service import StorageService
 
 router = APIRouter(prefix="/adoptions", tags=["adoptions"])
 
 
+
 def get_adoption_service(
     db: AsyncSession = Depends(get_db),
+    redis: RedisClient = Depends(get_redis),
     audit: AuditService = Depends(get_audit_service),
 ) -> AdoptionService:
     repo = AdoptionRepository(db)
     dog_repo = DogRepository(db)
     storage_svc = StorageService()
-    return AdoptionService(repo, dog_repo, audit_service=audit, storage_service=storage_svc)
+    return AdoptionService(
+        repo, dog_repo, redis_client=redis, audit_service=audit, storage_service=storage_svc
+    )
+
 
 
 @router.post(

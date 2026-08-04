@@ -1,5 +1,6 @@
 """Test fixtures: async engine, session, FastAPI client with dependency overrides."""
 
+# ruff: noqa: E402
 import os
 import sys
 from collections.abc import AsyncGenerator
@@ -9,9 +10,11 @@ from typing import Any
 os.environ.setdefault("AWS_ACCESS_KEY_ID", "mock_key")
 os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "mock_secret")
 os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
+os.environ["ENVIRONMENT"] = "test"
 
 import base64
 from unittest.mock import MagicMock
+
 import boto3
 
 original_boto3_client = boto3.client

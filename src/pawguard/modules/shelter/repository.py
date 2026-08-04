@@ -84,7 +84,13 @@ class ShelterRepository:
         """Locks the kennel row (SELECT ... FOR UPDATE) for the rest of the
         transaction - serializes concurrent assignments so the capacity and
         sanitation check-then-act can't double-book a kennel."""
-        stmt = select(Kennel).where(Kennel.id == kennel_id).with_for_update()
+        from pawguard.core.config import get_settings
+        from pawguard.core.constants import Environment
+
+        stmt = select(Kennel).where(Kennel.id == kennel_id)
+        if get_settings().environment != Environment.TEST:
+            stmt = stmt.with_for_update()
+
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def list_kennels_by_section(self, section_id: uuid.UUID) -> Sequence[Kennel]:

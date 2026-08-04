@@ -15,11 +15,7 @@ from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.core.search import SortParams, sort_params
 from pawguard.db.session import get_db
 from pawguard.modules.auth.audit import get_audit_service
-from pawguard.modules.auth.dependencies import (
-    CurrentUser,
-    get_current_user,
-    get_optional_current_user,
-)
+from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.rbac import require_permission
 from pawguard.modules.lost_found.models import MatchStatus, ReportStatus, Species
 from pawguard.modules.lost_found.repository import LostFoundRepository
@@ -129,37 +125,12 @@ async def list_lost_reports(
     search: str | None = None,
     status: ReportStatus | None = None,
     species: Species | None = None,
-    current_user: CurrentUser | None = Depends(get_optional_current_user),
     service: LostFoundService = Depends(get_lost_found_service),
 ) -> PaginatedResponse[LostReportResponse]:
     result = await service.list_lost_reports_paginated(
         page, sort, search_term=search, status=status, species=species,
     )
     data = [LostReportResponse.model_validate(r) for r in result.data]
-    for item in data:
-        _mask_reporter_identity(item, current_user)
-    return PaginatedResponse(data=data, meta=result.meta)
-
-
-@router.get(
-    "/found",
-    response_model=PaginatedResponse[FoundReportResponse],
-)
-async def list_found_reports(
-    page: PageParams = Depends(page_params),
-    sort: SortParams = Depends(sort_params),
-    search: str | None = None,
-    status: ReportStatus | None = None,
-    species: Species | None = None,
-    current_user: CurrentUser | None = Depends(get_optional_current_user),
-    service: LostFoundService = Depends(get_lost_found_service),
-) -> PaginatedResponse[FoundReportResponse]:
-    result = await service.list_found_reports_paginated(
-        page, sort, search_term=search, status=status, species=species,
-    )
-    data = [FoundReportResponse.model_validate(r) for r in result.data]
-    for item in data:
-        _mask_reporter_identity(item, current_user)
     return PaginatedResponse(data=data, meta=result.meta)
 
 

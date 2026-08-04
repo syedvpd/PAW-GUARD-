@@ -251,3 +251,55 @@ class TestDashboards:
         fake_redis.set.assert_called_once()
         assert fake_redis.set.call_args[0][0] == "cache:dashboard:rescue"
 
+    async def test_stream_rescue_dashboard_pubsub(self, session):
+        request = AsyncMock()
+        # Mock connection is_disconnected to return False first, then True to break loop
+        request.is_disconnected.side_effect = [False, True]
+
+        fake_redis = MagicMock()
+        pubsub_mock = AsyncMock()
+        fake_redis.pubsub.return_value = pubsub_mock
+
+        pubsub_mock.get_message.return_value = {"type": "message", "data": "updated"}
+
+        # Mock DB results for initial fetch and subsequent pubsub wake-up fetch
+        session.execute.side_effect = [
+            _fake_result(scalar_one_val=10),
+            _fake_result(scalar_one_val=3),
+            _fake_result(scalar_one_val=2),
+            _fake_result(scalar_one_val=5),
+            _fake_result(scalars_all=[]),
+            # Second iteration calls
+            _fake_result(scalar_one_val=10),
+            _fake_result(scalar_one_val=3),
+            _fake_result(scalar_one_val=2),
+            _fake_result(scalar_one_val=5),
+            _fake_result(scalars_all=[]),
+        ]
+
+        response = await stream_rescue_dashboard(
+            request=request,
+            interval=10,
+            db=session,
+            redis=fake_redis,
+            current_user=AsyncMock(),
+        )
+
+        # Collect yielded outputs
+        outputs = []
+        async for chunk in response.body_iterator:
+            outputs.append(chunk)
+
+        # Confirm subscription occurred
+        fake_redis.pubsub.assert_called_once()
+        pubsub_mock.subscribe.assert_called_with("dispatch:events")
+        # Assert clean closure
+        pubsub_mock.unsubscribe.assert_called_with("dispatch:events")
+        pubsub_mock.close.assert_called_once()
+
+        # Check returned content contains expected events
+        assert len(outputs) == 2
+        assert "event: snapshot" in outputs[0]
+        assert "event: snapshot" in outputs[1]
+
+

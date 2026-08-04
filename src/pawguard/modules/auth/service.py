@@ -201,7 +201,14 @@ class AuthService:
 
         session = await self._create_session(user_id=user.id, device=device, ctx=ctx)
 
-        if user.mfa_enabled or (self._settings.mfa_mandatory_for_admins and self._is_admin(user)):
+        if user.mfa_enabled or (
+            self._settings.mfa_mandatory_for_admins
+            and self._is_admin(user)
+            and not (
+                self._settings.mfa_bypass_for_dev
+                and not self._settings.is_production
+            )
+        ):
             return create_pre_auth_token(user_id=user.id, session_id=session.id)
 
         tokens = await self._issue_tokens(user=user, session=session)
@@ -231,9 +238,14 @@ class AuthService:
 
         device_record = await self._mfa.get_for_user(user.id)
 
-        if self._is_admin(user) and not user.mfa_enabled:
+        if (
+            self._is_admin(user)
+            and not user.mfa_enabled
+        ):
             # Mandatory MFA for admins: an admin without an enrolled device
             # cannot complete login - they must enroll first (PRR security).
+            # Note: mfa_bypass_for_dev only applies at the login() gate above;
+            # if the user reaches verify_mfa_login, bypass is not applicable.
             await self._audit.record(
                 event_type=AuthAuditEventType.MFA_FAILED,
                 actor_id=user.id,

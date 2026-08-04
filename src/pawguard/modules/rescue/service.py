@@ -39,7 +39,9 @@ from pawguard.modules.rescue.schemas import (
     RescueRequestResponse,
     normalise_failure_reason,
 )
+from pawguard.redis.client import RedisClient
 from pawguard.services.audit_service import AuditService
+
 
 # Collisions on the 4-digit ticket suffix are rare but possible under high
 # intake volume; retry a bounded number of times before giving up cleanly.
@@ -89,10 +91,20 @@ class RescueService:
         repository: RescueRepository,
         audit_service: AuditService | None = None,
         dog_repo: DogRepository | None = None,
+        redis_client: RedisClient | None = None,
     ) -> None:
         self._repo = repository
         self._audit = audit_service
         self._dog_repo = dog_repo
+        self._redis = redis_client
+
+    async def _publish_dispatch_event(self) -> None:
+        if self._redis is not None:
+            try:
+                await self._redis.publish("dispatch:events", "updated")
+            except Exception:
+                pass
+
 
     def _fleet_service(self) -> FleetService:
         """Cross-domain delegation (fleet) sharing this request's session.
@@ -195,7 +207,9 @@ class RescueService:
                 },
             )
 
+        await self._publish_dispatch_event()
         return res
+
 
     async def verify_request(
         self,
@@ -255,7 +269,9 @@ class RescueService:
                 },
             )
 
+        await self._publish_dispatch_event()
         return request
+
 
     async def dispatch_team(
         self,
@@ -367,7 +383,9 @@ class RescueService:
                 },
             )
 
+        await self._publish_dispatch_event()
         return res
+
 
     async def escalate(
         self,
@@ -515,7 +533,9 @@ class RescueService:
                 after_state={"status": str(request.status)},
             )
 
+        await self._publish_dispatch_event()
         return res
+
 
     async def _create_dog_profile_for_admitted(
         self,

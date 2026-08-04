@@ -45,30 +45,65 @@ async def stream_rescue_dashboard(
     request: Request,
     interval: int = Query(10, ge=5, le=300, description="Snapshot interval (seconds)"),
     db: AsyncSession = Depends(get_db),
+    redis: RedisClient = Depends(get_redis),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> StreamingResponse:
     """Real-time rescue dashboard feed (PRR 3.2).
 
-    Emits an SSE `snapshot` event every `interval` seconds with the current
-    rescue dashboard data plus a timestamp, so command-centre screens update
-    without polling. A heartbeat comment is sent when a snapshot fails so the
-    client knows the stream is still alive.
+    Subscribes to Redis Pub/Sub 'dispatch:events' channel for immediate updates on database writes,
+    falling back to periodic snapshots every `interval` seconds (also acts as heartbeat).
     """
 
     async def _event_stream():
-        while True:
-            if await request.is_disconnected():
-                break
+        pubsub = None
+        if hasattr(redis, "pubsub"):
             try:
-                data = await dasvc.rescue_dashboard(db)
-                payload = json.dumps(
-                    {"data": data, "ts": datetime.now(UTC).isoformat()},
-                    default=str,
-                )
-                yield f"event: snapshot\ndata: {payload}\n\n"
+                pubsub = redis.pubsub()
+                await pubsub.subscribe("dispatch:events")
             except Exception:
-                yield ": snapshot unavailable, stream alive\n\n"
-            await asyncio.sleep(interval)
+                pubsub = None
+
+        # Send initial snapshot immediately
+        try:
+            data = await dasvc.rescue_dashboard(db)
+            payload = json.dumps(
+                {"data": data, "ts": datetime.now(UTC).isoformat()},
+                default=str,
+            )
+            yield f"event: snapshot\ndata: {payload}\n\n"
+        except Exception:
+            yield ": initial snapshot unavailable, stream starting\n\n"
+
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+
+                if pubsub is not None:
+                    try:
+                        # Wait for next event via pub/sub or timeout (acts as interval/heartbeat fallback)
+                        await pubsub.get_message(ignore_subscribe_messages=True, timeout=interval)
+                    except Exception:
+                        await asyncio.sleep(interval)
+                else:
+                    await asyncio.sleep(interval)
+
+                try:
+                    data = await dasvc.rescue_dashboard(db)
+                    payload = json.dumps(
+                        {"data": data, "ts": datetime.now(UTC).isoformat()},
+                        default=str,
+                    )
+                    yield f"event: snapshot\ndata: {payload}\n\n"
+                except Exception:
+                    yield ": snapshot unavailable, stream alive\n\n"
+        finally:
+            if pubsub is not None:
+                try:
+                    await pubsub.unsubscribe("dispatch:events")
+                    await pubsub.close()
+                except Exception:
+                    pass
 
     return StreamingResponse(
         _event_stream(),
@@ -79,6 +114,7 @@ async def stream_rescue_dashboard(
             "X-Accel-Buffering": "no",
         },
     )
+
 
 
 @router.get(

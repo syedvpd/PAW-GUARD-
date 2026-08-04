@@ -25,8 +25,10 @@ LOGIN_PAYLOAD = {
 @pytest.mark.asyncio
 class TestAdoptionAPI:
     async def _auth(self, client: AsyncClient, db_session: AsyncSession) -> dict:
+        import uuid
+        unique_email = f"adoptapitest_{uuid.uuid4().hex[:8]}@example.com"
         return await register_and_auth(
-            client, db_session, email=REGISTER_PAYLOAD["email"]
+            client, db_session, email=unique_email
         )
 
     async def _create_dog(self, client: AsyncClient, headers: dict) -> str:

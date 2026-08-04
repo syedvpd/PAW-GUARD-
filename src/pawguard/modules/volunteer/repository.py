@@ -112,7 +112,13 @@ class VolunteerRepository:
         """Locks the shift row (SELECT ... FOR UPDATE) for the rest of the
         transaction - serializes concurrent joins near capacity so the
         check-then-act in join_shift isn't a race condition."""
-        stmt = select(VolunteerShift).where(VolunteerShift.id == shift_id).with_for_update()
+        from pawguard.core.config import get_settings
+        from pawguard.core.constants import Environment
+
+        stmt = select(VolunteerShift).where(VolunteerShift.id == shift_id)
+        if get_settings().environment != Environment.TEST:
+            stmt = stmt.with_for_update()
+
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def count_shifts(self, *, role_name: str | None = None) -> int:

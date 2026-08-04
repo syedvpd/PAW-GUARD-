@@ -37,6 +37,7 @@ from pawguard.modules.rescue.schemas import (
     RescueRequestUpdate,
 )
 from pawguard.modules.rescue.service import RescueService
+from pawguard.redis.client import RedisClient, get_redis
 from pawguard.services.audit_service import AuditService
 
 router = APIRouter(prefix="/rescue", tags=["rescue"])
@@ -44,11 +45,13 @@ router = APIRouter(prefix="/rescue", tags=["rescue"])
 
 def get_rescue_service(
     db: AsyncSession = Depends(get_db),
+    redis: RedisClient = Depends(get_redis),
     audit: AuditService = Depends(get_audit_service),
 ) -> RescueService:
     repo = RescueRepository(db)
     dog_repo = DogRepository(db)
-    return RescueService(repo, audit_service=audit, dog_repo=dog_repo)
+    return RescueService(repo, audit_service=audit, dog_repo=dog_repo, redis_client=redis)
+
 
 
 # Roles allowed to see unmasked reporter PII on rescue cases. Per PRR §6.1
