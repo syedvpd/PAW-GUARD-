@@ -22,7 +22,11 @@ from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.core.search import SortParams, sort_params
 from pawguard.db.session import get_db
 from pawguard.modules.auth.audit import get_audit_service
-from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
+from pawguard.modules.auth.dependencies import (
+    CurrentUser,
+    get_current_user,
+    get_optional_current_user,
+)
 from pawguard.modules.auth.rbac import require_permission
 from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.rescue.models import RescueRequest, RescueSeverity, RescueStatus
@@ -61,13 +65,14 @@ _UNMASKED_RESCUE_PII_PERMISSIONS = {"rescue:verify", "rescue:dispatch", "system:
 
 
 def _mask_reporter_pii(
-    item: RescueRequestResponse, current_user: CurrentUser
+    item: RescueRequestResponse, current_user: CurrentUser | None
 ) -> RescueRequestResponse:
     """Return a copy of the response with reporter PII masked unless the
     caller holds coordinator/admin permissions."""
-    user_permissions = {p.code for r in current_user.user.roles for p in r.permissions}
-    if _UNMASKED_RESCUE_PII_PERMISSIONS & user_permissions:
-        return item
+    if current_user is not None:
+        user_permissions = {p.code for r in current_user.user.roles for p in r.permissions}
+        if _UNMASKED_RESCUE_PII_PERMISSIONS & user_permissions:
+            return item
     return item.model_copy(
         update={
             "reporter_name": mask_full_name(item.reporter_name),
@@ -76,6 +81,7 @@ def _mask_reporter_pii(
             "reporter_email": mask_email(item.reporter_email),
         }
     )
+
 
 
 def _masked_rescue_response(
@@ -342,11 +348,10 @@ async def get_public_status(
 @router.get(
     "/{request_id}",
     response_model=ApiResponse[RescueRequestResponse],
-    dependencies=[Depends(require_permission("rescue:read"))],
 )
 async def get_request(
     request_id: uuid.UUID,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser | None = Depends(get_optional_current_user),
     service: RescueService = Depends(get_rescue_service),
 ) -> ApiResponse[RescueRequestResponse]:
     request = await service.get_request(request_id)
@@ -359,7 +364,6 @@ async def get_request(
 @router.get(
     "",
     response_model=PaginatedResponse[RescueRequestResponse],
-    dependencies=[Depends(require_permission("rescue:read"))],
 )
 async def list_requests(
     page: PageParams = Depends(page_params),
@@ -375,16 +379,17 @@ async def list_requests(
     assigned_to_me: bool | None = Query(
         None, description="Filter to requests assigned to the current user"
     ),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser | None = Depends(get_optional_current_user),
     service: RescueService = Depends(get_rescue_service),
 ) -> PaginatedResponse[RescueRequestResponse]:
     result = await service.list_requests_paginated(
         page=page, sort=sort, search_term=search, status=status,
         severity=severity, urgent_only=urgent_only,
-        assigned_to_me=current_user.id if assigned_to_me else None,
+        assigned_to_me=current_user.id if (assigned_to_me and current_user) else None,
     )
     data = [_mask_reporter_pii(item, current_user) for item in result.data]
     return PaginatedResponse(data=data, meta=result.meta)
+
 
 
 @router.delete(

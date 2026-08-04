@@ -21,6 +21,7 @@ from pawguard.modules.notifications.router import router as notification_router
 from pawguard.modules.portal.router import router as portal_router
 from pawguard.modules.reports.router import router as reports_router
 from pawguard.modules.rescue.router import router as rescue_router
+from pawguard.modules.rescue_centre.router import router as rescue_centre_router
 from pawguard.modules.settings.router import router as settings_router
 from pawguard.modules.shelter.router import router as shelter_router
 from pawguard.modules.storage import router as storage_router
@@ -33,7 +34,9 @@ api_v1_router.include_router(dashboards_router)
 api_v1_router.include_router(admin_dashboard_router)
 api_v1_router.include_router(audit_router)
 api_v1_router.include_router(rescue_router)
+api_v1_router.include_router(rescue_centre_router)
 api_v1_router.include_router(dog_router)
+
 api_v1_router.include_router(adoption_router)
 api_v1_router.include_router(volunteer_router)
 api_v1_router.include_router(foster_router)

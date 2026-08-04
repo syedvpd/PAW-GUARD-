@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -19,6 +20,30 @@ class StoredFileCreate(BaseModel):
     entity_type: str | None = Field(None, max_length=64, examples=["dog_profile"])
     entity_id: uuid.UUID | None = None
 
+    @field_validator("folder", mode="before")
+    @classmethod
+    def validate_folder(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            val_lower = value.strip().lower()
+            try:
+                return FileFolder(val_lower)
+            except ValueError:
+                # Common aliases
+                aliases = {
+                    "avatar": FileFolder.AVATARS,
+                    "profile": FileFolder.PROFILES,
+                    "rescues": FileFolder.RESCUE,
+                    "dog": FileFolder.DOGS,
+                    "shelter": FileFolder.SHELTERS,
+                    "doc": FileFolder.DOCUMENTS,
+                    "docs": FileFolder.DOCUMENTS,
+                    "lost": FileFolder.LOST_FOUND,
+                    "found": FileFolder.LOST_FOUND,
+                    "adoption": FileFolder.ADOPTIONS,
+                }
+                return aliases.get(val_lower, FileFolder.GENERAL)
+        return value
+
     @field_validator("mime_type")
     @classmethod
     def validate_mime_type(cls, value: str) -> str:
@@ -28,6 +53,7 @@ class StoredFileCreate(BaseModel):
                 f"Allowed: {', '.join(sorted(ALLOWED_MIME_TYPES))}."
             )
         return value
+
 
 
 class StoredFileUpdate(BaseModel):

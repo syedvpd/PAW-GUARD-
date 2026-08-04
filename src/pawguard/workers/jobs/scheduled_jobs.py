@@ -10,6 +10,7 @@ from datetime import UTC, date, datetime, timedelta
 from arq import Retry
 from sqlalchemy import and_, select
 from sqlalchemy.exc import InterfaceError, OperationalError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.payments import PaymentGatewayError, get_payment_gateway
 from pawguard.db.session import AsyncSessionLocal

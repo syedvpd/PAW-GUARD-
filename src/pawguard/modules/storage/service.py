@@ -49,9 +49,10 @@ class StorageService:
         *,
         user_id: uuid.UUID | None = None,
     ) -> UploadUrlResponse:
+        folder_str = payload.folder.value if hasattr(payload.folder, "value") else str(payload.folder)
         try:
             object_key = self._s3.build_object_key(
-                folder=payload.folder.value, filename=payload.original_filename
+                folder=folder_str, filename=payload.original_filename
             )
             stored = StoredFile(
                 user_id=user_id,
@@ -59,7 +60,7 @@ class StorageService:
                 original_filename=payload.original_filename,
                 mime_type=payload.mime_type,
                 file_size=payload.file_size,
-                folder=payload.folder.value,
+                folder=folder_str,
                 entity_type=payload.entity_type,
                 entity_id=payload.entity_id,
             )
@@ -74,7 +75,9 @@ class StorageService:
                 file_id=stored.id,
             )
         except Exception as exc:
+            logger.error("request_upload_url_failed", exc_info=exc)
             raise ValidationFailedError(f"Storage error: {type(exc).__name__} - {exc}") from exc
+
 
 
     async def confirm_upload(

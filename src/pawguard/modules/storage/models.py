@@ -19,6 +19,14 @@ class FileFolder(StrEnum):
     PROFILES = "profiles"
     DOCUMENTS = "documents"
     CERTIFICATES = "certificates"
+    RESCUE = "rescue"
+    EVIDENCE = "evidence"
+    AVATARS = "avatars"
+    LOST_FOUND = "lost_found"
+    ADOPTIONS = "adoptions"
+    GENERAL = "general"
+    BLOG = "blog"
+
 
 
 class StoredFile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):

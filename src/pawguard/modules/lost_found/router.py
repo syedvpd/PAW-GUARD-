@@ -15,7 +15,11 @@ from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.core.search import SortParams, sort_params
 from pawguard.db.session import get_db
 from pawguard.modules.auth.audit import get_audit_service
-from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
+from pawguard.modules.auth.dependencies import (
+    CurrentUser,
+    get_current_user,
+    get_optional_current_user,
+)
 from pawguard.modules.auth.rbac import require_permission
 from pawguard.modules.lost_found.models import MatchStatus, ReportStatus, Species
 from pawguard.modules.lost_found.repository import LostFoundRepository
@@ -29,6 +33,9 @@ from pawguard.modules.lost_found.schemas import (
     ReportMatchResponse,
 )
 from pawguard.modules.lost_found.service import LostFoundService
+from pawguard.modules.portal.router import get_portal_service
+from pawguard.modules.portal.schemas import SuccessStoryResponse
+from pawguard.modules.portal.service import PortalService
 from pawguard.services.audit_service import AuditService
 
 router = APIRouter(prefix="/lost-found", tags=["lost-found"])
@@ -125,13 +132,88 @@ async def list_lost_reports(
     search: str | None = None,
     status: ReportStatus | None = None,
     species: Species | None = None,
+    current_user: CurrentUser | None = Depends(get_optional_current_user),
     service: LostFoundService = Depends(get_lost_found_service),
 ) -> PaginatedResponse[LostReportResponse]:
     result = await service.list_lost_reports_paginated(
         page, sort, search_term=search, status=status, species=species,
     )
     data = [LostReportResponse.model_validate(r) for r in result.data]
+    for item in data:
+        _mask_reporter_identity(item, current_user)
     return PaginatedResponse(data=data, meta=result.meta)
+
+
+@router.get(
+    "/found",
+    response_model=PaginatedResponse[FoundReportResponse],
+)
+async def list_found_reports(
+    page: PageParams = Depends(page_params),
+    sort: SortParams = Depends(sort_params),
+    search: str | None = None,
+    status: ReportStatus | None = None,
+    species: Species | None = None,
+    current_user: CurrentUser | None = Depends(get_optional_current_user),
+    service: LostFoundService = Depends(get_lost_found_service),
+) -> PaginatedResponse[FoundReportResponse]:
+    result = await service.list_found_reports_paginated(
+        page, sort, search_term=search, status=status, species=species,
+    )
+    data = [FoundReportResponse.model_validate(r) for r in result.data]
+    for item in data:
+        _mask_reporter_identity(item, current_user)
+    return PaginatedResponse(data=data, meta=result.meta)
+
+
+@router.get(
+    "/reunion-stories",
+    response_model=ApiResponse[list[SuccessStoryResponse]],
+)
+@router.get(
+    "/stories",
+    response_model=ApiResponse[list[SuccessStoryResponse]],
+)
+async def get_reunion_stories(
+    portal_service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[list[SuccessStoryResponse]]:
+    stories = await portal_service.list_stories(published_only=True)
+    return ApiResponse(data=[SuccessStoryResponse.model_validate(s) for s in stories])
+
+
+@router.get(
+    "/lost/{report_id}",
+    response_model=ApiResponse[LostReportResponse],
+)
+async def get_lost_report(
+    report_id: uuid.UUID,
+    current_user: CurrentUser | None = Depends(get_optional_current_user),
+    service: LostFoundService = Depends(get_lost_found_service),
+) -> ApiResponse[LostReportResponse]:
+    report = await service._repo.get_lost_report_by_id(report_id)
+    if report is None:
+        raise NotFoundError("Lost report not found.")
+    item = LostReportResponse.model_validate(report)
+    _mask_reporter_identity(item, current_user)
+    return ApiResponse(data=item)
+
+
+@router.get(
+    "/found/{report_id}",
+    response_model=ApiResponse[FoundReportResponse],
+)
+async def get_found_report(
+    report_id: uuid.UUID,
+    current_user: CurrentUser | None = Depends(get_optional_current_user),
+    service: LostFoundService = Depends(get_lost_found_service),
+) -> ApiResponse[FoundReportResponse]:
+    report = await service._repo.get_found_report_by_id(report_id)
+    if report is None:
+        raise NotFoundError("Found report not found.")
+    item = FoundReportResponse.model_validate(report)
+    _mask_reporter_identity(item, current_user)
+    return ApiResponse(data=item)
+
 
 
 @router.get(
