@@ -236,6 +236,32 @@ class TestNewModules:
             resp = await client.get(f"/api/v1/admin/dashboard/{ep}", headers=headers)
             assert resp.status_code == 200, f"{ep} failed"
 
+    async def test_dashboard_all_stats_endpoints(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        """All admin dashboard stats endpoints must be reachable with a proper
+        admin (super_admin) token - including shelter, foster, lost-found and
+        grievance which the QA report listed as failing under a weak token."""
+        headers = await self._auth(client, db_session)
+
+        endpoints = [
+            "shelter-stats",
+            "foster-stats",
+            "lost-found-stats",
+            "grievance-stats",
+            "notification-summary",
+            "charts",
+            "metrics",
+            "summary",
+            "kpis",
+            "inventory-alerts",
+            "donation-summary",
+            "recent-activity",
+        ]
+        for ep in endpoints:
+            resp = await client.get(f"/api/v1/admin/dashboard/{ep}", headers=headers)
+            assert resp.status_code == 200, f"{ep} failed: {resp.status_code} {resp.text}"
+
     async def test_settings_flow(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
 

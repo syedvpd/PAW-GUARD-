@@ -11,6 +11,14 @@ from pawguard.services.cache_service import CacheService
 
 PERMISSIONS_CACHE_TTL_SECONDS = 300
 
+# Roles that bypass all permission checks (unrestricted access).
+ADMIN_ROLES = {"super_admin", "system:admin", "admin", "rescue_centre_admin"}
+
+
+def is_admin_role(claims) -> bool:
+    """True when the token carries a role with unrestricted admin access."""
+    return any(r in ADMIN_ROLES for r in claims.roles)
+
 
 def has_permission(user: User, permission_code: str) -> bool:
     """Direct role->permission check on an in-memory User object.
@@ -44,8 +52,7 @@ class RequirePermission:
 
     async def __call__(self, current: CurrentUser = Depends(get_current_user)) -> CurrentUser:
         # Admin bypass — super_admin, system:admin, and admin roles have unrestricted access
-        admin_roles = {"super_admin", "system:admin", "admin", "rescue_centre_admin"}
-        if any(r in admin_roles for r in current.claims.roles):
+        if is_admin_role(current.claims):
             return current
 
 

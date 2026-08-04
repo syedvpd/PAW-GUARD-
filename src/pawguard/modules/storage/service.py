@@ -22,7 +22,9 @@ from pawguard.core.upload import (
     verify_batch_size,
     verify_mime_type,
 )
-
+from pawguard.modules.auth.dependencies import CurrentUser
+from pawguard.modules.auth.exceptions import InsufficientPermissionsError
+from pawguard.modules.auth.rbac import is_admin_role
 from pawguard.modules.storage.models import StoredFile
 from pawguard.modules.storage.repository import StorageRepository
 from pawguard.modules.storage.schemas import (
@@ -183,6 +185,10 @@ class StorageService:
             raise NotFoundError("Stored file not found.")
         return stored
 
+    async def is_admin_user(self, current_user: CurrentUser) -> bool:
+        """True when the caller has unrestricted admin access to storage."""
+        return is_admin_role(current_user.claims)
+
     async def list_files_paginated(
         self,
         page: PageParams,
@@ -207,10 +213,19 @@ class StorageService:
             meta=build_pagination_meta(total=total, params=page),
         )
 
-    async def delete_file(self, file_id: uuid.UUID) -> None:
+    async def delete_file(
+        self,
+        file_id: uuid.UUID,
+        *,
+        current_user: CurrentUser,
+    ) -> None:
         stored = await self._repo.get_by_id(file_id)
         if stored is None:
             raise NotFoundError("Stored file not found.")
+        if not is_admin_role(current_user.claims) and stored.user_id != current_user.id:
+            raise InsufficientPermissionsError(
+                "You do not have permission to delete this file."
+            )
         stored.deleted_at = datetime.now(UTC)
         await self._repo._session.flush()
 
@@ -234,7 +249,17 @@ class StorageService:
             meta=build_pagination_meta(total=total, params=page),
         )
 
-    async def bulk_delete_files(self, ids: list[uuid.UUID]) -> int:
-        count = await self._repo.bulk_soft_delete(ids)
+    async def bulk_delete_files(
+        self,
+        ids: list[uuid.UUID],
+        *,
+        current_user: CurrentUser,
+    ) -> int:
+        if is_admin_role(current_user.claims):
+            count = await self._repo.bulk_soft_delete(ids)
+        else:
+            files = await self._repo.list_by_ids(ids)
+            own_ids = [f.id for f in files if f.user_id == current_user.id]
+            count = await self._repo.bulk_soft_delete(own_ids)
         await self._repo._session.flush()
         return count

@@ -114,3 +114,45 @@ class TestStorageAPI:
         headers = await self._auth(client, db_session)
         resp = await client.put(f"/api/v1/storage/{uuid.uuid4()}/confirm", headers=headers)
         assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+class TestStorageNonAdminAccess:
+    """Regular (non-system-admin) users can manage their own files without 403."""
+
+    async def _create_file(self, client: AsyncClient, headers: dict) -> str:
+        payload = {"original_filename": "avatar.jpg", "mime_type": "image/jpeg", "file_size": 500, "folder": "avatars"}
+        resp = await client.post("/api/v1/storage/upload-url", json=payload, headers=headers)
+        assert resp.status_code == 201
+        return resp.json()["data"]["file_id"]
+
+    async def test_regular_user_can_list_own_files(self, client: AsyncClient, db_session: AsyncSession) -> None:
+        headers = await register_and_auth(client, db_session, email="nonadminlist@example.com", role="donor")
+        resp = await client.get("/api/v1/storage", headers=headers)
+        assert resp.status_code == 200
+
+    async def test_regular_user_can_delete_own_file(self, client: AsyncClient, db_session: AsyncSession) -> None:
+        headers = await register_and_auth(client, db_session, email="nonadmindelete@example.com", role="donor")
+        file_id = await self._create_file(client, headers)
+        resp = await client.delete(f"/api/v1/storage/{file_id}", headers=headers)
+        assert resp.status_code == 200
+        get_resp = await client.get(f"/api/v1/storage/{file_id}", headers=headers)
+        assert get_resp.status_code == 404
+
+    async def test_regular_user_can_bulk_delete_own_files(self, client: AsyncClient, db_session: AsyncSession) -> None:
+        headers = await register_and_auth(client, db_session, email="nonadminbulk@example.com", role="donor")
+        file_id = await self._create_file(client, headers)
+        resp = await client.post("/api/v1/storage/bulk/delete", json={"ids": [file_id]}, headers=headers)
+        assert resp.status_code == 200
+        assert resp.json()["data"]["deleted_count"] == 1
+
+    async def test_regular_user_cannot_delete_others_file(self, client: AsyncClient, db_session: AsyncSession) -> None:
+        owner_headers = await register_and_auth(client, db_session, email="fileowner@example.com", role="donor")
+        file_id = await self._create_file(client, owner_headers)
+
+        other_headers = await register_and_auth(client, db_session, email="fileintruder@example.com", role="donor")
+        resp = await client.delete(f"/api/v1/storage/{file_id}", headers=other_headers)
+        assert resp.status_code == 403
+
+        get_resp = await client.get(f"/api/v1/storage/{file_id}", headers=owner_headers)
+        assert get_resp.status_code == 200

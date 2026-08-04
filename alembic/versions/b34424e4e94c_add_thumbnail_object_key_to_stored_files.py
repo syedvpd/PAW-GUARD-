@@ -18,10 +18,18 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "stored_files",
-        sa.Column("thumbnail_object_key", sa.String(length=1024), nullable=True),
-    )
+    # Idempotent: the production database already carries the column (schema
+    # drift), so only add it when missing to keep this migration re-runnable.
+    bind = op.get_bind()
+    existing = {
+        c["name"]
+        for c in sa.inspect(bind).get_columns("stored_files")
+    }
+    if "thumbnail_object_key" not in existing:
+        op.add_column(
+            "stored_files",
+            sa.Column("thumbnail_object_key", sa.String(length=1024), nullable=True),
+        )
 
 
 def downgrade() -> None:

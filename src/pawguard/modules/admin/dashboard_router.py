@@ -5,7 +5,6 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from pawguard.core.metrics import get_metrics_snapshot
 from pawguard.core.responses import ApiResponse
 from pawguard.db.session import get_db
 from pawguard.modules.admin.dashboard_repository import DashboardRepository
@@ -211,12 +210,3 @@ async def get_grievance_stats(
 ) -> ApiResponse[dict[str, Any]]:
     data = await service.get_grievance_stats()
     return ApiResponse(data=data)
-
-
-@admin_dashboard_router.get(
-    "/metrics",
-    response_model=ApiResponse[dict[str, Any]],
-    dependencies=[Depends(require_permission("system:admin"))],
-)
-async def get_metrics() -> ApiResponse[dict[str, Any]]:
-    return ApiResponse(data=get_metrics_snapshot())

@@ -11,7 +11,6 @@ from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.core.search import SortParams, sort_params
 from pawguard.db.session import get_db
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
-from pawguard.modules.auth.rbac import require_permission
 from pawguard.modules.storage.models import FileFolder
 from pawguard.modules.storage.repository import StorageRepository
 from pawguard.modules.storage.schemas import (
@@ -102,7 +101,6 @@ async def get_file(
 @router.get(
     "",
     response_model=PaginatedResponse[StoredFileResponse],
-    dependencies=[Depends(require_permission("system:admin"))],
 )
 async def list_files(
     page: PageParams = Depends(page_params),
@@ -111,8 +109,10 @@ async def list_files(
     folder: FileFolder | None = Query(None, description="Filter by folder"),
     mime_type: str | None = Query(None, description="Filter by MIME type"),
     is_uploaded: bool | None = Query(None, description="Filter by upload status"),
+    current_user: CurrentUser = Depends(get_current_user),
     service: StorageService = Depends(get_storage_service),
 ) -> PaginatedResponse[StoredFileResponse]:
+    is_admin = await service.is_admin_user(current_user)
     return await service.list_files_paginated(
         page=page,
         sort=sort,
@@ -120,6 +120,7 @@ async def list_files(
         folder=folder.value if folder else None,
         mime_type=mime_type,
         is_uploaded=is_uploaded,
+        user_id=None if is_admin else current_user.id,
     )
 
 
@@ -127,26 +128,32 @@ async def list_files(
     "/{file_id}",
     response_model=ApiResponse[None],
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(require_permission("system:admin"))],
 )
 async def delete_file(
     file_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
     service: StorageService = Depends(get_storage_service),
 ) -> ApiResponse[None]:
-    await service.delete_file(file_id)
+    await service.delete_file(
+        file_id,
+        current_user=current_user,
+    )
     return ApiResponse(message="File deleted successfully.")
 
 
 @router.post(
     "/bulk/delete",
     response_model=ApiResponse[BulkDeleteResponse],
-    dependencies=[Depends(require_permission("system:admin"))],
 )
 async def bulk_delete_files(
     payload: BulkDeleteRequest,
+    current_user: CurrentUser = Depends(get_current_user),
     service: StorageService = Depends(get_storage_service),
 ) -> ApiResponse[BulkDeleteResponse]:
-    deleted = await service.bulk_delete_files(payload.ids)
+    deleted = await service.bulk_delete_files(
+        payload.ids,
+        current_user=current_user,
+    )
     return ApiResponse(
         data=BulkDeleteResponse(
             message=f"{deleted} file(s) deleted.",

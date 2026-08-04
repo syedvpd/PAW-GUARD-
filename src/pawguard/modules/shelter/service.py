@@ -39,6 +39,7 @@ from pawguard.modules.shelter.schemas import (
     KennelResponse,
     ShelterFacilityCreate,
     ShelterFacilityResponse,
+    ShelterFacilityUpdate,
     ShelterSectionCreate,
     ShelterSectionResponse,
 )
@@ -84,6 +85,12 @@ class ShelterService:
                 user_agent="",
                 metadata={"facility_id": str(facility.id)},
             )
+        return facility
+
+    async def get_facility(self, facility_id: uuid.UUID) -> ShelterFacility:
+        facility = await self._repo.get_facility(facility_id)
+        if facility is None:
+            raise NotFoundError("Shelter facility not found.")
         return facility
 
     async def create_section(
@@ -526,6 +533,30 @@ class ShelterService:
         facility.status = status
         await self._repo._session.flush()
         await self._repo._session.refresh(facility)
+        return facility
+
+    async def update_facility(
+        self,
+        facility_id: uuid.UUID,
+        payload: ShelterFacilityUpdate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> ShelterFacility:
+        facility = await self._repo.get_facility(facility_id)
+        if facility is None:
+            raise NotFoundError("Shelter facility not found.")
+        for field, value in payload.model_dump(exclude_unset=True).items():
+            setattr(facility, field, value)
+        await self._repo._session.flush()
+        await self._repo._session.refresh(facility)
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.SHELTER_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"facility_id": str(facility_id)},
+            )
         return facility
 
     async def bulk_delete_facilities(self, ids: list[uuid.UUID]) -> int:
