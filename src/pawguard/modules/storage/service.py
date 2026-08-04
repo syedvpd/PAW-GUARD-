@@ -51,7 +51,12 @@ class StorageService:
         *,
         user_id: uuid.UUID | None = None,
     ) -> UploadUrlResponse:
-        folder_str = payload.folder.value if hasattr(payload.folder, "value") else str(payload.folder)
+        folder_str = (
+            payload.folder.value
+            if hasattr(payload.folder, "value")
+            else str(payload.folder)
+        )
+        stored: StoredFile | None = None
         try:
             object_key = self._s3.build_object_key(
                 folder=folder_str, filename=payload.original_filename
@@ -78,7 +83,15 @@ class StorageService:
             )
         except Exception as exc:
             logger.error("request_upload_url_failed", exc_info=exc)
-            raise ValidationFailedError(f"Storage error: {type(exc).__name__} - {exc}") from exc
+            if stored is not None:
+                try:
+                    await self._repo._session.delete(stored)
+                    await self._repo._session.flush()
+                except Exception:  # noqa: BLE001 - orphan cleanup must not mask the original error
+                    logger.error("request_upload_url_cleanup_failed", exc_info=True)
+            raise ValidationFailedError(
+                "Failed to prepare an upload. Please try again."
+            ) from exc
 
 
 

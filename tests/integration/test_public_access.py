@@ -128,6 +128,44 @@ class TestPublicAccess:
         assert reporter["email"] != REGISTER_PAYLOAD["email"]
         assert "***" in reporter["full_name"]
         assert reporter["full_name"] != "Public Access Tester"
+        assert "***" in reporter["phone"]
+        assert reporter["phone"] != "+1234567890"
+
+    async def test_found_report_matches_endpoint(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        headers = await self._auth(client, db_session)
+        found_payload = {
+            "breed_observed": "Labrador Mix",
+            "color_observed": "Golden",
+            "location_address": "Road No 8, Banjara Hills",
+            "latitude": 17.4170,
+            "longitude": 78.4420,
+            "found_at": "2026-07-30T14:00:00Z",
+        }
+        found_resp = await client.post(
+            "/api/v1/lost-found/found", json=found_payload, headers=headers
+        )
+        assert found_resp.status_code == 201
+        found_id = found_resp.json()["data"]["id"]
+
+        # Owner can list matches for their found report.
+        matches_resp = await client.get(
+            f"/api/v1/lost-found/found/{found_id}/matches", headers=headers
+        )
+        assert matches_resp.status_code == 200
+        assert "data" in matches_resp.json()
+
+        # Any authenticated public reader (donor carries public:read) may view
+        # matches for transparency, mirroring the lost-report matches gate.
+        reader_headers = await self._auth_as_role(
+            client, db_session, "donor", "foundreader@example.com"
+        )
+        reader_resp = await client.get(
+            f"/api/v1/lost-found/found/{found_id}/matches", headers=reader_headers
+        )
+        assert reader_resp.status_code == 200
+        assert isinstance(reader_resp.json()["data"], list)
 
     # ── 2. Rescue PII masking ──────────────────────────────────────────────
 

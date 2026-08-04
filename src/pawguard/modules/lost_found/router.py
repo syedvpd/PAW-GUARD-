@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pawguard.core.bulk import BulkDeleteRequest, BulkDeleteResponse
 from pawguard.core.exceptions import ForbiddenError, NotFoundError
 from pawguard.core.pagination import PageParams, page_params
-from pawguard.core.pii import mask_email, mask_full_name
+from pawguard.core.pii import mask_email, mask_full_name, mask_phone
 from pawguard.core.rate_limiter import rate_limit
 from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.core.search import SortParams, sort_params
@@ -45,8 +45,8 @@ def _mask_reporter_identity(
     item: LostReportResponse | FoundReportResponse,
     current_user: CurrentUser | None,
 ) -> None:
-    """Masks the reporter's identity (email + full name) for anyone who isn't
-    the reporter or an admin.
+    """Masks the reporter's identity (email + full name + phone) for anyone
+    who isn't the reporter or an admin.
 
     Anonymous visitors (current_user is None) always get the masked view;
     unmasked contact details are only released to the report owner or through
@@ -60,12 +60,13 @@ def _mask_reporter_identity(
         user_permissions = {p.code for r in current_user.user.roles for p in r.permissions}
         if "system:admin" in user_permissions:
             return
-    # Mask reporter identity (email + name) per PRR §6.1 - the public listing
-    # must not expose reporter PII to anonymous visitors or non-owner staff.
+    # Mask reporter identity (email + name + phone) per PRR §6.1 - the public
+    # listing must not expose reporter PII to anonymous visitors or non-owner staff.
     item.user = item.user.model_copy(
         update={
             "email": mask_email(item.user.email),
             "full_name": mask_full_name(item.user.full_name),
+            "phone": mask_phone(item.user.phone),
         }
     )
 
@@ -236,6 +237,35 @@ async def get_matches_for_lost(
         raise ForbiddenError("You do not have permission to view matches for this report.")
 
     result = await service.list_matches_paginated(page, sort, lost_report_id=report_id)
+    data = [ReportMatchResponse.model_validate(m) for m in result.data]
+    for match in data:
+        if match.lost_report is not None:
+            _mask_reporter_identity(match.lost_report, current_user)
+        if match.found_report is not None:
+            _mask_reporter_identity(match.found_report, current_user)
+    return PaginatedResponse(data=data, meta=result.meta)
+
+
+@router.get(
+    "/found/{report_id}/matches",
+    response_model=PaginatedResponse[ReportMatchResponse],
+)
+async def get_matches_for_found(
+    report_id: uuid.UUID,
+    page: PageParams = Depends(page_params),
+    sort: SortParams = Depends(sort_params),
+    current_user: CurrentUser = Depends(get_current_user),
+    service: LostFoundService = Depends(get_lost_found_service),
+) -> PaginatedResponse[ReportMatchResponse]:
+    report = await service._repo.get_found_report_by_id(report_id)
+    if report is None:
+        raise NotFoundError("Found report not found.")
+
+    user_permissions = {p.code for r in current_user.user.roles for p in r.permissions}
+    if report.user_id != current_user.user.id and "public:read" not in user_permissions:
+        raise ForbiddenError("You do not have permission to view matches for this report.")
+
+    result = await service.list_matches_paginated(page, sort, found_report_id=report_id)
     data = [ReportMatchResponse.model_validate(m) for m in result.data]
     for match in data:
         if match.lost_report is not None:
