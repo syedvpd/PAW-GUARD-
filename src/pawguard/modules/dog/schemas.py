@@ -54,6 +54,29 @@ class DogProfileCreate(BaseModel):
     is_adoptable: bool = False
     is_quarantine_passed: bool = False
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "name": "Barnaby",
+                "breed": "Indie Mix",
+                "breed_classification": "pure",
+                "gender": "male",
+                "is_spayed_neutered": False,
+                "estimated_age": "2 years",
+                "age_months": 24,
+                "weight": 16.4,
+                "color": "Tan/White",
+                "temperament": "friendly",
+                "ear_shape": "floppy",
+                "tail_type": "curled",
+                "distinctive_markers": "White patch on chest, notched left ear",
+                "is_adoptable": False,
+                "is_quarantine_passed": False,
+            }
+        }
+    )
+
+
 
 class DogProfileUpdate(BaseModel):
     microchip_id: str | None = Field(None, examples=["985141002345678"])
