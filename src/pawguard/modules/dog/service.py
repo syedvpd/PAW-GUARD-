@@ -36,6 +36,19 @@ from pawguard.services.audit_service import AuditService
 # giving up cleanly (mirrors the rescue module's ticket-number handling).
 _MAX_REGISTRATION_RETRIES = 5
 
+# ISO 11784/11785 microchips are 15 digits; a leading "985" registrar prefix
+# is the common global code, so synthesized chips read like real ones.
+_MICROCHIP_PREFIX = "985"
+_MICROCHIP_SUFFIX_DIGITS = 12
+
+
+def _generate_microchip_id() -> str:
+    """Synthesize a unique 15-digit microchip number for a newly registered
+    dog (PRR 3.4 System IDs). Real chips are implanted by a vet; PawGuard
+    generates its own registration value so every intake has one."""
+    suffix = "".join(secrets.choice("0123456789") for _ in range(_MICROCHIP_SUFFIX_DIGITS))
+    return f"{_MICROCHIP_PREFIX}{suffix}"
+
 
 # Keywords that mark a free-text breed as a mix (PRR 3.4 Demographics:
 # Breed classification Pure/Mix/Unknown). Anything without these markers is
@@ -141,10 +154,28 @@ class DogService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> DogProfile:
+        # Prevent duplicate intake (PRR 3.4): before allocating identifiers,
+        # reject a dog that already exists in the registry with the same
+        # identifying details.
+        duplicate = await self._repo.get_duplicate_by_details(
+            name=payload.name,
+            breed=payload.breed,
+            gender=payload.gender,
+            color=payload.color,
+            distinctive_markers=payload.distinctive_markers,
+        )
+        if duplicate is not None:
+            raise ConflictError(
+                "A dog with these details (name, breed, gender, color) is already registered."
+            )
+
         if payload.microchip_id:
             existing_chip = await self._repo.get_by_microchip(payload.microchip_id)
             if existing_chip is not None:
                 raise ConflictError("A dog with this microchip ID is already registered.")
+            microchip_id = payload.microchip_id
+        else:
+            microchip_id = await self._allocate_microchip_id()
 
         dog: DogProfile | None = None
         for _ in range(_MAX_REGISTRATION_RETRIES):
@@ -159,7 +190,7 @@ class DogService:
             dog = DogProfile(
                 registration_number=registration_number,
                 rescue_case_id=payload.rescue_case_id,
-                microchip_id=payload.microchip_id,
+                microchip_id=microchip_id,
                 name=payload.name,
                 breed=payload.breed,
                 breed_classification=(
@@ -224,6 +255,16 @@ class DogService:
             )
 
         return dog
+
+    async def _allocate_microchip_id(self) -> str:
+        """Generate a unique 15-digit microchip id, retrying on the rare
+        collision (PRR 3.4 System IDs). Fails cleanly instead of surfacing a
+        UNIQUE constraint 500."""
+        for _ in range(_MAX_REGISTRATION_RETRIES):
+            candidate = _generate_microchip_id()
+            if await self._repo.get_by_microchip(candidate) is None:
+                return candidate
+        raise ConflictError("Unable to allocate a unique microchip ID. Please retry.")
 
     async def get_dog(self, dog_id: uuid.UUID) -> DogProfile:
         dog = await self._repo.get_by_id(dog_id)

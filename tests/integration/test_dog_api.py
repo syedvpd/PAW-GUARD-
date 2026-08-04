@@ -49,6 +49,11 @@ class TestDogAPI:
         data = resp.json()["data"]
         assert data["name"] == "Rex"
         assert data["status"] == DogStatus.RESCUED.value
+        # A unique microchip is auto-generated when the request omits one.
+        assert data["microchip_id"] is not None
+        assert len(data["microchip_id"]) == 15
+        assert data["microchip_id"].isdigit()
+        assert data["microchip_id"].startswith("985")
         # is_adoptable is always forced False at registration; it can only be
         # granted via the vet-authorized medical clearance endpoint.
         assert data["is_adoptable"] is False
@@ -74,6 +79,43 @@ class TestDogAPI:
         second = await client.post("/api/v1/dogs", json=payload, headers=headers)
         assert second.status_code == 409
         assert second.json()["error"]["code"] == "CONFLICT"
+
+    async def test_register_dog_duplicate_details_conflict(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        """PRR 3.4: registering a dog that already exists with the same
+        identifying details returns 409 before allocating a new microchip."""
+        headers = await self._auth(client, db_session)
+        payload = {
+            "name": "Duplicate Buddy",
+            "breed": "Labrador",
+            "gender": "male",
+            "color": "black",
+        }
+        first = await client.post("/api/v1/dogs", json=payload, headers=headers)
+        assert first.status_code == 201
+        assert first.json()["data"]["microchip_id"] is not None
+
+        second = await client.post("/api/v1/dogs", json=payload, headers=headers)
+        assert second.status_code == 409
+        assert second.json()["error"]["code"] == "CONFLICT"
+
+    async def test_register_dog_same_details_different_markers_is_unique(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        """A distinct identifying marker makes the same-named dog a real,
+        non-duplicate intake (markers are part of the duplicate key)."""
+        headers = await self._auth(client, db_session)
+        base = {"name": "Twins", "breed": "Beagle", "gender": "male", "color": "brown"}
+        first = await client.post(
+            "/api/v1/dogs", json={**base, "distinctive_markers": "left ear notch"}, headers=headers
+        )
+        second = await client.post(
+            "/api/v1/dogs", json={**base, "distinctive_markers": "white chest patch"}, headers=headers
+        )
+        assert first.status_code == 201
+        assert second.status_code == 201
+        assert first.json()["data"]["microchip_id"] != second.json()["data"]["microchip_id"]
 
     async def test_get_dog_timeline(self, client: AsyncClient, db_session: AsyncSession) -> None:
         """H-3: a dog's lifecycle activity stream is readable and chronological."""

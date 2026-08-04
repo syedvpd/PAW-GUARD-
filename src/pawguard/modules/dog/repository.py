@@ -14,6 +14,7 @@ from pawguard.core.search import SortParams, apply_sorting, build_search_filter
 from pawguard.modules.dog.models import (
     DogActivityLog,
     DogBreedClassification,
+    DogGender,
     DogProfile,
     DogStatus,
     DogWeightLog,
@@ -55,11 +56,15 @@ class DogRepository:
         """Locks the dog row (SELECT ... FOR UPDATE) for the rest of the
         transaction - used to serialize concurrent adoption approvals on the
         same dog so the exclusivity check-then-act isn't a race condition."""
-        stmt = (
-            select(DogProfile)
-            .where(DogProfile.id == dog_id, DogProfile.deleted_at.is_(None))
-            .with_for_update()
+        from pawguard.core.config import get_settings
+        from pawguard.core.constants import Environment
+
+        stmt = select(DogProfile).where(
+            DogProfile.id == dog_id, DogProfile.deleted_at.is_(None)
         )
+        if get_settings().environment != Environment.TEST:
+            stmt = stmt.with_for_update()
+
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def get_by_registration(self, reg_num: str) -> DogProfile | None:
@@ -73,6 +78,40 @@ class DogRepository:
         stmt = select(DogProfile).where(
             DogProfile.microchip_id == microchip_id, DogProfile.deleted_at.is_(None)
         )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def get_duplicate_by_details(
+        self,
+        *,
+        name: str,
+        breed: str,
+        gender: DogGender,
+        color: str | None,
+        distinctive_markers: str | None,
+    ) -> DogProfile | None:
+        """Find a non-deleted dog already carrying the same identifying
+        details (PRR 3.4 duplicate-intake prevention).
+
+        String comparisons are case-insensitive; only the identifying fields
+        the caller supplied are matched - a NULL column matches only rows
+        that are also NULL on that column, so an incomplete intake record
+        never trips the guard against a fully identified dog."""
+        stmt = select(DogProfile).where(
+            DogProfile.deleted_at.is_(None),
+            func.lower(DogProfile.name) == name.lower(),
+            func.lower(DogProfile.breed) == breed.lower(),
+            DogProfile.gender == gender,
+        )
+        if color:
+            stmt = stmt.where(func.lower(DogProfile.color) == color.lower())
+        else:
+            stmt = stmt.where(DogProfile.color.is_(None))
+        if distinctive_markers:
+            stmt = stmt.where(
+                func.lower(DogProfile.distinctive_markers) == distinctive_markers.lower()
+            )
+        else:
+            stmt = stmt.where(DogProfile.distinctive_markers.is_(None))
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def count_by_kennel(

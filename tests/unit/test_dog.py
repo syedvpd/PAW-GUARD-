@@ -50,6 +50,7 @@ class TestDogService:
         # so existing tests don't trip the collision branches.
         repo.get_by_registration.return_value = None
         repo.get_by_microchip.return_value = None
+        repo.get_duplicate_by_details.return_value = None
         return repo
 
     @pytest.fixture
@@ -280,6 +281,79 @@ class TestDogService:
         assert mock_repo.create.await_count == 1
 
     # ── H-2: duplicate microchip → clean 409 ──────────────────────────────────
+
+    @pytest.mark.asyncio
+    async def test_register_dog_autogenerates_microchip(self, service, mock_repo, mock_audit):
+        """When no microchip is supplied, a unique 15-digit one is generated."""
+        dog = _make_dog(
+            id=uuid.uuid4(), registration_number="DOG-2026-0001", name="Buddy",
+            breed="Labrador", gender="male", status=DogStatus.RESCUED, is_adoptable=False,
+        )
+        mock_repo.create.return_value = dog
+        payload = DogProfileCreate(name="Buddy", breed="Labrador", gender="male")
+
+        await service.register_dog(payload, actor_id=uuid.uuid4())
+
+        created = mock_repo.create.call_args[0][0]
+        assert created.microchip_id is not None
+        assert len(created.microchip_id) == 15
+        assert created.microchip_id.isdigit()
+        assert created.microchip_id.startswith("985")
+
+    @pytest.mark.asyncio
+    async def test_register_dog_keeps_supplied_microchip(self, service, mock_repo, mock_audit):
+        """An explicitly provided microchip is preserved (not overwritten)."""
+        dog = _make_dog(
+            id=uuid.uuid4(), registration_number="DOG-2026-0001", name="Buddy",
+            breed="Labrador", gender="male", status=DogStatus.RESCUED, is_adoptable=False,
+        )
+        mock_repo.create.return_value = dog
+        payload = DogProfileCreate(
+            name="Buddy", breed="Labrador", gender="male",
+            microchip_id="985141002399999",
+        )
+
+        await service.register_dog(payload, actor_id=uuid.uuid4())
+
+        created = mock_repo.create.call_args[0][0]
+        assert created.microchip_id == "985141002399999"
+
+    @pytest.mark.asyncio
+    async def test_register_dog_retries_microchip_collision(self, service, mock_repo, mock_audit):
+        """A generated microchip colliding with an existing one is retried."""
+        taken = _make_dog(
+            id=uuid.uuid4(), registration_number="DOG-2026-0001", name="Chip Dog",
+            breed="Mix", gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+            microchip_id="985999999999999",
+        )
+        # First generated candidate collides; second is free.
+        mock_repo.get_by_microchip.side_effect = [taken, None]
+        dog = _make_dog(
+            id=uuid.uuid4(), registration_number="DOG-2026-0001", name="Buddy",
+            breed="Labrador", gender="male", status=DogStatus.RESCUED, is_adoptable=False,
+        )
+        mock_repo.create.return_value = dog
+        payload = DogProfileCreate(name="Buddy", breed="Labrador", gender="male")
+
+        await service.register_dog(payload, actor_id=uuid.uuid4())
+
+        created = mock_repo.create.call_args[0][0]
+        assert created.microchip_id != taken.microchip_id
+
+    @pytest.mark.asyncio
+    async def test_register_dog_duplicate_details_conflict(self, service, mock_repo):
+        """A dog already present with the same identifying details → 409."""
+        existing = _make_dog(
+            id=uuid.uuid4(), registration_number="DOG-2026-0001", name="Buddy",
+            breed="Labrador", gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+        )
+        mock_repo.get_duplicate_by_details.return_value = existing
+        payload = DogProfileCreate(name="Buddy", breed="Labrador", gender="male")
+
+        with pytest.raises(ConflictError, match="already registered"):
+            await service.register_dog(payload, actor_id=uuid.uuid4())
+        # Nothing is created when the details already exist.
+        mock_repo.create.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_register_dog_duplicate_microchip_conflict(

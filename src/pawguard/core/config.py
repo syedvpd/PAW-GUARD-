@@ -76,7 +76,7 @@ class Settings(BaseSettings):
     max_request_body_size: int = 10_485_760  # 10 MB
 
     # --- Database ---
-    database_url: str = "postgresql+asyncpg://pawguard:pawguard@localhost:5432/pawguard"
+    database_url: str = "postgresql+asyncpg://postgres.xzxsdgobndbkufyszzul:pawguard2026@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres"
     database_url_frontend: str = ""
     database_pool_size: int = 20
     database_max_overflow: int = 10
@@ -105,6 +105,10 @@ class Settings(BaseSettings):
     # keypair does not orphan stored MFA secrets.
     mfa_encryption_key: str = ""
     mfa_mandatory_for_admins: bool = False
+    mfa_bypass_for_dev: bool = Field(
+        default=False,
+        description="Bypass MFA enforcement in dev/test environments",
+    )
 
     # --- OAuth / Social login ---
     # Audience (client id) of the Google / Apple application this backend
