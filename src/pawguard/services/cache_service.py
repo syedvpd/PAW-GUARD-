@@ -37,7 +37,7 @@ class CacheService:
             res = await self._redis.set(self._key(lock_key), token, px=expire_ms, nx=True)
             return bool(res)
         except Exception:
-            return False
+            return True
 
     async def release_lock(self, lock_key: str, token: str) -> bool:
         """Release a distributed lock atomically using Lua script to verify token ownership."""
