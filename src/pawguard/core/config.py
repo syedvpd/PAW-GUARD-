@@ -71,8 +71,8 @@ class Settings(BaseSettings):
     environment: Environment = Environment.LOCAL
     debug: bool = False
     api_v1_prefix: str = "/api/v1"
-    allowed_hosts: str = "localhost,127.0.0.1"
-    cors_origins: str = "http://localhost:3000"
+    allowed_hosts: str = "*,localhost,127.0.0.1"
+    cors_origins: str = "http://localhost:3000,http://localhost:5173,https://pawguard-web-gamma.vercel.app"
     max_request_body_size: int = 10_485_760  # 10 MB
 
     # --- Database ---
@@ -163,12 +163,24 @@ class Settings(BaseSettings):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def allowed_hosts_list(self) -> list[str]:
-        return [h.strip() for h in self.allowed_hosts.split(",") if h.strip()]
+        hosts = [h.strip() for h in self.allowed_hosts.split(",") if h.strip()]
+        if "*" in hosts:
+            return ["*"]
+        return hosts
 
     @computed_field  # type: ignore[prop-decorator]
     @property
     def cors_origins_list(self) -> list[str]:
-        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+        origins = [o.strip().rstrip("/") for o in self.cors_origins.split(",") if o.strip()]
+        if self.web_app_url:
+            clean_web = self.web_app_url.strip().rstrip("/")
+            if clean_web and clean_web not in origins:
+                origins.append(clean_web)
+        if self.admin_app_url:
+            clean_admin = self.admin_app_url.strip().rstrip("/")
+            if clean_admin and clean_admin not in origins:
+                origins.append(clean_admin)
+        return origins
 
     @computed_field  # type: ignore[prop-decorator]
     @property
