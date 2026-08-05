@@ -34,11 +34,16 @@ class RescueRepository:
         return (
             select(RescueRequest)
             .options(
-                selectinload(RescueRequest.dispatch),
+                selectinload(RescueRequest.dispatch).selectinload(RescueDispatch.agents),
                 selectinload(RescueRequest.reports),
             )
             .where(RescueRequest.deleted_at.is_(None))
         )
+
+    async def user_exists(self, user_id: uuid.UUID) -> bool:
+        from pawguard.modules.auth.models import User
+        stmt = select(exists().where(User.id == user_id, User.deleted_at.is_(None)))
+        return bool((await self._session.execute(stmt)).scalar())
 
     async def create_request(self, request: RescueRequest) -> RescueRequest:
         self._session.add(request)

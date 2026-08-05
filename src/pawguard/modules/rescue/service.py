@@ -318,12 +318,18 @@ class RescueService:
                     f"(vehicle is '{vehicle.status.value}')."
                 )
 
+        if assigned_driver_id is not None:
+            if not await self._repo.user_exists(assigned_driver_id):
+                raise NotFoundError(f"Assigned driver user '{assigned_driver_id}' not found.")
+
         # Assemble the full team: the explicit agent list plus the legacy
         # single-driver field, deduplicated. Every member is mirrored into
         # the dispatch-agent association table so "one or more agents" holds
         # for both the new multi-agent flow and the back-compat driver flow.
         agent_ids: list[uuid.UUID] = []
         for agent_id in assigned_agent_ids or []:
+            if not await self._repo.user_exists(agent_id):
+                raise NotFoundError(f"Assigned agent user '{agent_id}' not found.")
             if agent_id not in agent_ids:
                 agent_ids.append(agent_id)
         if assigned_driver_id is not None and assigned_driver_id not in agent_ids:
@@ -340,11 +346,17 @@ class RescueService:
             escalation_notes=escalation_notes,
             notes=notes,
         )
-        await self._repo.create_dispatch(dispatch)
-        for agent_id in agent_ids:
-            await self._repo.create_dispatch_agent(
-                RescueDispatchAgent(dispatch_id=dispatch.id, agent_id=agent_id)
-            )
+        try:
+            await self._repo.create_dispatch(dispatch)
+            for agent_id in agent_ids:
+                await self._repo.create_dispatch_agent(
+                    RescueDispatchAgent(dispatch_id=dispatch.id, agent_id=agent_id)
+                )
+        except IntegrityError as exc:
+            raise ValidationFailedError(
+                "Failed to create dispatch record due to database constraint violation."
+            ) from exc
+
         # Keep the in-memory relationship consistent: the request was fetched
         # before the dispatch existed, so its `dispatch` attribute is already
         # loaded as None and the re-fetch below would not overwrite it (the
