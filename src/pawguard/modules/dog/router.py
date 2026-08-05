@@ -256,6 +256,11 @@ async def update_dog(
     response_model=ApiResponse[DogProfileResponse],
     dependencies=[Depends(require_permission("shelter:update"))],
 )
+@router.patch(
+    "/admin/dogs/{dog_id}/status",
+    response_model=ApiResponse[DogProfileResponse],
+    dependencies=[Depends(require_permission("shelter:update"))],
+)
 async def update_dog_status(
     dog_id: uuid.UUID,
     payload: DogStatusUpdate,

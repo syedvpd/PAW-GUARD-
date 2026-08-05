@@ -44,6 +44,64 @@ async def list_audit_logs(
 
 
 @audit_router.get(
+    "/export",
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+@audit_router.post(
+    "/export",
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def export_audit_logs(
+    format: str = Query("csv", description="Export format: 'csv' or 'json'"),
+    event_type: str | None = Query(None),
+    user_id: uuid.UUID | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    import csv
+    import io
+    from fastapi.responses import StreamingResponse
+
+    repo = AuthAuditLogRepository(db)
+    entries = await repo.list(skip=0, limit=1000, event_type=event_type, user_id=user_id)
+
+    if format.lower() == "csv":
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["id", "user_id", "event_type", "ip_address", "user_agent", "created_at"])
+        for e in entries:
+            writer.writerow([
+                str(e.id),
+                str(e.user_id) if e.user_id else "",
+                e.event_type,
+                e.ip_address or "",
+                e.user_agent or "",
+                e.created_at.isoformat() if e.created_at else "",
+            ])
+        output.seek(0)
+        return StreamingResponse(
+            io.BytesIO(output.getvalue().encode("utf-8")),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=audit_logs.csv"},
+        )
+
+    return ApiResponse(
+        data=[
+            {
+                "id": str(e.id),
+                "user_id": str(e.user_id) if e.user_id else None,
+                "event_type": e.event_type,
+                "ip_address": e.ip_address,
+                "user_agent": e.user_agent,
+                "event_metadata": e.event_metadata,
+                "created_at": e.created_at.isoformat() if e.created_at else None,
+            }
+            for e in entries
+        ],
+        message="Audit logs exported successfully.",
+    )
+
+
+@audit_router.get(
     "/{entry_id}",
     dependencies=[Depends(require_permission("system:admin"))],
 )

@@ -110,6 +110,12 @@ async def update_profile(
     status_code=status.HTTP_200_OK,
     dependencies=[Depends(require_permission("foster:update"))],
 )
+@router.delete(
+    "/admin/fosters/{profile_id}",
+    response_model=ApiResponse[None],
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(require_permission("foster:update"))],
+)
 async def soft_delete_profile(
     profile_id: uuid.UUID,
     request: Request,

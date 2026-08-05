@@ -166,6 +166,14 @@ class RescueRepository:
         stmt = select(RescueDispatch).where(RescueDispatch.rescue_request_id == request_id)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    async def get_dispatch_by_id(self, dispatch_id: uuid.UUID) -> RescueDispatch | None:
+        stmt = select(RescueDispatch).where(RescueDispatch.id == dispatch_id)
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def delete_dispatch(self, dispatch: RescueDispatch) -> None:
+        await self._session.delete(dispatch)
+        await self._session.flush()
+
     async def create_report(self, report: RescueReport) -> RescueReport:
         self._session.add(report)
         await self._session.flush()

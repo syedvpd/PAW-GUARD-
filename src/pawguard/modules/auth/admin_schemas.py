@@ -54,8 +54,24 @@ class RoleResponse(BaseModel):
 class PermissionResponse(BaseModel):
     id: uuid.UUID
     code: str
+    name: str = ""
     description: str | None
     created_at: datetime
+
+    @model_validator(mode="before")
+    @classmethod
+    def _populate_name(cls, data: Any) -> Any:
+        if hasattr(data, "code") and not isinstance(data, dict):
+            return {
+                "id": data.id,
+                "code": data.code,
+                "name": getattr(data, "name", None) or data.code,
+                "description": data.description,
+                "created_at": data.created_at,
+            }
+        elif isinstance(data, dict) and "code" in data:
+            data.setdefault("name", data.get("name") or data["code"])
+        return data
 
     model_config = {"from_attributes": True}
 

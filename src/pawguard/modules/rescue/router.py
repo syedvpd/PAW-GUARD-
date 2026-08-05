@@ -34,6 +34,8 @@ from pawguard.modules.rescue.repository import RescueRepository
 from pawguard.modules.rescue.schemas import (
     PublicRescueStatusResponse,
     RescueDispatchCreate,
+    RescueDispatchResponse,
+    RescueDispatchUpdate,
     RescueEscalateCreate,
     RescueReportCreate,
     RescueRequestCreate,
@@ -196,6 +198,59 @@ async def dispatch_team(
         current_user,
         message="Rescue vehicle and team dispatched successfully.",
     )
+
+
+@router.patch(
+    "/dispatches/{dispatch_id}",
+    response_model=ApiResponse[RescueDispatchResponse],
+    dependencies=[Depends(require_permission("rescue:dispatch"))],
+)
+@router.patch(
+    "/dispatch/{dispatch_id}",
+    response_model=ApiResponse[RescueDispatchResponse],
+    dependencies=[Depends(require_permission("rescue:dispatch"))],
+)
+async def update_dispatch(
+    dispatch_id: uuid.UUID,
+    payload: RescueDispatchUpdate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: RescueService = Depends(get_rescue_service),
+) -> ApiResponse[RescueDispatchResponse]:
+    dispatch = await service.update_dispatch(
+        dispatch_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(
+        data=RescueDispatchResponse.model_validate(dispatch),
+        message="Rescue dispatch updated successfully.",
+    )
+
+
+@router.delete(
+    "/dispatches/{dispatch_id}",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(require_permission("rescue:delete"))],
+)
+@router.delete(
+    "/dispatch/{dispatch_id}",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(require_permission("rescue:delete"))],
+)
+async def delete_dispatch(
+    dispatch_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: RescueService = Depends(get_rescue_service),
+) -> ApiResponse[None]:
+    await service.delete_dispatch(
+        dispatch_id,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(message="Rescue dispatch deleted successfully.")
 
 
 @router.post(

@@ -93,6 +93,26 @@ async def update_profile(
     )
 
 
+@router.delete(
+    "/{profile_id}",
+    response_model=ApiResponse[None],
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(require_permission("volunteer:update"))],
+)
+@router.delete(
+    "/admin/volunteers/{profile_id}",
+    response_model=ApiResponse[None],
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(require_permission("volunteer:update"))],
+)
+async def soft_delete_profile(
+    profile_id: uuid.UUID,
+    service: VolunteerService = Depends(get_volunteer_service),
+) -> ApiResponse[None]:
+    await service.soft_delete_profile(profile_id)
+    return ApiResponse(message="Volunteer profile deleted successfully.")
+
+
 @router.post(
     "/shifts",
     response_model=ApiResponse[VolunteerShiftResponse],

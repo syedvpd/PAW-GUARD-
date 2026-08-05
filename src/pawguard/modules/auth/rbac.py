@@ -12,7 +12,14 @@ from pawguard.services.cache_service import CacheService
 PERMISSIONS_CACHE_TTL_SECONDS = 300
 
 # Roles that bypass all permission checks (unrestricted access).
-ADMIN_ROLES = {"super_admin", "system:admin", "admin", "rescue_centre_admin"}
+ADMIN_ROLES = {
+    "super_admin",
+    "system:admin",
+    "admin",
+    "rescue_centre_admin",
+    "rescue_admin",
+    "shelter_admin",
+}
 
 
 def is_admin_role(claims) -> bool:

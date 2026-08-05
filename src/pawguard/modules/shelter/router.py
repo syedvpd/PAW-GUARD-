@@ -222,6 +222,11 @@ async def list_kennels(
     response_model=ApiResponse[bool],
     dependencies=[Depends(require_permission("shelter:update"))],
 )
+@router.patch(
+    "/kennels/{kennel_id}/assign/{dog_id}",
+    response_model=ApiResponse[bool],
+    dependencies=[Depends(require_permission("shelter:update"))],
+)
 async def assign_dog_to_kennel(
     kennel_id: uuid.UUID,
     dog_id: uuid.UUID,

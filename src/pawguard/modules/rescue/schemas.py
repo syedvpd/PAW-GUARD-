@@ -208,6 +208,23 @@ class RescueDispatchCreate(BaseModel):
     notes: str | None = None
 
 
+class RescueDispatchUpdate(BaseModel):
+    assigned_driver_id: uuid.UUID | None = None
+    assigned_agent_ids: list[uuid.UUID] | None = None
+    vehicle_id: str | None = None
+    assigned_vehicle_id: uuid.UUID | None = None
+    equipment_details: str | None = None
+    status: RescueStatus | str | None = None
+    failure_reason: RescueFailureReason | str | None = None
+    escalation_type: RescueEscalationType | str | None = None
+    escalation_notes: str | None = None
+    notes: str | None = None
+    located_at: datetime | None = None
+    rescued_at: datetime | None = None
+    admitted_at: datetime | None = None
+    failed_at: datetime | None = None
+
+
 class RescueDispatchAgentResponse(BaseModel):
     id: uuid.UUID
     dispatch_id: uuid.UUID

@@ -210,6 +210,11 @@ async def update_requisition_status(
     response_model=ApiResponse[None],
     dependencies=[Depends(require_permission("inventory:update"))],
 )
+@router.delete(
+    "/admin/inventory/items/{item_id}",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(require_permission("inventory:update"))],
+)
 async def delete_item(
     item_id: uuid.UUID,
     request: Request,

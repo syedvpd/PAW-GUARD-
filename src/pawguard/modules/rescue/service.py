@@ -386,6 +386,63 @@ class RescueService:
         await self._publish_dispatch_event()
         return res
 
+    async def update_dispatch(
+        self,
+        dispatch_id: uuid.UUID,
+        payload: RescueDispatchUpdate,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> RescueDispatch:
+        dispatch = await self._repo.get_dispatch_by_id(dispatch_id)
+        if dispatch is None:
+            dispatch = await self._repo.get_dispatch_by_request_id(dispatch_id)
+        if dispatch is None:
+            raise NotFoundError("Rescue dispatch record not found.")
+
+        if payload.assigned_driver_id is not None:
+            dispatch.assigned_driver_id = payload.assigned_driver_id
+        if payload.vehicle_id is not None:
+            dispatch.vehicle_id = payload.vehicle_id
+        if payload.assigned_vehicle_id is not None:
+            dispatch.assigned_vehicle_id = payload.assigned_vehicle_id
+        if payload.equipment_details is not None:
+            dispatch.equipment_details = payload.equipment_details
+        if payload.notes is not None:
+            dispatch.notes = payload.notes
+        if payload.escalation_notes is not None:
+            dispatch.escalation_notes = payload.escalation_notes
+        if payload.escalation_type is not None:
+            dispatch.escalation_type = parse_enum(RescueEscalationType, payload.escalation_type)
+        if payload.failure_reason is not None:
+            dispatch.failure_reason = parse_enum(RescueFailureReason, payload.failure_reason)
+        if payload.located_at is not None:
+            dispatch.located_at = payload.located_at
+        if payload.rescued_at is not None:
+            dispatch.rescued_at = payload.rescued_at
+        if payload.admitted_at is not None:
+            dispatch.admitted_at = payload.admitted_at
+        if payload.failed_at is not None:
+            dispatch.failed_at = payload.failed_at
+
+        await self._repo._session.flush()
+        return dispatch
+
+    async def delete_dispatch(
+        self,
+        dispatch_id: uuid.UUID,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> None:
+        dispatch = await self._repo.get_dispatch_by_id(dispatch_id)
+        if dispatch is None:
+            dispatch = await self._repo.get_dispatch_by_request_id(dispatch_id)
+        if dispatch is None:
+            raise NotFoundError("Rescue dispatch record not found.")
+
+        await self._repo.delete_dispatch(dispatch)
+
 
     async def escalate(
         self,
