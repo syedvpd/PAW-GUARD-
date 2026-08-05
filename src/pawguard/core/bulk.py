@@ -28,6 +28,18 @@ class BulkIdsRequest(BaseModel):
 class BulkStatusUpdateRequest(BulkIdsRequest):
     status: str = Field(..., min_length=1, max_length=64, examples=["active"])
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "ids": [
+                    "550e8400-e29b-41d4-a716-446655440000",
+                    "550e8400-e29b-41d4-a716-446655440001",
+                ],
+                "status": "active",
+            }
+        }
+    )
+
 
 class BulkDeleteRequest(BulkIdsRequest):
     pass
