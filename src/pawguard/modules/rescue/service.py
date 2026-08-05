@@ -8,7 +8,12 @@ from datetime import UTC, datetime
 
 from sqlalchemy.exc import IntegrityError
 
-from pawguard.core.exceptions import ConflictError, NotFoundError, ValidationFailedError
+from pawguard.core.exceptions import (
+    ConflictError,
+    NotFoundError,
+    ValidationFailedError,
+    parse_enum,
+)
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
@@ -27,6 +32,7 @@ from pawguard.modules.rescue.models import (
     RescueDispatch,
     RescueDispatchAgent,
     RescueEscalationType,
+    RescueFailureReason,
     RescuePhysicalCondition,
     RescueReport,
     RescueRequest,
@@ -36,6 +42,7 @@ from pawguard.modules.rescue.models import (
 from pawguard.modules.rescue.repository import RescueRepository
 from pawguard.modules.rescue.schemas import (
     PublicRescueStatusResponse,
+    RescueDispatchUpdate,
     RescueRequestResponse,
     normalise_failure_reason,
 )
