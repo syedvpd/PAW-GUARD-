@@ -90,9 +90,29 @@ async def apply_for_adoption(
 
 
 @router.get(
+    "/my",
+    response_model=PaginatedResponse[AdoptionApplicationResponse],
+)
+async def list_my_applications(
+    page: PageParams = Depends(page_params),
+    sort: SortParams = Depends(sort_params),
+    search: str | None = Query(None, description="Search by notes, residential status"),
+    status: AdoptionStatus | None = Query(None, description="Filter by status"),
+    current_user: CurrentUser = Depends(get_current_user),
+    service: AdoptionService = Depends(get_adoption_service),
+) -> PaginatedResponse[AdoptionApplicationResponse]:
+    return await service.list_applications_paginated(
+        page=page,
+        sort=sort,
+        search_term=search,
+        status=status,
+        adopter_id=current_user.user.id,
+    )
+
+
+@router.get(
     "",
     response_model=PaginatedResponse[AdoptionApplicationResponse],
-    dependencies=[Depends(require_permission("adoption:read"))],
 )
 async def list_applications(
     page: PageParams = Depends(page_params),
@@ -101,15 +121,19 @@ async def list_applications(
     status: AdoptionStatus | None = Query(None, description="Filter by status"),
     dog_id: uuid.UUID | None = Query(None, description="Filter by dog ID"),
     adopter_id: uuid.UUID | None = Query(None, description="Filter by adopter ID"),
+    current_user: CurrentUser = Depends(get_current_user),
     service: AdoptionService = Depends(get_adoption_service),
 ) -> PaginatedResponse[AdoptionApplicationResponse]:
+    effective_adopter_id = adopter_id
+    if not has_permission(current_user.user, "adoption:read"):
+        effective_adopter_id = current_user.user.id
     return await service.list_applications_paginated(
         page=page,
         sort=sort,
         search_term=search,
         status=status,
         dog_id=dog_id,
-        adopter_id=adopter_id,
+        adopter_id=effective_adopter_id,
     )
 
 
