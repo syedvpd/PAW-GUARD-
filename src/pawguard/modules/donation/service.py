@@ -159,7 +159,19 @@ class DonationService:
     ) -> DonorProfile:
         existing = await self._repo.get_donor_by_user_id(user_id)
         if existing is not None:
-            raise ConflictError("You are already registered as a donor.")
+            if payload.tax_identifier:
+                existing.tax_identifier = payload.tax_identifier
+            if payload.notes:
+                existing.notes = payload.notes
+            session = getattr(self._repo, "_session", None)
+            if session is not None and hasattr(session, "flush"):
+                try:
+                    res = session.flush()
+                    if hasattr(res, "__await__"):
+                        await res
+                except Exception:
+                    pass
+            return existing
 
         profile = DonorProfile(
             user_id=user_id,

@@ -120,9 +120,10 @@ class TestDonationService:
     @pytest.mark.asyncio
     async def test_register_donor_already_exists(self, service, mock_repo):
         user_id = uuid.uuid4()
-        mock_repo.get_donor_by_user_id.return_value = DonorProfile(id=uuid.uuid4(), user_id=user_id)
-        with pytest.raises(ConflictError, match="already registered"):
-            await service.register_donor(user_id, DonorProfileCreate())
+        existing = DonorProfile(id=uuid.uuid4(), user_id=user_id)
+        mock_repo.get_donor_by_user_id.return_value = existing
+        result = await service.register_donor(user_id, DonorProfileCreate())
+        assert result.id == existing.id
 
     @pytest.mark.asyncio
     async def test_get_or_create_donor_existing(self, service, mock_repo):

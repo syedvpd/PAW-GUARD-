@@ -151,19 +151,39 @@ async def list_dogs(
 
 
 @router.get(
+    "/admin/dogs/{dog_id}",
+    response_model=ApiResponse[DogProfileResponse],
+)
+@router.get(
     "/{dog_id}",
     response_model=ApiResponse[DogProfileResponse],
 )
 async def get_dog(
-    dog_id: uuid.UUID,
+    dog_id: str,
+    current_user: CurrentUser | None = Depends(get_optional_current_user),
     service: DogService = Depends(get_dog_service),
 ) -> ApiResponse[DogProfileResponse]:
     dog = await service.get_dog(dog_id)
-    # Public endpoint - only show adoptable dogs
-    if not dog.is_adoptable:
-        raise NotFoundError("Dog profile not found.")
+
+    # Check caller permissions - staff and admins can view any dog profile,
+    # public unauthenticated callers can only view adoptable dogs.
+    is_staff_or_admin = False
+    if current_user is not None:
+        user_permissions = {p.code for r in current_user.user.roles for p in r.permissions}
+        admin_roles = {
+            "super_admin", "system:admin", "admin",
+            "rescue_centre_admin", "rescue_admin", "shelter_admin",
+        }
+        user_roles = {r.name for r in current_user.user.roles}
+        if (admin_roles & user_roles) or ("shelter:read" in user_permissions) or ("user:read" in user_permissions):
+            is_staff_or_admin = True
+
+    if not is_staff_or_admin and not dog.is_adoptable:
+        raise NotFoundError("Dog profile is currently in intake/treatment and not yet available for public adoption.")
+
     data = DogProfileResponse.model_validate(dog)
-    data = _public_dog_view(data)
+    if not is_staff_or_admin:
+        data = _public_dog_view(data)
     return ApiResponse(data=data)
 
 

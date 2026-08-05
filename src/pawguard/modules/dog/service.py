@@ -266,8 +266,20 @@ class DogService:
                 return candidate
         raise ConflictError("Unable to allocate a unique microchip ID. Please retry.")
 
-    async def get_dog(self, dog_id: uuid.UUID) -> DogProfile:
-        dog = await self._repo.get_by_id(dog_id)
+    async def get_dog(self, dog_id_or_ref: uuid.UUID | str) -> DogProfile:
+        dog: DogProfile | None = None
+        if isinstance(dog_id_or_ref, uuid.UUID):
+            dog = await self._repo.get_by_id(dog_id_or_ref)
+        else:
+            try:
+                parsed_uuid = uuid.UUID(str(dog_id_or_ref))
+                dog = await self._repo.get_by_id(parsed_uuid)
+            except ValueError:
+                ref_str = str(dog_id_or_ref).strip()
+                dog = await self._repo.get_by_registration(ref_str)
+                if dog is None:
+                    dog = await self._repo.get_by_microchip(ref_str)
+
         if dog is None:
             raise NotFoundError("Dog profile not found.")
         return dog
