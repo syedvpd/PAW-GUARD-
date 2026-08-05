@@ -157,6 +157,29 @@ class AdoptionService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> AdoptionApplication:
+        dog = await self._dog_repo.get_by_id(payload.dog_id)
+        if dog is None:
+            raise NotFoundError("Dog profile not found.")
+
+        if not dog.is_adoptable:
+            raise ConflictError(
+                f"Dog '{dog.name}' (ID: {payload.dog_id}) is not currently cleared for adoption."
+            )
+
+        existing_approved = await self._repo.get_approved_application_for_dog(payload.dog_id)
+        if existing_approved is not None:
+            raise ConflictError(
+                f"Dog '{dog.name}' is already under an approved adoption process with another applicant."
+            )
+
+        existing_app = await self._repo.get_application_by_adopter_and_dog(
+            adopter_id, payload.dog_id
+        )
+        if existing_app is not None:
+            raise ConflictError(
+                f"You have already submitted an active adoption application for dog '{dog.name}'."
+            )
+
         lock_token = str(uuid.uuid4())
         lock_acquired = False
         cache_svc = None
@@ -167,31 +190,10 @@ class AdoptionService:
             )
             if not lock_acquired:
                 raise ConflictError(
-                    "This dog is currently being processed for adoption. Please try again later."
+                    f"Another applicant is currently processing an application for dog '{dog.name}'. Please try again in a few moments."
                 )
 
         try:
-            dog = await self._dog_repo.get_by_id(payload.dog_id)
-            if dog is None:
-                raise NotFoundError("Dog profile not found.")
-
-            if not dog.is_adoptable:
-                raise ConflictError("This dog is not currently cleared for adoption.")
-
-            existing_approved = await self._repo.get_approved_application_for_dog(payload.dog_id)
-            if existing_approved is not None:
-                raise ConflictError(
-                    "This dog is already under an approved adoption application process."
-                )
-
-            existing_app = await self._repo.get_application_by_adopter_and_dog(
-                adopter_id, payload.dog_id
-            )
-            if existing_app is not None:
-                raise ConflictError(
-                    "You have already submitted an application for this dog."
-                )
-
             app = AdoptionApplication(
                 dog_id=payload.dog_id,
                 adopter_id=adopter_id,
