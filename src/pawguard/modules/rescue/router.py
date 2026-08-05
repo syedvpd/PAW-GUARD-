@@ -37,6 +37,8 @@ from pawguard.modules.rescue.schemas import (
     RescueDispatchResponse,
     RescueDispatchUpdate,
     RescueEscalateCreate,
+    RescueMediaUploadUrlRequest,
+    RescueMediaUploadUrlResponse,
     RescueReportCreate,
     RescueRequestCreate,
     RescueRequestResponse,
@@ -136,6 +138,35 @@ async def report_incident(
     return ApiResponse(
         data=RescueRequestResponse.model_validate(request_obj),
         message="Emergency incident reported successfully.",
+    )
+
+
+@router.post(
+    "/media-upload-url",
+    response_model=ApiResponse[RescueMediaUploadUrlResponse],
+    dependencies=[Depends(rate_limit("rescue_upload", 10, 60))],
+)
+async def request_rescue_media_upload_url(
+    payload: RescueMediaUploadUrlRequest,
+) -> ApiResponse[RescueMediaUploadUrlResponse]:
+    """Generate a presigned S3 upload URL for incident photos/videos (max 50MB)."""
+    from pawguard.core.exceptions import ValidationFailedError
+    from pawguard.services.storage_service import StorageService
+
+    if payload.file_size > 52428800:
+        raise ValidationFailedError("File size exceeds the maximum 50MB limit for media evidence.")
+
+    storage = StorageService()
+    object_key = storage.build_object_key(folder="rescue", filename=payload.filename)
+    upload_url = storage.generate_presigned_upload_url(
+        object_key=object_key, content_type=payload.mime_type
+    )
+    return ApiResponse(
+        data=RescueMediaUploadUrlResponse(
+            upload_url=upload_url,
+            object_key=object_key,
+        ),
+        message="Presigned upload URL generated successfully.",
     )
 
 

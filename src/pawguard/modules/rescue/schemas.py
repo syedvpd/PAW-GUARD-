@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from pawguard.modules.rescue.models import (
     RescueEscalationType,
@@ -170,12 +170,24 @@ class PublicRescueStatusResponse(BaseModel):
     updated_at: datetime
 
 
+class RescueMediaUploadUrlRequest(BaseModel):
+    filename: str = Field(..., examples=["incident_photo1.jpg"])
+    mime_type: str = Field(..., examples=["image/jpeg"])
+    file_size: int = Field(..., ge=1, le=52428800, description="Max 50MB file size limit")
+
+
+class RescueMediaUploadUrlResponse(BaseModel):
+    upload_url: str
+    object_key: str
+
+
 class RescueRequestUpdate(BaseModel):
     status: RescueStatus | None = None
     rejection_rationale: str | None = None
     # Coordinator severity refinement at verification (PRR 3.2).
     severity: RescueSeverity | None = Field(None, examples=["critical"])
     is_urgent: bool | None = Field(None, examples=[True])
+    media_evidence: list[str] | None = Field(None, max_length=5)
 
 
 class RescueDispatchCreate(BaseModel):
@@ -280,7 +292,29 @@ class RescueReportResponse(BaseModel):
     agent_id: uuid.UUID
     notes: str | None
     photos: list[str] | None
+    photo_urls: list[str] = Field(default_factory=list)
     created_at: datetime
+
+    @model_validator(mode="before")
+    @classmethod
+    def _populate_photo_urls(cls, data: Any) -> Any:
+        if hasattr(data, "photos") and not isinstance(data, dict):
+            photos = getattr(data, "photos", None) or []
+            urls = []
+            if photos:
+                from pawguard.services.storage_service import StorageService
+                storage = StorageService()
+                urls = [storage.generate_presigned_download_url(object_key=k) for k in photos if k]
+            return {
+                "id": data.id,
+                "rescue_request_id": data.rescue_request_id,
+                "agent_id": data.agent_id,
+                "notes": data.notes,
+                "photos": photos,
+                "photo_urls": urls,
+                "created_at": data.created_at,
+            }
+        return data
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -303,6 +337,7 @@ class RescueRequestResponse(BaseModel):
     severity: RescueSeverity
     is_urgent: bool
     media_evidence: list[str] | None
+    media_urls: list[str] = Field(default_factory=list)
     environmental_factors: str | None
     reporter_notes: str | None
     status: RescueStatus
@@ -311,6 +346,46 @@ class RescueRequestResponse(BaseModel):
     updated_at: datetime
     dispatch: RescueDispatchResponse | None = None
     reports: list[RescueReportResponse] = []
+
+    @model_validator(mode="before")
+    @classmethod
+    def _populate_media_urls(cls, data: Any) -> Any:
+        if hasattr(data, "media_evidence") and not isinstance(data, dict):
+            keys = getattr(data, "media_evidence", None) or []
+            urls = []
+            if keys:
+                from pawguard.services.storage_service import StorageService
+                storage = StorageService()
+                urls = [storage.generate_presigned_download_url(object_key=k) for k in keys if k]
+            return {
+                "id": data.id,
+                "ticket_number": data.ticket_number,
+                "reporter_name": data.reporter_name,
+                "reporter_phone": data.reporter_phone,
+                "reporter_alternate_phone": data.reporter_alternate_phone,
+                "reporter_email": data.reporter_email,
+                "is_anonymous": data.is_anonymous,
+                "location_address": data.location_address,
+                "location_landmark": data.location_landmark,
+                "latitude": data.latitude,
+                "longitude": data.longitude,
+                "animal_count": data.animal_count,
+                "physical_condition": data.physical_condition,
+                "behavioral_indicators": data.behavioral_indicators,
+                "severity": data.severity,
+                "is_urgent": data.is_urgent,
+                "media_evidence": keys,
+                "media_urls": urls,
+                "environmental_factors": data.environmental_factors,
+                "reporter_notes": data.reporter_notes,
+                "status": data.status,
+                "rejection_rationale": data.rejection_rationale,
+                "created_at": data.created_at,
+                "updated_at": data.updated_at,
+                "dispatch": getattr(data, "dispatch", None),
+                "reports": getattr(data, "reports", []),
+            }
+        return data
 
     _normalise_condition = field_validator("physical_condition", mode="before")(
         _normalise_physical_condition
