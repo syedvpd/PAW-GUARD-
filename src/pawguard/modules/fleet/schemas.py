@@ -14,7 +14,11 @@ class VehicleCreate(BaseModel):
     vehicle_type: VehicleType = VehicleType.RESCUE_VAN
     status: VehicleStatus = VehicleStatus.ACTIVE
     mileage: int = Field(0, ge=0, examples=[12500])
-    primary_driver_id: uuid.UUID | None = None
+    primary_driver_id: uuid.UUID | None = Field(
+        None,
+        description="Optional UUID of the primary driver (user.id). Omit or set to null if no driver assigned.",
+        examples=[None],
+    )
 
 
 class VehicleUpdate(BaseModel):
@@ -25,7 +29,11 @@ class VehicleUpdate(BaseModel):
     vehicle_type: VehicleType | None = Field(None, examples=["ambulance"])
     status: VehicleStatus | None = Field(None, examples=["active"])
     mileage: int | None = Field(None, ge=0, examples=[12800])
-    primary_driver_id: uuid.UUID | None = None
+    primary_driver_id: uuid.UUID | None = Field(
+        None,
+        description="Optional UUID of the primary driver (user.id). Omit or set to null if no driver assigned.",
+        examples=[None],
+    )
     insurance_provider: str | None = Field(
         None, max_length=255, examples=["SafeGuard Insurance Co."]
     )

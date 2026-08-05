@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.pagination import PageParams
 from pawguard.core.search import SortParams, apply_sorting, build_search_filter
+from pawguard.modules.auth.models import User
 from pawguard.modules.fleet.models import (
     EquipmentCheckout,
     FleetMaintenance,
@@ -52,6 +53,10 @@ class FleetRepository:
             .where(Vehicle.license_plate == license_plate, Vehicle.deleted_at.is_(None))
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def user_exists(self, user_id: uuid.UUID) -> bool:
+        stmt = select(func.count()).select_from(User).where(User.id == user_id, User.deleted_at.is_(None))
+        return (await self._session.execute(stmt)).scalar_one() > 0
 
     async def paginate_vehicles(
         self,

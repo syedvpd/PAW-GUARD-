@@ -88,6 +88,17 @@ class TestFleetService:
             await service.create_vehicle(payload)
 
     @pytest.mark.asyncio
+    async def test_create_vehicle_nonexistent_primary_driver(self, service, mock_repo):
+        mock_repo.get_vehicle_by_plate.return_value = None
+        mock_repo.user_exists.return_value = False
+        dummy_driver_id = uuid.uuid4()
+        payload = VehicleCreate(
+            make_model="Toyota", license_plate="ABC-999", primary_driver_id=dummy_driver_id
+        )
+        with pytest.raises(NotFoundError, match="Primary driver user with ID"):
+            await service.create_vehicle(payload)
+
+    @pytest.mark.asyncio
     async def test_create_vehicle_defaults_vehicle_type(self, service, mock_repo):
         """New vehicles default to a sensible vehicle_type (PRR 3.13)."""
         mock_repo.get_vehicle_by_plate.return_value = None
