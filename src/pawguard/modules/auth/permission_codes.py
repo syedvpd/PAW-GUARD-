@@ -53,18 +53,21 @@ ADOPTION_READ = "adoption:read"
 ADOPTION_PROCESS = "adoption:process"
 ADOPTION_APPROVE = "adoption:approve"
 ADOPTION_LOCK = "adoption:lock"
+ADOPTION_DELETE = "adoption:delete"
 
 # ── Foster ───────────────────────────────────────────────────────────────────
 FOSTER_CREATE = "foster:create"
 FOSTER_READ = "foster:read"
 FOSTER_UPDATE = "foster:update"
 FOSTER_APPROVE = "foster:approve"
+FOSTER_DELETE = "foster:delete"
 
 # ── Volunteer ────────────────────────────────────────────────────────────────
 VOLUNTEER_CREATE = "volunteer:create"
 VOLUNTEER_READ = "volunteer:read"
 VOLUNTEER_UPDATE = "volunteer:update"
 VOLUNTEER_SCHEDULE = "volunteer:schedule"
+VOLUNTEER_DELETE = "volunteer:delete"
 
 # ── Inventory ────────────────────────────────────────────────────────────────
 INVENTORY_CREATE = "inventory:create"
