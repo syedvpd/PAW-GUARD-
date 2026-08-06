@@ -28,6 +28,41 @@ logger = get_logger(__name__)
 logger = get_logger(__name__)
 
 
+def _build_custom_openapi(app: FastAPI) -> dict:
+    from fastapi.openapi.utils import get_openapi
+
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+
+    openapi_schema["components"] = openapi_schema.get("components", {})
+
+    openapi_schema["components"]["securitySchemes"] = {
+        "BearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+        },
+        "ApiKeyAuth": {
+            "type": "apiKey",
+            "in": "header",
+            "name": "Authorization",
+        },
+    }
+
+    # Apply security globally to all endpoints
+    openapi_schema["security"] = [{"BearerAuth": []}]
+
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     configure_logging()
@@ -68,11 +103,10 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    from fastapi.openapi.utils import get_openapi
-
-    def custom_openapi():
+    def custom_openapi() -> dict:
         if app.openapi_schema:
             return app.openapi_schema
+        from fastapi.openapi.utils import get_openapi
         openapi_schema = get_openapi(
             title=app.title,
             version=app.version,
@@ -85,7 +119,12 @@ def create_app() -> FastAPI:
                 "type": "http",
                 "scheme": "bearer",
                 "bearerFormat": "JWT",
-            }
+            },
+            "ApiKeyAuth": {
+                "type": "apiKey",
+                "in": "header",
+                "name": "Authorization",
+            },
         }
         # Apply security globally to all endpoints
         openapi_schema["security"] = [{"BearerAuth": []}]
