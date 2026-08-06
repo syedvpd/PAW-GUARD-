@@ -51,7 +51,8 @@ class DonationRepository:
     async def create_donor_profile(self, profile: DonorProfile) -> DonorProfile:
         self._session.add(profile)
         await self._session.flush()
-        return profile
+        res = await self.get_donor_by_id(profile.id)
+        return res if res is not None else profile
 
     async def get_donor_by_id(self, donor_id: uuid.UUID) -> DonorProfile | None:
         stmt = (
