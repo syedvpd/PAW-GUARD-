@@ -43,6 +43,8 @@ from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.rbac import has_permission, require_permission
 from pawguard.modules.dog.repository import DogRepository
+from pawguard.modules.shelter.repository import ShelterRepository
+from pawguard.modules.shelter.schemas import NearbyShelterResponse
 from pawguard.modules.storage.schemas import DownloadUrlResponse
 from pawguard.redis.client import RedisClient, get_redis
 from pawguard.services.audit_service import AuditService
@@ -59,9 +61,31 @@ def get_adoption_service(
 ) -> AdoptionService:
     repo = AdoptionRepository(db)
     dog_repo = DogRepository(db)
+    shelter_repo = ShelterRepository(db)
     storage_svc = StorageService()
     return AdoptionService(
-        repo, dog_repo, redis_client=redis, audit_service=audit, storage_service=storage_svc
+        repo, dog_repo, redis_client=redis, audit_service=audit, storage_service=storage_svc,
+        shelter_repo=shelter_repo,
+    )
+
+
+@router.get(
+    "/nearby-shelters",
+    response_model=ApiResponse[list[NearbyShelterResponse]],
+)
+async def find_nearby_shelters(
+    latitude: float = Query(..., ge=-90.0, le=90.0, description="Latitude of the search point (WGS-84)"),
+    longitude: float = Query(..., ge=-180.0, le=180.0, description="Longitude of the search point (WGS-84)"),
+    radius: float = Query(5.0, gt=0.0, le=100.0, description="Search radius in kilometers"),
+    current_user: CurrentUser = Depends(get_current_user),
+    service: AdoptionService = Depends(get_adoption_service),
+) -> ApiResponse[list[NearbyShelterResponse]]:
+    """Adoption flow lookup: shelters within ``radius`` km of the adopter's
+    location, nearest first, each with its currently adoptable dogs."""
+    result = await service.find_nearby_shelters(latitude, longitude, radius)
+    return ApiResponse(
+        data=[NearbyShelterResponse.model_validate(s) for s in result],
+        message=f"{len(result)} shelter(s) found within {radius} km.",
     )
 
 

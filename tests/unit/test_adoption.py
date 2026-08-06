@@ -27,6 +27,8 @@ from pawguard.modules.adoption.service import AdoptionService
 from pawguard.modules.auth.models import User
 from pawguard.modules.dog.models import DogProfile, DogStatus
 from pawguard.modules.dog.repository import DogRepository
+from pawguard.modules.shelter.models import FacilityStatus, FacilityType, ShelterFacility
+from pawguard.modules.shelter.repository import ShelterRepository
 from pawguard.services.audit_service import AuditService
 from pawguard.services.storage_service import StorageService
 
@@ -484,6 +486,67 @@ class TestAdoptionService:
 
         with pytest.raises(ConflictError, match="Cannot update the fee"):
             await service.update_adoption_fee(app_id, Decimal("150.00"))
+
+
+class TestNearbyShelters(TestAdoptionService):
+    @pytest.fixture
+    def mock_shelter_repo(self):
+        return AsyncMock(spec=ShelterRepository)
+
+    @pytest.fixture
+    def service(self, mock_repo, mock_dog_repo, mock_audit, mock_shelter_repo):
+        return AdoptionService(mock_repo, mock_dog_repo, mock_audit, shelter_repo=mock_shelter_repo)
+
+    @pytest.mark.asyncio
+    async def test_find_nearby_shelters_returns_nearest_first_with_dogs(
+        self, service, mock_shelter_repo
+    ):
+        now = datetime.now(UTC)
+        near_id = uuid.uuid4()
+        far_id = uuid.uuid4()
+        near_dog = DogProfile(
+            id=uuid.uuid4(), registration_number="DOG-001", name="Rex",
+            breed="Indie Mix", breed_classification="mix", gender="male",
+            is_spayed_neutered=False, is_adoptable=True, is_quarantine_passed=True,
+            shelter_facility_id=near_id, created_at=now, updated_at=now,
+            status=DogStatus.SHELTER,
+        )
+        near_facility = ShelterFacility(
+            id=near_id, name="Near Shelter", address="Near St", phone="+1",
+            latitude=28.6, longitude=77.2, total_capacity=50,
+            facility_type=FacilityType.SHELTER, status=FacilityStatus.ACTIVE,
+            created_at=now, updated_at=now,
+        )
+        far_facility = ShelterFacility(
+            id=far_id, name="Far Shelter", address="Far St", phone="+2",
+            latitude=29.0, longitude=78.0, total_capacity=50,
+            facility_type=FacilityType.SHELTER, status=FacilityStatus.ACTIVE,
+            created_at=now, updated_at=now, deleted_at=None,
+        )
+        mock_shelter_repo.find_nearby_facilities.return_value = [
+            (near_facility, 1.5),
+            (far_facility, 12.3),
+        ]
+        mock_shelter_repo.list_adoptable_dogs_by_facilities.return_value = [near_dog]
+
+        result = await service.find_nearby_shelters(28.6, 77.2, 10.0)
+
+        assert len(result) == 2
+        assert [r.name for r in result] == ["Near Shelter", "Far Shelter"]
+        assert result[0].distance_km == 1.5
+        assert [dog.id for dog in result[0].adoptable_dogs] == [near_dog.id]
+        assert result[1].adoptable_dogs == []
+        mock_shelter_repo.find_nearby_facilities.assert_awaited_once_with(28.6, 77.2, 10.0)
+        mock_shelter_repo.list_adoptable_dogs_by_facilities.assert_awaited_once_with(
+            [near_id, far_id]
+        )
+
+    @pytest.mark.asyncio
+    async def test_find_nearby_shelters_empty(self, service, mock_shelter_repo):
+        mock_shelter_repo.find_nearby_facilities.return_value = []
+        result = await service.find_nearby_shelters(28.6, 77.2, 10.0)
+        assert result == []
+        mock_shelter_repo.list_adoptable_dogs_by_facilities.assert_not_awaited()
 
 
 class TestAdoptionScores:

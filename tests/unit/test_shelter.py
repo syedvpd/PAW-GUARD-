@@ -17,7 +17,6 @@ from pawguard.modules.shelter.models import (
     DailyCareLog,
     FacilityStatus,
     FacilityTransfer,
-    FacilityType,
     Kennel,
     KennelCleaningLog,
     KennelSanitationState,
@@ -498,52 +497,3 @@ class TestShelterService:
         )
         result = await service.create_section(facility_id, payload, actor_id=uuid.uuid4())
         assert result.section_type == SectionType.QUARANTINE
-
-    @pytest.mark.asyncio
-    async def test_find_nearby_shelters_returns_nearest_first_with_dogs(
-        self, service, mock_repo
-    ):
-        now = datetime.now()
-        near_id = uuid.uuid4()
-        far_id = uuid.uuid4()
-        near_dog = DogProfile(
-            id=uuid.uuid4(), registration_number="DOG-001", name="Rex",
-            breed="Indie Mix", breed_classification="mix", gender="male",
-            is_spayed_neutered=False, is_adoptable=True, is_quarantine_passed=True,
-            shelter_facility_id=near_id, created_at=now, updated_at=now,
-            status=DogStatus.SHELTER,
-        )
-        near_facility = ShelterFacility(
-            id=near_id, name="Near Shelter", address="Near St", phone="+1",
-            latitude=28.6, longitude=77.2, total_capacity=50,
-            facility_type=FacilityType.SHELTER, status=FacilityStatus.ACTIVE,
-            created_at=now, updated_at=now,
-        )
-        far_facility = ShelterFacility(
-            id=far_id, name="Far Shelter", address="Far St", phone="+2",
-            latitude=29.0, longitude=78.0, total_capacity=50,
-            facility_type=FacilityType.SHELTER, status=FacilityStatus.ACTIVE,
-            created_at=now, updated_at=now, deleted_at=None,
-        )
-        mock_repo.find_nearby_facilities.return_value = [
-            (near_facility, 1.5),
-            (far_facility, 12.3),
-        ]
-        mock_repo.list_adoptable_dogs_by_facilities.return_value = [near_dog]
-
-        result = await service.find_nearby_shelters(28.6, 77.2, 10.0)
-
-        assert len(result) == 2
-        assert [r.name for r in result] == ["Near Shelter", "Far Shelter"]
-        assert result[0].distance_km == 1.5
-        assert [dog.id for dog in result[0].adoptable_dogs] == [near_dog.id]
-        assert result[1].adoptable_dogs == []
-        mock_repo.find_nearby_facilities.assert_awaited_once_with(28.6, 77.2, 10.0)
-        mock_repo.list_adoptable_dogs_by_facilities.assert_awaited_once_with([near_id, far_id])
-
-    @pytest.mark.asyncio
-    async def test_find_nearby_shelters_empty(self, service, mock_repo):
-        mock_repo.find_nearby_facilities.return_value = []
-        result = await service.find_nearby_shelters(28.6, 77.2, 10.0)
-        assert result == []
-        mock_repo.list_adoptable_dogs_by_facilities.assert_not_awaited()

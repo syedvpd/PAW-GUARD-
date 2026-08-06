@@ -26,8 +26,10 @@ from pawguard.modules.adoption.schemas import (
     AdoptionScoreCreate,
 )
 from pawguard.modules.auth.models import AuthAuditEventType
-from pawguard.modules.dog.models import DogStatus
+from pawguard.modules.dog.models import DogProfile, DogStatus
 from pawguard.modules.dog.repository import DogRepository
+from pawguard.modules.shelter.repository import ShelterRepository
+from pawguard.modules.shelter.schemas import NearbyShelterResponse
 from pawguard.modules.storage.models import FileFolder, StoredFile
 from pawguard.redis.client import RedisClient
 from pawguard.services.audit_service import AuditService
@@ -66,12 +68,14 @@ class AdoptionService:
         audit_service: AuditService | None = None,
         storage_service: StorageService | None = None,
         redis_client: RedisClient | None = None,
+        shelter_repo: ShelterRepository | None = None,
     ) -> None:
         self._repo = repository
         self._dog_repo = dog_repo
         self._redis = redis_client
         self._audit = audit_service
         self._storage = storage_service
+        self._shelter_repo = shelter_repo
 
 
 
@@ -582,6 +586,54 @@ class AdoptionService:
             data=[AdoptionApplicationResponse.model_validate(a) for a in results],
             meta=build_pagination_meta(total=total, params=page),
         )
+
+    async def find_nearby_shelters(
+        self,
+        latitude: float,
+        longitude: float,
+        radius_km: float,
+    ) -> list[NearbyShelterResponse]:
+        """Return shelters within ``radius_km`` of the adopter's location,
+        nearest first, each bundled with its currently adoptable dogs.
+
+        Used by the apply-for-adoption flow to let an adopter pick a dog
+        that is near them. Reuses the shelter module's geospatial query so
+        the haversine logic lives in exactly one place.
+        """
+        if self._shelter_repo is None:
+            return []
+
+        nearby = await self._shelter_repo.find_nearby_facilities(latitude, longitude, radius_km)
+        if not nearby:
+            return []
+
+        facility_ids = [facility.id for facility, _distance in nearby]
+        dogs = await self._shelter_repo.list_adoptable_dogs_by_facilities(facility_ids)
+
+        dogs_by_facility: dict[uuid.UUID, list[DogProfile]] = {}
+        for dog in dogs:
+            dogs_by_facility.setdefault(dog.shelter_facility_id, []).append(dog)
+
+        results: list[NearbyShelterResponse] = []
+        for facility, distance_km in nearby:
+            results.append(
+                NearbyShelterResponse(
+                    id=facility.id,
+                    name=facility.name,
+                    address=facility.address,
+                    phone=facility.phone,
+                    latitude=(
+                        float(facility.latitude) if facility.latitude is not None else None
+                    ),
+                    longitude=(
+                        float(facility.longitude) if facility.longitude is not None else None
+                    ),
+                    facility_type=facility.facility_type,
+                    distance_km=distance_km,
+                    adoptable_dogs=dogs_by_facility.get(facility.id) or [],
+                )
+            )
+        return results
 
     async def soft_delete_application(
         self,
