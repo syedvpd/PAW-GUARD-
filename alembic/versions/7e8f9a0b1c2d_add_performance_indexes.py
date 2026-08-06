@@ -22,15 +22,15 @@ def upgrade() -> None:
     op.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm;")
 
     # 2. GIN Trigram Indexes for text search
-    op.execute("CREATE INDEX IF NOT EXISTS idx_dogs_name_trgm ON dogs USING gin (name gin_trgm_ops);")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_dogs_breed_trgm ON dogs USING gin (breed gin_trgm_ops);")
+    op.execute("CREATE INDEX IF NOT EXISTS idx_dogs_name_trgm ON dog_profiles USING gin (name gin_trgm_ops);")
+    op.execute("CREATE INDEX IF NOT EXISTS idx_dogs_breed_trgm ON dog_profiles USING gin (breed gin_trgm_ops);")
     op.execute("CREATE INDEX IF NOT EXISTS idx_inventory_items_name_trgm ON inventory_items USING gin (name gin_trgm_ops);")
 
     # 3. Composite & Partial B-Tree Indexes for frequent filtering
     op.create_index(
         "idx_dogs_status_shelter_id",
-        "dogs",
-        ["status", "shelter_id"],
+        "dog_profiles",
+        ["status", "shelter_facility_id"],
         postgresql_where=sa.text("deleted_at IS NULL"),
         if_not_exists=True,
     )
@@ -52,13 +52,12 @@ def upgrade() -> None:
         "idx_donations_donor_status",
         "donations",
         ["donor_id", "status"],
-        postgresql_where=sa.text("deleted_at IS NULL"),
         if_not_exists=True,
     )
     op.create_index(
-        "idx_rescue_requests_status_urgency",
+        "idx_rescue_requests_status_severity",
         "rescue_requests",
-        ["status", "urgency"],
+        ["status", "severity"],
         postgresql_where=sa.text("deleted_at IS NULL"),
         if_not_exists=True,
     )
@@ -73,11 +72,11 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index("idx_adoption_apps_status_adopter", table_name="adoption_applications", if_exists=True)
-    op.drop_index("idx_rescue_requests_status_urgency", table_name="rescue_requests", if_exists=True)
+    op.drop_index("idx_rescue_requests_status_severity", table_name="rescue_requests", if_exists=True)
     op.drop_index("idx_donations_donor_status", table_name="donations", if_exists=True)
     op.drop_index("idx_inventory_items_expiry", table_name="inventory_items", if_exists=True)
     op.drop_index("idx_inventory_items_low_stock", table_name="inventory_items", if_exists=True)
-    op.drop_index("idx_dogs_status_shelter_id", table_name="dogs", if_exists=True)
+    op.drop_index("idx_dogs_status_shelter_id", table_name="dog_profiles", if_exists=True)
 
     op.execute("DROP INDEX IF EXISTS idx_inventory_items_name_trgm;")
     op.execute("DROP INDEX IF EXISTS idx_dogs_breed_trgm;")
