@@ -8,6 +8,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pawguard.modules.auth.models import AuthAuditEventType, AuthAuditLog
 
 
+def _jsonable(value: Any) -> Any:
+    """Recursively coerce values into JSON-safe primitives for JSONB columns.
+
+    UUIDs (and StrEnum/bytes) cannot be serialized to Postgres JSONB by the
+    asyncpg driver; stringify them so audit metadata / state snapshots that
+    embed entity IDs persist instead of raising a 500.
+    """
+    if isinstance(value, uuid.UUID):
+        return str(value)
+    if isinstance(value, dict):
+        return {k: _jsonable(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_jsonable(v) for v in value]
+    return value
+
+
 class AuditService:
     """Writes to `auth_audit_logs`. A generic cross-module `audit_logs` table can be added
     when non-auth domains need auditing — this stays auth-scoped for Phase 1."""
@@ -31,9 +47,9 @@ class AuditService:
             event_type=event_type.value,
             ip_address=ip_address,
             user_agent=user_agent,
-            event_metadata=metadata,
-            before_state=before_state,
-            after_state=after_state,
+            event_metadata=_jsonable(metadata),
+            before_state=_jsonable(before_state),
+            after_state=_jsonable(after_state),
         )
         self._session.add(entry)
         await self._session.flush()

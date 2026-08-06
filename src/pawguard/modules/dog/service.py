@@ -95,6 +95,22 @@ def _parse_age_months(estimated_age: str | None) -> int | None:
     return None
 
 
+def _jsonable(value: Any) -> Any:
+    """Recursively coerce values into JSON-safe primitives for JSONB columns.
+
+    UUIDs (and StrEnum/bytes) cannot be serialized to Postgres JSONB by the
+    asyncpg driver; stringify them so metadata like ``{"changes": {...}}`` that
+    embeds facility/section IDs persists instead of raising a 500.
+    """
+    if isinstance(value, uuid.UUID):
+        return str(value)
+    if isinstance(value, dict):
+        return {k: _jsonable(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_jsonable(v) for v in value]
+    return value
+
+
 async def record_activity(
     session: AsyncSession,
     *,
@@ -651,6 +667,6 @@ class DogService:
                 actor_id=actor_id,
                 event_type=event_type,
                 message=message,
-                event_metadata=metadata,
+                event_metadata=_jsonable(metadata),
             )
         )
