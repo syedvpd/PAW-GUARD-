@@ -13,6 +13,7 @@ from pawguard.core.responses import PaginationMeta
 from pawguard.core.search import SortParams
 from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
 from pawguard.modules.auth.models import AuthAuditEventType
+from pawguard.modules.auth.service import RequestContext
 from pawguard.modules.dog.models import DogProfile, DogStatus
 from pawguard.modules.donation.models import Donation, DonationStatus, DonorProfile
 from pawguard.modules.foster.models import FosterProfile, FosterStatus
