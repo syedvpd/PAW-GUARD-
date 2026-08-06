@@ -169,6 +169,7 @@ class AdoptionRepository:
             .where(
                 AdoptionApplication.adopter_id == adopter_id,
                 AdoptionApplication.dog_id == dog_id,
+                AdoptionApplication.status != AdoptionStatus.REJECTED,
                 AdoptionApplication.deleted_at.is_(None),
             )
             .order_by(AdoptionApplication.created_at.desc())

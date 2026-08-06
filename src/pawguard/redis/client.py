@@ -41,7 +41,7 @@ class _NullRedis:
         px: int | None = None,
         nx: bool | None = None,
     ) -> Any:
-        return None
+        return True if nx else None
 
     async def delete(self, key: str) -> None:
         return None

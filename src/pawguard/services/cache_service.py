@@ -34,6 +34,10 @@ class CacheService:
     async def acquire_lock(self, lock_key: str, token: str, expire_ms: int = 10000) -> bool:
         """Acquire a distributed lock with NX PX options."""
         try:
+            from pawguard.redis.client import _NullRedis
+
+            if isinstance(self._redis, _NullRedis):
+                return True
             res = await self._redis.set(self._key(lock_key), token, px=expire_ms, nx=True)
             return bool(res)
         except Exception:
@@ -41,6 +45,11 @@ class CacheService:
 
     async def release_lock(self, lock_key: str, token: str) -> bool:
         """Release a distributed lock atomically using Lua script to verify token ownership."""
+        from pawguard.redis.client import _NullRedis
+
+        if isinstance(self._redis, _NullRedis):
+            return True
+
         lua_script = """
         if redis.call("get", KEYS[1]) == ARGV[1] then
             return redis.call("del", KEYS[1])

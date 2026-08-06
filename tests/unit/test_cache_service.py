@@ -86,7 +86,7 @@ async def test_locks_noop_gracefully_without_redis() -> None:
     redis = _NullRedis()
     cache = CacheService(redis, namespace="test")
 
-    # Without redis config, lock acquisition/release should fail/noop gracefully rather than crash
-    assert await cache.acquire_lock("my_lock", "token") is False
-    assert await cache.release_lock("my_lock", "token") is False
+    # Without redis config, lock acquisition/release should fail open gracefully so business logic is not blocked
+    assert await cache.acquire_lock("my_lock", "token") is True
+    assert await cache.release_lock("my_lock", "token") is True
 

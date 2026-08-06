@@ -32,7 +32,7 @@ class TestAdoptionAPI:
         )
 
     async def _create_dog(self, client: AsyncClient, headers: dict) -> str:
-        payload = {"name": "AdoptDog", "breed": "Lab", "gender": "male", "estimated_age": "2y", "weight": 20, "color": "black", "temperament": "friendly", "is_adoptable": True, "is_quarantine_passed": True}
+        payload = {"name": f"AdoptDog_{uuid.uuid4().hex[:6]}", "breed": "Lab", "gender": "male", "estimated_age": "2y", "weight": 20, "color": "black", "temperament": "friendly", "is_adoptable": True, "is_quarantine_passed": True}
         resp = await client.post("/api/v1/dogs", json=payload, headers=headers)
         dog_id = resp.json()["data"]["id"]
         # is_adoptable is forced False at registration; grant vet clearance
