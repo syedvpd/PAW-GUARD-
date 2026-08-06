@@ -5,8 +5,9 @@ from datetime import datetime
 from enum import StrEnum
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pawguard.db.base import Base
 from pawguard.db.mixins import SoftDeleteMixin, TimestampMixin, UUIDPkMixin
@@ -141,3 +142,74 @@ class UrgentAlert(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+
+class CmsPage(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+    __tablename__ = "cms_pages"
+
+    slug: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    seo_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    seo_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    seo_keywords: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    status: Mapped[ContentStatus] = mapped_column(
+        String(32), default=ContentStatus.DRAFT, nullable=False, index=True
+    )
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    sections: Mapped[list["CmsSection"]] = relationship(
+        "CmsSection", back_populates="page", cascade="all, delete-orphan", order_by="CmsSection.display_order"
+    )
+    versions: Mapped[list["CmsPageVersion"]] = relationship(
+        "CmsPageVersion", back_populates="page", cascade="all, delete-orphan", order_by="CmsPageVersion.version_number.desc()"
+    )
+
+
+class CmsSection(UUIDPkMixin, TimestampMixin, Base):
+    __tablename__ = "cms_sections"
+
+    page_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("cms_pages.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    section_key: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    section_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    display_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    page: Mapped["CmsPage"] = relationship("CmsPage", back_populates="sections")
+    fields: Mapped[list["CmsContentField"]] = relationship(
+        "CmsContentField", back_populates="section", cascade="all, delete-orphan"
+    )
+
+
+class CmsContentField(UUIDPkMixin, TimestampMixin, Base):
+    __tablename__ = "cms_content_fields"
+
+    section_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("cms_sections.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    field_key: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    field_type: Mapped[str] = mapped_column(String(32), default="text", nullable=False)
+    published_value: Mapped[str | None] = mapped_column(Text, nullable=True)
+    draft_value: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    section: Mapped["CmsSection"] = relationship("CmsSection", back_populates="fields")
+
+
+class CmsPageVersion(UUIDPkMixin, Base):
+    __tablename__ = "cms_page_versions"
+
+    page_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("cms_pages.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    snapshot: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    published_by: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.now, nullable=False
+    )
+
+    page: Mapped["CmsPage"] = relationship("CmsPage", back_populates="versions")

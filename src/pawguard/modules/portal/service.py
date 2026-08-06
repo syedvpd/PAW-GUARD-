@@ -19,6 +19,10 @@ from pawguard.modules.foster.models import FosterProfile, FosterStatus
 from pawguard.modules.lost_found.models import FoundReport, LostReport
 from pawguard.modules.portal.models import (
     BlogPost,
+    CmsContentField,
+    CmsPage,
+    CmsPageVersion,
+    CmsSection,
     ContactLocation,
     ContentStatus,
     FAQEntry,
@@ -44,6 +48,9 @@ from pawguard.modules.portal.schemas import (
     UrgentAlertCreate,
     UrgentAlertUpdate,
     UserDashboardSummary,
+    CmsPageResponse,
+    CmsPageUpdate,
+    PublicCmsPageResponse,
     VeterinaryPartnerCreate,
     VeterinaryPartnerUpdate,
 )
@@ -1285,3 +1292,478 @@ class PortalService:
             "breed_observed": f.breed_observed,
             "status": f.status,
         }
+
+    # ── Dynamic CMS Pages ───────────────────────────────────────────────────
+
+    async def _ensure_default_cms_pages_seeded(self) -> None:
+        """Seed default manageable public pages if cms_pages is empty."""
+        existing = await self._repo.list_cms_pages()
+        if existing:
+            return
+
+        now = datetime.now(UTC)
+        for seed in DEFAULT_CMS_PAGES_SEED:
+            page = CmsPage(
+                id=uuid.uuid4(),
+                slug=seed["slug"],
+                name=seed["name"],
+                description=seed.get("description"),
+                seo_title=seed.get("seo_title"),
+                seo_description=seed.get("seo_description"),
+                seo_keywords=seed.get("seo_keywords"),
+                status=ContentStatus.PUBLISHED,
+                published_at=now,
+                created_at=now,
+                updated_at=now,
+            )
+            page.sections = []
+            page.versions = []
+            for s_data in seed.get("sections", []):
+                sec = CmsSection(
+                    id=uuid.uuid4(),
+                    page_id=page.id,
+                    section_key=s_data["key"],
+                    section_name=s_data["name"],
+                    display_order=s_data.get("display_order", 0),
+                    is_active=True,
+                    created_at=now,
+                    updated_at=now,
+                )
+                sec.fields = []
+                for f_data in s_data.get("fields", []):
+                    field = CmsContentField(
+                        id=uuid.uuid4(),
+                        section_id=sec.id,
+                        field_key=f_data["key"],
+                        field_type=f_data.get("type", "text"),
+                        published_value=f_data.get("value"),
+                        draft_value=f_data.get("value"),
+                        created_at=now,
+                        updated_at=now,
+                    )
+                    sec.fields.append(field)
+                page.sections.append(sec)
+            await self._repo.create_cms_page(page)
+
+    async def get_public_cms_page(self, slug: str) -> PublicCmsPageResponse:
+        """Get live published content for a public CMS page."""
+        await self._ensure_default_cms_pages_seeded()
+        page = await self._repo.get_cms_page_by_slug(slug)
+        if page is None:
+            raise NotFoundError(f"CMS page '{slug}' not found.")
+
+        sections_dict: dict[str, dict[str, Any]] = {}
+        for sec in page.sections:
+            if not sec.is_active:
+                continue
+            sec_fields: dict[str, Any] = {}
+            for f in sec.fields:
+                sec_fields[f.field_key] = f.published_value
+            sections_dict[sec.section_key] = sec_fields
+
+        return PublicCmsPageResponse(
+            slug=page.slug,
+            name=page.name,
+            seo_title=page.seo_title,
+            seo_description=page.seo_description,
+            seo_keywords=page.seo_keywords,
+            published_at=page.published_at,
+            sections=sections_dict,
+        )
+
+    async def list_cms_pages(self) -> list[CmsPageResponse]:
+        """List all manageable CMS pages for admin."""
+        await self._ensure_default_cms_pages_seeded()
+        pages = await self._repo.list_cms_pages()
+        return [CmsPageResponse.model_validate(p) for p in pages]
+
+    async def get_admin_cms_page(self, slug: str) -> CmsPageResponse:
+        """Get detailed CMS page editor content for admin."""
+        await self._ensure_default_cms_pages_seeded()
+        page = await self._repo.get_cms_page_by_slug(slug)
+        if page is None:
+            raise NotFoundError(f"CMS page '{slug}' not found.")
+        return CmsPageResponse.model_validate(page)
+
+    async def update_admin_cms_page(
+        self,
+        slug: str,
+        payload: CmsPageUpdate,
+        user_id: uuid.UUID | None = None,
+        ctx: RequestContext | None = None,
+    ) -> CmsPageResponse:
+        """Save draft changes for a CMS page and its section fields."""
+        await self._ensure_default_cms_pages_seeded()
+        page = await self._repo.get_cms_page_by_slug(slug)
+        if page is None:
+            raise NotFoundError(f"CMS page '{slug}' not found.")
+
+        if payload.name is not None:
+            page.name = payload.name
+        if payload.description is not None:
+            page.description = payload.description
+        if payload.seo_title is not None:
+            page.seo_title = payload.seo_title
+        if payload.seo_description is not None:
+            page.seo_description = payload.seo_description
+        if payload.seo_keywords is not None:
+            page.seo_keywords = payload.seo_keywords
+
+        sec_map = {sec.section_key: sec for sec in page.sections}
+        for sec_update in payload.sections:
+            sec = sec_map.get(sec_update.section_key)
+            if sec is None:
+                sec = CmsSection(
+                    page_id=page.id,
+                    section_key=sec_update.section_key,
+                    section_name=sec_update.section_name or sec_update.section_key.title(),
+                    display_order=sec_update.display_order or 0,
+                    is_active=sec_update.is_active if sec_update.is_active is not None else True,
+                )
+                page.sections.append(sec)
+                sec_map[sec_update.section_key] = sec
+            else:
+                if sec_update.section_name is not None:
+                    sec.section_name = sec_update.section_name
+                if sec_update.display_order is not None:
+                    sec.display_order = sec_update.display_order
+                if sec_update.is_active is not None:
+                    sec.is_active = sec_update.is_active
+
+            field_map = {f.field_key: f for f in sec.fields}
+            for f_update in sec_update.fields:
+                f = field_map.get(f_update.field_key)
+                if f is None:
+                    f = CmsContentField(
+                        section_id=sec.id,
+                        field_key=f_update.field_key,
+                        field_type=f_update.field_type or "text",
+                        published_value=None,
+                        draft_value=f_update.value,
+                    )
+                    sec.fields.append(f)
+                else:
+                    f.draft_value = f_update.value
+                    if f_update.field_type:
+                        f.field_type = f_update.field_type
+
+        page.status = ContentStatus.DRAFT
+        await self._repo.save_cms_page()
+
+        if self._audit:
+            await self._audit.record(
+                event_type=AuthAuditEventType.SYSTEM_SETTING_CHANGED,
+                user_id=user_id,
+                ip_address=ctx.ip_address if ctx else None,
+                user_agent=ctx.user_agent if ctx else None,
+                metadata={"action": "cms_draft_saved", "slug": slug},
+            )
+
+        return CmsPageResponse.model_validate(page)
+
+    async def publish_admin_cms_page(
+        self,
+        slug: str,
+        user_id: uuid.UUID | None = None,
+        ctx: RequestContext | None = None,
+    ) -> CmsPageResponse:
+        """Publish draft content to public live state and record a version snapshot."""
+        await self._ensure_default_cms_pages_seeded()
+        page = await self._repo.get_cms_page_by_slug(slug)
+        if page is None:
+            raise NotFoundError(f"CMS page '{slug}' not found.")
+
+        for sec in page.sections:
+            for f in sec.fields:
+                f.published_value = f.draft_value
+
+        page.status = ContentStatus.PUBLISHED
+        page.published_at = datetime.now(UTC)
+
+        version_num = len(page.versions) + 1
+        snapshot_data = {
+            "slug": page.slug,
+            "name": page.name,
+            "seo_title": page.seo_title,
+            "seo_description": page.seo_description,
+            "seo_keywords": page.seo_keywords,
+            "published_at": page.published_at.isoformat(),
+            "sections": {
+                sec.section_key: {
+                    f.field_key: f.published_value for f in sec.fields
+                }
+                for sec in page.sections if sec.is_active
+            },
+        }
+
+        version = CmsPageVersion(
+            page_id=page.id,
+            version_number=version_num,
+            snapshot=snapshot_data,
+            published_by=user_id,
+        )
+        await self._repo.create_cms_page_version(version)
+        await self._repo.save_cms_page()
+
+        if self._audit:
+            await self._audit.record(
+                event_type=AuthAuditEventType.SYSTEM_SETTING_CHANGED,
+                user_id=user_id,
+                ip_address=ctx.ip_address if ctx else None,
+                user_agent=ctx.user_agent if ctx else None,
+                metadata={"action": "cms_page_published", "slug": slug, "version": version_num},
+            )
+
+        return CmsPageResponse.model_validate(page)
+
+    async def discard_admin_cms_page(
+        self,
+        slug: str,
+        user_id: uuid.UUID | None = None,
+        ctx: RequestContext | None = None,
+    ) -> CmsPageResponse:
+        """Discard draft changes and revert draft values back to published values."""
+        await self._ensure_default_cms_pages_seeded()
+        page = await self._repo.get_cms_page_by_slug(slug)
+        if page is None:
+            raise NotFoundError(f"CMS page '{slug}' not found.")
+
+        for sec in page.sections:
+            for f in sec.fields:
+                f.draft_value = f.published_value
+
+        page.status = ContentStatus.PUBLISHED
+        await self._repo.save_cms_page()
+
+        if self._audit:
+            await self._audit.record(
+                event_type=AuthAuditEventType.SYSTEM_SETTING_CHANGED,
+                user_id=user_id,
+                ip_address=ctx.ip_address if ctx else None,
+                user_agent=ctx.user_agent if ctx else None,
+                metadata={"action": "cms_draft_discarded", "slug": slug},
+            )
+
+        return CmsPageResponse.model_validate(page)
+
+
+DEFAULT_CMS_PAGES_SEED: list[dict[str, Any]] = [
+    {
+        "slug": "home",
+        "name": "Home Page",
+        "description": "Main landing page hero, mission, and emergency callouts",
+        "seo_title": "PawGuard - Animal Rescue & Welfare Platform",
+        "seo_description": "Connecting rescued animals with loving families across the community.",
+        "seo_keywords": "dog rescue, adoption, animal welfare, shelter",
+        "sections": [
+            {
+                "key": "hero",
+                "name": "Hero Banner",
+                "display_order": 1,
+                "fields": [
+                    {"key": "hero_badge", "type": "text", "value": "Every Paw Deserves a Home"},
+                    {"key": "title", "type": "text", "value": "Find Your New Best Friend..."},
+                    {"key": "subtitle", "type": "textarea", "value": "PawGuard connects rescued animals with loving families, helping every pet find a safe and caring forever home."},
+                    {"key": "primary_cta_text", "type": "text", "value": "Adopt a Pet"},
+                    {"key": "primary_cta_url", "type": "url", "value": "/adopt"},
+                    {"key": "secondary_cta_text", "type": "text", "value": "Report Lost Pet"},
+                    {"key": "secondary_cta_url", "type": "url", "value": "/lost-found"},
+                    {"key": "hero_image_url", "type": "image", "value": "https://images.unsplash.com/photo-1543466835-00a7907e9de1"},
+                ],
+            },
+            {
+                "key": "mission",
+                "name": "Mission Section",
+                "display_order": 2,
+                "fields": [
+                    {"key": "heading", "type": "text", "value": "Our Core Mission"},
+                    {"key": "body", "type": "textarea", "value": "Dedicated to rescuing street dogs, providing medical care, shelter, and matching them with caring forever homes."},
+                ],
+            },
+            {
+                "key": "cta",
+                "name": "Emergency Rescue Banner",
+                "display_order": 3,
+                "fields": [
+                    {"key": "heading", "type": "text", "value": "Emergency Rescue Needed?"},
+                    {"key": "subheading", "type": "text", "value": "Our dispatch team operates 24/7 for stray rescue."},
+                    {"key": "button_text", "type": "text", "value": "Report Incident"},
+                    {"key": "button_url", "type": "url", "value": "/rescue"},
+                ],
+            },
+        ],
+    },
+    {
+        "slug": "about",
+        "name": "About & Mission",
+        "description": "Organization background, core values, and mission",
+        "seo_title": "About PawGuard - Rescue & Welfare Mission",
+        "seo_description": "Empowering communities to protect, rescue, and care for strays.",
+        "seo_keywords": "about us, mission, animal welfare organization",
+        "sections": [
+            {
+                "key": "hero",
+                "name": "Hero Section",
+                "display_order": 1,
+                "fields": [
+                    {"key": "title", "type": "text", "value": "About PawGuard"},
+                    {"key": "subtitle", "type": "textarea", "value": "Empowering communities to protect, rescue, and care for strays."},
+                ],
+            },
+            {
+                "key": "vision",
+                "name": "Our Vision",
+                "display_order": 2,
+                "fields": [
+                    {"key": "heading", "type": "text", "value": "Our Vision"},
+                    {"key": "body", "type": "textarea", "value": "A world where no animal suffers from neglect, injury, or homelessness."},
+                ],
+            },
+        ],
+    },
+    {
+        "slug": "adopt",
+        "name": "Adoption Directory",
+        "description": "Adoptable dog directory headers and guidelines",
+        "seo_title": "Adoptable Dogs - PawGuard",
+        "seo_description": "Browse rescued dogs ready for loving homes.",
+        "seo_keywords": "adopt dog, adoptable pets, dog adoption process",
+        "sections": [
+            {
+                "key": "hero",
+                "name": "Hero Section",
+                "display_order": 1,
+                "fields": [
+                    {"key": "title", "type": "text", "value": "Adoptable Dogs"},
+                    {"key": "subtitle", "type": "textarea", "value": "Browse rescued dogs ready for loving homes."},
+                    {"key": "notice", "type": "text", "value": "All dogs are vaccinated, dewormed, and microchipped."},
+                ],
+            },
+            {
+                "key": "process",
+                "name": "Adoption Process",
+                "display_order": 2,
+                "fields": [
+                    {"key": "heading", "type": "text", "value": "Adoption Workflow"},
+                    {"key": "body", "type": "textarea", "value": "Submit an application -> Meet & Greet -> Home Check -> Welcome Home!"},
+                ],
+            },
+        ],
+    },
+    {
+        "slug": "rescue",
+        "name": "Emergency Rescue Portal",
+        "description": "Rescue hotline info and incident report guidance",
+        "seo_title": "Emergency Rescue - PawGuard",
+        "seo_description": "Report injured or distressed strays for immediate dispatch.",
+        "seo_keywords": "dog rescue helpline, emergency stray rescue",
+        "sections": [
+            {
+                "key": "hero",
+                "name": "Hero Section",
+                "display_order": 1,
+                "fields": [
+                    {"key": "title", "type": "text", "value": "Emergency Rescue Operations"},
+                    {"key": "subtitle", "type": "textarea", "value": "Report injured or distressed strays for immediate dispatch."},
+                    {"key": "hotline", "type": "text", "value": "+1 (800) 555-PAW1"},
+                ],
+            },
+        ],
+    },
+    {
+        "slug": "lost-found",
+        "name": "Lost & Found Portal",
+        "description": "Lost and found pet reporting guidance",
+        "seo_title": "Lost & Found Pets - PawGuard",
+        "seo_description": "Reuniting lost dogs with their owners across the community.",
+        "seo_keywords": "lost dog, found pet, pet matching",
+        "sections": [
+            {
+                "key": "hero",
+                "name": "Hero Section",
+                "display_order": 1,
+                "fields": [
+                    {"key": "title", "type": "text", "value": "Lost & Found Pets"},
+                    {"key": "subtitle", "type": "textarea", "value": "Reuniting lost dogs with their owners across the community."},
+                ],
+            },
+        ],
+    },
+    {
+        "slug": "community",
+        "name": "Community & Education",
+        "description": "Community guidelines and awareness posts",
+        "seo_title": "Community & Awareness - PawGuard",
+        "seo_description": "Learn animal welfare practices, volunteer, or foster.",
+        "seo_keywords": "community welfare, volunteer, foster",
+        "sections": [
+            {
+                "key": "hero",
+                "name": "Hero Section",
+                "display_order": 1,
+                "fields": [
+                    {"key": "title", "type": "text", "value": "Community & Awareness"},
+                    {"key": "subtitle", "type": "textarea", "value": "Learn animal welfare practices, volunteer, or foster."},
+                ],
+            },
+        ],
+    },
+    {
+        "slug": "donate",
+        "name": "Donation Gateway",
+        "description": "Donation appeal banners and tax exemption info",
+        "seo_title": "Donate & Support - PawGuard",
+        "seo_description": "Your contributions fund medical surgeries, food, shelter, and rescue runs.",
+        "seo_keywords": "donate animal shelter, 80G tax exemption, dog rescue donation",
+        "sections": [
+            {
+                "key": "hero",
+                "name": "Hero Section",
+                "display_order": 1,
+                "fields": [
+                    {"key": "title", "type": "text", "value": "Support Our Mission"},
+                    {"key": "subtitle", "type": "textarea", "value": "Your contributions fund medical surgeries, food, shelter, and rescue runs."},
+                    {"key": "tax_info", "type": "text", "value": "80G Tax Exemption Eligible."},
+                ],
+            },
+        ],
+    },
+    {
+        "slug": "contact",
+        "name": "Contact & Shelters",
+        "description": "Contact info, operating hours, and location headers",
+        "seo_title": "Contact Us - PawGuard",
+        "seo_description": "Find shelter addresses, emergency hotlines, and operating hours.",
+        "seo_keywords": "contact pawguard, shelter location, emergency phone",
+        "sections": [
+            {
+                "key": "hero",
+                "name": "Hero Section",
+                "display_order": 1,
+                "fields": [
+                    {"key": "title", "type": "text", "value": "Get in Touch"},
+                    {"key": "subtitle", "type": "textarea", "value": "Find shelter addresses, emergency hotlines, and operating hours."},
+                ],
+            },
+        ],
+    },
+    {
+        "slug": "faq",
+        "name": "FAQ & Help Center",
+        "description": "Frequently asked questions header and metadata",
+        "seo_title": "Frequently Asked Questions - PawGuard",
+        "seo_description": "Find answers to common questions about rescue, adoption, and volunteering.",
+        "seo_keywords": "faq, pawguard help, adoption questions",
+        "sections": [
+            {
+                "key": "hero",
+                "name": "Hero Section",
+                "display_order": 1,
+                "fields": [
+                    {"key": "title", "type": "text", "value": "Frequently Asked Questions"},
+                    {"key": "subtitle", "type": "textarea", "value": "Find answers to common questions about rescue, adoption, and volunteering."},
+                ],
+            },
+        ],
+    },
+]

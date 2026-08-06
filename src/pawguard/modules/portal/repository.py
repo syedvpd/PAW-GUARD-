@@ -6,12 +6,17 @@ from datetime import UTC, datetime
 
 from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from pawguard.core.pagination import PageParams
 from pawguard.core.search import SortParams, apply_sorting
 from pawguard.modules.portal.models import (
     AlertSeverity,
     BlogPost,
+    CmsContentField,
+    CmsPage,
+    CmsPageVersion,
+    CmsSection,
     ContactLocation,
     ContentStatus,
     FAQEntry,
@@ -585,3 +590,35 @@ class PortalRepository:
         for o in objs:
             o.is_published = is_published
         return len(objs)
+
+    # ── Dynamic CMS Pages & Content ──────────────────────────────────────────
+
+    async def get_cms_page_by_slug(self, slug: str) -> CmsPage | None:
+        stmt = (
+            select(CmsPage)
+            .options(selectinload(CmsPage.sections).selectinload(CmsSection.fields))
+            .where(CmsPage.slug == slug, CmsPage.deleted_at.is_(None))
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def list_cms_pages(self) -> Sequence[CmsPage]:
+        stmt = (
+            select(CmsPage)
+            .options(selectinload(CmsPage.sections).selectinload(CmsSection.fields))
+            .where(CmsPage.deleted_at.is_(None))
+            .order_by(CmsPage.name)
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def create_cms_page(self, page: CmsPage) -> CmsPage:
+        self._session.add(page)
+        await self._session.flush()
+        return page
+
+    async def save_cms_page(self) -> None:
+        await self._session.flush()
+
+    async def create_cms_page_version(self, version: CmsPageVersion) -> CmsPageVersion:
+        self._session.add(version)
+        await self._session.flush()
+        return version

@@ -342,3 +342,77 @@ class UserDashboardSummary(BaseModel):
     foster_profile: dict[str, Any] | None
     donations: list[dict[str, Any]]
     lost_found_reports: list[dict[str, Any]]
+
+
+# ── Dynamic CMS Schemas ──────────────────────────────────────────────────────
+
+
+class CmsFieldUpdate(BaseModel):
+    field_key: str
+    field_type: str = "text"
+    value: str | None = None
+
+
+class CmsSectionUpdate(BaseModel):
+    section_key: str
+    section_name: str | None = None
+    display_order: int | None = None
+    is_active: bool | None = None
+    fields: list[CmsFieldUpdate] = Field(default_factory=list)
+
+
+class CmsPageUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    seo_title: str | None = None
+    seo_description: str | None = None
+    seo_keywords: str | None = None
+    sections: list[CmsSectionUpdate] = Field(default_factory=list)
+
+
+class CmsFieldResponse(BaseModel):
+    id: uuid.UUID
+    field_key: str
+    field_type: str
+    published_value: str | None
+    draft_value: str | None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CmsSectionResponse(BaseModel):
+    id: uuid.UUID
+    section_key: str
+    section_name: str
+    display_order: int
+    is_active: bool
+    fields: list[CmsFieldResponse]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CmsPageResponse(BaseModel):
+    id: uuid.UUID
+    slug: str
+    name: str
+    description: str | None
+    seo_title: str | None
+    seo_description: str | None
+    seo_keywords: str | None
+    status: ContentStatus
+    published_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+    sections: list[CmsSectionResponse] = Field(default_factory=list)
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PublicCmsPageResponse(BaseModel):
+    slug: str
+    name: str
+    seo_title: str | None
+    seo_description: str | None
+    seo_keywords: str | None
+    published_at: datetime | None
+    sections: dict[str, dict[str, Any]]

@@ -51,6 +51,9 @@ from pawguard.modules.portal.schemas import (
     UrgentAlertResponse,
     UrgentAlertUpdate,
     UserDashboardSummary,
+    CmsPageResponse,
+    CmsPageUpdate,
+    PublicCmsPageResponse,
     VeterinaryPartnerCreate,
     VeterinaryPartnerResponse,
     VeterinaryPartnerUpdate,
@@ -987,3 +990,105 @@ async def admin_list_urgent_alerts(
         data=[UrgentAlertResponse.model_validate(a) for a in alerts],
         meta=meta,
     )
+
+
+# ── Dynamic CMS Endpoints ───────────────────────────────────────────────────
+
+
+@router.get(
+    "/cms/pages/{slug}",
+    response_model=ApiResponse[PublicCmsPageResponse],
+)
+async def get_public_cms_page(
+    slug: str,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[PublicCmsPageResponse]:
+    page = await service.get_public_cms_page(slug)
+    return ApiResponse(data=page)
+
+
+@router.get(
+    "/admin/cms/pages",
+    response_model=ApiResponse[list[CmsPageResponse]],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def list_admin_cms_pages(
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[list[CmsPageResponse]]:
+    pages = await service.list_cms_pages()
+    return ApiResponse(data=pages)
+
+
+@router.get(
+    "/admin/cms/pages/{slug}",
+    response_model=ApiResponse[CmsPageResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def get_admin_cms_page(
+    slug: str,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[CmsPageResponse]:
+    page = await service.get_admin_cms_page(slug)
+    return ApiResponse(data=page)
+
+
+@router.put(
+    "/admin/cms/pages/{slug}",
+    response_model=ApiResponse[CmsPageResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def update_admin_cms_page(
+    slug: str,
+    payload: CmsPageUpdate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[CmsPageResponse]:
+    ctx = _build_request_context(request)
+    page = await service.update_admin_cms_page(
+        slug=slug,
+        payload=payload,
+        user_id=current_user.id,
+        ctx=ctx,
+    )
+    return ApiResponse(data=page, message="CMS draft saved successfully.")
+
+
+@router.post(
+    "/admin/cms/pages/{slug}/publish",
+    response_model=ApiResponse[CmsPageResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def publish_admin_cms_page(
+    slug: str,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[CmsPageResponse]:
+    ctx = _build_request_context(request)
+    page = await service.publish_admin_cms_page(
+        slug=slug,
+        user_id=current_user.id,
+        ctx=ctx,
+    )
+    return ApiResponse(data=page, message="CMS page published successfully.")
+
+
+@router.post(
+    "/admin/cms/pages/{slug}/discard",
+    response_model=ApiResponse[CmsPageResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def discard_admin_cms_page(
+    slug: str,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[CmsPageResponse]:
+    ctx = _build_request_context(request)
+    page = await service.discard_admin_cms_page(
+        slug=slug,
+        user_id=current_user.id,
+        ctx=ctx,
+    )
+    return ApiResponse(data=page, message="CMS draft discarded successfully.")
