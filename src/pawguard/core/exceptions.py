@@ -145,6 +145,10 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(SQLAlchemyError)
     async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError) -> JSONResponse:
+        import traceback
+        print("=== SQLALCHEMY ERROR TRACEBACK ===")
+        traceback.print_exc()
+        print("==================================")
         logger.error(
             "unhandled_database_error",
             path=request.url.path,
@@ -158,6 +162,10 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        import traceback
+        print("=== UNHANDLED EXCEPTION TRACEBACK ===")
+        traceback.print_exc()
+        print("=====================================")
         logger.error(
             "unhandled_exception",
             path=request.url.path,

@@ -16,7 +16,7 @@ from sqlalchemy.orm import selectinload
 
 from pawguard.core.pagination import PageParams
 from pawguard.core.search import SortParams, apply_sorting, build_search_filter
-from pawguard.modules.auth.models import User
+from pawguard.modules.auth.models import Role, User
 from pawguard.modules.donation.models import (
     CampaignStatus,
     DogSponsorship,
@@ -51,8 +51,8 @@ class DonationRepository:
     async def create_donor_profile(self, profile: DonorProfile) -> DonorProfile:
         self._session.add(profile)
         await self._session.flush()
-        res = await self.get_donor_by_id(profile.id)
-        return res if res is not None else profile
+        await self._session.refresh(profile)
+        return profile
 
     async def get_donor_by_id(self, donor_id: uuid.UUID) -> DonorProfile | None:
         stmt = (
@@ -63,6 +63,7 @@ class DonationRepository:
                 .selectinload(Role.permissions)
             )
             .where(DonorProfile.id == donor_id, DonorProfile.deleted_at.is_(None))
+            .execution_options(populate_existing=True)
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
@@ -75,6 +76,7 @@ class DonationRepository:
                 .selectinload(Role.permissions)
             )
             .where(DonorProfile.user_id == user_id, DonorProfile.deleted_at.is_(None))
+            .execution_options(populate_existing=True)
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 

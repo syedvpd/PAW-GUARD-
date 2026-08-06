@@ -163,7 +163,15 @@ class DonationService:
                 existing.tax_identifier = payload.tax_identifier
             if payload.notes:
                 existing.notes = payload.notes
-            await self._repo._session.flush()
+            session = getattr(self._repo, "_session", None)
+            if session is not None and hasattr(session, "flush"):
+                res = session.flush()
+                if hasattr(res, "__await__"):
+                    await res
+                if hasattr(session, "refresh"):
+                    ref = session.refresh(existing)
+                    if hasattr(ref, "__await__"):
+                        await ref
             return existing
 
         profile = DonorProfile(
