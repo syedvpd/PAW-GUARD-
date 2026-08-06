@@ -948,6 +948,11 @@ class AdminService:
         await self._roles.create(role)
         if permission_codes:
             perms = await self._permissions.get_by_codes(permission_codes)
+            found_codes = {p.code for p in perms}
+            invalid_codes = set(permission_codes) - found_codes
+            if invalid_codes:
+                from pawguard.core.exceptions import ValidationFailedError
+                raise ValidationFailedError(f"Invalid permission code(s): {', '.join(sorted(invalid_codes))}")
             await self._roles.set_permissions(role.id, [p.id for p in perms])
         await self._audit.record(
             event_type=AuthAuditEventType.ADMIN_ROLE_CREATED,
@@ -987,6 +992,11 @@ class AdminService:
             role.description = description
         if permission_codes is not None:
             perms = await self._permissions.get_by_codes(permission_codes)
+            found_codes = {p.code for p in perms}
+            invalid_codes = set(permission_codes) - found_codes
+            if invalid_codes:
+                from pawguard.core.exceptions import ValidationFailedError
+                raise ValidationFailedError(f"Invalid permission code(s): {', '.join(sorted(invalid_codes))}")
             await self._roles.set_permissions(role.id, [p.id for p in perms])
         await self._audit.record(
             event_type=AuthAuditEventType.ADMIN_ROLE_UPDATED,
@@ -1122,6 +1132,8 @@ class AdminService:
                     role_ids.append(role.id)
             await self._user_roles.set_roles(user_id, role_ids)
 
+        await self._users._session.flush()
+        await self._users._session.refresh(user)
         fresh = await self._users.get_by_id(user_id)
         await self._audit.record(
             event_type=AuthAuditEventType.ADMIN_USER_UPDATED,

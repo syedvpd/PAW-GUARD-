@@ -35,6 +35,7 @@ class UserRepository:
             select(User)
             .options(selectinload(User.roles).selectinload(Role.permissions))
             .where(User.id == user_id, User.deleted_at.is_(None))
+            .execution_options(populate_existing=True)
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 

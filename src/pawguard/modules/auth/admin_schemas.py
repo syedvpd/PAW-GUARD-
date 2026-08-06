@@ -15,6 +15,14 @@ class RoleCreateRequest(BaseModel):
         default=[], examples=[["adoption:read", "public:read"]]
     )
 
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        v_stripped = v.strip()
+        if not v_stripped:
+            raise ValueError("Role name cannot be empty or whitespace-only")
+        return v_stripped
+
 
 class RoleUpdateRequest(BaseModel):
     description: str | None = Field(None, examples=["Updated role description."])

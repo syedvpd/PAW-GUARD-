@@ -121,7 +121,9 @@ class TestRbacCacheInvalidation:
         role = Role(id=uuid.uuid4(), name="coordinator", is_system=False)
         role_repo.get_by_id.return_value = role
         permission_repo = AsyncMock()
-        permission_repo.get_by_codes.return_value = []
+        perm = AsyncMock()
+        perm.code = "rescue:delete"
+        permission_repo.get_by_codes.return_value = [perm]
         fake_redis = _FakeRedis()
         svc = _make_service(
             role_repo=role_repo, permission_repo=permission_repo, redis=fake_redis
@@ -151,7 +153,9 @@ class TestRbacCacheInvalidation:
         role = Role(id=uuid.uuid4(), name="coordinator", is_system=False)
         role_repo.get_by_id.return_value = role
         permission_repo = AsyncMock()
-        permission_repo.get_by_codes.return_value = []
+        perm = AsyncMock()
+        perm.code = "rescue:delete"
+        permission_repo.get_by_codes.return_value = [perm]
         svc = _make_service(role_repo=role_repo, permission_repo=permission_repo)
 
         await svc.update_role(
