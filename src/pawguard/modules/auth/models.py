@@ -137,6 +137,9 @@ class AuthAuditEventType(StrEnum):
     FINANCE_BUDGET_CREATED = "finance_budget_created"
     FINANCE_BUDGET_ITEM_ADDED = "finance_budget_item_added"
     FINANCE_RECURRING_CREATED = "finance_recurring_created"
+    CMS_PAGE_DRAFT_SAVED = "cms_page_draft_saved"
+    CMS_PAGE_PUBLISHED = "cms_page_published"
+    CMS_PAGE_DRAFT_DISCARDED = "cms_page_draft_discarded"
 
 
 class Role(UUIDPkMixin, TimestampMixin, Base):

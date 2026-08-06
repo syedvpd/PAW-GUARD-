@@ -25,6 +25,7 @@ from pawguard.modules.auth.dependencies import (
     get_optional_current_user,
 )
 from pawguard.modules.auth.rbac import require_permission
+from pawguard.modules.auth.router import _build_request_context
 from pawguard.modules.portal.models import ContentStatus, LegalDocumentType
 from pawguard.modules.portal.repository import PortalRepository
 from pawguard.modules.portal.schemas import (

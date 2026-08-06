@@ -596,7 +596,10 @@ class PortalRepository:
     async def get_cms_page_by_slug(self, slug: str) -> CmsPage | None:
         stmt = (
             select(CmsPage)
-            .options(selectinload(CmsPage.sections).selectinload(CmsSection.fields))
+            .options(
+                selectinload(CmsPage.sections).selectinload(CmsSection.fields),
+                selectinload(CmsPage.versions),
+            )
             .where(CmsPage.slug == slug, CmsPage.deleted_at.is_(None))
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
