@@ -16,7 +16,7 @@ from pawguard.core.config import get_settings
 
 logger = structlog.get_logger(__name__)
 
-_pool: ArqRedis | None = None
+_pool: Any = None
 
 
 class _NullArqPool:
@@ -27,18 +27,38 @@ class _NullArqPool:
         return None
 
 
-async def _ensure_pool() -> ArqRedis:
+class _SafeArqPool:
+    """Wrapper around ArqRedis pool that traps any connection errors during enqueue_job."""
+
+    def __init__(self, inner: Any) -> None:
+        self._inner = inner
+
+    async def enqueue_job(self, *args: Any, **kwargs: Any) -> Any:
+        try:
+            return await self._inner.enqueue_job(*args, **kwargs)
+        except Exception as exc:
+            logger.warning("arq_pool_enqueue_failed_falling_back", error=str(exc))
+            return None
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+
+async def _ensure_pool() -> Any:
     global _pool
     if _pool is not None:
         return _pool
     try:
         settings = get_settings()
-        _pool = await create_pool(RedisSettings.from_dsn(settings.redis_url))
+        redis_settings = RedisSettings.from_dsn(settings.redis_url)
+        redis_settings.conn_timeout = 1.0
+        inner_pool = await create_pool(redis_settings)
+        _pool = _SafeArqPool(inner_pool)  # type: ignore[assignment]
     except Exception:
         logger.warning("arq_pool_unreachable_falling_back_to_noop")
         _pool = _NullArqPool()  # type: ignore[assignment]
     return _pool  # type: ignore[return-value]
 
 
-async def get_arq_pool() -> AsyncGenerator[ArqRedis]:
+async def get_arq_pool() -> AsyncGenerator[Any]:
     yield await _ensure_pool()
