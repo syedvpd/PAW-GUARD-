@@ -393,7 +393,10 @@ class AuthAuditLogRepository:
         event_type: str | None = None,
         user_id: uuid.UUID | None = None,
     ) -> list[AuthAuditLog]:
-        stmt = select(AuthAuditLog)
+        stmt = (
+            select(AuthAuditLog)
+            .options(selectinload(AuthAuditLog.user).selectinload(User.roles))
+        )
         if event_type:
             stmt = stmt.where(AuthAuditLog.event_type == event_type)
         if user_id:
@@ -402,5 +405,9 @@ class AuthAuditLogRepository:
         return list((await self._session.execute(stmt)).scalars().all())
 
     async def get_by_id(self, entry_id: uuid.UUID) -> AuthAuditLog | None:
-        stmt = select(AuthAuditLog).where(AuthAuditLog.id == entry_id)
+        stmt = (
+            select(AuthAuditLog)
+            .options(selectinload(AuthAuditLog.user).selectinload(User.roles))
+            .where(AuthAuditLog.id == entry_id)
+        )
         return (await self._session.execute(stmt)).scalar_one_or_none()

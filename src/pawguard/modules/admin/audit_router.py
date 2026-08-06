@@ -14,6 +14,41 @@ from pawguard.modules.auth.repository import AuthAuditLogRepository
 audit_router = APIRouter(prefix="/admin/audit-logs", tags=["admin-audit"])
 
 
+def _format_audit_entry(e: Any) -> dict[str, Any]:
+    user = getattr(e, "user", None)
+    email = user.email if user else None
+    full_name = user.full_name if user else None
+    roles = [r.name for r in user.roles] if user and hasattr(user, "roles") and user.roles else []
+    primary_role = roles[0] if roles else ("user" if user else "system")
+
+    meta = e.event_metadata or {}
+    if "status" in meta:
+        status_val = str(meta["status"]).lower()
+    elif any(term in e.event_type for term in ["_failed", "_rejected", "_denied", "_error"]):
+        status_val = "failed"
+    else:
+        status_val = "success"
+
+    return {
+        "id": str(e.id),
+        "user_id": str(e.user_id) if e.user_id else None,
+        "user_name": email,
+        "username": email,
+        "email": email,
+        "full_name": full_name,
+        "role": primary_role,
+        "roles": roles,
+        "status": status_val,
+        "event_type": e.event_type,
+        "ip_address": e.ip_address,
+        "user_agent": e.user_agent,
+        "event_metadata": e.event_metadata,
+        "before_state": getattr(e, "before_state", None),
+        "after_state": getattr(e, "after_state", None),
+        "created_at": e.created_at.isoformat() if e.created_at else None,
+    }
+
+
 @audit_router.get(
     "",
     dependencies=[Depends(require_permission("system:admin"))],
@@ -27,20 +62,7 @@ async def list_audit_logs(
 ) -> ApiResponse[list[dict[str, Any]]]:
     repo = AuthAuditLogRepository(db)
     entries = await repo.list(skip=skip, limit=limit, event_type=event_type, user_id=user_id)
-    return ApiResponse(
-        data=[
-            {
-                "id": str(e.id),
-                "user_id": str(e.user_id) if e.user_id else None,
-                "event_type": e.event_type,
-                "ip_address": e.ip_address,
-                "user_agent": e.user_agent,
-                "event_metadata": e.event_metadata,
-                "created_at": e.created_at.isoformat() if e.created_at else None,
-            }
-            for e in entries
-        ]
-    )
+    return ApiResponse(data=[_format_audit_entry(e) for e in entries])
 
 
 @audit_router.get(
@@ -67,15 +89,23 @@ async def export_audit_logs(
     if format.lower() == "csv":
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(["id", "user_id", "event_type", "ip_address", "user_agent", "created_at"])
+        writer.writerow([
+            "id", "user_id", "user_name", "full_name", "role", "status",
+            "event_type", "ip_address", "user_agent", "created_at"
+        ])
         for e in entries:
+            formatted = _format_audit_entry(e)
             writer.writerow([
-                str(e.id),
-                str(e.user_id) if e.user_id else "",
-                e.event_type,
-                e.ip_address or "",
-                e.user_agent or "",
-                e.created_at.isoformat() if e.created_at else "",
+                formatted["id"],
+                formatted["user_id"] or "",
+                formatted["user_name"] or "",
+                formatted["full_name"] or "",
+                formatted["role"] or "",
+                formatted["status"],
+                formatted["event_type"],
+                formatted["ip_address"] or "",
+                formatted["user_agent"] or "",
+                formatted["created_at"] or "",
             ])
         output.seek(0)
         return StreamingResponse(
@@ -85,18 +115,7 @@ async def export_audit_logs(
         )
 
     return ApiResponse(
-        data=[
-            {
-                "id": str(e.id),
-                "user_id": str(e.user_id) if e.user_id else None,
-                "event_type": e.event_type,
-                "ip_address": e.ip_address,
-                "user_agent": e.user_agent,
-                "event_metadata": e.event_metadata,
-                "created_at": e.created_at.isoformat() if e.created_at else None,
-            }
-            for e in entries
-        ],
+        data=[_format_audit_entry(e) for e in entries],
         message="Audit logs exported successfully.",
     )
 
@@ -114,14 +133,4 @@ async def get_audit_log(
     if entry is None:
         from pawguard.core.exceptions import NotFoundError
         raise NotFoundError("Audit log entry not found.")
-    return ApiResponse(
-        data={
-            "id": str(entry.id),
-            "user_id": str(entry.user_id) if entry.user_id else None,
-            "event_type": entry.event_type,
-            "ip_address": entry.ip_address,
-            "user_agent": entry.user_agent,
-            "event_metadata": entry.event_metadata,
-            "created_at": entry.created_at.isoformat() if entry.created_at else None,
-        }
-    )
+    return ApiResponse(data=_format_audit_entry(entry))

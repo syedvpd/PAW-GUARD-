@@ -358,6 +358,7 @@ class AuthAuditLog(UUIDPkMixin, Base):
         nullable=True,
         index=True,
     )
+    user: Mapped["User | None"] = relationship("User", foreign_keys=[user_id])
     event_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
     user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
