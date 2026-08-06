@@ -57,7 +57,11 @@ class DonationRepository:
     async def get_donor_by_id(self, donor_id: uuid.UUID) -> DonorProfile | None:
         stmt = (
             select(DonorProfile)
-            .options(selectinload(DonorProfile.user).selectinload(User.roles))
+            .options(
+                selectinload(DonorProfile.user)
+                .selectinload(User.roles)
+                .selectinload(Role.permissions)
+            )
             .where(DonorProfile.id == donor_id, DonorProfile.deleted_at.is_(None))
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
@@ -65,7 +69,11 @@ class DonationRepository:
     async def get_donor_by_user_id(self, user_id: uuid.UUID) -> DonorProfile | None:
         stmt = (
             select(DonorProfile)
-            .options(selectinload(DonorProfile.user).selectinload(User.roles))
+            .options(
+                selectinload(DonorProfile.user)
+                .selectinload(User.roles)
+                .selectinload(Role.permissions)
+            )
             .where(DonorProfile.user_id == user_id, DonorProfile.deleted_at.is_(None))
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
