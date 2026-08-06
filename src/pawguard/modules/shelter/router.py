@@ -5,7 +5,7 @@ Routers only validate and call services (RULE-004).
 
 import uuid
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.bulk import (
@@ -42,8 +42,10 @@ from pawguard.modules.shelter.schemas import (
     KennelCleaningLogResponse,
     KennelCreate,
     KennelResponse,
+    NearbyShelterResponse,
     ShelterFacilityCreate,
     ShelterFacilityResponse,
+    ShelterFacilityUpdate,
     ShelterSectionCreate,
     ShelterSectionResponse,
 )
@@ -112,6 +114,49 @@ async def list_facilities(
             for f in result.data
         ],
         meta=result.meta,
+    )
+
+
+@router.get(
+    "/nearby",
+    response_model=ApiResponse[list[NearbyShelterResponse]],
+)
+async def find_nearby_shelters(
+    latitude: float = Query(..., ge=-90.0, le=90.0, description="Latitude of the search point (WGS-84)"),
+    longitude: float = Query(..., ge=-180.0, le=180.0, description="Longitude of the search point (WGS-84)"),
+    radius: float = Query(5.0, gt=0.0, le=100.0, description="Search radius in kilometers"),
+    service: ShelterService = Depends(get_shelter_service),
+) -> ApiResponse[list[NearbyShelterResponse]]:
+    """Public endpoint: shelters within ``radius`` km of a coordinate, nearest
+    first, each with its currently adoptable dogs (adoption directory use)."""
+    result = await service.find_nearby_shelters(latitude, longitude, radius)
+    return ApiResponse(
+        data=[NearbyShelterResponse.model_validate(s) for s in result],
+        message=f"{len(result)} shelter(s) found within {radius} km.",
+    )
+
+
+@router.put(
+    "/facilities/{facility_id}",
+    response_model=ApiResponse[ShelterFacilityResponse],
+    dependencies=[Depends(require_permission("shelter:update"))],
+)
+async def update_facility(
+    facility_id: uuid.UUID,
+    payload: ShelterFacilityUpdate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: ShelterService = Depends(get_shelter_service),
+) -> ApiResponse[ShelterFacilityResponse]:
+    facility = await service.update_facility(
+        facility_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(
+        data=ShelterFacilityResponse.model_validate(facility),
+        message="Shelter facility updated successfully.",
     )
 
 

@@ -53,6 +53,10 @@ class ShelterFacility(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     address: Mapped[str] = mapped_column(Text, nullable=False)
     phone: Mapped[str] = mapped_column(String(32), nullable=False)
+    # Geographic coordinates (WGS-84 decimal degrees) used by the nearby
+    # shelter lookup for adoptions. NULL until a facility is geocoded.
+    latitude: Mapped[float | None] = mapped_column(Numeric(9, 6), nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Numeric(9, 6), nullable=True)
     total_capacity: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
     status: Mapped[FacilityStatus] = mapped_column(
         String(32), default=FacilityStatus.ACTIVE, nullable=False, index=True

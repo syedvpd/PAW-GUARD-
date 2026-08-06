@@ -3,14 +3,17 @@
 Repositories never contain business decisions (RULE-002).
 """
 
+import math
 import uuid
 from collections.abc import Sequence
 
 from sqlalchemy import func, select, update
+from sqlalchemy import literal as sa_literal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.pagination import PageParams
 from pawguard.core.search import SortParams, apply_sorting, build_search_filter
+from pawguard.modules.dog.models import DogProfile
 from pawguard.modules.shelter.models import (
     DailyCareLog,
     FacilityStatus,
@@ -51,6 +54,63 @@ class ShelterRepository:
             select(ShelterFacility)
             .where(ShelterFacility.deleted_at.is_(None))
             .order_by(ShelterFacility.name.asc())
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def find_nearby_facilities(
+        self,
+        latitude: float,
+        longitude: float,
+        radius_km: float,
+    ) -> Sequence[tuple[ShelterFacility, float]]:
+        """Return facilities (with a known location) within ``radius_km`` of the
+        given coordinate, nearest first, plus each facility's distance in km.
+
+        Uses the haversine great-circle distance computed in SQL so no PostGIS
+        extension is required on the managed Postgres hosting.
+        """
+        lat1 = func.radians(sa_literal(latitude))
+        lng1 = func.radians(sa_literal(longitude))
+        lat2 = func.radians(ShelterFacility.latitude)
+        lng2 = func.radians(ShelterFacility.longitude)
+
+        dlat = lat2 - lat1
+        dlng = lng2 - lng1
+        a_expr = (
+            func.pow(func.sin(dlat / 2), 2)
+            + func.cos(lat1) * func.cos(lat2) * func.pow(func.sin(dlng / 2), 2)
+        )
+        distance_km = (2 * sa_literal(6371.0) * func.asin(func.sqrt(a_expr))).label(
+            "distance_km"
+        )
+
+        stmt = (
+            select(ShelterFacility, distance_km)
+            .where(
+                ShelterFacility.deleted_at.is_(None),
+                ShelterFacility.latitude.is_not(None),
+                ShelterFacility.longitude.is_not(None),
+                distance_km <= radius_km,
+            )
+            .order_by(distance_km.asc())
+        )
+        rows = (await self._session.execute(stmt)).all()
+        return [(row[0], float(row[1])) for row in rows]
+
+    async def list_adoptable_dogs_by_facilities(
+        self,
+        facility_ids: Sequence[uuid.UUID],
+    ) -> Sequence[DogProfile]:
+        if not facility_ids:
+            return []
+        stmt = (
+            select(DogProfile)
+            .where(
+                DogProfile.shelter_facility_id.in_(facility_ids),
+                DogProfile.is_adoptable.is_(True),
+                DogProfile.deleted_at.is_(None),
+            )
+            .order_by(DogProfile.name.asc())
         )
         return (await self._session.execute(stmt)).scalars().all()
 

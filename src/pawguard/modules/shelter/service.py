@@ -11,7 +11,7 @@ from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
 from pawguard.modules.auth.models import AuthAuditEventType
-from pawguard.modules.dog.models import DogStatus
+from pawguard.modules.dog.models import DogProfile, DogStatus
 from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.inventory.models import MovementType
 from pawguard.modules.inventory.schemas import InventoryConsumptionItem, InventoryMovementCreate
@@ -37,6 +37,7 @@ from pawguard.modules.shelter.schemas import (
     KennelCleaningLogResponse,
     KennelCreate,
     KennelResponse,
+    NearbyShelterResponse,
     ShelterFacilityCreate,
     ShelterFacilityResponse,
     ShelterFacilityUpdate,
@@ -445,6 +446,48 @@ class ShelterService:
 
     async def list_facilities(self) -> Sequence[ShelterFacility]:
         return await self._repo.list_facilities()
+
+    async def find_nearby_shelters(
+        self,
+        latitude: float,
+        longitude: float,
+        radius_km: float,
+    ) -> Sequence[NearbyShelterResponse]:
+        """Return shelters within ``radius_km`` of the coordinate, nearest first,
+        each bundled with its currently adoptable dogs."""
+        nearby = await self._repo.find_nearby_facilities(latitude, longitude, radius_km)
+        if not nearby:
+            return []
+
+        facility_ids = [facility.id for facility, _distance in nearby]
+        dogs = await self._repo.list_adoptable_dogs_by_facilities(facility_ids)
+
+        dogs_by_facility: dict[uuid.UUID, list[DogProfile]] = {}
+        for dog in dogs:
+            dogs_by_facility.setdefault(dog.shelter_facility_id, []).append(dog)
+
+        results: list[NearbyShelterResponse] = []
+        for facility, distance_km in nearby:
+            results.append(
+                NearbyShelterResponse(
+                    id=facility.id,
+                    name=facility.name,
+                    address=facility.address,
+                    phone=facility.phone,
+                    latitude=(
+                        float(facility.latitude) if facility.latitude is not None else None
+                    ),
+                    longitude=(
+                        float(facility.longitude) if facility.longitude is not None else None
+                    ),
+                    facility_type=facility.facility_type,
+                    distance_km=distance_km,
+                    adoptable_dogs=(
+                        dogs_by_facility.get(facility.id) or []
+                    ),
+                )
+            )
+        return results
 
     async def list_sections(self, facility_id: uuid.UUID) -> Sequence[ShelterSection]:
         return await self._repo.list_sections_by_facility(facility_id)
