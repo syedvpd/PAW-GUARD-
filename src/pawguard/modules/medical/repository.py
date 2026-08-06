@@ -32,21 +32,25 @@ class MedicalRepository:
     async def create_clinical_exam(self, exam: ClinicalExam) -> ClinicalExam:
         self._session.add(exam)
         await self._session.flush()
+        await self._session.refresh(exam)
         return exam
 
     async def create_treatment(self, treatment: MedicalTreatment) -> MedicalTreatment:
         self._session.add(treatment)
         await self._session.flush()
+        await self._session.refresh(treatment)
         return treatment
 
     async def create_vaccination(self, rec: VaccinationRecord) -> VaccinationRecord:
         self._session.add(rec)
         await self._session.flush()
+        await self._session.refresh(rec)
         return rec
 
     async def create_prescription(self, prescription: Prescription) -> Prescription:
         self._session.add(prescription)
         await self._session.flush()
+        await self._session.refresh(prescription)
         return prescription
 
     async def create_administration(

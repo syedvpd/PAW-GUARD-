@@ -29,6 +29,7 @@ class VolunteerRepository:
     async def create_profile(self, profile: VolunteerProfile) -> VolunteerProfile:
         self._session.add(profile)
         await self._session.flush()
+        await self._session.refresh(profile)
         return profile
 
     async def get_profile_by_id(self, profile_id: uuid.UUID) -> VolunteerProfile | None:

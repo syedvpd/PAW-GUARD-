@@ -32,6 +32,7 @@ class PortalRepository:
     async def create_story(self, story: SuccessStory) -> SuccessStory:
         self._session.add(story)
         await self._session.flush()
+        await self._session.refresh(story)
         return story
 
     async def get_story(self, story_id: uuid.UUID) -> SuccessStory | None:
@@ -101,6 +102,7 @@ class PortalRepository:
     async def create_blog(self, post: BlogPost) -> BlogPost:
         self._session.add(post)
         await self._session.flush()
+        await self._session.refresh(post)
         return post
 
     async def get_blog_by_id(self, post_id: uuid.UUID) -> BlogPost | None:
@@ -179,6 +181,7 @@ class PortalRepository:
     async def create_vet(self, partner: VeterinaryPartner) -> VeterinaryPartner:
         self._session.add(partner)
         await self._session.flush()
+        await self._session.refresh(partner)
         return partner
 
     async def get_vet(self, partner_id: uuid.UUID) -> VeterinaryPartner | None:
@@ -203,6 +206,7 @@ class PortalRepository:
     async def create_contact(self, location: ContactLocation) -> ContactLocation:
         self._session.add(location)
         await self._session.flush()
+        await self._session.refresh(location)
         return location
 
     async def get_contact(self, location_id: uuid.UUID) -> ContactLocation | None:
@@ -224,6 +228,7 @@ class PortalRepository:
     async def create_faq(self, entry: FAQEntry) -> FAQEntry:
         self._session.add(entry)
         await self._session.flush()
+        await self._session.refresh(entry)
         return entry
 
     async def get_faq(self, entry_id: uuid.UUID) -> FAQEntry | None:

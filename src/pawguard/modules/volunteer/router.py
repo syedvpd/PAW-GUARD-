@@ -140,6 +140,9 @@ async def join_shift(
     service: VolunteerService = Depends(get_volunteer_service),
 ) -> ApiResponse[ShiftAttendanceResponse]:
     profile = await service.get_profile_by_user(current_user.id)
+    if profile is None:
+        from pawguard.core.exceptions import NotFoundError
+        raise NotFoundError("Volunteer profile not found. Please apply to volunteer first.")
     attendance = await service.join_shift(shift_id, profile.id)
     return ApiResponse(
         data=ShiftAttendanceResponse.model_validate(attendance),
