@@ -2,7 +2,7 @@
 
 import re
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
@@ -162,12 +162,26 @@ class MFADisableRequest(BaseModel):
 class UserProfileUpdate(BaseModel):
     full_name: str | None = Field(None, examples=["Jane Doe"])
     phone: str | None = Field(None, examples=["+1-555-0100"])
+    profile_picture_url: str | None = Field(None, alias="avatar_url", examples=["https://example.com/avatar.jpg"])
+    date_of_birth: date | str | None = Field(None, alias="dob", examples=["1995-05-15"])
+    gender: str | None = Field(None, examples=["female"])
+    address_line: str | None = Field(None, alias="address", examples=["123 Rescue Way"])
+    city: str | None = Field(None, examples=["Sector 4"])
+    state: str | None = Field(None, examples=["Telangana"])
+    country: str | None = Field(None, examples=["India"])
+    postal_code: str | None = Field(None, alias="pin_code", examples=["500081"])
+    push_notifications_enabled: bool | None = Field(None, alias="push_notifications", examples=[True])
+
+    model_config = {
+        "populate_by_name": True,
+        "extra": "ignore",
+    }
 
     @field_validator("full_name", mode="before")
     @classmethod
     def validate_full_name(cls, v: Any) -> Any:
         if v is None:
-            raise ValueError("Full name cannot be null.")
+            return None
         if isinstance(v, str):
             v_str = v.strip()
             if not v_str:
@@ -189,12 +203,56 @@ class UserProfileUpdate(BaseModel):
             return val
         return v
 
+    @field_validator("date_of_birth", mode="before")
+    @classmethod
+    def validate_dob(cls, v: Any) -> Any:
+        if v is None or v == "":
+            return None
+        if isinstance(v, str):
+            v_str = v.strip()
+            if not v_str:
+                return None
+            try:
+                return date.fromisoformat(v_str)
+            except ValueError:
+                raise ValueError("Invalid date_of_birth format. Use YYYY-MM-DD.")
+        return v
+
+    @model_validator(mode="before")
+    @classmethod
+    def handle_aliases_and_extra_keys(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "postal_code" not in data and "pin_code" in data:
+                data["postal_code"] = data["pin_code"]
+            elif "postal_code" not in data and "zip_code" in data:
+                data["postal_code"] = data["zip_code"]
+            if "profile_picture_url" not in data and "avatar_url" in data:
+                data["profile_picture_url"] = data["avatar_url"]
+            if "push_notifications_enabled" not in data and "push_notifications" in data:
+                data["push_notifications_enabled"] = data["push_notifications"]
+            if "address_line" not in data and "address" in data:
+                data["address_line"] = data["address"]
+            if "date_of_birth" not in data and "dob" in data:
+                data["date_of_birth"] = data["dob"]
+        return data
+
     @model_validator(mode="after")
     def at_least_one_field_provided(self) -> "UserProfileUpdate":
-        if self.full_name is None and self.phone is None:
-            raise ValueError(
-                "At least one field (full_name or phone) must be provided for profile update."
-            )
+        fields = [
+            self.full_name,
+            self.phone,
+            self.profile_picture_url,
+            self.date_of_birth,
+            self.gender,
+            self.address_line,
+            self.city,
+            self.state,
+            self.country,
+            self.postal_code,
+            self.push_notifications_enabled,
+        ]
+        if all(f is None for f in fields):
+            raise ValueError("At least one field must be provided for profile update.")
         return self
 
 
@@ -203,6 +261,19 @@ class UserProfile(BaseModel):
     email: str
     full_name: str
     phone: str | None = None
+    profile_picture_url: str | None = None
+    avatar_url: str | None = None
+    date_of_birth: date | str | None = None
+    gender: str | None = None
+    address_line: str | None = None
+    city: str | None = None
+    state: str | None = None
+    country: str | None = None
+    postal_code: str | None = None
+    pin_code: str | None = None
+    zip_code: str | None = None
+    push_notifications_enabled: bool = True
+    push_notifications: bool = True
     is_verified: bool
     mfa_enabled: bool
     roles: list[str]
@@ -213,6 +284,17 @@ class UserProfile(BaseModel):
         if isinstance(v, list):
             return [r.name if hasattr(r, "name") else str(r) for r in v]
         return list(v) if isinstance(v, (list, tuple)) else []
+
+    @model_validator(mode="after")
+    def populate_alias_fields(self) -> "UserProfile":
+        if self.avatar_url is None:
+            self.avatar_url = self.profile_picture_url
+        if self.pin_code is None:
+            self.pin_code = self.postal_code
+        if self.zip_code is None:
+            self.zip_code = self.postal_code
+        self.push_notifications = self.push_notifications_enabled
+        return self
 
     model_config = {"from_attributes": True}
 

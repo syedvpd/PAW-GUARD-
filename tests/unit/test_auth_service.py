@@ -160,6 +160,34 @@ class TestProfileUpdateValidation:
         assert req.full_name == "New Name"
         assert req.phone == "+15550100"
 
+    def test_accepts_extended_profile_fields(self) -> None:
+        from datetime import date
+        from pawguard.modules.auth.schemas import UserProfile, UserProfileUpdate
+
+        data = {
+            "full_name": "Jane Doe",
+            "avatar_url": "https://example.com/avatar.jpg",
+            "dob": "1995-05-15",
+            "gender": "female",
+            "address": "123 Rescue Way",
+            "city": "Sector 4",
+            "state": "Telangana",
+            "country": "India",
+            "pin_code": "500081",
+            "push_notifications": True,
+        }
+        req = UserProfileUpdate.model_validate(data)
+        assert req.full_name == "Jane Doe"
+        assert req.profile_picture_url == "https://example.com/avatar.jpg"
+        assert req.date_of_birth == date(1995, 5, 15)
+        assert req.gender == "female"
+        assert req.address_line == "123 Rescue Way"
+        assert req.city == "Sector 4"
+        assert req.state == "Telangana"
+        assert req.country == "India"
+        assert req.postal_code == "500081"
+        assert req.push_notifications_enabled is True
+
 
 class TestChangePasswordValidation:
     def test_rejects_same_password(self) -> None:

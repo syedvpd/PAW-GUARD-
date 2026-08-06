@@ -7,7 +7,7 @@ rules, and MFA gating all live here.
 
 import asyncio
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pyotp
 
@@ -864,6 +864,15 @@ class AuthService:
         *,
         full_name: str | None = None,
         phone: str | None = None,
+        profile_picture_url: str | None = None,
+        date_of_birth: date | str | None = None,
+        gender: str | None = None,
+        address_line: str | None = None,
+        city: str | None = None,
+        state: str | None = None,
+        country: str | None = None,
+        postal_code: str | None = None,
+        push_notifications_enabled: bool | None = None,
         ctx: RequestContext,
     ) -> User:
         user = await self._users.get_by_id(user_id)
@@ -873,7 +882,32 @@ class AuthService:
             user.full_name = full_name
         if phone is not None:
             user.phone = phone
+        if profile_picture_url is not None:
+            user.profile_picture_url = profile_picture_url
+        if date_of_birth is not None:
+            if isinstance(date_of_birth, str) and date_of_birth.strip():
+                user.date_of_birth = date.fromisoformat(date_of_birth.strip())
+            elif isinstance(date_of_birth, date):
+                user.date_of_birth = date_of_birth
+            elif date_of_birth == "" or date_of_birth is None:
+                user.date_of_birth = None
+        if gender is not None:
+            user.gender = gender
+        if address_line is not None:
+            user.address_line = address_line
+        if city is not None:
+            user.city = city
+        if state is not None:
+            user.state = state
+        if country is not None:
+            user.country = country
+        if postal_code is not None:
+            user.postal_code = postal_code
+        if push_notifications_enabled is not None:
+            user.push_notifications_enabled = push_notifications_enabled
+
         await self._users._session.flush()
+        await self._users._session.refresh(user)
         await self._audit.record(
             event_type=AuthAuditEventType.PROFILE_UPDATED,
             actor_id=user_id,

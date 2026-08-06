@@ -149,15 +149,7 @@ def _to_login_response(
         access_token=tokens.access_token,
         refresh_token=tokens.refresh_token if include_refresh_in_body else None,
         expires_in=tokens.expires_in,
-        user=UserProfile(
-            id=tokens.user.id,
-            email=tokens.user.email,
-            full_name=tokens.user.full_name,
-            phone=tokens.user.phone,
-            is_verified=tokens.user.is_verified,
-            mfa_enabled=tokens.user.mfa_enabled,
-            roles=[r.name for r in tokens.user.roles],
-        ),
+        user=UserProfile.model_validate(tokens.user),
     )
 
 
@@ -191,15 +183,7 @@ async def register(
     except Exception:
         pass
     return ApiResponse(
-        data=UserProfile(
-            id=user.id,
-            email=user.email,
-            full_name=user.full_name,
-            phone=user.phone,
-            is_verified=user.is_verified,
-            mfa_enabled=user.mfa_enabled,
-            roles=[r.name for r in user.roles],
-        ),
+        data=UserProfile.model_validate(user),
         message="Registration successful. Please verify your email.",
     )
 
@@ -328,15 +312,7 @@ async def logout_all(
 @router.get("/me", response_model=ApiResponse[UserProfile])
 async def get_me(current: CurrentUser = Depends(get_current_user)) -> ApiResponse[UserProfile]:
     return ApiResponse(
-        data=UserProfile(
-            id=current.user.id,
-            email=current.user.email,
-            full_name=current.user.full_name,
-            phone=current.user.phone,
-            is_verified=current.user.is_verified,
-            mfa_enabled=current.user.mfa_enabled,
-            roles=[r.name for r in current.user.roles],
-        )
+        data=UserProfile.model_validate(current.user)
     )
 
 
@@ -351,18 +327,19 @@ async def update_profile(
         current.user.id,
         full_name=payload.full_name,
         phone=payload.phone,
+        profile_picture_url=payload.profile_picture_url,
+        date_of_birth=payload.date_of_birth,
+        gender=payload.gender,
+        address_line=payload.address_line,
+        city=payload.city,
+        state=payload.state,
+        country=payload.country,
+        postal_code=payload.postal_code,
+        push_notifications_enabled=payload.push_notifications_enabled,
         ctx=_build_request_context(request),
     )
     return ApiResponse(
-        data=UserProfile(
-            id=user.id,
-            email=user.email,
-            full_name=user.full_name,
-            phone=user.phone,
-            is_verified=user.is_verified,
-            mfa_enabled=user.mfa_enabled,
-            roles=[r.name for r in user.roles],
-        ),
+        data=UserProfile.model_validate(user),
         message="Profile updated.",
     )
 
