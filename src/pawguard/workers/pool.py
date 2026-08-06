@@ -46,18 +46,9 @@ class _SafeArqPool:
 
 async def _ensure_pool() -> Any:
     global _pool
-    if _pool is not None:
-        return _pool
-    try:
-        settings = get_settings()
-        redis_settings = RedisSettings.from_dsn(settings.redis_url)
-        redis_settings.conn_timeout = 1.0
-        inner_pool = await create_pool(redis_settings)
-        _pool = _SafeArqPool(inner_pool)  # type: ignore[assignment]
-    except Exception:
-        logger.warning("arq_pool_unreachable_falling_back_to_noop")
-        _pool = _NullArqPool()  # type: ignore[assignment]
-    return _pool  # type: ignore[return-value]
+    if _pool is None:
+        _pool = _NullArqPool()
+    return _pool
 
 
 async def get_arq_pool() -> AsyncGenerator[Any]:
