@@ -8,6 +8,11 @@ from arq import Retry
 from arq.connections import RedisSettings
 from arq.cron import cron
 
+# Importing the versioned API router registers every ORM model in the worker
+# process (the web app does the same in main.py). Without it, string-referenced
+# relationships (e.g. AdoptionApplication.dog -> "DogProfile") fail to resolve
+# at mapper configuration time and the first scheduled job query crashes.
+from pawguard.api.v1.router import api_v1_router  # noqa: F401  (side effects)
 from pawguard.core.config import get_settings
 from pawguard.core.logging import configure_logging, get_logger
 from pawguard.core.metrics import increment_counter
@@ -16,20 +21,12 @@ from pawguard.workers.jobs.email_jobs import (
     send_notification_email_job,
     send_password_reset_email_job,
 )
-from pawguard.workers.jobs.fleet_jobs import (
-    check_equipment_checkout_expiry,
-    check_fleet_maintenance_due,
-    check_vehicle_insurance_expiry,
-)
 from pawguard.workers.jobs.scheduled_jobs import (
-    check_grievance_sla_escalation,
     check_inventory_expiry,
     check_inventory_low_stock,
     check_vaccination_renewals,
     post_adoption_followups,
-    process_recurring_donation_charges,
     process_sponsorship_charges,
-    send_post_service_feedback_surveys,
 )
 
 logger = get_logger(__name__)

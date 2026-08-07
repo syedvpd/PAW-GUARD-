@@ -4,6 +4,7 @@ These run periodically via ARQ's scheduled_jobs feature and are kept off
 the request path per TRANSACTION RULES.
 """
 
+import calendar
 import uuid
 from datetime import UTC, date, datetime, timedelta
 
@@ -14,17 +15,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.payments import PaymentGatewayError, get_payment_gateway
 from pawguard.db.session import AsyncSessionLocal
-from pawguard.modules.adoption.models import AdoptionApplication
+from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
+from pawguard.modules.auth.models import Permission, Role, User
 from pawguard.modules.auth.repository import UserRepository
 from pawguard.modules.donation.models import (
     Donation,
     DonationStatus,
     DonationType,
-    RecurringStatus,
-    RecurringSubscription,
 )
 from pawguard.modules.donation.repository import DonationRepository
-from pawguard.modules.grievance.models import ServiceFeedback
+from pawguard.modules.grievance.models import GrievanceStatus, GrievanceTicket, ServiceFeedback
 from pawguard.modules.inventory.models import InventoryItem
 from pawguard.modules.medical.models import VaccinationRecord
 from pawguard.modules.notifications.models import Notification
@@ -230,6 +230,20 @@ async def process_sponsorship_charges(ctx: dict[str, object]) -> None:
         raise Retry(defer=retry_defer(ctx)) from exc
 
 
+def _next_month_clamped(current: date) -> date:
+    """Return the same day next month, clamped to the shorter month's last day.
+
+    A sponsorship charged on Jan 31 advances to Feb 28 (not Mar 3).
+    """
+    year = current.year
+    month = current.month
+    next_year = year if month < 12 else year + 1
+    next_month = month % 12 + 1
+    last_day = calendar.monthrange(next_year, next_month)[1]
+    day = min(current.day, last_day)
+    return date(next_year, next_month, day)
+
+
 async def _run_sponsorship_charges(today: date) -> None:
     async with AsyncSessionLocal() as session:
         donation_repo = DonationRepository(session)
@@ -256,6 +270,11 @@ async def _run_sponsorship_charges(today: date) -> None:
                 notes="Monthly sponsorship charge requires manual collection.",
             )
 
+            try:
+                gateway = get_payment_gateway()
+            except PaymentGatewayError:
+                gateway = None
+
             if gateway is not None:
                 try:
                     order = await gateway.create_order(
@@ -279,6 +298,9 @@ async def _run_sponsorship_charges(today: date) -> None:
 
             await donation_repo.create_donation(donation)
 
+            next_date = _next_month_clamped(sp.next_charge_date)
+            await donation_repo.advance_charge_date(sp.id, next_date)
+
             if sp.donor and sp.donor.user_id:
                 n_payload = NotificationCreate(
                     user_id=sp.donor.user_id,
@@ -297,20 +319,224 @@ async def _run_sponsorship_charges(today: date) -> None:
 
 async def check_grievance_sla_escalation(ctx: dict[str, object]) -> None:
     """Escalate unresolved grievances that have exceeded their SLA resolution time."""
+    now = datetime.now(UTC)
+
     async with AsyncSessionLocal() as session:
-        # Placeholder for background grievance SLA check - queries open tickets exceeding SLA target
+        result = await session.execute(
+            select(GrievanceTicket).where(
+                and_(
+                    GrievanceTicket.deleted_at.is_(None),
+                    GrievanceTicket.sla_due_at.isnot(None),
+                    GrievanceTicket.sla_due_at < now,
+                    GrievanceTicket.status.in_(
+                        [
+                            GrievanceStatus.OPEN,
+                            GrievanceStatus.AWAITING_RESPONSE,
+                            GrievanceStatus.INVESTIGATING,
+                        ]
+                    ),
+                    GrievanceTicket.escalated_at.is_(None),
+                )
+            )
+        )
+        overdue = result.scalars().all()
+        if not overdue:
+            return
+
+        notification_repo = NotificationRepository(session)
+        notification_svc = NotificationService(repository=notification_repo)
+
+        for ticket in overdue:
+            ticket.escalation_level += 1
+            ticket.escalated_at = now
+
+            if ticket.assigned_to_admin_id:
+                n_payload = NotificationCreate(
+                    user_id=ticket.assigned_to_admin_id,
+                    title="Grievance SLA Breach",
+                    body=(
+                        f"Grievance ticket {ticket.id} has exceeded its SLA "
+                        f"resolution time and was escalated to level "
+                        f"{ticket.escalation_level}."
+                    ),
+                    notification_type="grievance_escalation",
+                    action_url=f"/api/v1/grievance/tickets/{ticket.id}",
+                )
+                await notification_svc.create_notification(payload=n_payload)
+
         await session.commit()
 
 
 async def process_recurring_donation_charges(ctx: dict[str, object]) -> None:
     """Process recurring monthly donation subscriptions whose charge date has arrived."""
+    today = date.today()
+
+    try:
+        await _run_recurring_charges(today)
+    except (OperationalError, InterfaceError) as exc:
+        # Transient DB connectivity blips: nothing has committed (the whole
+        # batch commits once at the end), so a scheduled retry is idempotent.
+        raise Retry(defer=retry_defer(ctx)) from exc
+
+
+async def _run_recurring_charges(today: date) -> None:
     async with AsyncSessionLocal() as session:
-        # Process active recurring subscriptions due today
+        donation_repo = DonationRepository(session)
+        notification_repo = NotificationRepository(session)
+        notification_svc = NotificationService(repository=notification_repo)
+
+        subscriptions = await donation_repo.get_due_recurring_subscriptions(today)
+        if not subscriptions:
+            return
+
+        try:
+            gateway = get_payment_gateway()
+        except PaymentGatewayError:
+            gateway = None
+
+        for sub in subscriptions:
+            # Skip if a PENDING charge for this subscription is already in flight.
+            if await donation_repo.has_pending_donation_for_subscription(sub.id):
+                continue
+
+            donation = Donation(
+                donor_id=sub.donor_id,
+                amount=sub.amount,
+                currency=sub.currency,
+                donation_type=DonationType.RECURRING,
+                status=DonationStatus.PENDING,
+                recurring_subscription_id=sub.id,
+                notes="Monthly recurring donation charge requires manual collection.",
+            )
+
+            if gateway is not None:
+                try:
+                    order = await gateway.create_order(
+                        amount=sub.amount,
+                        currency=sub.currency,
+                        receipt=str(uuid.uuid4()),
+                        notes={
+                            "subscription_id": str(sub.id),
+                            "donor_id": str(sub.donor_id),
+                        },
+                    )
+                except PaymentGatewayError:
+                    order = None
+
+                if order is not None:
+                    donation.payment_provider = order.provider
+                    donation.gateway_order_id = order.order_id
+                    donation.notes = (
+                        "Monthly recurring donation charge initiated; awaiting payment."
+                    )
+
+            await donation_repo.create_donation(donation)
+
+            next_date = _next_month_clamped(sub.next_charge_date)
+            await donation_repo.advance_recurring_charge_date(sub.id, next_date)
+
+            if sub.donor and sub.donor.user_id:
+                n_payload = NotificationCreate(
+                    user_id=sub.donor.user_id,
+                    title="Monthly Recurring Donation",
+                    body=(
+                        f"Your recurring donation of {sub.amount} {sub.currency} "
+                        f"is now due. We'll let you know once your payment "
+                        f"has been received."
+                    ),
+                    notification_type="recurring_charge",
+                )
+                await notification_svc.create_notification(payload=n_payload)
+
         await session.commit()
 
 
 async def send_post_service_feedback_surveys(ctx: dict[str, object]) -> None:
-    """Send automated post-service feedback survey notifications to adopters/donors."""
+    """Send automated post-service feedback survey notifications to adopters.
+
+    Completed adoptions 7-14 days old whose adopters have neither submitted
+    feedback nor already received a survey prompt are notified once.
+    """
+    now = datetime.now(UTC)
+    window_end = now - timedelta(days=7)
+    window_start = window_end - timedelta(days=7)
+
     async with AsyncSessionLocal() as session:
-        # Dispatch feedback survey requests
+        notification_svc = NotificationService(
+            repository=NotificationRepository(session)
+        )
+
+        result = await session.execute(
+            select(AdoptionApplication).where(
+                and_(
+                    AdoptionApplication.deleted_at.is_(None),
+                    AdoptionApplication.status == AdoptionStatus.COMPLETED,
+                    AdoptionApplication.completed_at >= window_start,
+                    AdoptionApplication.completed_at < window_end,
+                )
+            )
+        )
+        adoptions = result.scalars().all()
+        if not adoptions:
+            return
+
+        adoption_ids = [a.id for a in adoptions]
+
+        feedback_ids = set(
+            (
+                await session.execute(
+                    select(ServiceFeedback.adoption_application_id).where(
+                        ServiceFeedback.adoption_application_id.in_(adoption_ids)
+                    )
+                )
+            ).scalars().all()
+        )
+
+        prior_urls = list(
+            (
+                await session.execute(
+                    select(Notification.action_url).where(
+                        and_(
+                            Notification.notification_type == "feedback_survey",
+                            Notification.action_url.isnot(None),
+                        )
+                    )
+                )
+            ).scalars().all()
+        )
+        surveyed_ids = {
+            prior_id
+            for url in prior_urls
+            if (prior_id := _extract_adoption_id_from_action_url(url)) is not None
+        }
+
+        for adoption in adoptions:
+            if adoption.id in feedback_ids or adoption.id in surveyed_ids:
+                continue
+            payload = NotificationCreate(
+                user_id=adoption.adopter_id,
+                title="We'd Love Your Feedback",
+                body=(
+                    f"Your adoption of dog {adoption.dog_id} has been completed. "
+                    f"Please take a moment to rate your experience."
+                ),
+                notification_type="feedback_survey",
+                action_url=(
+                    f"/api/v1/grievance/feedback?"
+                    f"adoption_application_id={adoption.id}"
+                ),
+            )
+            await notification_svc.create_notification(payload=payload)
+
         await session.commit()
+
+
+def _extract_adoption_id_from_action_url(url: str) -> uuid.UUID | None:
+    prefix = "adoption_application_id="
+    if not url or prefix not in url:
+        return None
+    raw = url.split(prefix, 1)[1].split("&", 1)[0]
+    try:
+        return uuid.UUID(raw)
+    except (ValueError, TypeError):
+        return None

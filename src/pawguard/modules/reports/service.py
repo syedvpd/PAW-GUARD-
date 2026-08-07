@@ -1,5 +1,5 @@
 import os
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Any
 
 from sqlalchemy import func, select
@@ -45,7 +45,14 @@ from pawguard.modules.reports.renderers import (
     report_filename,
 )
 from pawguard.modules.reports.schemas import ReportFormat, ReportType
-from pawguard.modules.rescue.models import RescueDispatch, RescueRequest
+from pawguard.modules.rescue.models import RescueDispatch, RescueRequest, RescueStatus
+from pawguard.modules.shelter.models import (
+    FacilityTransfer,
+    Kennel,
+    ShelterFacility,
+    ShelterSection,
+    TransferStatus,
+)
 from pawguard.modules.volunteer.models import VolunteerProfile, VolunteerStatus
 
 
@@ -355,14 +362,14 @@ class ReportService:
     ) -> dict[str, Any]:
         stmt = select(MedicalTreatment)
         if start:
-            treatment_stmt = treatment_stmt.where(
+            stmt = stmt.where(
                 MedicalTreatment.treatment_date >= start
             )
         if end:
-            treatment_stmt = treatment_stmt.where(
+            stmt = stmt.where(
                 MedicalTreatment.treatment_date <= end
             )
-        treatments = (await self._session.execute(treatment_stmt)).scalars().all()
+        treatments = (await self._session.execute(stmt)).scalars().all()
 
         vaccination_stmt = select(VaccinationRecord)
         if start:
@@ -514,10 +521,10 @@ class ReportService:
     ) -> dict[str, Any]:
         stmt = select(InventoryItem)
         if filters and "category" in filters:
-            item_stmt = item_stmt.where(
+            stmt = stmt.where(
                 InventoryItem.category == filters["category"]
             )
-        results = (await self._session.execute(item_stmt)).scalars().all()
+        results = (await self._session.execute(stmt)).scalars().all()
         movements = (
             await self._session.execute(select(InventoryMovement))
         ).scalars().all()
@@ -839,22 +846,22 @@ class ReportService:
             FinancialTransaction.deleted_at.is_(None),
         )
         if start:
-            txn_stmt = txn_stmt.where(
+            stmt = stmt.where(
                 FinancialTransaction.transaction_date >= start
             )
         if end:
-            txn_stmt = txn_stmt.where(
+            stmt = stmt.where(
                 FinancialTransaction.transaction_date <= end
             )
         if filters and "type" in filters:
-            txn_stmt = txn_stmt.where(
+            stmt = stmt.where(
                 FinancialTransaction.transaction_type == filters["type"]
             )
         if filters and "status" in filters:
-            txn_stmt = txn_stmt.where(
+            stmt = stmt.where(
                 FinancialTransaction.status == filters["status"]
             )
-        transactions = (await self._session.execute(txn_stmt)).scalars().all()
+        transactions = (await self._session.execute(stmt)).scalars().all()
 
         donation_stmt = select(Donation)
         if start:

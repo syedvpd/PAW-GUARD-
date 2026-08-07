@@ -6,7 +6,7 @@ Repositories never contain business decisions (RULE-002).
 import calendar
 import uuid
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from datetime import date as date_type
 from typing import Any
 
@@ -156,7 +156,10 @@ class DonationRepository:
         if date_from is not None:
             stmt = stmt.where(Donation.created_at >= date_from)
         if date_to is not None:
-            stmt = stmt.where(Donation.created_at <= date_to)
+            # `date_to` is a bare date; comparing a DateTime column with `<=`
+            # normalizes it to midnight, silently excluding the entire end
+            # day. Use an exclusive upper bound (end of day) instead.
+            stmt = stmt.where(Donation.created_at < date_to + timedelta(days=1))
 
         stmt = apply_sorting(stmt, sort, self.DONATION_SORTABLE_FIELDS)
 

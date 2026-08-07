@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
-from pawguard.modules.auth.models import AuthAuditLog, User, UserSession
+from pawguard.modules.auth.models import AuthAuditLog, Role, User, UserSession
 from pawguard.modules.dog.models import DogProfile, DogStatus
 from pawguard.modules.donation.models import Donation, DonationStatus
 from pawguard.modules.foster.models import FosterPlacement, FosterProfile
@@ -38,7 +38,7 @@ class DashboardRepository:
         return (await self._session.execute(stmt)).scalar_one()
 
     async def get_total_roles_count(self) -> int:
-        result = await self._session.execute(select(func.count(UserSession.id)))
+        result = await self._session.execute(select(func.count(Role.id)))
         return result.scalar_one()
 
     async def get_active_sessions_count(self) -> int:

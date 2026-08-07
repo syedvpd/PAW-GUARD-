@@ -622,6 +622,11 @@ class AuthService:
     async def disable_mfa(
         self, *, user: User, payload: MFADisableRequest, ctx: RequestContext
     ) -> None:
+        if self._is_admin(user):
+            raise MFADisableNotAllowedError(
+                "Admins must keep MFA enabled."
+            )
+
         confirmed_via: str | None = None
 
         if payload.password is not None:

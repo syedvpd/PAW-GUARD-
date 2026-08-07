@@ -15,7 +15,7 @@ from pawguard.core.constants import DeviceType
 from pawguard.core.security import create_pre_auth_token
 from pawguard.modules.auth.exceptions import MFADisableNotAllowedError, MFARequiredError
 from pawguard.modules.auth.models import MFADevice, Permission, Role, User, UserSession
-from pawguard.modules.auth.schemas import DeviceContext
+from pawguard.modules.auth.schemas import DeviceContext, MFADisableRequest
 from pawguard.modules.auth.service import AuthenticatedTokens, AuthService, RequestContext
 
 
@@ -55,9 +55,10 @@ def _admin_user(**kw: object) -> User:
 
 def _regular_user(**kw: object) -> User:
     mfa_enabled = kw.pop("mfa_enabled", False)
+    hashed_password = kw.pop("hashed_password", "x")
     user = User(
         email="user@example.com",
-        hashed_password="x",
+        hashed_password=hashed_password,
         full_name="Regular User",
         is_active=True,
         mfa_enabled=mfa_enabled,
@@ -193,16 +194,26 @@ class TestAdminMfaDisableEnforcement:
     @pytest.mark.asyncio
     async def test_disable_mfa_blocked_for_admin(self):
         svc = _make_service()
-        admin = _admin_user()
+        admin = _admin_user(mfa_enabled=True)
 
         with pytest.raises(MFADisableNotAllowedError, match="keep MFA enabled"):
-            await svc.disable_mfa(user=admin, ctx=_ctx())
+            await svc.disable_mfa(
+                user=admin,
+                payload=MFADisableRequest(password="Whatever1!"),
+                ctx=_ctx(),
+            )
 
-        assert admin.mfa_enabled is False
+        assert admin.mfa_enabled is True
 
     @pytest.mark.asyncio
     async def test_disable_mfa_allowed_for_regular_user(self):
-        user = _regular_user(mfa_enabled=True)
+        user = _regular_user(
+            mfa_enabled=True,
+            hashed_password=(
+                "$argon2id$v=19$m=19456,t=2,p=1$JoRb+Y2/MpzJ6oPcWhcnXQ"
+                "$A6Q5RTBxi8gO4/TycFnK1GZU/GFnC2aGz9yEfVLS9mM"
+            ),
+        )
         device = MFADevice(
             user_id=user.id,
             device_type="totp",
@@ -213,7 +224,11 @@ class TestAdminMfaDisableEnforcement:
         mfa_repo.get_for_user.return_value = device
         svc = _make_service(mfa_repo=mfa_repo)
 
-        await svc.disable_mfa(user=user, ctx=_ctx())
+        await svc.disable_mfa(
+            user=user,
+            payload=MFADisableRequest(password="CorrectPassword1!"),
+            ctx=_ctx(),
+        )
 
         assert user.mfa_enabled is False
         assert device.is_verified is False

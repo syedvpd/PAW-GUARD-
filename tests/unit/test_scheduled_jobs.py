@@ -10,6 +10,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+import pawguard
+from pawguard.core.payments import PaymentGatewayError
 from pawguard.modules.notifications.schemas import NotificationCreate
 from pawguard.workers.jobs.scheduled_jobs import (
     _staff_user_ids,
@@ -204,7 +206,7 @@ class TestScheduledJobs:
         adoption_result.scalars.return_value.all.return_value = [adoption]
 
         mock_session = AsyncMock()
-        mock_session.execute.return_value = mock_result
+        mock_session.execute.return_value = adoption_result
         mock_session_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session_factory.return_value.__aexit__ = AsyncMock(return_value=False)
 

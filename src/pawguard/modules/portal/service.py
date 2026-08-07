@@ -1454,7 +1454,7 @@ class PortalService:
         if self._audit:
             await self._audit.record(
                 event_type=AuthAuditEventType.CMS_PAGE_DRAFT_SAVED,
-                user_id=user_id,
+                actor_id=user_id,
                 ip_address=ctx.ip_address if ctx else None,
                 user_agent=ctx.user_agent if ctx else None,
                 metadata={"action": "cms_draft_saved", "slug": slug},
@@ -1509,7 +1509,7 @@ class PortalService:
         if self._audit:
             await self._audit.record(
                 event_type=AuthAuditEventType.CMS_PAGE_PUBLISHED,
-                user_id=user_id,
+                actor_id=user_id,
                 ip_address=ctx.ip_address if ctx else None,
                 user_agent=ctx.user_agent if ctx else None,
                 metadata={"action": "cms_page_published", "slug": slug, "version": version_num},
@@ -1539,7 +1539,7 @@ class PortalService:
         if self._audit:
             await self._audit.record(
                 event_type=AuthAuditEventType.CMS_PAGE_DRAFT_DISCARDED,
-                user_id=user_id,
+                actor_id=user_id,
                 ip_address=ctx.ip_address if ctx else None,
                 user_agent=ctx.user_agent if ctx else None,
                 metadata={"action": "cms_draft_discarded", "slug": slug},

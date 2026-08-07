@@ -287,7 +287,7 @@ async def razorpay_webhook(
     body = await request.body()
     # Swallow signature/config errors here so Razorpay doesn't retry a request
     # that will never succeed; real failures are logged upstream.
-    with contextlib.suppress(ValidationFailedError):
+    with contextlib.suppress(ValidationFailedError, PaymentGatewayError):
         await service.handle_gateway_webhook(body, signature)
     return ApiResponse(message="ok")
 

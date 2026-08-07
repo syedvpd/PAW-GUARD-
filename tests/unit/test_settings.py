@@ -155,7 +155,7 @@ class TestAppConfigService:
         svc = AppConfigService()
         result = svc.get_general_settings()
         assert result.app_name == "PawGuard"
-        assert result.environment == "local"
+        assert result.environment == "test"
 
     def test_email_settings(self):
         svc = AppConfigService()
