@@ -66,7 +66,12 @@ class FleetRepository:
         status: VehicleStatus | None = None,
         vehicle_type: VehicleType | None = None,
     ) -> tuple[Sequence[Vehicle], int]:
-        stmt = select(Vehicle).where(Vehicle.deleted_at.is_(None))
+        # Single round-trip pagination: a windowed COUNT() returns the total
+        # alongside the page rows, avoiding a second query + an extra ~half-RTT
+        # to the database. Window functions evaluate before OFFSET/LIMIT in
+        # PostgreSQL, so `total` reflects the full filtered result set.
+        total_count = func.count().over().label("_total_count")
+        stmt = select(Vehicle, total_count).where(Vehicle.deleted_at.is_(None))
 
         search_filter = build_search_filter(Vehicle, search_term, self.VEHICLE_SEARCH_FIELDS)
         if search_filter is not None:
@@ -80,11 +85,11 @@ class FleetRepository:
 
         stmt = apply_sorting(stmt, sort, self.VEHICLE_SORTABLE_FIELDS)
 
-        count_stmt = select(func.count()).select_from(stmt.subquery())
-        total = (await self._session.execute(count_stmt)).scalar_one()
-
         stmt = stmt.offset(page.offset).limit(page.limit)
-        results = (await self._session.execute(stmt)).scalars().all()
+        rows = (await self._session.execute(stmt)).all()
+
+        results = [row[0] for row in rows]
+        total = int(rows[0]._total_count) if rows else 0
 
         return results, total
 
@@ -94,7 +99,8 @@ class FleetRepository:
         sort: SortParams,
         vehicle_id: uuid.UUID | None = None,
     ) -> tuple[Sequence[FleetMaintenance], int]:
-        stmt = select(FleetMaintenance)
+        total_count = func.count().over().label("_total_count")
+        stmt = select(FleetMaintenance, total_count)
 
         if vehicle_id is not None:
             stmt = stmt.where(FleetMaintenance.vehicle_id == vehicle_id)
@@ -103,11 +109,11 @@ class FleetRepository:
             stmt, sort, self.MAINTENANCE_SORTABLE_FIELDS, default_field="service_date"
         )
 
-        count_stmt = select(func.count()).select_from(stmt.subquery())
-        total = (await self._session.execute(count_stmt)).scalar_one()
-
         stmt = stmt.offset(page.offset).limit(page.limit)
-        results = (await self._session.execute(stmt)).scalars().all()
+        rows = (await self._session.execute(stmt)).all()
+
+        results = [row[0] for row in rows]
+        total = int(rows[0]._total_count) if rows else 0
 
         return results, total
 
@@ -204,7 +210,8 @@ class FleetRepository:
         search_term: str | None = None,
         outstanding_only: bool = False,
     ) -> tuple[Sequence[EquipmentCheckout], int]:
-        stmt = select(EquipmentCheckout)
+        total_count = func.count().over().label("_total_count")
+        stmt = select(EquipmentCheckout, total_count)
 
         search_filter = build_search_filter(
             EquipmentCheckout, search_term, self.EQUIPMENT_SEARCH_FIELDS
@@ -217,11 +224,12 @@ class FleetRepository:
 
         stmt = apply_sorting(stmt, sort, self.EQUIPMENT_SORTABLE_FIELDS)
 
-        count_stmt = select(func.count()).select_from(stmt.subquery())
-        total = (await self._session.execute(count_stmt)).scalar_one()
-
         stmt = stmt.offset(page.offset).limit(page.limit)
-        results = (await self._session.execute(stmt)).scalars().all()
+        rows = (await self._session.execute(stmt)).all()
+
+        results = [row[0] for row in rows]
+        total = int(rows[0]._total_count) if rows else 0
+
         return results, total
 
     async def create_fuel_log(self, log: FuelLog) -> FuelLog:
@@ -239,16 +247,18 @@ class FleetRepository:
         sort: SortParams,
         vehicle_id: uuid.UUID | None = None,
     ) -> tuple[Sequence[FuelLog], int]:
-        stmt = select(FuelLog)
+        total_count = func.count().over().label("_total_count")
+        stmt = select(FuelLog, total_count)
 
         if vehicle_id is not None:
             stmt = stmt.where(FuelLog.vehicle_id == vehicle_id)
 
         stmt = apply_sorting(stmt, sort, self.FUEL_SORTABLE_FIELDS, default_field="filled_at")
 
-        count_stmt = select(func.count()).select_from(stmt.subquery())
-        total = (await self._session.execute(count_stmt)).scalar_one()
-
         stmt = stmt.offset(page.offset).limit(page.limit)
-        results = (await self._session.execute(stmt)).scalars().all()
+        rows = (await self._session.execute(stmt)).all()
+
+        results = [row[0] for row in rows]
+        total = int(rows[0]._total_count) if rows else 0
+
         return results, total

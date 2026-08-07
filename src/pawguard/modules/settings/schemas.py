@@ -1,9 +1,17 @@
 """Pydantic schemas for Settings module."""
 
+import re
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictStr,
+    field_validator,
+    model_validator,
+)
 
 
 class SystemSettingCreate(BaseModel):
@@ -18,9 +26,20 @@ class SystemSettingCreate(BaseModel):
     is_encrypted: bool = False
     is_editable: bool = True
 
+    @field_validator("key")
+    @classmethod
+    def _reject_placeholder_key(cls, key: str) -> str:
+        # Reject OpenAPI-style placeholders (e.g. `<string>`) so garbage keys
+        # never get persisted as real configuration.
+        if re.search(r"[<>{}]", key):
+            raise ValueError("Configuration key must not contain placeholder characters.")
+        return key
+
 
 class SystemSettingUpdate(BaseModel):
-    value: str | None = Field(None, examples=["30"])
+    value: StrictStr = Field(
+        ..., min_length=1, max_length=4096, examples=["30"]
+    )
     description: str | None = Field(None, examples=["Updated description."])
     is_encrypted: bool | None = Field(None, examples=[False])
     is_editable: bool | None = Field(None, examples=[True])
@@ -68,6 +87,26 @@ class PasswordPolicyUpdate(BaseModel):
     max_login_attempts: int | None = Field(None, ge=1, le=20, examples=[5])
     lockout_duration_minutes: int | None = Field(None, ge=1, le=1440, examples=[15])
     is_active: bool | None = Field(None, examples=[True])
+
+    @model_validator(mode="after")
+    def _require_at_least_one_field(self) -> "PasswordPolicyUpdate":
+        fields = (
+            self.min_length,
+            self.require_uppercase,
+            self.require_lowercase,
+            self.require_digit,
+            self.require_special_char,
+            self.max_age_days,
+            self.password_history_count,
+            self.max_login_attempts,
+            self.lockout_duration_minutes,
+            self.is_active,
+        )
+        if all(field is None for field in fields):
+            raise ValueError(
+                "At least one password policy field must be provided for update."
+            )
+        return self
 
 
 class BusinessRuleCreate(BaseModel):
@@ -143,11 +182,11 @@ class PublicContentResponse(BaseModel):
 
 
 class PublicContentUpdate(BaseModel):
-    about_us: str | None = Field(
-        None, min_length=1, max_length=20000,
+    about_us: StrictStr = Field(
+        ..., min_length=1, max_length=20000,
         examples=["PawGuard rescues, rehabilitates and rehomes street dogs."],
     )
-    mission: str | None = Field(
-        None, min_length=1, max_length=20000,
+    mission: StrictStr = Field(
+        ..., min_length=1, max_length=20000,
         examples=["To give every stray dog a safe home and a second chance."],
     )

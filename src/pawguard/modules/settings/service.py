@@ -55,6 +55,9 @@ class SystemSettingService:
         return setting
 
     async def delete_setting(self, setting_id: uuid.UUID) -> None:
+        setting = await self._repo.get_by_id(setting_id)
+        if setting is None:
+            raise NotFoundError(f"Setting with id '{setting_id}' not found.")
         await self._repo.delete(setting_id)
 
 
@@ -127,6 +130,9 @@ class BusinessRuleService:
         return rule
 
     async def delete_rule(self, rule_id: uuid.UUID) -> None:
+        rule = await self._repo.get_by_id(rule_id)
+        if rule is None:
+            raise NotFoundError(f"Business rule with id '{rule_id}' not found.")
         await self._repo.delete(rule_id)
 
 

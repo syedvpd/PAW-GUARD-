@@ -136,18 +136,20 @@ class TestPublicContentService:
         }
         mock_repo.get_by_key.side_effect = lambda key, *a, **k: stored.get(key)
 
-        result = await service.update_content(PublicContentUpdate(about_us="Edited"))
+        result = await service.update_content(
+            PublicContentUpdate(about_us="Edited", mission="Edited mission")
+        )
         assert mock_repo.create.await_count == 0
         assert result.about_us == "Edited"
-        assert result.mission == "old mission"
+        assert result.mission == "Edited mission"
         assert stored[ABOUT_US_KEY].value == "Edited"
+        assert stored[MISSION_KEY].value == "Edited mission"
 
-    async def test_update_content_partial_noop_returns_current(self, service, mock_repo):
-        mock_repo.get_by_key.return_value = None
-        result = await service.update_content(PublicContentUpdate())
-        assert mock_repo.create.await_count == 0
-        assert result.about_us == DEFAULT_ABOUT_US
-        assert result.mission == DEFAULT_MISSION
+    async def test_update_content_rejects_empty_payload(self, service, mock_repo):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            PublicContentUpdate()
 
 
 class TestAppConfigService:
