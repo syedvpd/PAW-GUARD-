@@ -963,3 +963,63 @@ class TestRecurringSubscriptionService:
             donations = await service.charge_due_recurring_subscriptions(mock_session)
         assert len(donations) == 0
         mock_repo.create_donation.assert_not_awaited()
+
+
+class TestSponsorshipValidation:
+    @pytest.fixture
+    def mock_repo(self):
+        return AsyncMock(spec=DonationRepository)
+
+    @pytest.fixture
+    def mock_dog_repo(self):
+        return AsyncMock(spec=DogRepository)
+
+    @pytest.fixture
+    def service(self, mock_repo, mock_dog_repo):
+        return DonationService(mock_repo, mock_dog_repo)
+
+    @pytest.mark.asyncio
+    async def test_create_sponsorship_adopted_dog_fails(self, service, mock_repo, mock_dog_repo):
+        user_id = uuid.uuid4()
+        dog_id = uuid.uuid4()
+        donor_id = uuid.uuid4()
+
+        mock_repo.get_donor_by_user_id.return_value = DonorProfile(id=donor_id, user_id=user_id)
+        mock_dog_repo.get_by_id.return_value = DogProfile(
+            id=dog_id, registration_number="DOG-001", name="Rex", breed="Mix",
+            gender="male", status=DogStatus.ADOPTED, is_adoptable=False,
+        )
+
+        payload = SponsorshipCreate(dog_id=dog_id, monthly_amount=100.0, currency="USD")
+        with pytest.raises(ConflictError, match="already been adopted"):
+            await service.create_sponsorship(user_id, payload)
+
+    @pytest.mark.asyncio
+    async def test_create_sponsorship_duplicate_sponsorship_fails(self, service, mock_repo, mock_dog_repo):
+        user_id = uuid.uuid4()
+        dog_id = uuid.uuid4()
+        donor_id = uuid.uuid4()
+
+        mock_repo.get_donor_by_user_id.return_value = DonorProfile(id=donor_id, user_id=user_id)
+        mock_dog_repo.get_by_id.return_value = DogProfile(
+            id=dog_id, registration_number="DOG-002", name="Max", breed="Mix",
+            gender="male", status=DogStatus.SHELTER, is_adoptable=True,
+        )
+
+        existing_sp = DogSponsorship(
+            id=uuid.uuid4(), donor_id=donor_id, dog_id=dog_id, monthly_amount=50.0,
+            currency="USD", status=SponsorshipStatus.ACTIVE,
+            next_charge_date=datetime.now(UTC).date(), started_at=datetime.now(UTC),
+        )
+        mock_repo.get_sponsorships_for_donor.return_value = [existing_sp]
+
+        payload = SponsorshipCreate(dog_id=dog_id, monthly_amount=100.0, currency="USD")
+        with pytest.raises(ConflictError, match="already been sponsored by you"):
+            await service.create_sponsorship(user_id, payload)
+
+    @pytest.mark.asyncio
+    async def test_create_sponsorship_invalid_amount_fails(self, service):
+        user_id = uuid.uuid4()
+        payload = SponsorshipCreate.model_construct(dog_id=uuid.uuid4(), monthly_amount=0.0, currency="USD")
+        with pytest.raises(ValidationFailedError, match="greater than zero"):
+            await service.create_sponsorship(user_id, payload)

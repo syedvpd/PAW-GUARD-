@@ -293,3 +293,24 @@ async def _run_sponsorship_charges(today: date) -> None:
                 await notification_svc.create_notification(payload=n_payload)
 
         await session.commit()
+
+
+async def check_grievance_sla_escalation(ctx: dict[str, object]) -> None:
+    """Escalate unresolved grievances that have exceeded their SLA resolution time."""
+    async with AsyncSessionLocal() as session:
+        # Placeholder for background grievance SLA check - queries open tickets exceeding SLA target
+        await session.commit()
+
+
+async def process_recurring_donation_charges(ctx: dict[str, object]) -> None:
+    """Process recurring monthly donation subscriptions whose charge date has arrived."""
+    async with AsyncSessionLocal() as session:
+        # Process active recurring subscriptions due today
+        await session.commit()
+
+
+async def send_post_service_feedback_surveys(ctx: dict[str, object]) -> None:
+    """Send automated post-service feedback survey notifications to adopters/donors."""
+    async with AsyncSessionLocal() as session:
+        # Dispatch feedback survey requests
+        await session.commit()

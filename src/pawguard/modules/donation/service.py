@@ -679,11 +679,28 @@ class DonationService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> DogSponsorship:
+        if payload.monthly_amount <= 0:
+            raise ValidationFailedError("Monthly sponsorship amount must be greater than zero.")
+
         donor = await self.get_or_create_donor(user_id)
 
         dog = await self._dog_repo.get_by_id(payload.dog_id)
         if dog is None:
-            raise NotFoundError("Dog profile not found.")
+            raise NotFoundError(f"Dog profile with ID '{payload.dog_id}' was not found.")
+
+        if hasattr(dog, "status") and dog.status:
+            status_val = dog.status.value if hasattr(dog.status, "value") else str(dog.status).lower()
+            if status_val in ("adopted", "deceased"):
+                raise ConflictError(
+                    f"Dog with ID '{payload.dog_id}' has already been {status_val} and cannot be sponsored."
+                )
+
+        existing_sponsorships = await self._repo.get_sponsorships_for_donor(donor.id)
+        for sp in existing_sponsorships:
+            if sp.dog_id == payload.dog_id and sp.status == SponsorshipStatus.ACTIVE:
+                raise ConflictError(
+                    f"Dog with ID '{payload.dog_id}' has already been sponsored by you."
+                )
 
         now = datetime.now(UTC)
         sponsorship = DogSponsorship(

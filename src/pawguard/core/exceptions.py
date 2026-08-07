@@ -136,6 +136,22 @@ def register_exception_handlers(app: FastAPI) -> None:
 
 
 
+    @app.exception_handler(ValueError)
+    async def value_exception_handler(request: Request, exc: ValueError) -> JSONResponse:
+        logger.info(
+            "value_error",
+            path=request.url.path,
+            message=str(exc),
+            request_id=getattr(request.state, "request_id", None),
+        )
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            content=error_envelope(
+                code="VALIDATION_FAILED",
+                message=str(exc) or "Invalid value provided.",
+            ),
+        )
+
     @app.exception_handler(StarletteHTTPException)
     async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         return JSONResponse(
@@ -145,27 +161,78 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(SQLAlchemyError)
     async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError) -> JSONResponse:
-        import traceback
-        print("=== SQLALCHEMY ERROR TRACEBACK ===")
-        traceback.print_exc()
-        print("==================================")
+        from sqlalchemy.exc import DataError, IntegrityError
+
+        err_msg = str(exc).lower()
+        orig_msg = str(getattr(exc, "orig", ""))
+
         logger.error(
-            "unhandled_database_error",
+            "database_error",
             path=request.url.path,
             request_id=getattr(request.state, "request_id", None),
             exc_info=exc,
         )
+
+        if isinstance(exc, IntegrityError) or "integrityerror" in err_msg:
+            if "unique" in err_msg or "unique" in orig_msg.lower() or "duplicate key" in err_msg:
+                # Extract specific field/table information if possible
+                detail_msg = "A record with this unique identifier or key already exists."
+                if "Key (" in orig_msg:
+                    # e.g. Key (email)=(test@example.com) already exists.
+                    key_part = orig_msg.split("Key (")[-1].split(")")[0] if "Key (" in orig_msg else ""
+                    if key_part:
+                        detail_msg = f"A record with {key_part} already exists."
+                return JSONResponse(
+                    status_code=status.HTTP_409_CONFLICT,
+                    content=error_envelope(
+                        code="CONFLICT",
+                        message=detail_msg,
+                        details={"constraint": "unique_violation"},
+                    ),
+                )
+            elif "foreign key" in err_msg or "foreignkey" in err_msg or "foreign key" in orig_msg.lower():
+                return JSONResponse(
+                    status_code=status.HTTP_409_CONFLICT,
+                    content=error_envelope(
+                        code="INVALID_REFERENCE",
+                        message="Referenced record does not exist or cannot be modified due to existing references.",
+                        details={"constraint": "foreign_key_violation"},
+                    ),
+                )
+            elif "check" in err_msg or "check constraint" in orig_msg.lower():
+                return JSONResponse(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    content=error_envelope(
+                        code="VALIDATION_FAILED",
+                        message="Value violates database check constraint.",
+                        details={"constraint": "check_violation"},
+                    ),
+                )
+            else:
+                return JSONResponse(
+                    status_code=status.HTTP_409_CONFLICT,
+                    content=error_envelope(
+                        code="CONFLICT",
+                        message="Database integrity constraint violated.",
+                    ),
+                )
+
+        if isinstance(exc, DataError) or "dataerror" in err_msg:
+            return JSONResponse(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                content=error_envelope(
+                    code="VALIDATION_FAILED",
+                    message="Invalid data format or value length exceeds maximum allowed limit.",
+                ),
+            )
+
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content=error_envelope(code="INTERNAL_ERROR", message="An internal error occurred."),
+            content=error_envelope(code="INTERNAL_ERROR", message="An internal database error occurred."),
         )
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-        import traceback
-        print("=== UNHANDLED EXCEPTION TRACEBACK ===")
-        traceback.print_exc()
-        print("=====================================")
         logger.error(
             "unhandled_exception",
             path=request.url.path,
@@ -174,5 +241,5 @@ def register_exception_handlers(app: FastAPI) -> None:
         )
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content=error_envelope(code="INTERNAL_ERROR", message="An internal error occurred."),
+            content=error_envelope(code="INTERNAL_ERROR", message="An unexpected internal server error occurred."),
         )
