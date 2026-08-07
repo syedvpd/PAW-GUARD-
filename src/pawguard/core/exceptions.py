@@ -105,6 +105,41 @@ def _sanitize_errors(errors: Sequence[Any]) -> list[dict[str, Any]]:
     return sanitized
 
 
+def clean_error_message(msg: str) -> str:
+    """Format validation and exception messages to be concise, clean (1-2 lines),
+    and production-ready per enterprise API design standards (Google / Amazon).
+
+    Strips raw internal stack traces, MissingGreenlet/SQLAlchemy framework errors,
+    Pydantic documentation URLs, and verbose dump blocks.
+    """
+    if not msg:
+        return "Invalid request payload or schema validation error."
+
+    if "MissingGreenlet" in msg or "Error extracting attribute" in msg or "get_attribute_error" in msg:
+        return "Internal processing error: database entity relations failed to load during serialization."
+
+    import re
+    msg = re.sub(r"\s*For further information visit https://errors\.pydantic\.dev/[^\s]+", "", msg)
+    msg = re.sub(r"\s*\[type=[^\]]+\]", "", msg)
+    msg = re.sub(r"\(Background on this error at: [^\)]+\)", "", msg)
+
+    lines = [line.strip() for line in msg.splitlines() if line.strip()]
+    if not lines:
+        return "Request validation failed."
+
+    if len(lines) == 1:
+        return lines[0]
+
+    # Summarize Pydantic multi-line errors into a clean 1-line statement
+    cleaned_lines = []
+    for line in lines:
+        if line.startswith("1 validation error for") or line.startswith("Validation error for"):
+            continue
+        cleaned_lines.append(line)
+
+    return " | ".join(cleaned_lines) if cleaned_lines else lines[0]
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppException)
     async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
@@ -116,25 +151,53 @@ def register_exception_handlers(app: FastAPI) -> None:
         )
         return JSONResponse(
             status_code=exc.status_code,
-            content=error_envelope(code=exc.code, message=exc.message, details=exc.details),
+            content=error_envelope(code=exc.code, message=clean_error_message(exc.message), details=exc.details),
         )
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(
         request: Request, exc: RequestValidationError
     ) -> JSONResponse:
+        # Build concise 1-line error message for frontend readability
+        err_details = _sanitize_errors(exc.errors())
+        first_msg = "Request validation failed."
+        if err_details and isinstance(err_details, list) and len(err_details) > 0:
+            first_err = err_details[0]
+            loc_str = " -> ".join(str(loc) for loc in first_err.get("loc", []) if loc != "body")
+            msg_str = first_err.get("msg", "")
+            if loc_str and msg_str:
+                first_msg = f"Validation failed for '{loc_str}': {msg_str}"
+            elif msg_str:
+                first_msg = f"Validation failed: {msg_str}"
+
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             content=error_envelope(
                 code="VALIDATION_FAILED",
-                message="Request validation failed.",
-                details=_sanitize_errors(exc.errors()),
+                message=clean_error_message(first_msg),
+                details=err_details,
             ),
         )
 
+    from fastapi.exceptions import ResponseValidationError
 
-
-
+    @app.exception_handler(ResponseValidationError)
+    async def response_validation_exception_handler(
+        request: Request, exc: ResponseValidationError
+    ) -> JSONResponse:
+        logger.error(
+            "response_validation_error",
+            path=request.url.path,
+            request_id=getattr(request.state, "request_id", None),
+            exc_info=exc,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content=error_envelope(
+                code="RESPONSE_SERIALIZATION_FAILED",
+                message="An internal error occurred while formatting response data.",
+            ),
+        )
 
     @app.exception_handler(ValueError)
     async def value_exception_handler(request: Request, exc: ValueError) -> JSONResponse:
@@ -148,7 +211,7 @@ def register_exception_handlers(app: FastAPI) -> None:
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             content=error_envelope(
                 code="VALIDATION_FAILED",
-                message=str(exc) or "Invalid value provided.",
+                message=clean_error_message(str(exc)) or "Invalid value provided.",
             ),
         )
 

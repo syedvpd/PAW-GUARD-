@@ -279,7 +279,8 @@ class DonationRepository:
     async def create_sponsorship(self, sponsorship: DogSponsorship) -> DogSponsorship:
         self._session.add(sponsorship)
         await self._session.flush()
-        return sponsorship
+        refreshed = await self.get_sponsorship_by_id(sponsorship.id)
+        return refreshed if refreshed is not None else sponsorship
 
     async def update_sponsorship_status(
         self, sponsorship_id: uuid.UUID, status: SponsorshipStatus
