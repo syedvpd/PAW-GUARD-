@@ -229,6 +229,10 @@ class InventoryService:
         item_id: uuid.UUID | None = None,
         movement_type: MovementType | None = None,
     ) -> PaginatedResponse[InventoryMovementResponse]:
+        if item_id is not None:
+            item = await self._repo.get_item(item_id)
+            if item is None:
+                raise NotFoundError("Inventory item not found.")
         movements, total = await self._repo.list_movements_paginated(
             page_params, sort, item_id=item_id, movement_type=movement_type,
         )

@@ -35,7 +35,7 @@ class InventoryItemResponse(BaseModel):
 
 class InventoryMovementCreate(BaseModel):
     item_id: uuid.UUID
-    movement_type: MovementType = Field(..., examples=["consumption"])
+    movement_type: MovementType = Field(..., examples=["check_in"])
     quantity: float = Field(..., gt=0.0, examples=[5.0])
     notes: str | None = Field(None, examples=["Used during morning treatment rounds."])
     reference_type: str | None = Field(None, examples=["medical_treatment"])
