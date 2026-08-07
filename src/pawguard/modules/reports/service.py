@@ -1,3 +1,4 @@
+import asyncio
 import os
 from datetime import UTC, date, datetime
 from typing import Any
@@ -202,35 +203,50 @@ class ReportService:
         ]
 
         # Campaign progress metrics (PRR 4.1): how each drive is performing
-        # toward its fundraising goal.
-        campaign_stmt = select(DonationCampaign).where(
-            DonationCampaign.deleted_at.is_(None)
-        )
-        campaigns = (await self._session.execute(campaign_stmt)).scalars().all()
-        campaign_rows = []
-        for c in campaigns:
-            raised = (
-                await self._session.execute(
-                    select(func.coalesce(func.sum(Donation.amount), 0)).where(
-                        Donation.campaign_id == c.id,
-                        Donation.status == "success",
-                    )
-                )
-            ).scalar_one()
-            raised = float(raised)
-            pct = (raised / float(c.target_amount) * 100.0) if float(c.target_amount) else 0.0
-            campaign_rows.append(
-                [c.name, c.campaign_type, c.status,
-                 f"{float(c.target_amount):.2f}", f"{raised:.2f}",
-                 f"{min(pct, 100.0):.1f}%"]
+        # toward its fundraising goal. Use single aggregated query instead of N+1.
+        campaign_stmt = (
+            select(
+                DonationCampaign.id,
+                DonationCampaign.name,
+                DonationCampaign.campaign_type,
+                DonationCampaign.status,
+                DonationCampaign.target_amount,
+                func.coalesce(func.sum(Donation.amount), 0).label("raised"),
             )
+            .select_from(DonationCampaign)
+            .outerjoin(
+                Donation,
+                (Donation.campaign_id == DonationCampaign.id)
+                & (Donation.status == "success"),
+            )
+            .where(DonationCampaign.deleted_at.is_(None))
+            .group_by(
+                DonationCampaign.id,
+                DonationCampaign.name,
+                DonationCampaign.campaign_type,
+                DonationCampaign.status,
+                DonationCampaign.target_amount,
+            )
+        )
+        campaign_rows_raw = (await self._session.execute(campaign_stmt)).all()
+        campaign_rows = []
+        for row in campaign_rows_raw:
+            c_id, name, c_type, status, target, raised = row
+            raised = float(raised)
+            pct = (raised / float(target) * 100.0) if float(target) else 0.0
+            campaign_rows.append([
+                name, c_type, status,
+                f"{float(target):.2f}", f"{raised:.2f}",
+                f"{min(pct, 100.0):.1f}%",
+            ])
 
         return {
             "title": "Donation Report",
             "subtitle": f"{start or 'N/A'} to {end or 'N/A'}",
             "headers": headers,
             "rows": rows,
-            "sections": [                {
+            "sections": [
+                {
                     "title": "Campaign Progress",
                     "headers": [
                         "Campaign", "Type", "Status", "Target", "Raised", "Progress",
@@ -243,23 +259,10 @@ class ReportService:
     async def _adoption_report(
         self, start: date | None, end: date | None, filters: dict[str, Any] | None
     ) -> dict[str, Any]:
-        stmt = select(AdoptionApplication)
-        if start:
-            stmt = stmt.where(AdoptionApplication.created_at >= start)
-        if end:
-            stmt = stmt.where(AdoptionApplication.created_at <= end)
-        if filters and "status" in filters:
-            stmt = stmt.where(
-                AdoptionApplication.status == filters["status"]
-            )
-        results = (await self._session.execute(stmt)).scalars().all()
-
-        score_stmt = select(AdoptionScore)
-        if start:
-            score_stmt = score_stmt.where(AdoptionScore.scored_at >= start)
-        if end:
-            score_stmt = score_stmt.where(AdoptionScore.scored_at <= end)
-        scores = (await self._session.execute(score_stmt)).scalars().all()
+        # Parallelise independent DB reads.
+        applications_task = asyncio.ensure_future(self._fetch_adoption_apps(start, end, filters))
+        scores_task = asyncio.ensure_future(self._fetch_adoption_scores(start, end))
+        results, scores = await asyncio.gather(applications_task, scores_task)
 
         headers = [
             "ID", "Dog ID", "Adopter ID", "Status",
@@ -357,48 +360,38 @@ class ReportService:
             "sections": sections,
         }
 
+    async def _fetch_adoption_apps(
+        self, start: date | None, end: date | None, filters: dict[str, Any] | None
+    ):
+        stmt = select(AdoptionApplication)
+        if start:
+            stmt = stmt.where(AdoptionApplication.created_at >= start)
+        if end:
+            stmt = stmt.where(AdoptionApplication.created_at <= end)
+        if filters and "status" in filters:
+            stmt = stmt.where(AdoptionApplication.status == filters["status"])
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def _fetch_adoption_scores(self, start: date | None, end: date | None):
+        stmt = select(AdoptionScore)
+        if start:
+            stmt = stmt.where(AdoptionScore.scored_at >= start)
+        if end:
+            stmt = stmt.where(AdoptionScore.scored_at <= end)
+        return (await self._session.execute(stmt)).scalars().all()
+
     async def _medical_report(
         self, start: date | None, end: date | None, filters: dict[str, Any] | None
     ) -> dict[str, Any]:
-        stmt = select(MedicalTreatment)
-        if start:
-            stmt = stmt.where(
-                MedicalTreatment.treatment_date >= start
-            )
-        if end:
-            stmt = stmt.where(
-                MedicalTreatment.treatment_date <= end
-            )
-        treatments = (await self._session.execute(stmt)).scalars().all()
-
-        vaccination_stmt = select(VaccinationRecord)
-        if start:
-            vaccination_stmt = vaccination_stmt.where(
-                VaccinationRecord.administered_at >= start
-            )
-        if end:
-            vaccination_stmt = vaccination_stmt.where(
-                VaccinationRecord.administered_at <= end
-            )
-        vaccinations = (await self._session.execute(vaccination_stmt)).scalars().all()
-
-        prescription_stmt = select(Prescription)
-        if start:
-            prescription_stmt = prescription_stmt.where(Prescription.start_at >= start)
-        if end:
-            prescription_stmt = prescription_stmt.where(Prescription.start_at <= end)
-        prescriptions = (await self._session.execute(prescription_stmt)).scalars().all()
-
-        total_dogs = int(
-            (
-                await self._session.execute(
-                    select(func.count(DogProfile.id)).where(
-                        DogProfile.deleted_at.is_(None)
-                    )
-                )
-            ).scalar()
-            or 0
+        # Parallelise independent DB reads.
+        treatments_task = asyncio.ensure_future(self._fetch_medical_treatments(start, end))
+        vaccinations_task = asyncio.ensure_future(self._fetch_vaccinations(start, end))
+        prescriptions_task = asyncio.ensure_future(self._fetch_prescriptions(start, end))
+        total_dogs_task = asyncio.ensure_future(self._fetch_total_dogs())
+        treatments, vaccinations, prescriptions, total_dogs = await asyncio.gather(
+            treatments_task, vaccinations_task, prescriptions_task, total_dogs_task,
         )
+        total_dogs = int(total_dogs)
 
         # Vaccination coverage (PRR 4.1 Medical Care & Immunization Compliance).
         vaccine_counts: dict[str, int] = {}
@@ -515,6 +508,37 @@ class ReportService:
             ],
             "sections": sections,
         }
+
+    async def _fetch_medical_treatments(self, start: date | None, end: date | None):
+        stmt = select(MedicalTreatment)
+        if start:
+            stmt = stmt.where(MedicalTreatment.treatment_date >= start)
+        if end:
+            stmt = stmt.where(MedicalTreatment.treatment_date <= end)
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def _fetch_vaccinations(self, start: date | None, end: date | None):
+        stmt = select(VaccinationRecord)
+        if start:
+            stmt = stmt.where(VaccinationRecord.administered_at >= start)
+        if end:
+            stmt = stmt.where(VaccinationRecord.administered_at <= end)
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def _fetch_prescriptions(self, start: date | None, end: date | None):
+        stmt = select(Prescription)
+        if start:
+            stmt = stmt.where(Prescription.start_at >= start)
+        if end:
+            stmt = stmt.where(Prescription.start_at <= end)
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def _fetch_total_dogs(self):
+        return (
+            await self._session.execute(
+                select(func.count(DogProfile.id)).where(DogProfile.deleted_at.is_(None))
+            )
+        ).scalar() or 0
 
     async def _inventory_report(
         self, filters: dict[str, Any] | None
@@ -842,74 +866,19 @@ class ReportService:
     async def _finance_report(
         self, start: date | None, end: date | None, filters: dict[str, Any] | None
     ) -> dict[str, Any]:
-        stmt = select(FinancialTransaction).where(
-            FinancialTransaction.deleted_at.is_(None),
+        # Parallelise independent DB reads.
+        transactions_task = asyncio.ensure_future(
+            self._fetch_financial_transactions(start, end, filters)
         )
-        if start:
-            stmt = stmt.where(
-                FinancialTransaction.transaction_date >= start
-            )
-        if end:
-            stmt = stmt.where(
-                FinancialTransaction.transaction_date <= end
-            )
-        if filters and "type" in filters:
-            stmt = stmt.where(
-                FinancialTransaction.transaction_type == filters["type"]
-            )
-        if filters and "status" in filters:
-            stmt = stmt.where(
-                FinancialTransaction.status == filters["status"]
-            )
-        transactions = (await self._session.execute(stmt)).scalars().all()
-
-        donation_stmt = select(Donation)
-        if start:
-            donation_stmt = donation_stmt.where(Donation.created_at >= start)
-        if end:
-            donation_stmt = donation_stmt.where(Donation.created_at <= end)
-        donations = (await self._session.execute(donation_stmt)).scalars().all()
-
-        gl_stmt = (
-            select(
-                ChartOfAccounts.category,
-                func.coalesce(func.sum(GeneralLedgerEntry.credit_amount), 0),
-                func.coalesce(func.sum(GeneralLedgerEntry.debit_amount), 0),
-            )
-            .join(
-                GeneralLedgerEntry,
-                GeneralLedgerEntry.account_id == ChartOfAccounts.id,
-            )
-            .group_by(ChartOfAccounts.category)
-            .order_by(ChartOfAccounts.category)
+        donations_task = asyncio.ensure_future(self._fetch_donations_for_finance(start, end))
+        gl_task = asyncio.ensure_future(self._fetch_gl_summary())
+        inventory_value_task = asyncio.ensure_future(self._fetch_inventory_value())
+        rescued_dogs_task = asyncio.ensure_future(self._fetch_rescued_dogs_count())
+        transactions, donations, gl_rows_raw, inventory_value, rescued_dogs = await asyncio.gather(
+            transactions_task, donations_task, gl_task, inventory_value_task, rescued_dogs_task,
         )
-        gl_rows_raw = (await self._session.execute(gl_stmt)).all()
-
-        inventory_value = float(
-            (
-                await self._session.execute(
-                    select(
-                        func.coalesce(
-                            func.sum(InventoryItem.quantity * InventoryItem.unit_cost),
-                            0,
-                        )
-                    ).where(InventoryItem.deleted_at.is_(None))
-                )
-            ).scalar()
-            or 0.0
-        )
-
-        rescued_dogs = int(
-            (
-                await self._session.execute(
-                    select(func.count(DogProfile.id)).where(
-                        DogProfile.deleted_at.is_(None),
-                        DogProfile.rescue_case_id.isnot(None),
-                    )
-                )
-            ).scalar()
-            or 0
-        )
+        inventory_value = float(inventory_value)
+        rescued_dogs = int(rescued_dogs)
 
         # GL / summary analytics (PRR 4.1 Financial Transparency).
         total_expenses = sum(
@@ -994,6 +963,60 @@ class ReportService:
             ],
             "sections": sections,
         }
+
+    async def _fetch_financial_transactions(
+        self, start: date | None, end: date | None, filters: dict[str, Any] | None
+    ):
+        stmt = select(FinancialTransaction).where(FinancialTransaction.deleted_at.is_(None))
+        if start:
+            stmt = stmt.where(FinancialTransaction.transaction_date >= start)
+        if end:
+            stmt = stmt.where(FinancialTransaction.transaction_date <= end)
+        if filters and "type" in filters:
+            stmt = stmt.where(FinancialTransaction.transaction_type == filters["type"])
+        if filters and "status" in filters:
+            stmt = stmt.where(FinancialTransaction.status == filters["status"])
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def _fetch_donations_for_finance(self, start: date | None, end: date | None):
+        stmt = select(Donation)
+        if start:
+            stmt = stmt.where(Donation.created_at >= start)
+        if end:
+            stmt = stmt.where(Donation.created_at <= end)
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def _fetch_gl_summary(self):
+        stmt = (
+            select(
+                ChartOfAccounts.category,
+                func.coalesce(func.sum(GeneralLedgerEntry.credit_amount), 0),
+                func.coalesce(func.sum(GeneralLedgerEntry.debit_amount), 0),
+            )
+            .join(GeneralLedgerEntry, GeneralLedgerEntry.account_id == ChartOfAccounts.id)
+            .group_by(ChartOfAccounts.category)
+            .order_by(ChartOfAccounts.category)
+        )
+        return (await self._session.execute(stmt)).all()
+
+    async def _fetch_inventory_value(self):
+        return (
+            await self._session.execute(
+                select(
+                    func.coalesce(func.sum(InventoryItem.quantity * InventoryItem.unit_cost), 0)
+                ).where(InventoryItem.deleted_at.is_(None))
+            )
+        ).scalar() or 0.0
+
+    async def _fetch_rescued_dogs_count(self):
+        return (
+            await self._session.execute(
+                select(func.count(DogProfile.id)).where(
+                    DogProfile.deleted_at.is_(None),
+                    DogProfile.rescue_case_id.isnot(None),
+                )
+            )
+        ).scalar() or 0
 
     @staticmethod
     def _months_in_range(start: date | None, end: date | None) -> int:
@@ -1216,81 +1239,36 @@ class ReportService:
     async def _staff_performance_report(
         self, start: date | None, end: date | None, filters: dict[str, Any] | None
     ) -> dict[str, Any]:
-        adoption_stmt = select(func.count(AdoptionApplication.id)).where(
-            AdoptionApplication.status == AdoptionStatus.COMPLETED
-        )
-        if start:
-            adoption_stmt = adoption_stmt.where(AdoptionApplication.created_at >= start)
-        if end:
-            adoption_stmt = adoption_stmt.where(AdoptionApplication.created_at <= end)
-        total_adoptions = (await self._session.execute(adoption_stmt)).scalar() or 0
-
         months = self._months_in_range(start, end)
+
+        # Parallelise all independent DB reads (8 sequential queries → 1 gather).
+        total_adoptions_task = asyncio.ensure_future(self._count_adoptions_completed(start, end))
+        active_foster_task = asyncio.ensure_future(self._count_active_fosters())
+        total_placements_task = asyncio.ensure_future(self._count_foster_placements())
+        returned_placements_task = asyncio.ensure_future(self._count_returned_placements())
+        rescue_count_task = asyncio.ensure_future(self._count_rescue_requests(start, end))
+        avg_response_task = asyncio.ensure_future(self._avg_rescue_response(start, end))
+        medical_count_task = asyncio.ensure_future(self._count_medical_treatments(start, end))
+        dogs_in_care_task = asyncio.ensure_future(self._count_dogs_in_care())
+        avg_los_task = asyncio.ensure_future(self._avg_los())
+        volunteer_count_task = asyncio.ensure_future(self._count_active_volunteers())
+
+        (
+            total_adoptions, active_foster, total_placements, returned_placements,
+            rescue_count, avg_response_time, medical_count, dogs_in_care,
+            avg_los, volunteer_count,
+        ) = await asyncio.gather(
+            total_adoptions_task, active_foster_task, total_placements_task,
+            returned_placements_task, rescue_count_task, avg_response_task,
+            medical_count_task, dogs_in_care_task, avg_los_task, volunteer_count_task,
+        )
+
         adoption_velocity = total_adoptions / months
-
-        active_foster_stmt = select(func.count(FosterPlacement.id)).where(
-            FosterPlacement.is_active.is_(True)
-        )
-        active_foster = (await self._session.execute(active_foster_stmt)).scalar() or 0
-
-        total_placements_stmt = select(func.count(FosterPlacement.id))
-        total_placements = (await self._session.execute(total_placements_stmt)).scalar() or 0
-        returned_placements_stmt = select(func.count(FosterPlacement.id)).where(
-            FosterPlacement.returned_at.isnot(None)
-        )
-        returned_placements = (await self._session.execute(returned_placements_stmt)).scalar() or 0
         foster_efficiency = (
             (returned_placements / total_placements * 100) if total_placements else 0.0
         )
-
-        rescue_stmt = select(func.count(RescueRequest.id))
-        if start:
-            rescue_stmt = rescue_stmt.where(RescueRequest.created_at >= start)
-        if end:
-            rescue_stmt = rescue_stmt.where(RescueRequest.created_at <= end)
-        rescue_count = (await self._session.execute(rescue_stmt)).scalar() or 0
-
-        avg_response_stmt = select(
-            func.avg(
-                func.extract(
-                    "epoch",
-                    RescueDispatch.dispatched_at - RescueRequest.created_at,
-                ) / 3600.0
-            )
-        ).select_from(RescueDispatch).join(
-            RescueRequest, RescueDispatch.rescue_request_id == RescueRequest.id
-        )
-        if start:
-            avg_response_stmt = avg_response_stmt.where(RescueRequest.created_at >= start)
-        if end:
-            avg_response_stmt = avg_response_stmt.where(RescueRequest.created_at <= end)
-        avg_response_time = (await self._session.execute(avg_response_stmt)).scalar()
         avg_response_time = round(avg_response_time, 1) if avg_response_time is not None else None
-
-        medical_stmt = select(func.count(MedicalTreatment.id))
-        if start:
-            medical_stmt = medical_stmt.where(MedicalTreatment.treatment_date >= start)
-        if end:
-            medical_stmt = medical_stmt.where(MedicalTreatment.treatment_date <= end)
-        medical_count = (await self._session.execute(medical_stmt)).scalar() or 0
-
-        dogs_in_care_stmt = select(func.count(DogProfile.id)).where(
-            DogProfile.status != DogStatus.ADOPTED
-        )
-        dogs_in_care = (await self._session.execute(dogs_in_care_stmt)).scalar() or 0
-
-        avg_los_stmt = select(
-            func.avg(
-                func.extract("epoch", func.now() - DogProfile.created_at) / 86400.0
-            )
-        ).where(DogProfile.status != DogStatus.ADOPTED)
-        avg_los = (await self._session.execute(avg_los_stmt)).scalar()
         avg_los = round(avg_los, 1) if avg_los is not None else None
-
-        volunteer_stmt = select(func.count(VolunteerProfile.id)).where(
-            VolunteerProfile.status == "active"
-        )
-        volunteer_count = (await self._session.execute(volunteer_stmt)).scalar() or 0
 
         return {
             "title": "Staff Performance Report",
@@ -1315,6 +1293,86 @@ class ReportService:
                 ["Volunteer Hours", str(volunteer_count)],
             ],
         }
+
+    async def _count_adoptions_completed(self, start: date | None, end: date | None):
+        stmt = select(func.count(AdoptionApplication.id)).where(
+            AdoptionApplication.status == AdoptionStatus.COMPLETED
+        )
+        if start:
+            stmt = stmt.where(AdoptionApplication.created_at >= start)
+        if end:
+            stmt = stmt.where(AdoptionApplication.created_at <= end)
+        return (await self._session.execute(stmt)).scalar() or 0
+
+    async def _count_active_fosters(self):
+        return (
+            await self._session.execute(
+                select(func.count(FosterPlacement.id)).where(FosterPlacement.is_active.is_(True))
+            )
+        ).scalar() or 0
+
+    async def _count_foster_placements(self):
+        return (await self._session.execute(select(func.count(FosterPlacement.id)))).scalar() or 0
+
+    async def _count_returned_placements(self):
+        return (
+            await self._session.execute(
+                select(func.count(FosterPlacement.id)).where(FosterPlacement.returned_at.isnot(None))
+            )
+        ).scalar() or 0
+
+    async def _count_rescue_requests(self, start: date | None, end: date | None):
+        stmt = select(func.count(RescueRequest.id))
+        if start:
+            stmt = stmt.where(RescueRequest.created_at >= start)
+        if end:
+            stmt = stmt.where(RescueRequest.created_at <= end)
+        return (await self._session.execute(stmt)).scalar() or 0
+
+    async def _avg_rescue_response(self, start: date | None, end: date | None):
+        response_time_expr = (
+            func.extract("epoch", RescueDispatch.dispatched_at - RescueRequest.created_at)
+            / 3600.0
+        )
+        stmt = select(func.avg(response_time_expr)).select_from(RescueDispatch).join(
+            RescueRequest, RescueDispatch.rescue_request_id == RescueRequest.id
+        )
+        if start:
+            stmt = stmt.where(RescueRequest.created_at >= start)
+        if end:
+            stmt = stmt.where(RescueRequest.created_at <= end)
+        return (await self._session.execute(stmt)).scalar()
+
+    async def _count_medical_treatments(self, start: date | None, end: date | None):
+        stmt = select(func.count(MedicalTreatment.id))
+        if start:
+            stmt = stmt.where(MedicalTreatment.treatment_date >= start)
+        if end:
+            stmt = stmt.where(MedicalTreatment.treatment_date <= end)
+        return (await self._session.execute(stmt)).scalar() or 0
+
+    async def _count_dogs_in_care(self):
+        return (
+            await self._session.execute(
+                select(func.count(DogProfile.id)).where(DogProfile.status != DogStatus.ADOPTED)
+            )
+        ).scalar() or 0
+
+    async def _avg_los(self):
+        return (
+            await self._session.execute(
+                select(
+                    func.avg(func.extract("epoch", func.now() - DogProfile.created_at) / 86400.0)
+                ).where(DogProfile.status != DogStatus.ADOPTED)
+            )
+        ).scalar()
+
+    async def _count_active_volunteers(self):
+        return (
+            await self._session.execute(
+                select(func.count(VolunteerProfile.id)).where(VolunteerProfile.status == "active")
+            )
+        ).scalar() or 0
 
     async def _animal_population_report(
         self, filters: dict[str, Any] | None

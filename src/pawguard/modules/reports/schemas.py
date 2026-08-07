@@ -1,7 +1,7 @@
 from datetime import date
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ReportFormat(StrEnum):
@@ -30,6 +30,16 @@ class ReportRequest(BaseModel):
     period_start: date | None = Field(None, examples=["2026-01-01"])
     period_end: date | None = Field(None, examples=["2026-07-31"])
     filters: dict[str, str] | None = Field(None, examples=[{"status": "completed"}])
+
+    @model_validator(mode="after")
+    def _validate_date_range(self) -> "ReportRequest":
+        if (
+            self.period_start is not None
+            and self.period_end is not None
+            and self.period_start > self.period_end
+        ):
+            raise ValueError("period_start must not be later than period_end")
+        return self
 
 
 class ReportResponse(BaseModel):
