@@ -85,7 +85,7 @@ class InventoryService:
         qty_change = payload.quantity
         from datetime import date
 
-        if payload.movement_type == MovementType.CHECK_OUT:
+        if payload.movement_type in (MovementType.CHECK_OUT, MovementType.CONSUMPTION):
             # Expiry date enforcement (PRD 3.12)
             if item.expiry_date is not None and item.expiry_date < date.today():
                 raise ConflictError(

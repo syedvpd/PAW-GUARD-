@@ -24,6 +24,7 @@ class ItemCategory(StrEnum):
 class MovementType(StrEnum):
     CHECK_IN = "check_in"
     CHECK_OUT = "check_out"
+    CONSUMPTION = "consumption"
     ADJUSTMENT = "adjustment"
 
 
