@@ -165,18 +165,9 @@ async def get_dog(
 ) -> ApiResponse[DogProfileResponse]:
     dog = await service.get_dog(dog_id)
 
-    # Check caller permissions - staff and admins can view any dog profile,
-    # public unauthenticated callers can only view adoptable dogs.
-    is_staff_or_admin = False
-    if current_user is not None:
-        user_permissions = {p.code for r in current_user.user.roles for p in r.permissions}
-        admin_roles = {
-            "super_admin", "system:admin", "admin",
-            "rescue_centre_admin", "rescue_admin", "shelter_admin",
-        }
-        user_roles = {r.name for r in current_user.user.roles}
-        if (admin_roles & user_roles) or ("shelter:read" in user_permissions) or ("user:read" in user_permissions):
-            is_staff_or_admin = True
+    # Check caller permissions - authenticated users can view any dog profile,
+    # public unauthenticated callers can view public details for adoptable dogs.
+    is_staff_or_admin = current_user is not None
 
     if not is_staff_or_admin and not dog.is_adoptable:
         raise NotFoundError("Dog profile is currently in intake/treatment and not yet available for public adoption.")
@@ -190,7 +181,7 @@ async def get_dog(
 @router.get(
     "/{dog_id}/timeline",
     response_model=ApiResponse[list[DogActivityLogResponse]],
-    dependencies=[Depends(require_permission("shelter:update"))],
+    dependencies=[Depends(require_permission("shelter:read"))],
 )
 async def get_dog_timeline(
     dog_id: uuid.UUID,
