@@ -226,3 +226,6 @@ src/pawguard/modules/generated_reports/
 
 
 Paw Guard Docs
+
+# Temporary agent scratch directory
+scratch/
