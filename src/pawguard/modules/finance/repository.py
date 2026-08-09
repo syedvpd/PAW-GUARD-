@@ -291,6 +291,20 @@ class FinanceRepository:
         )
         return (await self._session.execute(stmt)).scalars().all()
 
+    async def get_donation_by_id(self, donation_id: uuid.UUID) -> Donation | None:
+        stmt = select(Donation).where(Donation.id == donation_id)
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def is_donation_reconciled(self, donation_id: uuid.UUID) -> bool:
+        stmt = select(
+            func.count(FinancialTransaction.id)
+        ).where(
+            FinancialTransaction.donation_id == donation_id,
+            FinancialTransaction.status == TransactionStatus.RECONCILED,
+        )
+        count = (await self._session.execute(stmt)).scalar_one()
+        return count > 0
+
     async def get_donation_reconciliation_summary(self) -> dict[str, Any]:
         total = await self._session.execute(
             select(

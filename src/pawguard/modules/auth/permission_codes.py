@@ -123,3 +123,15 @@ GRIEVANCE_COMMENT = "grievance:comment"
 # ── Notifications ─────────────────────────────────────────────────────────────
 NOTIFICATION_READ = "notification:read"
 NOTIFICATION_MANAGE = "notification:manage"
+
+# ── Client-facing permission aliases (app vocabulary) ────────────────────────
+# The Flutter/web clients gate UI actions on coarse action verbs
+# (rescue:write, donations:write, complaints:write, notifications:write) that
+# differ from the fine-grained backend codes. These aliases are granted to the
+# same roles that hold the matching backend code (see seed_roles_and_permissions
+# ROLE_DEFINITIONS) so both vocabularies stay in sync without churning every
+# require_permission call site.
+RESCUE_WRITE = "rescue:write"  # client alias for rescue:create/update/delete
+DONATIONS_WRITE = "donations:write"  # client alias for donation:manage/update
+COMPLAINTS_WRITE = "complaints:write"  # client alias for grievance:*
+NOTIFICATIONS_WRITE = "notifications:write"  # client alias for notification:manage

@@ -107,6 +107,22 @@ async def soft_delete_profile(
     return ApiResponse(message="Volunteer profile deleted successfully.")
 
 
+@router.get(
+    "/{profile_id}",
+    response_model=ApiResponse[VolunteerProfileResponse],
+)
+async def get_profile(
+    profile_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: VolunteerService = Depends(get_volunteer_service),
+) -> ApiResponse[VolunteerProfileResponse]:
+    profile = await service.get_profile(profile_id)
+    is_owner = profile.user_id == current_user.user.id
+    if not is_owner and not has_permission(current_user.user, "volunteer:update"):
+        raise ForbiddenError("You do not have permission to view this volunteer profile.")
+    return ApiResponse(data=VolunteerProfileResponse.model_validate(profile))
+
+
 @router.post(
     "/shifts",
     response_model=ApiResponse[VolunteerShiftResponse],

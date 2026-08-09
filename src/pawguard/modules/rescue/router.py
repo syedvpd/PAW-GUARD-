@@ -107,11 +107,15 @@ def _masked_rescue_response(
     "/report",
     response_model=ApiResponse[RescueRequestResponse],
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(rate_limit("rescue_report", 5, 60))],
+    dependencies=[
+        Depends(rate_limit("rescue_report", 5, 60)),
+        Depends(require_permission("rescue:create")),
+    ],
 )
 async def report_incident(
     payload: RescueRequestCreate,
     request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     service: RescueService = Depends(get_rescue_service),
 ) -> ApiResponse[RescueRequestResponse]:
     request_obj = await service.report_incident(
@@ -132,7 +136,7 @@ async def report_incident(
         media_evidence=payload.media_evidence,
         environmental_factors=payload.environmental_factors,
         reporter_notes=payload.reporter_notes,
-        actor_id=None,
+        actor_id=current_user.id,
         ip_address=request.client.host if request.client else None,
     )
     return ApiResponse(
@@ -429,6 +433,20 @@ async def get_public_status(
 ) -> ApiResponse[PublicRescueStatusResponse]:
     status = await service.lookup_public_status(ticket_number, phone)
     return ApiResponse(data=status, message="Rescue case status retrieved.")
+
+
+@router.get(
+    "/dispatches",
+    response_model=PaginatedResponse[RescueDispatchResponse],
+    dependencies=[Depends(require_permission("rescue:read"))],
+)
+async def list_dispatches(
+    page: PageParams = Depends(page_params),
+    sort: SortParams = Depends(sort_params),
+    service: RescueService = Depends(get_rescue_service),
+) -> PaginatedResponse[RescueDispatchResponse]:
+    result = await service.list_dispatches_paginated(page=page, sort=sort)
+    return result
 
 
 @router.get(

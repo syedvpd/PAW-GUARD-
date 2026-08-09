@@ -175,6 +175,27 @@ class RescueRepository:
         stmt = select(RescueDispatch).where(RescueDispatch.id == dispatch_id)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    async def list_dispatches_paginated(
+        self,
+        page: PageParams,
+        sort: SortParams,
+    ) -> tuple[Sequence[RescueDispatch], int]:
+        stmt = select(RescueDispatch).options(selectinload(RescueDispatch.agents))
+
+        valid_fields = {
+            "dispatched_at", "located_at", "rescued_at", "admitted_at",
+            "failed_at", "escalation_type", "created_at", "updated_at",
+        }
+        stmt = apply_sorting(stmt, sort, valid_fields)
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = (await self._session.execute(count_stmt)).scalar_one()
+
+        stmt = stmt.offset(page.offset).limit(page.limit)
+        results = (await self._session.execute(stmt)).scalars().all()
+
+        return results, total
+
     async def delete_dispatch(self, dispatch: RescueDispatch) -> None:
         await self._session.delete(dispatch)
         await self._session.flush()

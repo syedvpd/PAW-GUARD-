@@ -63,6 +63,8 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
             pc.REPORTS_READ, pc.REPORTS_CREATE,
             pc.REPORTS_EXPORT_PDF, pc.REPORTS_EXPORT_CSV, pc.REPORTS_EXPORT_EXCEL,
             pc.FINANCE_UPDATE, pc.FINANCE_DELETE, pc.FINANCE_EXPORT,
+            pc.RESCUE_WRITE, pc.DONATIONS_WRITE,
+            pc.COMPLAINTS_WRITE, pc.NOTIFICATIONS_WRITE,
         ],
     ),
     (
@@ -76,9 +78,11 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
             pc.VEHICLE_READ, pc.VEHICLE_ASSIGN, pc.VEHICLE_UPDATE,
             pc.SHELTER_READ, pc.SHELTER_UPDATE, pc.SHELTER_MANAGE_KENNELS, pc.SHELTER_TRANSFER,
             pc.MEDICAL_READ, pc.MEDICAL_CLEARANCE,
-            pc.ADOPTION_READ, pc.ADOPTION_PROCESS, pc.ADOPTION_APPROVE, pc.ADOPTION_LOCK, pc.ADOPTION_DELETE,
+            pc.ADOPTION_READ, pc.ADOPTION_PROCESS, pc.ADOPTION_APPROVE,
+            pc.ADOPTION_LOCK, pc.ADOPTION_DELETE,
             pc.FOSTER_CREATE, pc.FOSTER_READ, pc.FOSTER_UPDATE, pc.FOSTER_APPROVE, pc.FOSTER_DELETE,
-            pc.VOLUNTEER_CREATE, pc.VOLUNTEER_READ, pc.VOLUNTEER_UPDATE, pc.VOLUNTEER_SCHEDULE, pc.VOLUNTEER_DELETE,
+            pc.VOLUNTEER_CREATE, pc.VOLUNTEER_READ, pc.VOLUNTEER_UPDATE,
+            pc.VOLUNTEER_SCHEDULE, pc.VOLUNTEER_DELETE,
             pc.INVENTORY_READ, pc.INVENTORY_UPDATE, pc.INVENTORY_DELETE,
             pc.FINANCE_READ,
             pc.DONATION_READ,
@@ -90,6 +94,7 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
             pc.DASHBOARD_RESCUE, pc.DASHBOARD_SHELTER, pc.DASHBOARD_MEDICAL,
             pc.DASHBOARD_ADOPTION, pc.DASHBOARD_FOSTER, pc.DASHBOARD_VOLUNTEER,
             pc.DASHBOARD_INVENTORY, pc.DASHBOARD_FINANCE, pc.DASHBOARD_DONOR,
+            pc.RESCUE_WRITE, pc.COMPLAINTS_WRITE,
         ],
     ),
     (
@@ -102,6 +107,7 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
             pc.VEHICLE_READ, pc.VEHICLE_ASSIGN,
             pc.PUBLIC_READ,
             pc.DASHBOARD_RESCUE,
+            pc.RESCUE_WRITE,
         ],
     ),
     (
@@ -192,6 +198,7 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
             pc.DONATION_READ, pc.DONATION_MANAGE, pc.DONATION_UPDATE,
             pc.PUBLIC_READ,
             pc.DASHBOARD_FINANCE,
+            pc.DONATIONS_WRITE,
         ],
     ),
     (
@@ -200,6 +207,7 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
         False,
         [
             pc.VOLUNTEER_READ,
+            pc.DASHBOARD_VOLUNTEER,
         ],
     ),
     (
@@ -208,6 +216,7 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
         False,
         [
             pc.FOSTER_READ,
+            pc.DASHBOARD_FOSTER,
         ],
     ),
     (

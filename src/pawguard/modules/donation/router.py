@@ -6,7 +6,7 @@ Routers only validate and call services (RULE-004).
 import contextlib
 import uuid
 from datetime import date
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -65,6 +65,8 @@ from pawguard.modules.donation.schemas import (
     SponsorshipStatusUpdate,
 )
 from pawguard.modules.donation.service import DonationService
+from pawguard.modules.finance.repository import FinanceRepository
+from pawguard.modules.finance.service import FinanceService
 from pawguard.modules.notifications.repository import NotificationRepository
 from pawguard.modules.notifications.service import NotificationService
 from pawguard.modules.storage.schemas import DownloadUrlResponse
@@ -397,6 +399,36 @@ async def update_donation_status(
     return ApiResponse(
         data=DonationResponse.model_validate(donation),
         message="Donation status updated successfully.",
+    )
+
+
+@router.post(
+    "/{donation_id}/reconcile",
+    response_model=ApiResponse[dict[str, Any]],
+    dependencies=[Depends(require_permission("finance:create"))],
+)
+async def reconcile_donation(
+    donation_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    audit: AuditService = Depends(get_audit_service),
+) -> ApiResponse[dict[str, Any]]:
+    """Reconcile a single successful donation into the finance ledger.
+
+    The app calls this per-donation; the bulk flow remains available at
+    POST /finance/reconcile/donations. Delegates to the finance domain
+    service so the reconciliation transaction/ledger rules stay in one place.
+    """
+    finance = FinanceService(FinanceRepository(db), audit_service=audit)
+    result = await finance.reconcile_donation(
+        donation_id,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(
+        data=result,
+        message="Donation reconciled successfully.",
     )
 
 

@@ -402,6 +402,15 @@ class ShelterService:
     ) -> FacilityTransfer:
         return await self._confirm_transfer_side(transfer_id, "receiver", actor_id, ip_address)
 
+    async def get_transfer(self, transfer_id: uuid.UUID) -> FacilityTransfer:
+        transfer = await self._repo.get_transfer(transfer_id)
+        if transfer is None:
+            raise NotFoundError("Facility transfer request not found.")
+        return transfer
+
+    async def list_transfers(self) -> Sequence[FacilityTransfer]:
+        return await self._repo.list_transfers()
+
     async def submit_daily_care_log(
         self,
         user_id: uuid.UUID,

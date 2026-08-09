@@ -116,6 +116,21 @@ async def list_facilities(
     )
 
 
+@router.get(
+    "/facilities/{facility_id}",
+    response_model=ApiResponse[ShelterFacilityResponse],
+    dependencies=[Depends(require_permission("shelter:read"))],
+)
+async def get_facility(
+    facility_id: uuid.UUID,
+    service: ShelterService = Depends(get_shelter_service),
+) -> ApiResponse[ShelterFacilityResponse]:
+    facility = await service.get_facility(facility_id)
+    return ApiResponse(
+        data=ShelterFacilityResponse.model_validate(facility),
+    )
+
+
 @router.put(
     "/facilities/{facility_id}",
     response_model=ApiResponse[ShelterFacilityResponse],
@@ -376,6 +391,35 @@ async def request_transfer(
             "Inter-facility transfer request submitted "
             "successfully."
         ),
+    )
+
+
+@router.get(
+    "/transfers",
+    response_model=ApiResponse[list[FacilityTransferResponse]],
+    dependencies=[Depends(require_permission("shelter:read"))],
+)
+async def list_transfers(
+    service: ShelterService = Depends(get_shelter_service),
+) -> ApiResponse[list[FacilityTransferResponse]]:
+    transfers = await service.list_transfers()
+    return ApiResponse(
+        data=[FacilityTransferResponse.model_validate(t) for t in transfers],
+    )
+
+
+@router.get(
+    "/transfers/{transfer_id}",
+    response_model=ApiResponse[FacilityTransferResponse],
+    dependencies=[Depends(require_permission("shelter:read"))],
+)
+async def get_transfer(
+    transfer_id: uuid.UUID,
+    service: ShelterService = Depends(get_shelter_service),
+) -> ApiResponse[FacilityTransferResponse]:
+    transfer = await service.get_transfer(transfer_id)
+    return ApiResponse(
+        data=FacilityTransferResponse.model_validate(transfer),
     )
 
 

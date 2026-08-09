@@ -1,5 +1,6 @@
 """RescueService: owns all rescue business behavior (RULE-003)."""
 
+import contextlib
 import re
 import secrets
 import uuid
@@ -42,13 +43,13 @@ from pawguard.modules.rescue.models import (
 from pawguard.modules.rescue.repository import RescueRepository
 from pawguard.modules.rescue.schemas import (
     PublicRescueStatusResponse,
+    RescueDispatchResponse,
     RescueDispatchUpdate,
     RescueRequestResponse,
     normalise_failure_reason,
 )
 from pawguard.redis.client import RedisClient
 from pawguard.services.audit_service import AuditService
-
 
 # Collisions on the 4-digit ticket suffix are rare but possible under high
 # intake volume; retry a bounded number of times before giving up cleanly.
@@ -107,10 +108,8 @@ class RescueService:
 
     async def _publish_dispatch_event(self) -> None:
         if self._redis is not None:
-            try:
+            with contextlib.suppress(Exception):
                 await self._redis.publish("dispatch:events", "updated")
-            except Exception:
-                pass
 
 
     def _fleet_service(self) -> FleetService:
@@ -318,9 +317,8 @@ class RescueService:
                     f"(vehicle is '{vehicle.status.value}')."
                 )
 
-        if assigned_driver_id is not None:
-            if not await self._repo.user_exists(assigned_driver_id):
-                raise NotFoundError(f"Assigned driver user '{assigned_driver_id}' not found.")
+        if assigned_driver_id is not None and not await self._repo.user_exists(assigned_driver_id):
+            raise NotFoundError(f"Assigned driver user '{assigned_driver_id}' not found.")
 
         # Assemble the full team: the explicit agent list plus the legacy
         # single-driver field, deduplicated. Every member is mirrored into
@@ -684,6 +682,17 @@ class RescueService:
 
     async def list_requests(self, status: RescueStatus | None = None) -> Sequence[RescueRequest]:
         return await self._repo.list_requests(status)
+
+    async def list_dispatches_paginated(
+        self, page: PageParams, sort: SortParams
+    ) -> PaginatedResponse[RescueDispatchResponse]:
+        dispatches, total = await self._repo.list_dispatches_paginated(
+            page=page, sort=sort
+        )
+        return PaginatedResponse(
+            data=[RescueDispatchResponse.model_validate(d) for d in dispatches],
+            meta=build_pagination_meta(total=total, params=page),
+        )
 
     async def list_requests_paginated(
         self,
