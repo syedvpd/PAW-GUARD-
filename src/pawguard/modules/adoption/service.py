@@ -306,6 +306,9 @@ class AdoptionService:
 
         if res.status == AdoptionStatus.APPROVED and "status" in update_data:
             await self._generate_agreement(res)
+            res = await self._repo.get_by_id(app_id)
+            if res is None:
+                raise NotFoundError("Adoption application not found after update.")
 
         return res
 
@@ -388,6 +391,9 @@ class AdoptionService:
 
         if status == AdoptionStatus.APPROVED and old_status != status:
             await self._generate_agreement(res)
+            res = await self._repo.get_by_id(app_id)
+            if res is None:
+                raise NotFoundError("Adoption application not found after status update.")
 
         return res
 

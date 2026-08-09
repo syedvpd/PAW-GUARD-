@@ -28,6 +28,7 @@ from pawguard.modules.portal import models as portal_models  # noqa: F401
 from pawguard.modules.finance import models as finance_models  # noqa: F401
 from pawguard.modules.storage import models as storage_models  # noqa: F401
 from pawguard.modules.settings import models as settings_models  # noqa: F401
+from pawguard.modules.companion_pet import models as companion_pet_models  # noqa: F401
 
 config = context.config
 

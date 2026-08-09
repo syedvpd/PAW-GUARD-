@@ -127,7 +127,12 @@ async def list_dogs(
     current_user: CurrentUser | None = Depends(get_optional_current_user),
     service: DogService = Depends(get_dog_service),
 ) -> PaginatedResponse[DogProfileResponse]:
-    # Public endpoint - no permission check required
+    # Public adoption directory: anonymous and non-staff callers may only see
+    # adoptable dogs. Authenticated staff/admin retain the full filter set.
+    is_staff_or_admin = current_user is not None
+    public_view = not is_staff_or_admin
+    if public_view:
+        is_adoptable = True
     result = await service.list_dogs_paginated(
         page=page,
         sort=sort,
@@ -145,8 +150,8 @@ async def list_dogs(
         location=location,
     )
     data = [DogProfileResponse.model_validate(d) for d in result.data]
-    # Public adoption directory only shows adoptable dogs
-    data = [_public_dog_view(d) for d in data]
+    if public_view:
+        data = [_public_dog_view(d) for d in data]
     return PaginatedResponse(data=data, meta=result.meta)
 
 

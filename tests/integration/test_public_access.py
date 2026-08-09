@@ -180,7 +180,7 @@ class TestPublicAccess:
             "reporter_name": "Jane Public", "reporter_phone": "+9876543210",
             "location_address": "Street 5, Block B", "physical_condition": "Injured",
         }
-        r = await client.post("/api/v1/rescue/report", json=report_payload)
+        r = await client.post("/api/v1/public/rescue/report", json=report_payload)
         assert r.status_code == 201
         case_id = r.json()["data"]["id"]
 
@@ -199,7 +199,7 @@ class TestPublicAccess:
             "reporter_name": "Jane Public", "reporter_phone": "+9876543210",
             "location_address": "Street 5, Block B", "physical_condition": "Injured",
         }
-        r = await client.post("/api/v1/rescue/report", json=report_payload)
+        r = await client.post("/api/v1/public/rescue/report", json=report_payload)
         case_id = r.json()["data"]["id"]
 
         resp = await client.get(f"/api/v1/rescue/{case_id}", headers=headers)
@@ -219,7 +219,7 @@ class TestPublicAccess:
             "reporter_name": "Jane Public", "reporter_phone": "+9876543210",
             "location_address": "Street 5, Block B", "physical_condition": "Injured",
         }
-        r = await client.post("/api/v1/rescue/report", json=report_payload)
+        r = await client.post("/api/v1/public/rescue/report", json=report_payload)
         case_id = r.json()["data"]["id"]
 
         # Advance the case to DISPATCHED as admin so the agent can act on it.

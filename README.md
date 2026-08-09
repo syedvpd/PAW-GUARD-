@@ -76,6 +76,7 @@ Business logic **never** lives in routers or repositories. See [AGENTS.md](AGENT
 | 16 | `grievance` | Complaint and grievance management |
 | 17 | `lost_found` | Lost and found pet matching |
 | 18 | `admin` | Admin dashboard, system administration |
+| 19 | `companion_pet` | Owner pets, privacy-safe QR tags, clinics, appointments, medical uploads, reminders |
 
 ---
 
@@ -296,6 +297,23 @@ When running in `local` or `staging` environments:
 | `GET /health` | Liveness summary |
 | `GET /live` | Process is up |
 | `GET /ready` | Dependencies (DB, Redis) are reachable |
+
+### Companion Pet APIs
+
+Authenticated endpoints are versioned under `/api/v1/companion-pets`. Owners are
+scoped to their own pets; clinic staff require an active clinic membership and
+patient access; administrators can manage all records.
+
+- `POST/GET /companion-pets` and `GET/PATCH/DELETE /companion-pets/{pet_id}`
+- `POST /companion-pets/{pet_id}/medical-files/upload-url` and medical-record endpoints
+- `POST/GET /companion-pets/{pet_id}/safety-tag` for hashed-token QR tags
+- `POST /companion-pets/safety-tag/scan` for the rate-limited, PII-free public scan flow
+- `GET/POST /companion-pets/clinics` and clinic membership administration
+- `POST/GET /companion-pets/appointments` plus detail, confirm, and cancel actions
+- `POST/GET /companion-pets/{pet_id}/reminders` for vaccination and medication reminders
+
+Reminder delivery runs through the ARQ worker and the existing in-app
+`NotificationService`; the unique delivery key makes retries idempotent.
 
 ---
 

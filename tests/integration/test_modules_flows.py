@@ -56,7 +56,7 @@ class TestEndToEndModuleFlows:
             "physical_condition": "Injured/Fractured",
             "animal_count": 1,
         }
-        rescue_resp = await client.post("/api/v1/rescue/report", json=report_payload)
+        rescue_resp = await client.post("/api/v1/public/rescue/report", json=report_payload)
         assert rescue_resp.status_code == 201
         case_data = rescue_resp.json()["data"]
         case_id = case_data["id"]

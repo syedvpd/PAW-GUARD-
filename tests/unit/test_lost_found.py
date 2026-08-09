@@ -28,6 +28,85 @@ from pawguard.modules.lost_found.service import LostFoundService
 from pawguard.services.audit_service import AuditService
 
 
+class TestLostFoundBroadcastQueue:
+    @pytest.fixture
+    def mock_repo(self):
+        repo = AsyncMock(spec=LostFoundRepository)
+        repo._session = AsyncMock()
+        return repo
+
+    @pytest.fixture
+    def mock_audit(self):
+        return AsyncMock(spec=AuditService)
+
+    @pytest.fixture
+    def mock_arq(self):
+        arq = AsyncMock()
+        arq.enqueue_job = AsyncMock(return_value=None)
+        return arq
+
+    @pytest.fixture
+    def service(self, mock_repo, mock_audit, mock_arq):
+        return LostFoundService(mock_repo, mock_audit, arq_pool=mock_arq)
+
+    @pytest.mark.asyncio
+    async def test_queue_broadcast_success(self, service, mock_repo, mock_audit, mock_arq):
+        owner_id = uuid.uuid4()
+        report = LostReport(
+            id=uuid.uuid4(), user_id=owner_id, pet_name="Max",
+            breed="labrador", color="brown", location_address="Addr",
+            lost_at=datetime.now(UTC), status=ReportStatus.ACTIVE,
+        )
+        mock_repo.get_lost_report_by_id.return_value = report
+        result = await service.queue_lost_alert_broadcast(report.id, owner_id)
+        assert result["queued"] is True
+        mock_arq.enqueue_job.assert_awaited_once()
+        mock_audit.record.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_queue_broadcast_not_found(self, service, mock_repo):
+        mock_repo.get_lost_report_by_id.return_value = None
+        with pytest.raises(NotFoundError):
+            await service.queue_lost_alert_broadcast(uuid.uuid4(), uuid.uuid4())
+
+    @pytest.mark.asyncio
+    async def test_queue_broadcast_forbidden_stranger(self, service, mock_repo):
+        owner_id = uuid.uuid4()
+        report = LostReport(
+            id=uuid.uuid4(), user_id=owner_id, pet_name="Max",
+            breed="labrador", color="brown", location_address="Addr",
+            lost_at=datetime.now(UTC), status=ReportStatus.ACTIVE,
+        )
+        mock_repo.get_lost_report_by_id.return_value = report
+        with pytest.raises(ForbiddenError):
+            await service.queue_lost_alert_broadcast(report.id, uuid.uuid4())
+
+    @pytest.mark.asyncio
+    async def test_queue_broadcast_admin_bypass(self, service, mock_repo, mock_arq):
+        owner_id = uuid.uuid4()
+        report = LostReport(
+            id=uuid.uuid4(), user_id=owner_id, pet_name="Max",
+            breed="labrador", color="brown", location_address="Addr",
+            lost_at=datetime.now(UTC), status=ReportStatus.ACTIVE,
+        )
+        mock_repo.get_lost_report_by_id.return_value = report
+        result = await service.queue_lost_alert_broadcast(report.id, uuid.uuid4(), is_admin=True)
+        assert result["queued"] is True
+        mock_arq.enqueue_job.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_queue_broadcast_only_active(self, service, mock_repo):
+        owner_id = uuid.uuid4()
+        report = LostReport(
+            id=uuid.uuid4(), user_id=owner_id, pet_name="Max",
+            breed="labrador", color="brown", location_address="Addr",
+            lost_at=datetime.now(UTC), status=ReportStatus.RESOLVED,
+        )
+        mock_repo.get_lost_report_by_id.return_value = report
+        with pytest.raises(ValidationFailedError):
+            await service.queue_lost_alert_broadcast(report.id, owner_id)
+
+
 class TestLostFoundService:
     @pytest.fixture
     def mock_repo(self):

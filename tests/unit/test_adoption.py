@@ -152,7 +152,7 @@ class TestAdoptionService:
         )
         mock_repo.get_by_id.return_value = app
         payload = AdoptionApplicationUpdate(vetting_officer_notes="Looks good")
-        mock_repo.get_by_id.side_effect = [app, app]
+        mock_repo.get_by_id.side_effect = [app, app, app]
         result = await service.update_application(app_id, payload, actor_id=uuid.uuid4())
         assert result.vetting_officer_notes == "Looks good"
 
@@ -164,7 +164,7 @@ class TestAdoptionService:
             id=app_id, dog_id=dog_id, adopter_id=uuid.uuid4(),
             status=AdoptionStatus.HOME_CHECK, residential_status="owned",
         )
-        mock_repo.get_by_id.side_effect = [app, app]
+        mock_repo.get_by_id.side_effect = [app, app, app]
         mock_repo.get_approved_application_for_dog.return_value = None
         dog = DogProfile(
             id=dog_id, registration_number="DOG-001", name="B", breed="Mix",
@@ -197,7 +197,7 @@ class TestAdoptionService:
             id=app_id, dog_id=dog_id, adopter_id=uuid.uuid4(),
             status=AdoptionStatus.INTERVIEW, residential_status="owned",
         )
-        mock_repo.get_by_id.side_effect = [app, app]
+        mock_repo.get_by_id.side_effect = [app, app, app]
         mock_repo.get_approved_application_for_dog.return_value = None
         dog = DogProfile(
             id=dog_id, registration_number="DOG-001", name="B", breed="Mix",
@@ -288,7 +288,7 @@ class TestAdoptionService:
             dog=dog, adopter=adopter,
             status=AdoptionStatus.HOME_CHECK, residential_status="owned",
         )
-        mock_repo.get_by_id.side_effect = [app, app]
+        mock_repo.get_by_id.side_effect = [app, app, app]
         mock_repo.get_approved_application_for_dog.return_value = None
         mock_repo._session = AsyncMock()
         mock_dog_repo.get_by_id.return_value = dog
@@ -378,7 +378,7 @@ class TestAdoptionService:
             status=AdoptionStatus.HOME_CHECK, residential_status="owned",
             fee_amount=Decimal("250.00"),
         )
-        mock_repo.get_by_id.side_effect = [app, app]
+        mock_repo.get_by_id.side_effect = [app, app, app]
         mock_repo.get_approved_application_for_dog.return_value = None
         mock_repo._session = AsyncMock()
         mock_dog_repo.get_by_id.return_value = dog
@@ -467,7 +467,7 @@ class TestAdoptionService:
             status=AdoptionStatus.SUBMITTED, residential_status="owned",
             fee_amount=Decimal("0.00"),
         )
-        mock_repo.get_by_id.side_effect = [app, app]
+        mock_repo.get_by_id.side_effect = [app, app, app]
 
         result = await service.update_adoption_fee(
             app_id, Decimal("150.00"), actor_id=uuid.uuid4(),

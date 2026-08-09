@@ -63,6 +63,7 @@ class LostReport(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
         String(32), default=ReportStatus.ACTIVE, nullable=False, index=True
     )
     photo_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    broadcasted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     user: Mapped["User"] = relationship("User", lazy="joined")
 

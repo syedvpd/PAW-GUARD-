@@ -140,6 +140,20 @@ class AuthAuditEventType(StrEnum):
     CMS_PAGE_DRAFT_SAVED = "cms_page_draft_saved"
     CMS_PAGE_PUBLISHED = "cms_page_published"
     CMS_PAGE_DRAFT_DISCARDED = "cms_page_draft_discarded"
+    COMPANION_PET_CREATED = "companion_pet_created"
+    COMPANION_PET_UPDATED = "companion_pet_updated"
+    COMPANION_PET_DELETED = "companion_pet_deleted"
+    COMPANION_MEDICAL_RECORD_CREATED = "companion_medical_record_created"
+    COMPANION_MEDICAL_RECORD_DELETED = "companion_medical_record_deleted"
+    SAFETY_TAG_PROVISIONED = "safety_tag_provisioned"
+    SAFETY_TAG_SCANNED = "safety_tag_scanned"
+    VET_CLINIC_CREATED = "vet_clinic_created"
+    VET_CLINIC_UPDATED = "vet_clinic_updated"
+    VET_CLINIC_DELETED = "vet_clinic_deleted"
+    PET_APPOINTMENT_CREATED = "pet_appointment_created"
+    PET_APPOINTMENT_CANCELLED = "pet_appointment_cancelled"
+    PET_APPOINTMENT_STATUS_CHANGED = "pet_appointment_status_changed"
+    LOST_FOUND_BROADCAST_QUEUED = "lost_found_broadcast_queued"
 
 
 class Role(UUIDPkMixin, TimestampMixin, Base):

@@ -3,6 +3,7 @@
 import uuid
 from typing import Annotated
 
+from arq import ArqRedis
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,7 +21,7 @@ from pawguard.modules.auth.dependencies import (
     get_current_user,
     get_optional_current_user,
 )
-from pawguard.modules.auth.rbac import require_permission
+from pawguard.modules.auth.rbac import is_admin_role, require_permission
 from pawguard.modules.lost_found.models import MatchStatus, ReportStatus, Species
 from pawguard.modules.lost_found.repository import LostFoundRepository
 from pawguard.modules.lost_found.schemas import (
@@ -37,6 +38,7 @@ from pawguard.modules.portal.router import get_portal_service
 from pawguard.modules.portal.schemas import SuccessStoryResponse
 from pawguard.modules.portal.service import PortalService
 from pawguard.services.audit_service import AuditService
+from pawguard.workers.pool import get_arq_pool
 
 router = APIRouter(prefix="/lost-found", tags=["lost-found"])
 
@@ -74,9 +76,10 @@ def _mask_reporter_identity(
 def get_lost_found_service(
     db: AsyncSession = Depends(get_db),
     audit: AuditService = Depends(get_audit_service),
+    arq_pool: ArqRedis = Depends(get_arq_pool),
 ) -> LostFoundService:
     repo = LostFoundRepository(db)
-    return LostFoundService(repo, audit_service=audit)
+    return LostFoundService(repo, audit_service=audit, arq_pool=arq_pool)
 
 
 @router.post(
@@ -99,6 +102,29 @@ async def report_lost_pet(
         data=LostReportResponse.model_validate(report),
         message="Lost pet report registered successfully.",
     )
+
+
+@router.post(
+    "/lost/{report_id}/broadcast",
+    response_model=ApiResponse[dict[str, object]],
+    dependencies=[
+        Depends(require_permission("lost_found:broadcast")),
+        Depends(rate_limit("lost_alert_broadcast", 3, 3600)),
+    ],
+)
+async def broadcast_lost_pet_alert(
+    report_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: LostFoundService = Depends(get_lost_found_service),
+) -> ApiResponse[dict[str, object]]:
+    result = await service.queue_lost_alert_broadcast(
+        report_id,
+        current_user.id,
+        is_admin=is_admin_role(current_user.claims),
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(data=result, message="Lost-pet broadcast queued for delivery.")
 
 
 @router.post(

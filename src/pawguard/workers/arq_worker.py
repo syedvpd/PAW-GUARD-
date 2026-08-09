@@ -16,11 +16,13 @@ from pawguard.api.v1.router import api_v1_router  # noqa: F401  (side effects)
 from pawguard.core.config import get_settings
 from pawguard.core.logging import configure_logging, get_logger
 from pawguard.core.metrics import increment_counter
+from pawguard.workers.jobs.companion_pet_jobs import send_companion_pet_reminders
 from pawguard.workers.jobs.email_jobs import (
     send_email_verification_email_job,
     send_notification_email_job,
     send_password_reset_email_job,
 )
+from pawguard.workers.jobs.lost_found_jobs import broadcast_lost_pet_alert
 from pawguard.workers.jobs.scheduled_jobs import (
     check_inventory_expiry,
     check_inventory_low_stock,
@@ -71,6 +73,7 @@ def _track_failures(fn: Callable[..., Awaitable[Any]]) -> Any:
 async def startup(ctx: dict[str, object]) -> None:
     configure_logging()
 
+
 _send_password_reset_email_job = _track_failures(send_password_reset_email_job)
 _send_email_verification_email_job = _track_failures(send_email_verification_email_job)
 _send_notification_email_job = _track_failures(send_notification_email_job)
@@ -80,6 +83,8 @@ _check_inventory_expiry = _track_failures(check_inventory_expiry)
 _check_vaccination_renewals = _track_failures(check_vaccination_renewals)
 _post_adoption_followups = _track_failures(post_adoption_followups)
 _process_sponsorship_charges = _track_failures(process_sponsorship_charges)
+_send_companion_pet_reminders = _track_failures(send_companion_pet_reminders)
+_broadcast_lost_pet_alert = _track_failures(broadcast_lost_pet_alert)
 
 
 class WorkerSettings:
@@ -94,6 +99,8 @@ class WorkerSettings:
         _check_vaccination_renewals,
         _post_adoption_followups,
         _process_sponsorship_charges,
+        _send_companion_pet_reminders,
+        _broadcast_lost_pet_alert,
     ]
     cron_jobs = [
         # Scheduled cron jobs: 2 tries is enough — a missed run just fires again
@@ -103,6 +110,7 @@ class WorkerSettings:
         cron(_check_vaccination_renewals, hour={9}, minute={30}, max_tries=2),
         cron(_post_adoption_followups, hour={10}, minute={0}, max_tries=2),
         cron(_process_sponsorship_charges, hour={8}, minute={0}, max_tries=2),
+        cron(_send_companion_pet_reminders, hour={9}, minute={45}, max_tries=2),
     ]
     on_startup = startup
     redis_settings = RedisSettings.from_dsn(settings.redis_url)

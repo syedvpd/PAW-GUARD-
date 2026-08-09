@@ -4,6 +4,9 @@ import math
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from typing import Any
+
+from arq import ArqRedis
 
 from pawguard.core.exceptions import ForbiddenError, NotFoundError, ValidationFailedError
 from pawguard.core.pagination import PageParams, build_pagination_meta
@@ -33,10 +36,48 @@ from pawguard.services.audit_service import AuditService
 
 class LostFoundService:
     def __init__(
-        self, repository: LostFoundRepository, audit_service: AuditService | None = None,
+        self,
+        repository: LostFoundRepository,
+        audit_service: AuditService | None = None,
+        arq_pool: ArqRedis | None = None,
     ) -> None:
         self._repo = repository
         self._audit = audit_service
+        self._arq = arq_pool
+
+    async def queue_lost_alert_broadcast(
+        self,
+        report_id: uuid.UUID,
+        actor_id: uuid.UUID,
+        *,
+        is_admin: bool = False,
+        ip_address: str | None = None,
+    ) -> dict[str, Any]:
+        report = await self._repo.get_lost_report_by_id(report_id)
+        if report is None:
+            raise NotFoundError("Lost report not found.")
+        if report.user_id != actor_id and not is_admin:
+            raise ForbiddenError("Only the lost-pet reporter may broadcast this alert.")
+        if report.status != ReportStatus.ACTIVE:
+            raise ValidationFailedError("Only active lost-pet reports can be broadcast.")
+        if self._arq is None:
+            raise ValidationFailedError("Alert delivery is temporarily unavailable.")
+
+        await self._arq.enqueue_job(
+            "broadcast_lost_pet_alert",
+            report_id=str(report_id),
+            actor_id=str(actor_id),
+            ip_address=ip_address,
+        )
+        if self._audit:
+            await self._audit.record(
+                event_type=AuthAuditEventType.LOST_FOUND_BROADCAST_QUEUED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"report_id": str(report_id)},
+            )
+        return {"report_id": report_id, "queued": True}
 
     async def report_lost_pet(
         self, user_id: uuid.UUID, payload: LostReportCreate,

@@ -50,6 +50,12 @@ from pawguard.services.audit_service import AuditService
 
 router = APIRouter(prefix="/rescue", tags=["rescue"])
 
+# Public, anonymous emergency-reporting surface (PRR). Kept separate from the
+# authenticated `/rescue/report` endpoint (which requires `rescue:create`) so
+# the community can report strays/emergencies without an account while staff
+# workflow reports stay permission-gated.
+public_rescue_router = APIRouter(prefix="/public/rescue", tags=["public-rescue"])
+
 
 def get_rescue_service(
     db: AsyncSession = Depends(get_db),
@@ -137,6 +143,50 @@ async def report_incident(
         environmental_factors=payload.environmental_factors,
         reporter_notes=payload.reporter_notes,
         actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(
+        data=RescueRequestResponse.model_validate(request_obj),
+        message="Emergency incident reported successfully.",
+    )
+
+
+@public_rescue_router.post(
+    "/report",
+    response_model=ApiResponse[RescueRequestResponse],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(rate_limit("public_rescue_report", 5, 60))],
+)
+async def public_report_incident(
+    payload: RescueRequestCreate,
+    request: Request,
+    service: RescueService = Depends(get_rescue_service),
+) -> ApiResponse[RescueRequestResponse]:
+    """Anonymous public emergency reporting (PRR).
+
+    No authentication required. Reporter identity is optional and the case is
+    created with ``actor_id=None``. Rate-limited to 5 requests/minute to deter
+    spam. Staff-side workflow reporting remains on ``POST /rescue/report``.
+    """
+    request_obj = await service.report_incident(
+        reporter_name=payload.reporter_name,
+        reporter_phone=payload.reporter_phone,
+        reporter_alternate_phone=payload.reporter_alternate_phone,
+        reporter_email=payload.reporter_email,
+        is_anonymous=payload.is_anonymous,
+        location_address=payload.location_address,
+        location_landmark=payload.location_landmark,
+        latitude=payload.latitude,
+        longitude=payload.longitude,
+        animal_count=payload.animal_count,
+        physical_condition=payload.physical_condition,
+        behavioral_indicators=payload.behavioral_indicators,
+        severity=payload.severity,
+        is_urgent=payload.is_urgent,
+        media_evidence=payload.media_evidence,
+        environmental_factors=payload.environmental_factors,
+        reporter_notes=payload.reporter_notes,
+        actor_id=None,
         ip_address=request.client.host if request.client else None,
     )
     return ApiResponse(

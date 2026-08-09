@@ -36,6 +36,14 @@ class LostFoundRepository:
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    async def get_lost_report_for_broadcast(self, report_id: uuid.UUID) -> LostReport | None:
+        stmt = (
+            select(LostReport)
+            .where(LostReport.id == report_id, LostReport.deleted_at.is_(None))
+            .with_for_update()
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
     async def list_lost_reports(self, status: ReportStatus | None = None) -> Sequence[LostReport]:
         stmt = (
             select(LostReport)

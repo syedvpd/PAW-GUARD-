@@ -135,3 +135,20 @@ RESCUE_WRITE = "rescue:write"  # client alias for rescue:create/update/delete
 DONATIONS_WRITE = "donations:write"  # client alias for donation:manage/update
 COMPLAINTS_WRITE = "complaints:write"  # client alias for grievance:*
 NOTIFICATIONS_WRITE = "notifications:write"  # client alias for notification:manage
+
+# ── Lost & found ─────────────────────────────────────────────────────────────
+LOST_FOUND_BROADCAST = "lost_found:broadcast"
+
+# ── Companion pets / veterinary access ───────────────────────────────────────
+COMPANION_PET_CREATE = "companion_pet:create"
+COMPANION_PET_READ = "companion_pet:read"
+COMPANION_PET_UPDATE = "companion_pet:update"
+COMPANION_PET_DELETE = "companion_pet:delete"
+COMPANION_PET_MEDICAL_UPLOAD = "companion_pet:medical_upload"
+SAFETY_TAG_MANAGE = "safety_tag:manage"
+VET_CLINIC_READ = "vet_clinic:read"
+VET_CLINIC_MANAGE = "vet_clinic:manage"
+APPOINTMENT_CREATE = "appointment:create"
+APPOINTMENT_READ = "appointment:read"
+APPOINTMENT_CANCEL = "appointment:cancel"
+APPOINTMENT_MANAGE = "appointment:manage"
