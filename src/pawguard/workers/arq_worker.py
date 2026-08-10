@@ -73,6 +73,24 @@ def _track_failures(fn: Callable[..., Awaitable[Any]]) -> Any:
 async def startup(ctx: dict[str, object]) -> None:
     configure_logging()
 
+    # Self-healing for crash recovery: this backend runs exactly ONE ARQ worker
+    # process (single-instance / free tier), so any `arq:in-progress:*` lock
+    # left behind by a previous process is by definition stale — a deploy or
+    # instance kill during a job strands it, and ARQ then logs an endless
+    # "job ... already running elsewhere" loop and never delivers the email.
+    # Delete those locks (and any dead jobs) on every startup so queued work
+    # is always picked up fresh. Safe: there is no second worker that could be
+    # legitimately running these jobs.
+    pool = ctx.get("redis")
+    if pool is not None:
+        try:
+            keys = [key async for key in pool.scan_iter(match="arq:in-progress:*")]
+            if keys:
+                await pool.delete(*keys)
+                logger.info("arq_startup_purged_stale_locks", count=len(keys))
+        except Exception as exc:  # never block worker boot on cleanup
+            logger.warning("arq_startup_purge_failed", error=str(exc))
+
 
 _send_password_reset_email_job = _track_failures(send_password_reset_email_job)
 _send_email_verification_email_job = _track_failures(send_email_verification_email_job)
