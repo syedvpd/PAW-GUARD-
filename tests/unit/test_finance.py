@@ -190,6 +190,60 @@ class TestFinanceService:
         assert result["total_income"] == 1000
 
     @pytest.mark.asyncio
+    async def test_get_finance_summary_counts_unreconciled_donation_income(
+        self, mock_repo
+    ):
+        """Successful donations not yet posted to the ledger must count as
+        income, otherwise the dashboard shows 0 despite existing data."""
+        from pawguard.modules.finance.repository import FinanceRepository
+
+        session = mock_repo._session
+        repo = FinanceRepository.__new__(FinanceRepository)
+        repo._session = session
+        session.execute.side_effect = [
+            MagicMock(scalar_one=MagicMock(return_value=0)),  # manual income
+            MagicMock(scalar_one=MagicMock(return_value=0)),  # expenses
+            MagicMock(scalar_one=MagicMock(return_value=0)),  # pending
+            MagicMock(scalar_one=MagicMock(return_value=0)),  # unreconciled tx
+            MagicMock(scalar_one=MagicMock(return_value=0)),  # donation tx
+            MagicMock(scalar_one=MagicMock(return_value=Decimal("1500.00"))),  # donations
+        ]
+        from datetime import date
+
+        result = await repo.get_finance_summary(
+            date(2026, 1, 1), date(2026, 12, 31)
+        )
+        assert result["total_income"] == 1500.0
+        assert result["net_balance"] == 1500.0
+
+    @pytest.mark.asyncio
+    async def test_get_finance_summary_counts_reconciled_donation_tx(
+        self, mock_repo
+    ):
+        """RECONCILIATION-type transactions created by reconcile flows must
+        count toward total_income."""
+        from pawguard.modules.finance.repository import FinanceRepository
+
+        session = mock_repo._session
+        repo = FinanceRepository.__new__(FinanceRepository)
+        repo._session = session
+        session.execute.side_effect = [
+            MagicMock(scalar_one=MagicMock(return_value=0)),  # manual income
+            MagicMock(scalar_one=MagicMock(return_value=0)),  # expenses
+            MagicMock(scalar_one=MagicMock(return_value=0)),  # pending
+            MagicMock(scalar_one=MagicMock(return_value=0)),  # unreconciled tx
+            MagicMock(scalar_one=MagicMock(return_value=Decimal("750.00"))),  # donation tx
+            MagicMock(scalar_one=MagicMock(return_value=0)),  # donations
+        ]
+        from datetime import date
+
+        result = await repo.get_finance_summary(
+            date(2026, 1, 1), date(2026, 12, 31)
+        )
+        assert result["total_income"] == 750.0
+        assert result["total_donations_reconciled"] == 750.0
+
+    @pytest.mark.asyncio
     async def test_get_pnl(self, service, mock_repo):
         mock_repo.get_pnl.return_value = {"net_income": 500}
         result = await service.get_pnl("2026-01-01", "2026-12-31")

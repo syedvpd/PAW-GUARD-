@@ -284,6 +284,40 @@ class FinanceService:
     ) -> dict[str, Any]:
         return await self._repo.get_pnl(period_start, period_end)
 
+    async def post_donation_to_ledger(
+        self,
+        donation: Donation,
+        *,
+        actor_id: uuid.UUID | None = None,
+    ) -> bool:
+        """Auto-post a successful donation into the finance ledger.
+
+        Idempotent: skips donations that are not SUCCESS or that already have
+        a reconciled ledger transaction, so repeated calls never double-book.
+        Returns True when a ledger transaction was created.
+        """
+        if donation.status != DonationStatus.SUCCESS:
+            return False
+        if await self._repo.is_donation_reconciled(donation.id):
+            return False
+        income_account, cash_account = await self._get_reconcile_accounts()
+        await self._reconcile_one_donation(
+            donation, income_account=income_account, cash_account=cash_account
+        )
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.FINANCE_DONATIONS_RECONCILED,
+                actor_id=actor_id,
+                ip_address="",
+                user_agent="",
+                metadata={
+                    "donation_id": str(donation.id),
+                    "count": 1,
+                    "source": "auto",
+                },
+            )
+        return True
+
     async def reconcile_donations(
         self,
         *,
@@ -388,7 +422,7 @@ class FinanceService:
             transaction_type=TransactionType.RECONCILIATION,
             transaction_date=datetime.now(UTC).date(),
             amount=donation.amount,
-            currency="USD",
+            currency=donation.currency or "USD",
             description=f"Donation reconciliation - {donation.id}",
             donation_id=donation.id,
             status=TransactionStatus.RECONCILED,

@@ -147,6 +147,8 @@ class TestDashboards:
     async def test_finance_dashboard(self, session):
         session.execute.side_effect = [
             _fake_result(scalar_one_val=50000),
+            _fake_result(scalar_one_val=0),
+            _fake_result(scalar_one_val=0),
             _fake_result(scalar_one_val=30000),
             _fake_result(scalar_one_val=5),
         ]
@@ -189,6 +191,8 @@ class TestDashboards:
             _fake_result(scalar_one_val=80),
             _fake_result(scalars_all=[]),
             _fake_result(scalar_one_val=500000),
+            _fake_result(scalar_one_val=0),
+            _fake_result(scalar_one_val=0),
             _fake_result(scalar_one_val=300000),
             _fake_result(scalar_one_val=10),
             _fake_result(scalar_one_val=200),
