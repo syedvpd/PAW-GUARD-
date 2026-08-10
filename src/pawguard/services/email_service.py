@@ -1,11 +1,19 @@
-"""Jinja2-templated transactional email rendering + SMTP delivery.
+"""Jinja2-templated transactional email rendering + delivery.
+
+Delivery strategy (in order):
+1. Brevo HTTP API (port 443) - works on all cloud platforms, including Render's
+   free tier where outbound SMTP ports (587/465) may be blocked.
+2. SMTP fallback (port 587) - used when no Brevo API key is configured.
 
 Per AGENTS.md TRANSACTION RULES, this is only ever invoked from an ARQ job
 (`workers/jobs/email_jobs.py`), never inline within an HTTP request/DB transaction.
 """
 
+import json
 import smtplib
 import ssl
+import urllib.error
+import urllib.request
 from email.message import EmailMessage
 from pathlib import Path
 
@@ -33,6 +41,55 @@ class EmailService:
         return template.render(**context)
 
     def send(self, *, to: str, subject: str, html_body: str) -> None:
+        """Deliver an HTML email.
+
+        Prefers the Brevo HTTP API (port 443, always reachable) when an API key
+        is configured, because many cloud platforms block outbound SMTP ports.
+        Falls back to SMTP when no API key is set.
+        """
+        if self._settings.brevo_api_key:
+            self._send_via_brevo_api(to=to, subject=subject, html_body=html_body)
+        else:
+            self._send_via_smtp(to=to, subject=subject, html_body=html_body)
+
+    def _send_via_brevo_api(self, *, to: str, subject: str, html_body: str) -> None:
+        payload = json.dumps(
+            {
+                "sender": {"name": "PawGuard", "email": self._settings.mail_from_email},
+                "to": [{"email": to}],
+                "subject": subject,
+                "htmlContent": html_body,
+            }
+        ).encode()
+
+        req = urllib.request.Request(
+            "https://api.brevo.com/v3/smtp/email",
+            data=payload,
+            headers={
+                "api-key": self._settings.brevo_api_key,
+                "Content-Type": "application/json",
+                "accept": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:  # noqa: S310 - fixed https Brevo endpoint
+                status = resp.status
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode(errors="replace")[:300]
+            logger.error(
+                "brevo_api_error", to=to, subject=subject, status=exc.code, body=body
+            )
+            raise
+        except urllib.error.URLError as exc:
+            logger.error(
+                "brevo_api_network_error", to=to, subject=subject, error=str(exc.reason)
+            )
+            raise
+
+        logger.info("email_sent", to=to, subject=subject, method="brevo_api", status=status)
+
+    def _send_via_smtp(self, *, to: str, subject: str, html_body: str) -> None:
         message = EmailMessage()
         message["From"] = self._settings.mail_from
         message["To"] = to
@@ -40,14 +97,24 @@ class EmailService:
         message.set_content("This email requires an HTML-capable client.")
         message.add_alternative(html_body, subtype="html")
 
-        with smtplib.SMTP(self._settings.mail_host, self._settings.mail_port) as smtp:
+        smtp_kwargs: dict[str, object] = {
+            "host": self._settings.mail_host,
+            "port": self._settings.mail_port,
+            "timeout": 10,
+        }
+        with smtplib.SMTP(**smtp_kwargs) as smtp:
             if self._settings.mail_use_ssl:
                 context = ssl.create_default_context()
                 with smtplib.SMTP_SSL(
-                    self._settings.mail_host, self._settings.mail_port, context=context
+                    self._settings.mail_host,
+                    self._settings.mail_port,
+                    context=context,
+                    timeout=10,
                 ) as smtp_ssl:
                     if self._settings.mail_username:
-                        smtp_ssl.login(self._settings.mail_username, self._settings.mail_password)
+                        smtp_ssl.login(
+                            self._settings.mail_username, self._settings.mail_password
+                        )
                     smtp_ssl.send_message(message)
             else:
                 if self._settings.mail_use_tls:
@@ -56,7 +123,7 @@ class EmailService:
                     smtp.login(self._settings.mail_username, self._settings.mail_password)
                 smtp.send_message(message)
 
-        logger.info("email_sent", to=to, subject=subject)
+        logger.info("email_sent", to=to, subject=subject, method="smtp")
 
     def send_password_reset_email(self, *, to: str, reset_url: str) -> None:
         html = self.render("password_reset.html", {"reset_url": reset_url})

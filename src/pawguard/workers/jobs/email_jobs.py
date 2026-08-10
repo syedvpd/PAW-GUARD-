@@ -2,25 +2,61 @@
 
 import asyncio
 import smtplib
+import urllib.error
 from typing import Any
 
 from arq import Retry
 
+from pawguard.core.logging import get_logger
 from pawguard.services.email_service import EmailService
 from pawguard.workers.jobs.retry import retry_defer
 
+logger = get_logger(__name__)
+
+# Permanent failures - retrying will never help (bad credentials, unverified
+# sender, rejected recipient). Fail fast so they surface as arq_job_failed
+# instead of being retried silently to exhaustion.
+_PERMANENT = (
+    smtplib.SMTPAuthenticationError,
+    smtplib.SMTPSenderRefused,
+    smtplib.SMTPRecipientsRefused,
+)
+
 # Transient delivery failures worth retrying: SMTP protocol hiccups, network
 # resets, and timeouts. Everything else propagates to the failure tracker.
-_TRANSIENT = (smtplib.SMTPException, TimeoutError, ConnectionError)
+_TRANSIENT = (
+    TimeoutError,
+    ConnectionError,
+    smtplib.SMTPException,
+    urllib.error.URLError,
+    urllib.error.HTTPError,
+)
 
 
 async def _deliver(ctx: dict[str, Any], *, to: str, subject: str, html_body: str) -> None:
-    # SMTP is blocking (smtplib). Run it in a worker thread so the event loop —
-    # which also serves the API when running under `pawguard.serve` — never
+    # SMTP is blocking (smtplib). Run it in a worker thread so the event loop -
+    # which also serves the API when running under `pawguard.serve` - never
     # stalls on network I/O (avoids Render health-check timeouts during sends).
     try:
         await asyncio.to_thread(EmailService().send, to=to, subject=subject, html_body=html_body)
+    except _PERMANENT as exc:
+        logger.error(
+            "email_send_failed",
+            to=to,
+            subject=subject,
+            error_type=exc.__class__.__name__,
+            error=str(exc),
+        )
+        raise
     except _TRANSIENT as exc:
+        logger.warning(
+            "email_send_transient_failure",
+            to=to,
+            subject=subject,
+            job_try=ctx.get("job_try"),
+            error_type=exc.__class__.__name__,
+            error=str(exc),
+        )
         raise Retry(defer=retry_defer(ctx)) from exc
 
 

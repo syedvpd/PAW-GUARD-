@@ -136,6 +136,18 @@ class Settings(BaseSettings):
     mail_password: str = ""
     mail_use_tls: bool = False
     mail_use_ssl: bool = False
+    # Brevo REST API key (xkeysib-...). When set, email is delivered over the
+    # HTTP API (port 443) which works on all cloud platforms - unlike outbound
+    # SMTP ports which are blocked on many free tiers (e.g. Render free).
+    brevo_api_key: str = ""
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def mail_from_email(self) -> str:
+        """Extract the bare address from `Name <addr>` mail_from values."""
+        if "<" in self.mail_from and self.mail_from.endswith(">"):
+            return self.mail_from.rsplit("<", 1)[1][:-1]
+        return self.mail_from
 
     # --- Frontend URLs ---
     web_app_url: str = "http://localhost:3000"
