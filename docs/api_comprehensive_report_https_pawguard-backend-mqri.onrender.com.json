@@ -1,0 +1,1022 @@
+[
+  {
+    "module": "dog",
+    "test": "create",
+    "method": "POST",
+    "path": "/api/v1/dogs",
+    "status": 201,
+    "expected": 201,
+    "ok": true,
+    "error": "",
+    "id": "30b12bbb-0332-47bd-9856-895cd15682d3"
+  },
+  {
+    "module": "dog",
+    "test": "list",
+    "method": "GET",
+    "path": "/api/v1/dogs",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "dog",
+    "test": "get by id",
+    "method": "GET",
+    "path": "/api/v1/dogs/30b12bbb-0332-47bd-9856-895cd15682d3",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "30b12bbb-0332-47bd-9856-895cd15682d3"
+  },
+  {
+    "module": "dog",
+    "test": "admin get",
+    "method": "GET",
+    "path": "/api/v1/dogs/admin/dogs/30b12bbb-0332-47bd-9856-895cd15682d3",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "30b12bbb-0332-47bd-9856-895cd15682d3"
+  },
+  {
+    "module": "dog",
+    "test": "public-scan",
+    "method": "GET",
+    "path": "/api/v1/dogs/30b12bbb-0332-47bd-9856-895cd15682d3/public-scan",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": ""
+  },
+  {
+    "module": "dog",
+    "test": "timeline",
+    "method": "GET",
+    "path": "/api/v1/dogs/30b12bbb-0332-47bd-9856-895cd15682d3/timeline",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "dog",
+    "test": "record weight",
+    "method": "POST",
+    "path": "/api/v1/dogs/30b12bbb-0332-47bd-9856-895cd15682d3/weight",
+    "status": 201,
+    "expected": 201,
+    "ok": true,
+    "error": "",
+    "id": "559fd4e1-a3f2-41a1-bf8b-1d889f158ef2"
+  },
+  {
+    "module": "dog",
+    "test": "weights list",
+    "method": "GET",
+    "path": "/api/v1/dogs/30b12bbb-0332-47bd-9856-895cd15682d3/weights",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "dog",
+    "test": "qr-image",
+    "method": "GET",
+    "path": "/api/v1/dogs/30b12bbb-0332-47bd-9856-895cd15682d3/qr-image",
+    "status": 422,
+    "expected": 200,
+    "ok": false,
+    "error": "FRONTEND_BASE_URL must be configured as an absolute HTTP(S) URL."
+  },
+  {
+    "module": "dog",
+    "test": "update",
+    "method": "PUT",
+    "path": "/api/v1/dogs/30b12bbb-0332-47bd-9856-895cd15682d3",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "30b12bbb-0332-47bd-9856-895cd15682d3"
+  },
+  {
+    "module": "dog",
+    "test": "patch status",
+    "method": "PATCH",
+    "path": "/api/v1/dogs/30b12bbb-0332-47bd-9856-895cd15682d3/status",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "30b12bbb-0332-47bd-9856-895cd15682d3"
+  },
+  {
+    "module": "dog",
+    "test": "admin patch status",
+    "method": "PATCH",
+    "path": "/api/v1/dogs/admin/dogs/30b12bbb-0332-47bd-9856-895cd15682d3/status",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "30b12bbb-0332-47bd-9856-895cd15682d3"
+  },
+  {
+    "module": "dog",
+    "test": "bulk status-update",
+    "method": "POST",
+    "path": "/api/v1/dogs/bulk/status-update",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": ""
+  },
+  {
+    "module": "dog",
+    "test": "delete",
+    "method": "DELETE",
+    "path": "/api/v1/dogs/30b12bbb-0332-47bd-9856-895cd15682d3",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "dog",
+    "test": "get after delete (404)",
+    "method": "GET",
+    "path": "/api/v1/dogs/30b12bbb-0332-47bd-9856-895cd15682d3",
+    "status": 404,
+    "expected": 404,
+    "ok": true,
+    "error": "Dog profile not found."
+  },
+  {
+    "module": "dog",
+    "test": "bulk delete",
+    "method": "POST",
+    "path": "/api/v1/dogs/bulk/delete",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": ""
+  },
+  {
+    "module": "donation",
+    "test": "list all",
+    "method": "GET",
+    "path": "/api/v1/donations",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "donation",
+    "test": "donors list",
+    "method": "GET",
+    "path": "/api/v1/donations/donors",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "donation",
+    "test": "donors/me",
+    "method": "GET",
+    "path": "/api/v1/donations/donors/me",
+    "status": 200,
+    "expected": [
+      200,
+      404
+    ],
+    "ok": true,
+    "error": "",
+    "id": "d84ceea7-3804-4f65-aa6f-d50a16512ad0"
+  },
+  {
+    "module": "donation",
+    "test": "history",
+    "method": "GET",
+    "path": "/api/v1/donations/history",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "donation",
+    "test": "create manual donation",
+    "method": "POST",
+    "path": "/api/v1/donations",
+    "status": 201,
+    "expected": 201,
+    "ok": true,
+    "error": "",
+    "id": "079258a1-defa-4bde-9e91-26dce995b084"
+  },
+  {
+    "module": "donation",
+    "test": "register donor",
+    "method": "POST",
+    "path": "/api/v1/donations/register",
+    "status": 201,
+    "expected": [
+      201,
+      409
+    ],
+    "ok": true,
+    "error": "",
+    "id": "d84ceea7-3804-4f65-aa6f-d50a16512ad0"
+  },
+  {
+    "module": "donation",
+    "test": "checkout",
+    "method": "POST",
+    "path": "/api/v1/donations/checkout",
+    "status": 201,
+    "expected": [
+      200,
+      201
+    ],
+    "ok": true,
+    "error": "",
+    "id": ""
+  },
+  {
+    "module": "donation",
+    "test": "receipt",
+    "method": "GET",
+    "path": "/api/v1/donations/079258a1-defa-4bde-9e91-26dce995b084/receipt",
+    "status": 200,
+    "expected": [
+      200,
+      404
+    ],
+    "ok": true,
+    "error": "",
+    "id": ""
+  },
+  {
+    "module": "donation",
+    "test": "reconcile",
+    "method": "POST",
+    "path": "/api/v1/donations/079258a1-defa-4bde-9e91-26dce995b084/reconcile",
+    "status": 409,
+    "expected": [
+      200,
+      400,
+      404,
+      409
+    ],
+    "ok": true,
+    "error": "Donation is already reconciled."
+  },
+  {
+    "module": "donation",
+    "test": "patch status",
+    "method": "PATCH",
+    "path": "/api/v1/donations/079258a1-defa-4bde-9e91-26dce995b084/status",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "079258a1-defa-4bde-9e91-26dce995b084"
+  },
+  {
+    "module": "donation",
+    "test": "bulk status-update",
+    "method": "POST",
+    "path": "/api/v1/donations/bulk/status-update",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": ""
+  },
+  {
+    "module": "donation",
+    "test": "verify (invalid sig)",
+    "method": "POST",
+    "path": "/api/v1/donations/verify",
+    "status": 422,
+    "expected": [
+      400,
+      403,
+      404,
+      422
+    ],
+    "ok": true,
+    "error": "Order reference does not match this donation."
+  },
+  {
+    "module": "donation",
+    "test": "donor update",
+    "method": "PUT",
+    "path": "/api/v1/donations/donors/ccc354c2-c544-4b06-8147-db65221e2eb1",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "ccc354c2-c544-4b06-8147-db65221e2eb1"
+  },
+  {
+    "module": "donation",
+    "test": "donor delete",
+    "method": "DELETE",
+    "path": "/api/v1/donations/donors/{id}",
+    "status": "SKIPPED",
+    "reason": "preserve existing donors"
+  },
+  {
+    "module": "donation",
+    "test": "donors bulk delete",
+    "method": "POST",
+    "path": "/api/v1/donations/donors/bulk/delete",
+    "status": "SKIPPED",
+    "reason": "preserve existing donors"
+  },
+  {
+    "module": "donation",
+    "test": "campaigns list",
+    "method": "GET",
+    "path": "/api/v1/donations/campaigns",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "donation",
+    "test": "campaigns manage",
+    "method": "GET",
+    "path": "/api/v1/donations/campaigns/manage",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "donation",
+    "test": "campaign create",
+    "method": "POST",
+    "path": "/api/v1/donations/campaigns",
+    "status": 201,
+    "expected": 201,
+    "ok": true,
+    "error": "",
+    "id": "f4a79f1c-4909-4b25-87ad-6a51ba617ccb"
+  },
+  {
+    "module": "donation",
+    "test": "campaign get",
+    "method": "GET",
+    "path": "/api/v1/donations/campaigns/f4a79f1c-4909-4b25-87ad-6a51ba617ccb",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "f4a79f1c-4909-4b25-87ad-6a51ba617ccb"
+  },
+  {
+    "module": "donation",
+    "test": "campaign update",
+    "method": "PATCH",
+    "path": "/api/v1/donations/campaigns/f4a79f1c-4909-4b25-87ad-6a51ba617ccb",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "f4a79f1c-4909-4b25-87ad-6a51ba617ccb"
+  },
+  {
+    "module": "donation",
+    "test": "campaign delete",
+    "method": "DELETE",
+    "path": "/api/v1/donations/campaigns/f4a79f1c-4909-4b25-87ad-6a51ba617ccb",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "donation",
+    "test": "recurring list",
+    "method": "GET",
+    "path": "/api/v1/donations/recurring",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "donation",
+    "test": "recurring create",
+    "method": "POST",
+    "path": "/api/v1/donations/recurring",
+    "status": 201,
+    "expected": [
+      201,
+      409
+    ],
+    "ok": true,
+    "error": "",
+    "id": "d82391e9-d5fc-4f2a-8c36-d3a54d5e8da5"
+  },
+  {
+    "module": "donation",
+    "test": "recurring delete",
+    "method": "DELETE",
+    "path": "/api/v1/donations/recurring/d82391e9-d5fc-4f2a-8c36-d3a54d5e8da5",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "d82391e9-d5fc-4f2a-8c36-d3a54d5e8da5"
+  },
+  {
+    "module": "donation",
+    "test": "sponsorships list",
+    "method": "GET",
+    "path": "/api/v1/donations/sponsorships",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "donation",
+    "test": "sponsorship create",
+    "method": "POST",
+    "path": "/api/v1/donations/sponsorships",
+    "status": 201,
+    "expected": [
+      201,
+      409
+    ],
+    "ok": true,
+    "error": "",
+    "id": "78528e7a-9123-4b06-a728-358f90d663f6"
+  },
+  {
+    "module": "donation",
+    "test": "sponsorships/my",
+    "method": "GET",
+    "path": "/api/v1/donations/sponsorships/my",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "donation",
+    "test": "sponsorship get",
+    "method": "GET",
+    "path": "/api/v1/donations/sponsorships/78528e7a-9123-4b06-a728-358f90d663f6",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "78528e7a-9123-4b06-a728-358f90d663f6"
+  },
+  {
+    "module": "donation",
+    "test": "sponsorship pause",
+    "method": "PATCH",
+    "path": "/api/v1/donations/sponsorships/78528e7a-9123-4b06-a728-358f90d663f6/status",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "78528e7a-9123-4b06-a728-358f90d663f6"
+  },
+  {
+    "module": "grievance",
+    "test": "create (public)",
+    "method": "POST",
+    "path": "/api/v1/grievance",
+    "status": 201,
+    "expected": 201,
+    "ok": true,
+    "error": "",
+    "id": "ce2847a4-ed19-4172-8bbd-bb89e88b1e4f"
+  },
+  {
+    "module": "grievance",
+    "test": "list",
+    "method": "GET",
+    "path": "/api/v1/grievance",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "grievance",
+    "test": "get by id",
+    "method": "GET",
+    "path": "/api/v1/grievance/ce2847a4-ed19-4172-8bbd-bb89e88b1e4f",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "ce2847a4-ed19-4172-8bbd-bb89e88b1e4f"
+  },
+  {
+    "module": "grievance",
+    "test": "update",
+    "method": "PUT",
+    "path": "/api/v1/grievance/ce2847a4-ed19-4172-8bbd-bb89e88b1e4f",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "ce2847a4-ed19-4172-8bbd-bb89e88b1e4f"
+  },
+  {
+    "module": "grievance",
+    "test": "assign",
+    "method": "POST",
+    "path": "/api/v1/grievance/ce2847a4-ed19-4172-8bbd-bb89e88b1e4f/assign",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "ce2847a4-ed19-4172-8bbd-bb89e88b1e4f"
+  },
+  {
+    "module": "grievance",
+    "test": "escalate",
+    "method": "POST",
+    "path": "/api/v1/grievance/ce2847a4-ed19-4172-8bbd-bb89e88b1e4f/escalate",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "ce2847a4-ed19-4172-8bbd-bb89e88b1e4f"
+  },
+  {
+    "module": "grievance",
+    "test": "add comment",
+    "method": "POST",
+    "path": "/api/v1/grievance/ce2847a4-ed19-4172-8bbd-bb89e88b1e4f/comments",
+    "status": 201,
+    "expected": 201,
+    "ok": true,
+    "error": "",
+    "id": "d054c2b6-dd1e-49f0-ac2b-3a25a58075d3"
+  },
+  {
+    "module": "grievance",
+    "test": "list comments",
+    "method": "GET",
+    "path": "/api/v1/grievance/ce2847a4-ed19-4172-8bbd-bb89e88b1e4f/comments",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "grievance",
+    "test": "patch status (query param)",
+    "method": "PATCH",
+    "path": "/api/v1/grievance/ce2847a4-ed19-4172-8bbd-bb89e88b1e4f/status",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "ce2847a4-ed19-4172-8bbd-bb89e88b1e4f"
+  },
+  {
+    "module": "grievance",
+    "test": "delete",
+    "method": "DELETE",
+    "path": "/api/v1/grievance/ce2847a4-ed19-4172-8bbd-bb89e88b1e4f",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "grievance",
+    "test": "feedback list",
+    "method": "GET",
+    "path": "/api/v1/grievance/feedback",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "grievance",
+    "test": "feedback create (public)",
+    "method": "POST",
+    "path": "/api/v1/grievance/feedback",
+    "status": 201,
+    "expected": 201,
+    "ok": true,
+    "error": "",
+    "id": "b717aa42-654f-4d21-9f55-d4a7e684465e"
+  },
+  {
+    "module": "grievance",
+    "test": "feedback delete",
+    "method": "DELETE",
+    "path": "/api/v1/grievance/feedback/b717aa42-654f-4d21-9f55-d4a7e684465e",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "grievance",
+    "test": "bulk status",
+    "method": "POST",
+    "path": "/api/v1/grievance/bulk/status",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "grievance",
+    "test": "bulk delete",
+    "method": "POST",
+    "path": "/api/v1/grievance/bulk/delete",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "lost_found",
+    "test": "lost list",
+    "method": "GET",
+    "path": "/api/v1/lost-found/lost",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "lost_found",
+    "test": "found list",
+    "method": "GET",
+    "path": "/api/v1/lost-found/found",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "lost_found",
+    "test": "reunion stories",
+    "method": "GET",
+    "path": "/api/v1/lost-found/reunion-stories",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "lost_found",
+    "test": "stories",
+    "method": "GET",
+    "path": "/api/v1/lost-found/stories",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "lost_found",
+    "test": "lost create",
+    "method": "POST",
+    "path": "/api/v1/lost-found/lost",
+    "status": 201,
+    "expected": 201,
+    "ok": true,
+    "error": "",
+    "id": "4e7efb11-3c71-4a00-96da-46cfe5e15817"
+  },
+  {
+    "module": "lost_found",
+    "test": "lost get",
+    "method": "GET",
+    "path": "/api/v1/lost-found/lost/4e7efb11-3c71-4a00-96da-46cfe5e15817",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "4e7efb11-3c71-4a00-96da-46cfe5e15817"
+  },
+  {
+    "module": "lost_found",
+    "test": "lost matches",
+    "method": "GET",
+    "path": "/api/v1/lost-found/lost/4e7efb11-3c71-4a00-96da-46cfe5e15817/matches",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "lost_found",
+    "test": "lost broadcast",
+    "method": "POST",
+    "path": "/api/v1/lost-found/lost/4e7efb11-3c71-4a00-96da-46cfe5e15817/broadcast",
+    "status": 200,
+    "expected": [
+      200,
+      201,
+      403
+    ],
+    "ok": true,
+    "error": "",
+    "id": ""
+  },
+  {
+    "module": "lost_found",
+    "test": "match claim",
+    "method": "POST",
+    "path": "/api/v1/lost-found/matches/a29a5500-8829-4065-9b5d-324cb6314f79/claim",
+    "status": 200,
+    "expected": [
+      200,
+      201,
+      400,
+      403,
+      409
+    ],
+    "ok": true,
+    "error": "",
+    "id": "a29a5500-8829-4065-9b5d-324cb6314f79"
+  },
+  {
+    "module": "lost_found",
+    "test": "match claim review",
+    "method": "POST",
+    "path": "/api/v1/lost-found/matches/a29a5500-8829-4065-9b5d-324cb6314f79/claim/review",
+    "status": 200,
+    "expected": [
+      200,
+      400,
+      403,
+      409
+    ],
+    "ok": true,
+    "error": "",
+    "id": "a29a5500-8829-4065-9b5d-324cb6314f79"
+  },
+  {
+    "module": "lost_found",
+    "test": "match resolve",
+    "method": "POST",
+    "path": "/api/v1/lost-found/matches/a29a5500-8829-4065-9b5d-324cb6314f79/resolve",
+    "status": 422,
+    "expected": [
+      200,
+      400,
+      403,
+      409
+    ],
+    "ok": false,
+    "error": "This match has already been reviewed."
+  },
+  {
+    "module": "lost_found",
+    "test": "lost delete",
+    "method": "DELETE",
+    "path": "/api/v1/lost-found/lost/4e7efb11-3c71-4a00-96da-46cfe5e15817",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "lost_found",
+    "test": "found create",
+    "method": "POST",
+    "path": "/api/v1/lost-found/found",
+    "status": 201,
+    "expected": 201,
+    "ok": true,
+    "error": "",
+    "id": "1a3486b7-1b8c-4a2e-a0cb-9833e51afce3"
+  },
+  {
+    "module": "lost_found",
+    "test": "found get",
+    "method": "GET",
+    "path": "/api/v1/lost-found/found/1a3486b7-1b8c-4a2e-a0cb-9833e51afce3",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "1a3486b7-1b8c-4a2e-a0cb-9833e51afce3"
+  },
+  {
+    "module": "lost_found",
+    "test": "found matches",
+    "method": "GET",
+    "path": "/api/v1/lost-found/found/1a3486b7-1b8c-4a2e-a0cb-9833e51afce3/matches",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "lost_found",
+    "test": "found delete",
+    "method": "DELETE",
+    "path": "/api/v1/lost-found/found/1a3486b7-1b8c-4a2e-a0cb-9833e51afce3",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "lost_found",
+    "test": "lost bulk delete",
+    "method": "POST",
+    "path": "/api/v1/lost-found/lost/bulk/delete",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "lost_found",
+    "test": "found bulk delete",
+    "method": "POST",
+    "path": "/api/v1/lost-found/found/bulk/delete",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "volunteer",
+    "test": "list",
+    "method": "GET",
+    "path": "/api/v1/volunteers",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "volunteer",
+    "test": "get by id",
+    "method": "GET",
+    "path": "/api/v1/volunteers/5a5dafe2-bfa8-414c-9f85-d3b7149ddc22",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "5a5dafe2-bfa8-414c-9f85-d3b7149ddc22"
+  },
+  {
+    "module": "volunteer",
+    "test": "update",
+    "method": "PUT",
+    "path": "/api/v1/volunteers/5a5dafe2-bfa8-414c-9f85-d3b7149ddc22",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "5a5dafe2-bfa8-414c-9f85-d3b7149ddc22"
+  },
+  {
+    "module": "volunteer",
+    "test": "service summary",
+    "method": "GET",
+    "path": "/api/v1/volunteers/5a5dafe2-bfa8-414c-9f85-d3b7149ddc22/service-summary",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": ""
+  },
+  {
+    "module": "volunteer",
+    "test": "certificate",
+    "method": "GET",
+    "path": "/api/v1/volunteers/5a5dafe2-bfa8-414c-9f85-d3b7149ddc22/certificate",
+    "status": 422,
+    "expected": [
+      200,
+      403,
+      404,
+      422
+    ],
+    "ok": true,
+    "error": "No verified shifts to certify; the volunteer must complete at least one attended shift first."
+  },
+  {
+    "module": "volunteer",
+    "test": "bulk status",
+    "method": "POST",
+    "path": "/api/v1/volunteers/bulk/status",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "volunteer",
+    "test": "profile delete",
+    "method": "DELETE",
+    "path": "/api/v1/volunteers/{id}",
+    "status": "SKIPPED",
+    "reason": "preserve existing volunteers"
+  },
+  {
+    "module": "volunteer",
+    "test": "bulk delete",
+    "method": "POST",
+    "path": "/api/v1/volunteers/bulk/delete",
+    "status": "SKIPPED",
+    "reason": "preserve existing volunteers"
+  },
+  {
+    "module": "volunteer",
+    "test": "apply",
+    "method": "POST",
+    "path": "/api/v1/volunteers/apply",
+    "status": 409,
+    "expected": [
+      200,
+      201,
+      400,
+      409
+    ],
+    "ok": true,
+    "error": "You have already applied or registered as a volunteer."
+  },
+  {
+    "module": "volunteer",
+    "test": "shifts list",
+    "method": "GET",
+    "path": "/api/v1/volunteers/shifts",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "volunteer",
+    "test": "shift create",
+    "method": "POST",
+    "path": "/api/v1/volunteers/shifts",
+    "status": 201,
+    "expected": 201,
+    "ok": true,
+    "error": "",
+    "id": "80751f15-fb3b-419a-998c-28b0b3f0b5b6"
+  },
+  {
+    "module": "volunteer",
+    "test": "shift attendance list",
+    "method": "GET",
+    "path": "/api/v1/volunteers/shifts/80751f15-fb3b-419a-998c-28b0b3f0b5b6/attendance",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "volunteer",
+    "test": "join shift",
+    "method": "POST",
+    "path": "/api/v1/volunteers/shifts/80751f15-fb3b-419a-998c-28b0b3f0b5b6/join",
+    "status": 403,
+    "expected": [
+      200,
+      201,
+      400,
+      403,
+      404,
+      409
+    ],
+    "ok": true,
+    "error": "Your volunteer application must be approved by a coordinator before you can join shifts."
+  },
+  {
+    "module": "volunteer",
+    "test": "check-in/out",
+    "method": "POST",
+    "path": "/api/v1/volunteers/attendance/{id}/check-in",
+    "status": "SKIPPED",
+    "reason": "no attendance created"
+  }
+]
