@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from logging import getLogger
 from typing import Any
 
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from pawguard.core.exceptions import (
@@ -20,7 +21,7 @@ from pawguard.core.exceptions import (
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
-from pawguard.modules.auth.models import AuthAuditEventType
+from pawguard.modules.auth.models import AuthAuditEventType, User
 from pawguard.modules.dog.models import (
     DogBreedClassification,
     DogGender,
@@ -113,11 +114,19 @@ class RescueService:
         self._arq = arq_pool
 
     async def _email_reporter(self, *, email: str, subject: str, body: str) -> None:
-        """Send a transactional email to a rescue reporter (public reports have
-        no user account, so email directly rather than via in-app notification)."""
+        """Send only to an existing active PawGuard account."""
         if self._arq is None or not email:
             return
         try:
+            registered = await self._repo._session.scalar(
+                select(User.id).where(
+                    func.lower(User.email) == email.strip().lower(),
+                    User.is_active.is_(True),
+                    User.deleted_at.is_(None),
+                )
+            )
+            if registered is None:
+                return
             await self._arq.enqueue_job(
                 "send_notification_email_job", to=email, subject=subject, body=body
             )

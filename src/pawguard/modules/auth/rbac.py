@@ -12,13 +12,14 @@ from pawguard.services.cache_service import CacheService
 PERMISSIONS_CACHE_TTL_SECONDS = 300
 
 # Roles that bypass all permission checks (unrestricted access).
+# PRR 2.1 least-privilege: ONLY super_admin bypasses. Every other role
+# (including rescue_centre_admin, rescue_admin, shelter_admin, admin)
+# authenticates against the seeded permission set; adding them here would
+# grant unrestricted super-admin access regardless of what the seed
+# script grants, which violates PRR 2.1.
 ADMIN_ROLES = {
     "super_admin",
     "system:admin",
-    "admin",
-    "rescue_centre_admin",
-    "rescue_admin",
-    "shelter_admin",
 }
 
 

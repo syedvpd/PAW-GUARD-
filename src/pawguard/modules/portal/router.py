@@ -1,7 +1,7 @@
 """API router for public portal CMS and user-facing content (RULE-004)."""
 
 import uuid
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,7 +22,6 @@ from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import (
     CurrentUser,
     get_current_user,
-    get_optional_current_user,
 )
 from pawguard.modules.auth.rbac import require_permission
 from pawguard.modules.auth.router import _build_request_context
@@ -32,15 +31,21 @@ from pawguard.modules.portal.schemas import (
     BlogPostCreate,
     BlogPostResponse,
     BlogPostUpdate,
+    CmsPageResponse,
+    CmsPageUpdate,
     ContactLocationCreate,
     ContactLocationResponse,
     ContactLocationUpdate,
+    ContactMessageCreate,
     FAQEntryCreate,
     FAQEntryResponse,
     FAQEntryUpdate,
     LegalDocumentCreate,
     LegalDocumentResponse,
     LegalDocumentUpdate,
+    NewsletterSubscribeRequest,
+    NewsletterSubscriptionResponse,
+    PublicCmsPageResponse,
     PublicHeroStats,
     SuccessStoryCreate,
     SuccessStoryResponse,
@@ -52,9 +57,6 @@ from pawguard.modules.portal.schemas import (
     UrgentAlertResponse,
     UrgentAlertUpdate,
     UserDashboardSummary,
-    CmsPageResponse,
-    CmsPageUpdate,
-    PublicCmsPageResponse,
     VeterinaryPartnerCreate,
     VeterinaryPartnerResponse,
     VeterinaryPartnerUpdate,
@@ -63,6 +65,7 @@ from pawguard.modules.portal.service import PortalService
 from pawguard.redis.client import RedisClient, get_redis
 from pawguard.services.audit_service import AuditService
 from pawguard.services.cache_service import CacheService
+from pawguard.workers.pool import get_arq_pool
 
 router = APIRouter(prefix="/portal", tags=["portal"])
 
@@ -79,12 +82,14 @@ def get_portal_service(
     db: AsyncSession = Depends(get_db),
     audit: AuditService = Depends(get_audit_service),
     redis: RedisClient = Depends(get_redis),
+    arq_pool: Any = Depends(get_arq_pool),
 ) -> PortalService:
     return PortalService(
         PortalRepository(db),
         db,
         audit_service=audit,
         cache_service=CacheService(redis, namespace=CACHE_NAMESPACE),
+        arq_pool=arq_pool,
     )
 
 
@@ -150,6 +155,48 @@ async def list_contact_locations(
 ) -> ApiResponse[list[ContactLocationResponse]]:
     locations = await service.list_contacts()
     return ApiResponse(data=[ContactLocationResponse.model_validate(loc) for loc in locations])
+
+
+@router.post(
+    "/contact",
+    response_model=ApiResponse[None],
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(rate_limit("portal_contact", max_requests=5, window_seconds=3600))],
+)
+async def submit_contact_message(
+    payload: ContactMessageCreate,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[None]:
+    accepted = await service.submit_contact_message(payload)
+    # Deliberately do not reveal whether an email belongs to an account.
+    return ApiResponse(
+        message=(
+            "Your message was received."
+            if accepted
+            else "If that email belongs to a PawGuard account, your message was received."
+        )
+    )
+
+
+@router.post(
+    "/newsletter/subscribe",
+    response_model=ApiResponse[NewsletterSubscriptionResponse],
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(rate_limit("portal_newsletter", max_requests=3, window_seconds=3600))],
+)
+async def subscribe_newsletter(
+    payload: NewsletterSubscribeRequest,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[NewsletterSubscriptionResponse]:
+    subscribed = await service.subscribe_newsletter(payload)
+    return ApiResponse(
+        data=NewsletterSubscriptionResponse(subscribed=subscribed),
+        message=(
+            "You are subscribed to PawGuard updates."
+            if subscribed
+            else "If that email belongs to a PawGuard account, subscription is available there."
+        ),
+    )
 
 
 @router.get("/faq", response_model=ApiResponse[list[FAQEntryResponse]])

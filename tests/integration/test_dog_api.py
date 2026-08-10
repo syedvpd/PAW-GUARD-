@@ -152,6 +152,65 @@ class TestDogAPI:
         anon = await client.get(f"/api/v1/dogs/{dog_id}/timeline")
         assert anon.status_code in (401, 403)
 
+    async def test_public_scan_returns_non_adoptable_dog_without_private_fields(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        headers = await self._auth(client, db_session)
+        create_resp = await client.post(
+            "/api/v1/dogs",
+            json={"name": "Medical Buddy", "breed": "Mix", "gender": "male"},
+            headers=headers,
+        )
+        assert create_resp.status_code == 201
+        data = create_resp.json()["data"]
+        dog_id = data["id"]
+
+        status_resp = await client.patch(
+            f"/api/v1/dogs/{dog_id}/status",
+            json={"status": "clinic"},
+            headers=headers,
+        )
+        assert status_resp.status_code == 200
+
+        scan = await client.get(f"/api/v1/dogs/{dog_id}/public-scan")
+        assert scan.status_code == 200
+        scanned = scan.json()["data"]
+        assert scanned["current_status"] == "clinic"
+        assert scanned["name"] == "Medical Buddy"
+        assert scanned["registration_number"] == data["registration_number"]
+        assert scanned["photo_gallery_urls"] == []
+        for private_field in (
+            "microchip_id",
+            "rescue_case_id",
+            "shelter_facility_id",
+            "section_id",
+            "kennel_id",
+            "foster_home_id",
+        ):
+            assert private_field not in scanned
+
+    async def test_public_scan_returns_404_for_soft_deleted_dog(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        headers = await self._auth(client, db_session)
+        create_resp = await client.post(
+            "/api/v1/dogs", json={"name": "Deleted QR Dog"}, headers=headers
+        )
+        dog_id = create_resp.json()["data"]["id"]
+        deleted = await client.delete(f"/api/v1/dogs/{dog_id}", headers=headers)
+        assert deleted.status_code == 200
+
+        scan = await client.get(f"/api/v1/dogs/{dog_id}/public-scan")
+        assert scan.status_code == 404
+        missing = await client.get(f"/api/v1/dogs/{uuid.uuid4()}/public-scan")
+        assert missing.status_code == 404
+
+    async def test_qr_image_requires_staff_permission(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        anonymous = await client.get(f"/api/v1/dogs/{uuid.uuid4()}/qr-image")
+        assert anonymous.status_code in (401, 403)
+
     # ── M-1: controlled gender/temperament enums ────────────────────────────
 
     async def test_register_dog_rejects_unknown_enum_values(

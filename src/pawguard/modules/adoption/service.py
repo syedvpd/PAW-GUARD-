@@ -198,7 +198,12 @@ class AdoptionService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> AdoptionApplication:
-        dog = await self._dog_repo.get_by_id(payload.dog_id)
+        # PRR 7.2 Zero Exclusivity Violation: always lock the dog row FIRST
+        # via SELECT ... FOR UPDATE - this is the authoritative guarantee
+        # against concurrent approvals on the same dog, independent of Redis.
+        # The Redis lock below is a best-effort secondary guard to reduce
+        # contention, but never the sole defense.
+        dog = await self._dog_repo.get_by_id_for_update(payload.dog_id)
         if dog is None:
             raise NotFoundError("Dog profile not found.")
 
@@ -221,6 +226,8 @@ class AdoptionService:
                 f"You have already submitted an active adoption application for dog '{dog.name}'."
             )
 
+        # Best-effort Redis-side lock to reduce contention; the DB row lock
+        # above is the real guarantee.
         lock_token = str(uuid.uuid4())
         lock_acquired = False
         cache_svc = None
@@ -757,6 +764,28 @@ class AdoptionService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> int:
+        # PRR 7.2 / 3.7: bulk updates to terminal states (HOME_CHECK / APPROVED
+        # / COMPLETED) must go through the same exclusivity gate as the
+        # single-application update path - otherwise a single staff action can
+        # approve multiple applications for the same dog. Reject outright.
+        if status in (
+            AdoptionStatus.HOME_CHECK,
+            AdoptionStatus.APPROVED,
+            AdoptionStatus.COMPLETED,
+        ):
+            raise ValidationFailedError(
+                f"Bulk update to '{status.value}' is not permitted. "
+                "These terminal approval states must be applied per-application "
+                "via update_application so the per-dog exclusivity check runs."
+            )
+
+        # For non-terminal bulk updates, still validate the state-machine
+        # transition per application so a bulk action cannot short-circuit
+        # SUBMITTED -> COMPLETED in one step.
+        apps = await self._repo.get_by_ids(ids)
+        for app in apps:
+            self._check_transition(app.status, status)
+
         updated = await self._repo.bulk_update_status(ids, status)
 
         if self._audit and actor_id:

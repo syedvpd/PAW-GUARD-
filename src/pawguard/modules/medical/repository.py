@@ -5,6 +5,7 @@ Repositories never contain business decisions.
 
 import uuid
 from collections.abc import Sequence
+from datetime import UTC, datetime
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -121,6 +122,33 @@ class MedicalRepository:
             .order_by(MedicalClearance.created_at.desc())
         )
         return (await self._session.execute(stmt)).scalars().all()
+
+    async def get_latest_approved_clearance(
+        self, dog_id: uuid.UUID
+    ) -> MedicalClearance | None:
+        """Most recent non-expired approved MedicalClearance for the dog.
+
+        Used by the adoption exclusivity gate (PRR 3.5): a dog cannot be
+        flagged adoptable - or be handed over via foster-to-adopt - without
+        an approved clearance record that has not expired.
+        """
+        now = datetime.now(UTC)
+        stmt = (
+            select(MedicalClearance)
+            .where(
+                MedicalClearance.dog_id == dog_id,
+                MedicalClearance.deleted_at.is_(None),
+                MedicalClearance.status == "approved",
+            )
+            .order_by(MedicalClearance.created_at.desc())
+            .limit(1)
+        )
+        clearance = (await self._session.execute(stmt)).scalar_one_or_none()
+        if clearance is None:
+            return None
+        if clearance.expires_at is not None and clearance.expires_at < now:
+            return None
+        return clearance
 
     async def get_prescription_by_id(self, p_id: uuid.UUID) -> Prescription | None:
         stmt = (

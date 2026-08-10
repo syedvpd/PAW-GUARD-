@@ -4,7 +4,7 @@ import uuid
 from datetime import UTC, datetime
 
 from pawguard.core.config import get_settings
-from pawguard.core.exceptions import ConflictError, NotFoundError
+from pawguard.core.exceptions import ConflictError, NotFoundError, ValidationFailedError
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.pdf_generation import generate_adoption_agreement
 from pawguard.core.responses import PaginatedResponse
@@ -31,6 +31,7 @@ from pawguard.modules.foster.schemas import (
     FosterProgressLogCreate,
     FosterSupplyDispatchCreate,
 )
+from pawguard.modules.medical.repository import MedicalRepository
 from pawguard.modules.storage.models import FileFolder, StoredFile
 from pawguard.services.audit_service import AuditService
 from pawguard.services.storage_service import StorageService
@@ -407,11 +408,29 @@ class FosterService:
         if foster is None:
             raise NotFoundError("Foster profile not found.")
 
-        dog = await self._dog_repo.get_by_id(placement.dog_id)
+        # PRR 3.5 / 3.7 / 3.8: gate the adoption on the same medical-clearance
+        # condition as the public adoption pipeline. We lock the dog row first
+        # (SELECT ... FOR UPDATE) so a concurrent approval cannot slip past.
+        dog = await self._dog_repo.get_by_id_for_update(placement.dog_id)
         if dog is None:
             raise NotFoundError("Dog profile not found.")
         if dog.status == DogStatus.ADOPTED:
             raise ConflictError("This dog has already been adopted.")
+
+        if not dog.is_adoptable:
+            raise ValidationFailedError(
+                "Foster-to-adopt conversion requires the dog to be cleared for "
+                "adoption (MedicalClearance status=approved, not expired) and "
+                "is_adoptable=True. Complete the medical clearance first."
+            )
+
+        medical_repo = MedicalRepository(self._repo._session)
+        clearance = await medical_repo.get_latest_approved_clearance(placement.dog_id)
+        if clearance is None:
+            raise ValidationFailedError(
+                "Foster-to-adopt conversion requires an approved, non-expired "
+                "MedicalClearance for the dog. See PRR 3.5."
+            )
 
         existing_approved = await self._adoption_repo.get_approved_application_for_dog(
             placement.dog_id
@@ -504,6 +523,7 @@ class FosterService:
                     "adoption_id": str(res.id),
                     "dog_id": str(placement.dog_id),
                     "source": "foster-to-adopt",
+                    "medical_clearance_id": str(clearance.id),
                 },
             )
             await self._audit.record(

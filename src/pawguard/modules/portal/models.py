@@ -11,6 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pawguard.db.base import Base
 from pawguard.db.mixins import SoftDeleteMixin, TimestampMixin, UUIDPkMixin
+from pawguard.modules.auth.models import User
 
 
 class ContentStatus(StrEnum):
@@ -91,6 +92,41 @@ class ContactLocation(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     operating_hours: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_emergency_hotline: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+
+class ContactMessage(UUIDPkMixin, TimestampMixin, Base):
+    """A contact/support message submitted by an existing PawGuard user."""
+
+    __tablename__ = "contact_messages"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    subject: Mapped[str] = mapped_column(String(255), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="open", nullable=False, index=True)
+
+    user: Mapped["User"] = relationship("User", lazy="joined")
+
+
+class NewsletterSubscription(UUIDPkMixin, TimestampMixin, Base):
+    """Newsletter opt-in linked to a real PawGuard account."""
+
+    __tablename__ = "newsletter_subscriptions"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    subscribed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.now, nullable=False
+    )
+
+    user: Mapped["User"] = relationship("User", lazy="joined")
 
 
 class FAQEntry(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):

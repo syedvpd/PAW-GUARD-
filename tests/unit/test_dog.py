@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -88,6 +88,24 @@ class TestDogService:
         mock_repo.get_by_id.return_value = None
         with pytest.raises(NotFoundError, match="Dog profile not found"):
             await service.get_dog(uuid.uuid4())
+
+    def test_public_qr_url_uses_configured_customer_frontend(self, service):
+        dog = _make_dog(registration_number="DOG-2026-0042")
+        settings = MagicMock(frontend_base_url="https://customer.example.test/")
+        with patch("pawguard.modules.dog.service.get_settings", return_value=settings):
+            assert service.public_qr_url(dog) == "https://customer.example.test/dogs/DOG-2026-0042"
+
+    def test_qr_image_encodes_only_configured_customer_url(self, service):
+        dog = _make_dog(registration_number="DOG-2026-0043")
+        settings = MagicMock(frontend_base_url="https://customer.example.test")
+        image = MagicMock()
+        image.save.side_effect = lambda output, format: output.write(b"PNG")
+        with (
+            patch("pawguard.modules.dog.service.get_settings", return_value=settings),
+            patch("qrcode.make", return_value=image) as make_qr,
+        ):
+            assert service.qr_image(dog) == b"PNG"
+        make_qr.assert_called_once_with("https://customer.example.test/dogs/DOG-2026-0043")
 
     @pytest.mark.asyncio
     async def test_update_dog(self, service, mock_repo):

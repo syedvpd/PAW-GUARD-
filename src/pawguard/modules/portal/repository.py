@@ -10,17 +10,19 @@ from sqlalchemy.orm import selectinload
 
 from pawguard.core.pagination import PageParams
 from pawguard.core.search import SortParams, apply_sorting
+from pawguard.modules.auth.models import User
 from pawguard.modules.portal.models import (
     AlertSeverity,
     BlogPost,
-    CmsContentField,
     CmsPage,
     CmsPageVersion,
     CmsSection,
     ContactLocation,
+    ContactMessage,
     ContentStatus,
     FAQEntry,
     LegalDocument,
+    NewsletterSubscription,
     SuccessStory,
     UrgentAlert,
     VeterinaryPartner,
@@ -31,6 +33,30 @@ from pawguard.modules.settings.models import SystemSetting
 class PortalRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def get_active_user_by_email(self, email: str) -> User | None:
+        stmt = select(User).where(
+            func.lower(User.email) == email.strip().lower(),
+            User.is_active.is_(True),
+            User.deleted_at.is_(None),
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def create_contact_message(self, message: ContactMessage) -> ContactMessage:
+        self._session.add(message)
+        await self._session.flush()
+        return message
+
+    async def get_newsletter_subscription(self, user_id: uuid.UUID) -> NewsletterSubscription | None:
+        stmt = select(NewsletterSubscription).where(NewsletterSubscription.user_id == user_id)
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def create_newsletter_subscription(
+        self, subscription: NewsletterSubscription
+    ) -> NewsletterSubscription:
+        self._session.add(subscription)
+        await self._session.flush()
+        return subscription
 
     # ── Success stories ─────────────────────────────────────────────────────
 

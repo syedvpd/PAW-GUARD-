@@ -4,12 +4,20 @@ import re
 import secrets
 import uuid
 from datetime import UTC, datetime
+from io import BytesIO
 from typing import Any
+from urllib.parse import urlsplit
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from pawguard.core.exceptions import ConflictError, ForbiddenError, NotFoundError
+from pawguard.core.config import get_settings
+from pawguard.core.exceptions import (
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+    ValidationFailedError,
+)
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
@@ -299,6 +307,25 @@ class DogService:
         if dog is None:
             raise NotFoundError("Dog profile not found.")
         return dog
+
+    def public_qr_url(self, dog: DogProfile) -> str:
+        """Build the public Next.js customer-site URL encoded by a dog QR."""
+        base_url = get_settings().frontend_base_url.strip().rstrip("/")
+        parsed = urlsplit(base_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValidationFailedError(
+                "FRONTEND_BASE_URL must be configured as an absolute HTTP(S) URL."
+            )
+        return f"{base_url}/dogs/{dog.registration_number}"
+
+    def qr_image(self, dog: DogProfile) -> bytes:
+        """Generate a deterministic PNG QR image without persisting it."""
+        import qrcode
+
+        image = qrcode.make(self.public_qr_url(dog))
+        output = BytesIO()
+        image.save(output, format="PNG")
+        return output.getvalue()
 
     async def update_dog(
         self,
