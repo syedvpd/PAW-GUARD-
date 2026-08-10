@@ -3,6 +3,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.bulk import (
@@ -13,7 +14,7 @@ from pawguard.core.bulk import (
 )
 from pawguard.core.exceptions import NotFoundError, parse_enum
 from pawguard.core.pagination import PageParams, page_params
-from pawguard.core.rate_limiter import resolve_client_ip
+from pawguard.core.rate_limiter import rate_limit, resolve_client_ip
 from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.core.search import SortParams, sort_params
 from pawguard.db.session import get_db
@@ -39,6 +40,7 @@ from pawguard.modules.dog.schemas import (
     DogStatusUpdate,
     DogWeightLogCreate,
     DogWeightLogResponse,
+    PublicDogScanResponse,
 )
 from pawguard.modules.dog.service import DogService
 from pawguard.services.audit_service import AuditService
@@ -197,6 +199,57 @@ async def get_dog_timeline(
     return ApiResponse(
         data=[DogActivityLogResponse.model_validate(log) for log in logs],
         message=f"{len(logs)} activity event(s).",
+    )
+
+
+@router.get(
+    "/{dog_id}/public-scan",
+    response_model=ApiResponse[PublicDogScanResponse],
+    dependencies=[Depends(rate_limit("dog_public_scan", max_requests=20, window_seconds=60))],
+    summary="Privacy-safe public dog QR scan",
+)
+async def public_scan_dog(
+    dog_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser | None = Depends(get_optional_current_user),
+    service: DogService = Depends(get_dog_service),
+) -> ApiResponse[PublicDogScanResponse]:
+    """Return live public-safe status for any non-deleted dog, regardless of status."""
+    resolve_client_ip(request)
+    dog = await service.get_dog(dog_id)
+    public = _public_dog_view(DogProfileResponse.model_validate(dog))
+    return ApiResponse(
+        data=PublicDogScanResponse(
+            name=public.name,
+            breed=public.breed,
+            breed_classification=public.breed_classification,
+            estimated_age=public.estimated_age,
+            gender=public.gender,
+            weight_kg=public.weight,
+            temperament=public.temperament,
+            color=public.color,
+            current_status=public.status,
+            is_adoptable=public.is_adoptable,
+            registration_number=public.registration_number,
+        )
+    )
+
+
+@router.get(
+    "/{dog_id}/qr-image",
+    response_class=Response,
+    dependencies=[Depends(require_permission("shelter:update"))],
+    summary="Generate a staff-only dog profile QR image",
+)
+async def dog_qr_image(
+    dog_id: uuid.UUID,
+    service: DogService = Depends(get_dog_service),
+) -> Response:
+    dog = await service.get_dog(dog_id)
+    return Response(
+        content=service.qr_image(dog),
+        media_type="image/png",
+        headers={"Content-Disposition": f'inline; filename="{dog.registration_number}.png"'},
     )
 
 

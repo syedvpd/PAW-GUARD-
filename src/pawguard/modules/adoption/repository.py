@@ -187,6 +187,18 @@ class AdoptionRepository:
         result = await self._session.execute(stmt)
         return result.rowcount  # type: ignore[attr-defined,no-any-return]
 
+    async def get_by_ids(self, ids: list[uuid.UUID]) -> Sequence[AdoptionApplication]:
+        """Bulk-fetch non-deleted applications by id, preserving input order."""
+        if not ids:
+            return []
+        stmt = select(AdoptionApplication).where(
+            AdoptionApplication.id.in_(ids),
+            AdoptionApplication.deleted_at.is_(None),
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        index = {row.id: row for row in rows}
+        return [index[i] for i in ids if i in index]
+
     async def create_score(self, score: AdoptionScore) -> AdoptionScore:
         self._session.add(score)
         await self._session.flush()

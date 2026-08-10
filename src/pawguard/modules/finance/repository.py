@@ -239,7 +239,7 @@ class FinanceRepository:
                 FinancialTransaction.deleted_at.is_(None),
             )
         )
-        donation_tx = await self._session.execute(
+        donation_tx_result = await self._session.execute(
             select(
                 func.coalesce(func.sum(FinancialTransaction.amount), 0)
             ).where(
@@ -272,19 +272,25 @@ class FinanceRepository:
                 ),
             )
         )
-        income_total = (
-            float(manual_income.scalar_one())
-            + float(donation_tx.scalar_one())
-            + float(unreconciled_donation_income.scalar_one())
-        )
-        expenses_total = float(expenses.scalar_one())
+        # Materialize all scalar values BEFORE composing the response.
+        # SQLAlchemy 2.0 Result objects are single-use cursors: calling
+        # scalar_one() twice on the same Result raises InvalidRequestError
+        # (surfaced as "An internal database error occurred").
+        manual_income_val = float(manual_income.scalar_one())
+        expenses_val = float(expenses.scalar_one())
+        donation_tx_val = float(donation_tx_result.scalar_one())
+        unreconciled_donation_val = float(unreconciled_donation_income.scalar_one())
+        pending_val = pending.scalar_one()
+        unreconciled_val = unreconciled.scalar_one()
+
+        income_total = manual_income_val + donation_tx_val + unreconciled_donation_val
         return {
             "total_income": income_total,
-            "total_expenses": expenses_total,
-            "net_balance": income_total - expenses_total,
-            "pending_transactions": pending.scalar_one(),
-            "unreconciled_count": unreconciled.scalar_one(),
-            "total_donations_reconciled": donation_tx.scalar_one(),
+            "total_expenses": expenses_val,
+            "net_balance": income_total - expenses_val,
+            "pending_transactions": pending_val,
+            "unreconciled_count": unreconciled_val,
+            "total_donations_reconciled": donation_tx_val,
             "period_start": period_start,
             "period_end": period_end,
         }

@@ -76,7 +76,9 @@ class Settings(BaseSettings):
     max_request_body_size: int = 10_485_760  # 10 MB
 
     # --- Database ---
-    database_url: str = "postgresql+asyncpg://postgres.xzxsdgobndbkufyszzul:pawguard2026@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres"
+    # No hardcoded fallback: infrastructure must provide DATABASE_URL via env.
+    # Application startup MUST fail closed if absent (see pawguard/main.py).
+    database_url: str = ""
     database_url_frontend: str = ""
     database_pool_size: int = 20
     database_max_overflow: int = 10
@@ -152,6 +154,7 @@ class Settings(BaseSettings):
     # --- Frontend URLs ---
     web_app_url: str = "http://localhost:3000"
     admin_app_url: str = "http://localhost:5173"
+    frontend_base_url: str = ""
 
     # --- Rate limiting ---
     login_rate_limit_per_minute: int = 10

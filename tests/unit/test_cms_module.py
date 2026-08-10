@@ -8,7 +8,13 @@ import pytest
 from pawguard.modules.auth.service import RequestContext
 from pawguard.modules.portal.models import CmsPage, ContentStatus
 from pawguard.modules.portal.repository import PortalRepository
-from pawguard.modules.portal.schemas import CmsFieldUpdate, CmsPageUpdate, CmsSectionUpdate
+from pawguard.modules.portal.schemas import (
+    CmsFieldUpdate,
+    CmsPageUpdate,
+    CmsSectionUpdate,
+    ContactMessageCreate,
+    NewsletterSubscribeRequest,
+)
 from pawguard.modules.portal.service import PortalService
 
 
@@ -57,6 +63,37 @@ class TestCmsModule:
         assert "hero" in public_home.sections
         assert public_home.sections["hero"]["title"] == "Find Your New Best Friend..."
         assert public_home.sections["hero"]["primary_cta_text"] == "Adopt a Pet"
+
+    @pytest.mark.asyncio
+    async def test_contact_and_newsletter_only_accept_registered_users(self):
+        session = AsyncMock()
+        repo = MagicMock(spec=PortalRepository)
+        arq = AsyncMock()
+        service = PortalService(repository=repo, session=session, arq_pool=arq)
+        user = MagicMock(id=uuid.uuid4(), email="member@example.com")
+        repo.get_active_user_by_email = AsyncMock(return_value=user)
+        repo.create_contact_message = AsyncMock()
+        repo.get_newsletter_subscription = AsyncMock(return_value=None)
+        repo.create_newsletter_subscription = AsyncMock()
+
+        assert await service.submit_contact_message(
+            ContactMessageCreate(
+                email=user.email, subject="Help", message="I need adoption support."
+            )
+        ) is True
+        assert await service.subscribe_newsletter(
+            NewsletterSubscribeRequest(email=user.email)
+        ) is True
+        assert arq.enqueue_job.await_count == 2
+
+        repo.get_active_user_by_email.return_value = None
+        assert await service.submit_contact_message(
+            ContactMessageCreate(email="unknown@example.com", subject="Spam", message="No")
+        ) is False
+        assert await service.subscribe_newsletter(
+            NewsletterSubscribeRequest(email="unknown@example.com")
+        ) is False
+        assert arq.enqueue_job.await_count == 2
 
     @pytest.mark.asyncio
     async def test_cms_draft_edit_discard_and_publish_flow(self, setup_service):

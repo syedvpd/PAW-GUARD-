@@ -184,6 +184,20 @@ class ContactLocationResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ContactMessageCreate(BaseModel):
+    email: str = Field(..., min_length=3, max_length=255)
+    subject: str = Field(..., min_length=1, max_length=255)
+    message: str = Field(..., min_length=1, max_length=10000)
+
+
+class NewsletterSubscribeRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=255)
+
+
+class NewsletterSubscriptionResponse(BaseModel):
+    subscribed: bool
+
+
 class FAQEntryCreate(BaseModel):
     question: str = Field(
         ..., min_length=1, max_length=512, examples=["How long does the adoption process take?"]

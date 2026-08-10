@@ -143,6 +143,23 @@ class DogProfileResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class PublicDogScanResponse(BaseModel):
+    """Privacy-safe dog status exposed by the public QR scan endpoint."""
+
+    name: str
+    breed: str
+    breed_classification: DogBreedClassification
+    estimated_age: str | None
+    gender: DogGender
+    weight_kg: float | None
+    temperament: DogTemperament | None
+    color: str | None
+    photo_gallery_urls: list[str] = Field(default_factory=list)
+    current_status: DogStatus
+    is_adoptable: bool
+    registration_number: str
+
+
 class DogListQueryParams(BaseModel):
     """Public adoption-directory filters (PRR 3.1.4: age, size, temperaments,
     location) plus staff-facing registry filters."""

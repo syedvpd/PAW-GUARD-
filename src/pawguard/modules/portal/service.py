@@ -25,9 +25,11 @@ from pawguard.modules.portal.models import (
     CmsPageVersion,
     CmsSection,
     ContactLocation,
+    ContactMessage,
     ContentStatus,
     FAQEntry,
     LegalDocument,
+    NewsletterSubscription,
     SuccessStory,
     UrgentAlert,
     VeterinaryPartner,
@@ -36,12 +38,17 @@ from pawguard.modules.portal.repository import PortalRepository
 from pawguard.modules.portal.schemas import (
     BlogPostCreate,
     BlogPostUpdate,
+    CmsPageResponse,
+    CmsPageUpdate,
     ContactLocationCreate,
     ContactLocationUpdate,
+    ContactMessageCreate,
     FAQEntryCreate,
     FAQEntryUpdate,
     LegalDocumentCreate,
     LegalDocumentUpdate,
+    NewsletterSubscribeRequest,
+    PublicCmsPageResponse,
     PublicHeroStats,
     SuccessStoryCreate,
     SuccessStoryUpdate,
@@ -49,9 +56,6 @@ from pawguard.modules.portal.schemas import (
     UrgentAlertCreate,
     UrgentAlertUpdate,
     UserDashboardSummary,
-    CmsPageResponse,
-    CmsPageUpdate,
-    PublicCmsPageResponse,
     VeterinaryPartnerCreate,
     VeterinaryPartnerUpdate,
 )
@@ -83,11 +87,59 @@ class PortalService:
         session: AsyncSession,
         audit_service: AuditService | None = None,
         cache_service: CacheService | None = None,
+        arq_pool: Any | None = None,
     ) -> None:
         self._repo = repository
         self._session = session
         self._audit = audit_service
         self._cache = cache_service
+        self._arq = arq_pool
+
+    async def submit_contact_message(self, payload: ContactMessageCreate) -> bool:
+        """Store and acknowledge a contact message only for an active account."""
+        user = await self._repo.get_active_user_by_email(payload.email)
+        if user is None:
+            return False
+        message = await self._repo.create_contact_message(
+            ContactMessage(user_id=user.id, subject=payload.subject, message=payload.message)
+        )
+        if self._arq is not None:
+            await self._arq.enqueue_job(
+                "send_notification_email_job",
+                to=user.email,
+                subject="We received your PawGuard message",
+                body=(
+                    f"We received your message about \"{message.subject}\". "
+                    "Our support team will review it and get back to you."
+                ),
+            )
+        return True
+
+    async def subscribe_newsletter(self, payload: NewsletterSubscribeRequest) -> bool:
+        """Subscribe an existing active account and send one welcome email."""
+        user = await self._repo.get_active_user_by_email(payload.email)
+        if user is None:
+            return False
+        subscription = await self._repo.get_newsletter_subscription(user.id)
+        if subscription is not None:
+            if not subscription.is_active:
+                subscription.is_active = True
+                await self._session.flush()
+            return True
+        await self._repo.create_newsletter_subscription(
+            NewsletterSubscription(user_id=user.id, is_active=True)
+        )
+        if self._arq is not None:
+            await self._arq.enqueue_job(
+                "send_notification_email_job",
+                to=user.email,
+                subject="Welcome to PawGuard updates",
+                body=(
+                    "You are now subscribed to PawGuard updates, rescue stories, "
+                    "and adoption news."
+                ),
+            )
+        return True
 
     def _apply_publish(
         self,
