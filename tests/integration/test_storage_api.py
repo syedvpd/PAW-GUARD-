@@ -42,6 +42,20 @@ class TestStorageAPI:
         assert "object_key" in data
         assert "file_id" in data
 
+    async def test_unauthenticated_request_upload_url(self, client: AsyncClient) -> None:
+        payload = {
+            "original_filename": "emergency_photo.jpg",
+            "mime_type": "image/jpeg",
+            "file_size": 204800,
+            "folder": "rescue",
+        }
+        resp = await client.post("/api/v1/storage/upload-url", json=payload)
+        assert resp.status_code == 201
+        data = resp.json()["data"]
+        assert "upload_url" in data
+        assert "object_key" in data
+        assert "file_id" in data
+
     async def test_request_upload_url_validation_error(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
         resp = await client.post("/api/v1/storage/upload-url", json={}, headers=headers)

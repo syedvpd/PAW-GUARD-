@@ -10,7 +10,11 @@ from pawguard.core.pagination import PageParams, page_params
 from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.core.search import SortParams, sort_params
 from pawguard.db.session import get_db
-from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
+from pawguard.modules.auth.dependencies import (
+    CurrentUser,
+    get_current_user,
+    get_optional_current_user,
+)
 from pawguard.modules.storage.models import FileFolder
 from pawguard.modules.storage.repository import StorageRepository
 from pawguard.modules.storage.schemas import (
@@ -38,11 +42,11 @@ def get_storage_service(
 )
 async def request_upload_url(
     payload: StoredFileCreate,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser | None = Depends(get_optional_current_user),
     service: StorageService = Depends(get_storage_service),
 ) -> ApiResponse[UploadUrlResponse]:
     result = await service.request_upload_url(
-        payload, user_id=current_user.id
+        payload, user_id=current_user.id if current_user else None
     )
     return ApiResponse(data=result, message="Upload URL generated successfully.")
 
@@ -57,7 +61,7 @@ async def confirm_upload(
         None,
         description="Comma-separated batch file IDs for combined size check",
     ),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser | None = Depends(get_optional_current_user),
     service: StorageService = Depends(get_storage_service),
 ) -> ApiResponse[StoredFileResponse]:
     ids = (
@@ -78,7 +82,7 @@ async def confirm_upload(
 )
 async def get_download_url(
     file_id: uuid.UUID,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser | None = Depends(get_optional_current_user),
     service: StorageService = Depends(get_storage_service),
 ) -> ApiResponse[DownloadUrlResponse]:
     result = await service.get_download_url(file_id)

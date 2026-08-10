@@ -205,6 +205,11 @@ async def public_report_incident(
     response_model=ApiResponse[RescueMediaUploadUrlResponse],
     dependencies=[Depends(rate_limit("rescue_upload", 10, 60))],
 )
+@public_rescue_router.post(
+    "/media-upload-url",
+    response_model=ApiResponse[RescueMediaUploadUrlResponse],
+    dependencies=[Depends(rate_limit("public_rescue_upload", 10, 60))],
+)
 async def request_rescue_media_upload_url(
     payload: RescueMediaUploadUrlRequest,
 ) -> ApiResponse[RescueMediaUploadUrlResponse]:
