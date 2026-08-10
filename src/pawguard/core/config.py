@@ -135,6 +135,7 @@ class Settings(BaseSettings):
     mail_username: str = ""
     mail_password: str = ""
     mail_use_tls: bool = False
+    mail_use_ssl: bool = False
 
     # --- Frontend URLs ---
     web_app_url: str = "http://localhost:3000"

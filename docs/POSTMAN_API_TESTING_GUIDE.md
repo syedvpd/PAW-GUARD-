@@ -1,4 +1,4 @@
-# Postman API Testing Guide — PRR Pet Vertical
+# Postman API Testing Guide — PRR Pet Vertical 
 
 This guide covers manual testing in Postman for every task completed today:
 companion pets, medical uploads, QR safety tags, vet directory & appointments,

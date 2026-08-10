@@ -35,5 +35,5 @@ async def send_email_verification_email_job(
 async def send_notification_email_job(
     ctx: dict[str, Any], *, to: str, subject: str, body: str
 ) -> None:
-    html = f"<html><body><p>{body}</p></body></html>"
+    html = EmailService().render("notification.html", {"subject": subject, "body": body})
     _deliver(ctx, to=to, subject=subject, html_body=html)

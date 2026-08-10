@@ -351,6 +351,54 @@ docker compose -f docker-compose.prod.yml up -d
 ```
 This starts the backend API, the ARQ background worker, and the Redis cache/queue, while connecting to your remote database (e.g. Supabase).
 
+### Render
+
+Email and notification delivery depends on the ARQ background worker consuming
+jobs from Redis. Two options:
+
+#### Two services (paid)
+
+**Web service** + **Background Worker service**, both pointing at the same repo:
+
+1. **Web service** — start command:
+   ```bash
+   uvicorn pawguard.main:app --host 0.0.0.0 --port 10000
+   ```
+2. **Worker service** — start command (same code, same env vars):
+   ```bash
+   arq pawguard.workers.arq_worker.WorkerSettings
+   ```
+
+Both services must share these env vars (in addition to `DATABASE_URL`,
+`JWT_PRIVATE_KEY_PEM`/`JWT_PUBLIC_KEY_PEM`, `MAIL_*`, etc.):
+
+| Key | Value |
+|---|---|
+| `REDIS_URL` | Render Redis internal URL, e.g. `rediss://default:TOKEN@redact...:6379/0` (TLS `rediss://` is supported) |
+| `ENVIRONMENT` | `production` |
+| `WEB_APP_URL` / `ADMIN_APP_URL` | Your live frontend URLs |
+
+If `REDIS_URL` is wrong or unreachable, the app **still starts** and HTTP stays
+up — but jobs are silently dropped (`arq_pool_unreachable_falling_back_to_noop`)
+and email will not be delivered. Check the worker logs for `email_sent` to
+confirm delivery.
+
+#### Free tier (single service, no paid Background Worker)
+
+Render's free web service can run the API **and** the ARQ worker in one process
+via `pawguard.serve` — no separate Background Worker service (which has no free
+tier) is needed:
+
+```bash
+# Render web service Start Command
+uv run python -m pawguard.serve
+```
+
+This launches uvicorn (API, port from `$PORT`) and the ARQ worker as concurrent
+asyncio tasks in the same process. If Redis is unreachable the API still serves
+requests and the worker degrades to a no-op loop. Set `REDIS_URL` to your Redis
+internal URL (e.g. `redis://red-...:6379`).
+
 ### GitHub Actions CI/CD
 
 Three workflows are provided:

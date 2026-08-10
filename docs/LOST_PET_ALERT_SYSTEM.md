@@ -25,11 +25,11 @@ human `location_address`). The match-score engine (`LostFoundService._evaluate_m
 uses the haversine distance between the lost and found coordinates:
 
 - **distance ≤ ~1 km** → strong geographic boost
-- distance up to ~25 km → partial boost
+- distance up to ~25 km → partial boost   
 - distance > 25 km → capped/partial
 - combined with breed/color match → `confidence_score` 0–100
 - temporal gap (days between lost_at and found_at) penalises long gaps
-- matching collar colour and distinctive marker text add boosts
+- matching collar colour and distinctive marker text add boosts    
 
 Output is a ranked list of `ReportMatch` rows with `confidence_score`, `gap_days`,
 `dist_km`, and human-readable `reasons`.

@@ -5,6 +5,7 @@ Per AGENTS.md TRANSACTION RULES, this is only ever invoked from an ARQ job
 """
 
 import smtplib
+import ssl
 from email.message import EmailMessage
 from pathlib import Path
 
@@ -40,11 +41,20 @@ class EmailService:
         message.add_alternative(html_body, subtype="html")
 
         with smtplib.SMTP(self._settings.mail_host, self._settings.mail_port) as smtp:
-            if self._settings.mail_use_tls:
-                smtp.starttls()
-            if self._settings.mail_username:
-                smtp.login(self._settings.mail_username, self._settings.mail_password)
-            smtp.send_message(message)
+            if self._settings.mail_use_ssl:
+                context = ssl.create_default_context()
+                with smtplib.SMTP_SSL(
+                    self._settings.mail_host, self._settings.mail_port, context=context
+                ) as smtp_ssl:
+                    if self._settings.mail_username:
+                        smtp_ssl.login(self._settings.mail_username, self._settings.mail_password)
+                    smtp_ssl.send_message(message)
+            else:
+                if self._settings.mail_use_tls:
+                    smtp.starttls()
+                if self._settings.mail_username:
+                    smtp.login(self._settings.mail_username, self._settings.mail_password)
+                smtp.send_message(message)
 
         logger.info("email_sent", to=to, subject=subject)
 

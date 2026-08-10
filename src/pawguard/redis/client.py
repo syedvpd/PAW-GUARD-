@@ -72,9 +72,20 @@ class _NullRedis:
 
 
 async def _ensure_client() -> RedisClient:
-    global _client
-    if _client is None:
+    global _pool, _client
+    if _client is not None:
+        return _client
+    try:
+        _pool = ConnectionPool.from_url(
+            _settings.redis_url,
+            decode_responses=True,
+            max_connections=100,
+        )
+        _client = cast(RedisClient, Redis(connection_pool=_pool))
+        await _client.ping()
+    except Exception:
         _client = cast(RedisClient, _NullRedis())
+    assert _client is not None
     return _client
 
 
@@ -83,4 +94,8 @@ async def get_redis() -> AsyncGenerator[RedisClient]:
 
 
 async def ping_redis() -> bool:
-    return True
+    try:
+        client = await _ensure_client()
+        return bool(await client.ping())
+    except Exception:
+        return False
