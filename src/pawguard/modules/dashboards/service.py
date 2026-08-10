@@ -299,6 +299,24 @@ async def finance_dashboard(
             FinancialTransaction.deleted_at.is_(None),
         )
     )
+    donation_income = await session.execute(
+        select(func.coalesce(func.sum(FinancialTransaction.amount), 0)).where(
+            FinancialTransaction.transaction_type == TransactionType.RECONCILIATION,
+            FinancialTransaction.status.in_(posted),
+            FinancialTransaction.deleted_at.is_(None),
+        )
+    )
+    unreconciled_donations = await session.execute(
+        select(func.coalesce(func.sum(Donation.amount), 0)).where(
+            Donation.status == DonationStatus.SUCCESS,
+            Donation.id.notin_(
+                select(FinancialTransaction.donation_id).where(
+                    FinancialTransaction.donation_id.isnot(None),
+                    FinancialTransaction.status == TransactionStatus.RECONCILED,
+                )
+            ),
+        )
+    )
     expense = await session.execute(
         select(func.coalesce(func.sum(FinancialTransaction.amount), 0)).where(
             FinancialTransaction.transaction_type == TransactionType.EXPENSE,
@@ -312,7 +330,11 @@ async def finance_dashboard(
             FinancialTransaction.deleted_at.is_(None),
         )
     )
-    total_income = float(income.scalar_one())
+    total_income = (
+        float(income.scalar_one())
+        + float(donation_income.scalar_one())
+        + float(unreconciled_donations.scalar_one())
+    )
     total_expenses = float(expense.scalar_one())
     result = {
         "total_income": total_income,

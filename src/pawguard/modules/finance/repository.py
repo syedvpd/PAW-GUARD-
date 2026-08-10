@@ -197,7 +197,7 @@ class FinanceRepository:
     async def get_finance_summary(
         self, period_start: date, period_end: date
     ) -> dict[str, Any]:
-        income = await self._session.execute(
+        manual_income = await self._session.execute(
             select(func.coalesce(func.sum(FinancialTransaction.amount), 0))
             .where(
                 FinancialTransaction.transaction_type
@@ -252,8 +252,32 @@ class FinanceRepository:
                 FinancialTransaction.deleted_at.is_(None),
             )
         )
-        income_total = income.scalar_one()
-        expenses_total = expenses.scalar_one()
+        # Self-healing income: successful donations that have not yet been
+        # posted into the finance ledger still represent real income. Once a
+        # donation is reconciled it appears via its RECONCILIATION transaction
+        # instead, so nothing is double counted.
+        unreconciled_donation_income = await self._session.execute(
+            select(func.coalesce(func.sum(Donation.amount), 0))
+            .where(
+                Donation.status == DonationStatus.SUCCESS,
+                func.date(Donation.created_at).between(
+                    period_start, period_end
+                ),
+                Donation.id.notin_(
+                    select(FinancialTransaction.donation_id).where(
+                        FinancialTransaction.donation_id.isnot(None),
+                        FinancialTransaction.status
+                        == TransactionStatus.RECONCILED,
+                    )
+                ),
+            )
+        )
+        income_total = (
+            float(manual_income.scalar_one())
+            + float(donation_tx.scalar_one())
+            + float(unreconciled_donation_income.scalar_one())
+        )
+        expenses_total = float(expenses.scalar_one())
         return {
             "total_income": income_total,
             "total_expenses": expenses_total,

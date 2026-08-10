@@ -125,10 +125,12 @@ def get_donation_service(
         gateway = get_payment_gateway()
     except PaymentGatewayError:
         gateway = None
+    finance_svc = FinanceService(FinanceRepository(db), audit_service=audit)
     return DonationService(
         repo, dog_repo, gateway, audit_service=audit,
         notification_service=notification_svc,
         storage_service=storage_svc,
+        finance_service=finance_svc,
     )
 
 

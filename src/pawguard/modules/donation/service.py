@@ -4,6 +4,7 @@ import calendar
 import uuid
 from datetime import UTC, date, datetime
 from logging import getLogger
+from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -47,6 +48,9 @@ from pawguard.modules.storage.models import FileFolder, StoredFile
 from pawguard.services.audit_service import AuditService
 from pawguard.services.storage_service import StorageService
 
+if TYPE_CHECKING:
+    from pawguard.modules.finance.service import FinanceService
+
 logger = getLogger(__name__)
 
 
@@ -59,6 +63,7 @@ class DonationService:
         audit_service: AuditService | None = None,
         notification_service: NotificationService | None = None,
         storage_service: StorageService | None = None,
+        finance_service: "FinanceService | None" = None,
     ) -> None:
         self._repo = repository
         self._dog_repo = dog_repo
@@ -66,6 +71,24 @@ class DonationService:
         self._audit = audit_service
         self._notification_svc = notification_service
         self._storage = storage_service
+        self._finance = finance_service
+
+    async def _post_donation_to_ledger(self, donation: Donation) -> None:
+        """Auto-post a successful donation into the finance ledger.
+
+        Runs only when a finance service is wired in; failures are logged and
+        swallowed so a ledger issue never breaks the donation flow. The
+        finance service is idempotent (skips already-reconciled donations).
+        """
+        if self._finance is None:
+            return
+        try:
+            await self._finance.post_donation_to_ledger(donation)
+        except Exception:  # pragma: no cover - defensive boundary
+            logger.exception(
+                "Failed to auto-post donation %s to finance ledger",
+                donation.id,
+            )
 
     async def _generate_receipt(self, donation: Donation) -> None:
         if self._storage is None:
@@ -308,6 +331,7 @@ class DonationService:
             )
         await self._generate_receipt(res)
         await self._refresh_campaign_progress(payload.campaign_id)
+        await self._post_donation_to_ledger(res)
         return res
 
     async def get_donation(self, donation_id: uuid.UUID) -> Donation:
@@ -457,6 +481,7 @@ class DonationService:
             )
         await self._generate_receipt(res)
         await self._refresh_campaign_progress(res.campaign_id)
+        await self._post_donation_to_ledger(res)
         return res
 
     async def handle_gateway_webhook(self, payload: bytes, signature: str) -> None:
@@ -497,6 +522,7 @@ class DonationService:
             if refreshed is not None:
                 await self._generate_receipt(refreshed)
                 await self._refresh_campaign_progress(refreshed.campaign_id)
+                await self._post_donation_to_ledger(refreshed)
         elif event.event_type == "payment.failed":
             await self._repo.update_gateway_fields(donation.id, status=DonationStatus.FAILED)
             if self._audit:
