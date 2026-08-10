@@ -109,14 +109,14 @@ class DonationService:
             donation.receipt_file_key = object_key
             await self._repo._session.flush()
 
-            # Automated tax receipt delivery via notification (PRD 3.11)
+            # Automated tax receipt delivery via notification + email (PRD 3.11)
             if self._notification_svc and donation.donor:
                 try:
-                    from pawguard.modules.notifications.schemas import NotificationCreate
-                    await self._notification_svc.create_notification(
-                        payload=NotificationCreate(
+                    from pawguard.modules.notifications.schemas import NotificationSend
+                    await self._notification_svc.send_notification(
+                        payload=NotificationSend(
                             user_id=donation.donor.user_id,
-                            title="Tax Receipt Available",
+                            title="Your PawGuard tax receipt is ready",
                             body=(
                                 "Your tax-deductible receipt for donation "
                                 f"{donation.transaction_id or donation.id} is "
@@ -124,7 +124,11 @@ class DonationService:
                             ),
                             notification_type="tax_receipt",
                             action_url=f"/api/v1/donations/{donation.id}/receipt",
-                        )
+                            send_email=True,
+                        ),
+                        user_email=(
+                            donation.donor.user.email if donation.donor.user else None
+                        ),
                     )
                 except Exception as notif_exc:
                     logger.warning(
@@ -728,6 +732,34 @@ class DonationService:
                     "currency": payload.currency,
                 },
             )
+
+        # Confirm sponsorship to the donor via in-app notification + email (PRD 3.11)
+        if self._notification_svc and donor.user:
+            try:
+                from pawguard.modules.notifications.schemas import NotificationSend
+                dog_name = dog.name if hasattr(dog, "name") and dog.name else "your sponsored dog"
+                await self._notification_svc.send_notification(
+                    payload=NotificationSend(
+                        user_id=donor.user_id,
+                        title=f"You're now sponsoring {dog_name}",
+                        body=(
+                            f"Thank you for sponsoring {dog_name} for "
+                            f"{payload.monthly_amount} {payload.currency} per month. "
+                            "You will receive monthly care updates for this dog."
+                        ),
+                        notification_type="sponsorship_created",
+                        action_url=f"/api/v1/donations/sponsorships/{sponsorship.id}",
+                        send_email=True,
+                    ),
+                    user_email=donor.user.email,
+                )
+            except Exception as notif_exc:
+                logger.warning(
+                    "Failed to send sponsorship confirmation for sponsorship %s: %s",
+                    sponsorship.id,
+                    notif_exc,
+                    exc_info=True,
+                )
         return sponsorship
 
     async def pause_sponsorship(

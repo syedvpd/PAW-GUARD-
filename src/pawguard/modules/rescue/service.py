@@ -6,6 +6,8 @@ import secrets
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from logging import getLogger
+from typing import Any
 
 from sqlalchemy.exc import IntegrityError
 
@@ -50,6 +52,8 @@ from pawguard.modules.rescue.schemas import (
 )
 from pawguard.redis.client import RedisClient
 from pawguard.services.audit_service import AuditService
+
+logger = getLogger(__name__)
 
 # Collisions on the 4-digit ticket suffix are rare but possible under high
 # intake volume; retry a bounded number of times before giving up cleanly.
@@ -100,11 +104,25 @@ class RescueService:
         audit_service: AuditService | None = None,
         dog_repo: DogRepository | None = None,
         redis_client: RedisClient | None = None,
+        arq_pool: Any | None = None,
     ) -> None:
         self._repo = repository
         self._audit = audit_service
         self._dog_repo = dog_repo
         self._redis = redis_client
+        self._arq = arq_pool
+
+    async def _email_reporter(self, *, email: str, subject: str, body: str) -> None:
+        """Send a transactional email to a rescue reporter (public reports have
+        no user account, so email directly rather than via in-app notification)."""
+        if self._arq is None or not email:
+            return
+        try:
+            await self._arq.enqueue_job(
+                "send_notification_email_job", to=email, subject=subject, body=body
+            )
+        except Exception as exc:
+            logger.warning("Failed to email rescue reporter %s: %s", email, exc)
 
     async def _publish_dispatch_event(self) -> None:
         if self._redis is not None:
@@ -214,6 +232,18 @@ class RescueService:
             )
 
         await self._publish_dispatch_event()
+
+        if not is_anonymous and reporter_email:
+            await self._email_reporter(
+                email=reporter_email,
+                subject=f"We received your rescue report {ticket_number}",
+                body=(
+                    f"Thank you for reporting an animal emergency. Our rescue "
+                    f"team has received your report ({ticket_number}) and will "
+                    "review it shortly. You can track its status on the PawGuard "
+                    "portal using the ticket number."
+                ),
+            )
         return res
 
 

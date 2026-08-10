@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import UTC, datetime
+from logging import getLogger
 
 from pawguard.core.config import get_settings
 from pawguard.core.exceptions import (
@@ -16,6 +17,7 @@ from pawguard.core.responses import PaginationMeta
 from pawguard.core.search import SortParams
 from pawguard.modules.auth.models import AuthAuditEventType
 from pawguard.modules.auth.repository import RoleRepository, UserRoleRepository
+from pawguard.modules.notifications.service import NotificationService
 from pawguard.modules.storage.models import FileFolder, StoredFile
 from pawguard.modules.volunteer.models import (
     ShiftAttendance,
@@ -33,15 +35,50 @@ from pawguard.modules.volunteer.schemas import (
 from pawguard.services.audit_service import AuditService
 from pawguard.services.storage_service import StorageService
 
+logger = getLogger(__name__)
+
 
 class VolunteerService:
     def __init__(
-        self, repository: VolunteerRepository, audit_service: AuditService | None = None
+        self,
+        repository: VolunteerRepository,
+        audit_service: AuditService | None = None,
+        notification_service: NotificationService | None = None,
     ) -> None:
         self._repo = repository
         self._audit = audit_service
+        self._notification_svc = notification_service
         self._roles = RoleRepository(repository._session)
         self._user_roles = UserRoleRepository(repository._session)
+
+    async def _notify_volunteer(
+        self,
+        profile: VolunteerProfile,
+        *,
+        title: str,
+        body: str,
+        notification_type: str,
+        action_url: str | None = None,
+    ) -> None:
+        if self._notification_svc is None or profile.user is None:
+            return
+        try:
+            from pawguard.modules.notifications.schemas import NotificationSend
+            await self._notification_svc.send_notification(
+                payload=NotificationSend(
+                    user_id=profile.user_id,
+                    title=title,
+                    body=body,
+                    notification_type=notification_type,
+                    action_url=action_url,
+                    send_email=True,
+                ),
+                user_email=profile.user.email,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to notify volunteer %s: %s", profile.id, exc, exc_info=True
+            )
 
     async def apply_to_volunteer(
         self,
@@ -84,6 +121,18 @@ class VolunteerService:
                     "user_id": str(user_id),
                 },
             )
+
+        await self._notify_volunteer(
+            res,
+            title="Volunteer application received",
+            body=(
+                "Thank you for applying to volunteer with PawGuard. Our "
+                "coordinator will review your application and contact you "
+                "with the next steps."
+            ),
+            notification_type="volunteer_applied",
+            action_url="/volunteers/my-profile",
+        )
         return res
 
     async def update_profile(
@@ -110,6 +159,19 @@ class VolunteerService:
         res = await self._repo.get_profile_by_id(profile_id)
         if res is None:
             raise NotFoundError("Volunteer profile not found after update.")
+
+        if res.status == VolunteerStatus.ACTIVE and not was_active:
+            await self._notify_volunteer(
+                res,
+                title="Welcome to the PawGuard volunteer team!",
+                body=(
+                    "Congratulations! Your volunteer application has been "
+                    "approved. You can now sign up for shifts in the volunteer "
+                    "portal."
+                ),
+                notification_type="volunteer_approved",
+                action_url="/volunteers/my-profile",
+            )
         return res
 
     async def get_profile(self, profile_id: uuid.UUID) -> VolunteerProfile:

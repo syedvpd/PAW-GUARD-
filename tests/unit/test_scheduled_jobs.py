@@ -12,7 +12,7 @@ import pytest
 
 import pawguard
 from pawguard.core.payments import PaymentGatewayError
-from pawguard.modules.notifications.schemas import NotificationCreate
+from pawguard.modules.notifications.schemas import NotificationCreate, NotificationSend
 from pawguard.workers.jobs.scheduled_jobs import (
     _staff_user_ids,
     check_inventory_expiry,
@@ -215,9 +215,9 @@ class TestScheduledJobs:
 
         await post_adoption_followups({})
 
-        assert mock_notif.create_notification.call_count >= 1
-        payload = mock_notif.create_notification.call_args.kwargs["payload"]
-        assert isinstance(payload, NotificationCreate)
+        assert mock_notif.send_notification.call_count >= 1
+        payload = mock_notif.send_notification.call_args.kwargs["payload"]
+        assert isinstance(payload, NotificationSend)
         assert payload.user_id == adopter_id
         assert "Day Post-Adoption Follow-Up" in payload.title
 
@@ -310,9 +310,9 @@ class TestScheduledJobs:
 
         await send_post_service_feedback_surveys({})
 
-        assert mock_notif.create_notification.call_count == 1
-        payload = mock_notif.create_notification.call_args.kwargs["payload"]
-        assert isinstance(payload, NotificationCreate)
+        assert mock_notif.send_notification.call_count == 1
+        payload = mock_notif.send_notification.call_args.kwargs["payload"]
+        assert isinstance(payload, NotificationSend)
         assert payload.user_id == adoption.adopter_id
         assert payload.notification_type == "feedback_survey"
         assert str(adoption.id) in payload.action_url
@@ -372,8 +372,8 @@ class TestScheduledJobs:
 
         await send_post_service_feedback_surveys({})
 
-        assert mock_notif.create_notification.call_count == 1
-        payload = mock_notif.create_notification.call_args.kwargs["payload"]
+        assert mock_notif.send_notification.call_count == 1
+        payload = mock_notif.send_notification.call_args.kwargs["payload"]
         assert payload.user_id == adoption_new.adopter_id
 
     @pytest.mark.asyncio
@@ -398,7 +398,7 @@ class TestScheduledJobs:
 
         await send_post_service_feedback_surveys({})
 
-        mock_notif.create_notification.assert_not_called()
+        mock_notif.send_notification.assert_not_called()
 
     @pytest.mark.asyncio
     @patch("pawguard.workers.jobs.scheduled_jobs.get_payment_gateway")
@@ -444,6 +444,6 @@ class TestScheduledJobs:
         next_date = mock_repo.advance_charge_date.call_args[0][1]
         assert next_date == date_type(2026, 2, 28)
 
-        payload = mock_notif.create_notification.call_args.kwargs["payload"]
-        assert isinstance(payload, NotificationCreate)
+        payload = mock_notif.send_notification.call_args.kwargs["payload"]
+        assert isinstance(payload, NotificationSend)
         assert payload.notification_type == "sponsorship_charge"

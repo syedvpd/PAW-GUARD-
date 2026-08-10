@@ -28,6 +28,7 @@ from pawguard.modules.adoption.schemas import (
 from pawguard.modules.auth.models import AuthAuditEventType
 from pawguard.modules.dog.models import DogProfile, DogStatus
 from pawguard.modules.dog.repository import DogRepository
+from pawguard.modules.notifications.service import NotificationService
 from pawguard.modules.shelter.repository import ShelterRepository
 from pawguard.modules.shelter.schemas import NearbyShelterResponse
 from pawguard.modules.storage.models import FileFolder, StoredFile
@@ -69,6 +70,7 @@ class AdoptionService:
         storage_service: StorageService | None = None,
         redis_client: RedisClient | None = None,
         shelter_repo: ShelterRepository | None = None,
+        notification_service: NotificationService | None = None,
     ) -> None:
         self._repo = repository
         self._dog_repo = dog_repo
@@ -76,7 +78,42 @@ class AdoptionService:
         self._audit = audit_service
         self._storage = storage_service
         self._shelter_repo = shelter_repo
+        self._notification_svc = notification_service
 
+
+
+    async def _notify_adopter(
+        self,
+        application: AdoptionApplication,
+        *,
+        title: str,
+        body: str,
+        notification_type: str,
+        action_url: str | None = None,
+    ) -> None:
+        """Send the adopter an in-app notification and email about their application."""
+        if self._notification_svc is None or application.adopter is None:
+            return
+        try:
+            from pawguard.modules.notifications.schemas import NotificationSend
+            await self._notification_svc.send_notification(
+                payload=NotificationSend(
+                    user_id=application.adopter_id,
+                    title=title,
+                    body=body,
+                    notification_type=notification_type,
+                    action_url=action_url,
+                    send_email=True,
+                ),
+                user_email=application.adopter.email,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to notify adopter for application %s: %s",
+                application.id,
+                exc,
+                exc_info=True,
+            )
 
 
     async def _generate_agreement(self, application: AdoptionApplication) -> None:
@@ -222,6 +259,18 @@ class AdoptionService:
                     user_agent="",
                     metadata={"adoption_id": str(res.id), "dog_id": str(payload.dog_id)},
                 )
+
+            await self._notify_adopter(
+                res,
+                title=f"Adoption application received for {dog.name}",
+                body=(
+                    "Thank you for your interest in adopting "
+                    f"{dog.name}. Our adoption team will review your "
+                    "application and contact you for the next steps."
+                ),
+                notification_type="adoption_submitted",
+                action_url="/adoptions/my-applications",
+            )
 
             return res
         finally:
@@ -394,6 +443,42 @@ class AdoptionService:
             res = await self._repo.get_by_id(app_id)
             if res is None:
                 raise NotFoundError("Adoption application not found after status update.")
+
+        dog_name = res.dog.name if res.dog is not None else "your adopted dog"
+        if status == AdoptionStatus.APPROVED and old_status != status:
+            await self._notify_adopter(
+                res,
+                title=f"Great news - your adoption of {dog_name} is approved!",
+                body=(
+                    f"Congratulations! Your adoption of {dog_name} has been "
+                    "approved. Our team will contact you to schedule the handover."
+                ),
+                notification_type="adoption_approved",
+                action_url="/adoptions/my-applications",
+            )
+        elif status == AdoptionStatus.REJECTED and old_status != status:
+            await self._notify_adopter(
+                res,
+                title=f"Update on your adoption application for {dog_name}",
+                body=(
+                    f"Thank you for applying to adopt {dog_name}. After careful "
+                    "review, we are unable to proceed with your application at "
+                    "this time. Please reach out if you have any questions."
+                ),
+                notification_type="adoption_rejected",
+                action_url="/adoptions/my-applications",
+            )
+        elif status == AdoptionStatus.COMPLETED and old_status != status:
+            await self._notify_adopter(
+                res,
+                title=f"Welcome {dog_name} to your family!",
+                body=(
+                    f"{dog_name} has been officially adopted by you. Thank you "
+                    "for giving a rescued dog a loving home!"
+                ),
+                notification_type="adoption_completed",
+                action_url="/adoptions/my-applications",
+            )
 
         return res
 

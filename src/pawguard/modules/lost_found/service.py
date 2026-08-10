@@ -4,6 +4,7 @@ import math
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from logging import getLogger
 from typing import Any
 
 from arq import ArqRedis
@@ -32,6 +33,8 @@ from pawguard.modules.lost_found.schemas import (
     ReportMatchResponse,
 )
 from pawguard.services.audit_service import AuditService
+
+logger = getLogger(__name__)
 
 
 class LostFoundService:
@@ -568,6 +571,7 @@ class LostFoundService:
                     status=MatchStatus.PENDING,
                 )
                 await self._repo.create_match(match)
+                await self._notify_match(match)
 
     async def _run_matching_for_found(self, found: FoundReport) -> None:
         active_losts = await self._repo.list_lost_reports(status=ReportStatus.ACTIVE)
@@ -584,3 +588,35 @@ class LostFoundService:
                     status=MatchStatus.PENDING,
                 )
                 await self._repo.create_match(match)
+                await self._notify_match(match)
+
+    async def _notify_match(self, match: ReportMatch) -> None:
+        """Email the lost-pet owner and the found-pet reporter about a possible match."""
+        if self._arq is None:
+            return
+        lost = match.lost_report
+        found = match.found_report
+        pet_name = lost.pet_name if lost.pet_name else "your pet"
+        subject = f"Possible match for {pet_name}!"
+        body = (
+            f"We found a possible match for {pet_name} (match confidence "
+            f"{match.confidence_score:.0f}%). Our team is reviewing it - "
+            "please check the PawGuard lost & found portal for details."
+        )
+        try:
+            if lost.user is not None and lost.user.email:
+                await self._arq.enqueue_job(
+                    "send_notification_email_job",
+                    to=lost.user.email,
+                    subject=subject,
+                    body=body,
+                )
+            if found.user is not None and found.user.email:
+                await self._arq.enqueue_job(
+                    "send_notification_email_job",
+                    to=found.user.email,
+                    subject=subject,
+                    body=body,
+                )
+        except Exception as exc:
+            logger.warning("Failed to notify lost/found match %s: %s", match.id, exc)

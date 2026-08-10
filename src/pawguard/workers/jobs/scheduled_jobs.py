@@ -29,9 +29,19 @@ from pawguard.modules.inventory.models import InventoryItem
 from pawguard.modules.medical.models import VaccinationRecord
 from pawguard.modules.notifications.models import Notification
 from pawguard.modules.notifications.repository import NotificationRepository
-from pawguard.modules.notifications.schemas import NotificationCreate
+from pawguard.modules.notifications.schemas import NotificationCreate, NotificationSend
 from pawguard.modules.notifications.service import NotificationService
 from pawguard.workers.jobs.retry import retry_defer
+
+
+def _notification_service(
+    session: AsyncSession, ctx: dict[str, object]
+) -> NotificationService:
+    """NotificationService wired to the worker's ARQ pool so `send_email=True`
+    notifications actually enqueue email jobs. The ARQ worker puts its Redis
+    pool on ctx['redis']; absent (e.g. in tests) it degrades to in-app only."""
+    pool = ctx.get("redis")
+    return NotificationService(repository=NotificationRepository(session), arq_pool=pool)
 
 
 async def _staff_user_ids(
@@ -184,7 +194,7 @@ async def post_adoption_followups(ctx: dict[str, object]) -> None:
     intervals = [30, 90, 180]
 
     async with AsyncSessionLocal() as session:
-        notification_svc = NotificationService(repository=NotificationRepository(session))
+        notification_svc = _notification_service(session, ctx)
         for days in intervals:
             target = now - timedelta(days=days)
             start = target.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -203,7 +213,7 @@ async def post_adoption_followups(ctx: dict[str, object]) -> None:
             adoptions = result.scalars().all()
 
             for adoption in adoptions:
-                payload = NotificationCreate(
+                payload = NotificationSend(
                     user_id=adoption.adopter_id,
                     title=f"{days}-Day Post-Adoption Follow-Up",
                     body=(
@@ -213,8 +223,12 @@ async def post_adoption_followups(ctx: dict[str, object]) -> None:
                         f"from you!"
                     ),
                     notification_type="follow_up",
+                    send_email=True,
                 )
-                await notification_svc.create_notification(payload=payload)
+                await notification_svc.send_notification(
+                    payload=payload,
+                    user_email=adoption.adopter.email if adoption.adopter else None,
+                )
         await session.commit()
 
 
@@ -223,7 +237,7 @@ async def process_sponsorship_charges(ctx: dict[str, object]) -> None:
     today = date.today()
 
     try:
-        await _run_sponsorship_charges(today)
+        await _run_sponsorship_charges(today, ctx)
     except (OperationalError, InterfaceError) as exc:
         # Transient DB connectivity blips: nothing has committed (the whole
         # batch commits once at the end), so a scheduled retry is idempotent.
@@ -244,11 +258,10 @@ def _next_month_clamped(current: date) -> date:
     return date(next_year, next_month, day)
 
 
-async def _run_sponsorship_charges(today: date) -> None:
+async def _run_sponsorship_charges(today: date, ctx: dict[str, object]) -> None:
     async with AsyncSessionLocal() as session:
         donation_repo = DonationRepository(session)
-        notification_repo = NotificationRepository(session)
-        notification_svc = NotificationService(repository=notification_repo)
+        notification_svc = _notification_service(session, ctx)
 
         sponsorships = await donation_repo.get_due_sponsorships(today)
         if not sponsorships:
@@ -302,7 +315,7 @@ async def _run_sponsorship_charges(today: date) -> None:
             await donation_repo.advance_charge_date(sp.id, next_date)
 
             if sp.donor and sp.donor.user_id:
-                n_payload = NotificationCreate(
+                n_payload = NotificationSend(
                     user_id=sp.donor.user_id,
                     title="Monthly Sponsorship Charge",
                     body=(
@@ -311,8 +324,12 @@ async def _run_sponsorship_charges(today: date) -> None:
                         f"your payment has been received."
                     ),
                     notification_type="sponsorship_charge",
+                    send_email=True,
                 )
-                await notification_svc.create_notification(payload=n_payload)
+                await notification_svc.send_notification(
+                    payload=n_payload,
+                    user_email=sp.donor.user.email if sp.donor.user else None,
+                )
 
         await session.commit()
 
@@ -372,18 +389,17 @@ async def process_recurring_donation_charges(ctx: dict[str, object]) -> None:
     today = date.today()
 
     try:
-        await _run_recurring_charges(today)
+        await _run_recurring_charges(today, ctx)
     except (OperationalError, InterfaceError) as exc:
         # Transient DB connectivity blips: nothing has committed (the whole
         # batch commits once at the end), so a scheduled retry is idempotent.
         raise Retry(defer=retry_defer(ctx)) from exc
 
 
-async def _run_recurring_charges(today: date) -> None:
+async def _run_recurring_charges(today: date, ctx: dict[str, object]) -> None:
     async with AsyncSessionLocal() as session:
         donation_repo = DonationRepository(session)
-        notification_repo = NotificationRepository(session)
-        notification_svc = NotificationService(repository=notification_repo)
+        notification_svc = _notification_service(session, ctx)
 
         subscriptions = await donation_repo.get_due_recurring_subscriptions(today)
         if not subscriptions:
@@ -436,7 +452,7 @@ async def _run_recurring_charges(today: date) -> None:
             await donation_repo.advance_recurring_charge_date(sub.id, next_date)
 
             if sub.donor and sub.donor.user_id:
-                n_payload = NotificationCreate(
+                n_payload = NotificationSend(
                     user_id=sub.donor.user_id,
                     title="Monthly Recurring Donation",
                     body=(
@@ -445,8 +461,12 @@ async def _run_recurring_charges(today: date) -> None:
                         f"has been received."
                     ),
                     notification_type="recurring_charge",
+                    send_email=True,
                 )
-                await notification_svc.create_notification(payload=n_payload)
+                await notification_svc.send_notification(
+                    payload=n_payload,
+                    user_email=sub.donor.user.email if sub.donor.user else None,
+                )
 
         await session.commit()
 
@@ -462,9 +482,7 @@ async def send_post_service_feedback_surveys(ctx: dict[str, object]) -> None:
     window_start = window_end - timedelta(days=7)
 
     async with AsyncSessionLocal() as session:
-        notification_svc = NotificationService(
-            repository=NotificationRepository(session)
-        )
+        notification_svc = _notification_service(session, ctx)
 
         result = await session.execute(
             select(AdoptionApplication).where(
@@ -513,7 +531,7 @@ async def send_post_service_feedback_surveys(ctx: dict[str, object]) -> None:
         for adoption in adoptions:
             if adoption.id in feedback_ids or adoption.id in surveyed_ids:
                 continue
-            payload = NotificationCreate(
+            payload = NotificationSend(
                 user_id=adoption.adopter_id,
                 title="We'd Love Your Feedback",
                 body=(
@@ -525,8 +543,12 @@ async def send_post_service_feedback_surveys(ctx: dict[str, object]) -> None:
                     f"/api/v1/grievance/feedback?"
                     f"adoption_application_id={adoption.id}"
                 ),
+                send_email=True,
             )
-            await notification_svc.create_notification(payload=payload)
+            await notification_svc.send_notification(
+                payload=payload,
+                user_email=adoption.adopter.email if adoption.adopter else None,
+            )
 
         await session.commit()
 

@@ -4,7 +4,7 @@ Routers only validate and call services (RULE-004).
 """
 
 import uuid
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +24,8 @@ from pawguard.db.session import get_db
 from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.rbac import has_permission, require_permission
+from pawguard.modules.notifications.repository import NotificationRepository
+from pawguard.modules.notifications.service import NotificationService
 from pawguard.modules.storage.schemas import DownloadUrlResponse
 from pawguard.modules.volunteer.models import VolunteerStatus
 from pawguard.modules.volunteer.repository import VolunteerRepository
@@ -39,6 +41,7 @@ from pawguard.modules.volunteer.schemas import (
 from pawguard.modules.volunteer.service import VolunteerService
 from pawguard.services.audit_service import AuditService
 from pawguard.services.storage_service import StorageService
+from pawguard.workers.pool import get_arq_pool
 
 router = APIRouter(prefix="/volunteers", tags=["volunteers"])
 
@@ -46,9 +49,12 @@ router = APIRouter(prefix="/volunteers", tags=["volunteers"])
 def get_volunteer_service(
     db: AsyncSession = Depends(get_db),
     audit: AuditService = Depends(get_audit_service),
+    arq_pool: Any = Depends(get_arq_pool),
 ) -> VolunteerService:
     repo = VolunteerRepository(db)
-    return VolunteerService(repo, audit_service=audit)
+    notification_repo = NotificationRepository(db)
+    notification_svc = NotificationService(repository=notification_repo, arq_pool=arq_pool)
+    return VolunteerService(repo, audit_service=audit, notification_service=notification_svc)
 
 
 @router.post(

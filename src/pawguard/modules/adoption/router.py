@@ -5,6 +5,7 @@ Routers only validate and call services (RULE-004).
 
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,12 +44,15 @@ from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.rbac import has_permission, require_permission
 from pawguard.modules.dog.repository import DogRepository
+from pawguard.modules.notifications.repository import NotificationRepository
+from pawguard.modules.notifications.service import NotificationService
 from pawguard.modules.shelter.repository import ShelterRepository
 from pawguard.modules.shelter.schemas import NearbyShelterResponse
 from pawguard.modules.storage.schemas import DownloadUrlResponse
 from pawguard.redis.client import RedisClient, get_redis
 from pawguard.services.audit_service import AuditService
 from pawguard.services.storage_service import StorageService
+from pawguard.workers.pool import get_arq_pool
 
 router = APIRouter(prefix="/adoptions", tags=["adoptions"])
 
@@ -58,14 +62,17 @@ def get_adoption_service(
     db: AsyncSession = Depends(get_db),
     redis: RedisClient = Depends(get_redis),
     audit: AuditService = Depends(get_audit_service),
+    arq_pool: Any = Depends(get_arq_pool),
 ) -> AdoptionService:
     repo = AdoptionRepository(db)
     dog_repo = DogRepository(db)
     shelter_repo = ShelterRepository(db)
     storage_svc = StorageService()
+    notification_repo = NotificationRepository(db)
+    notification_svc = NotificationService(repository=notification_repo, arq_pool=arq_pool)
     return AdoptionService(
         repo, dog_repo, redis_client=redis, audit_service=audit, storage_service=storage_svc,
-        shelter_repo=shelter_repo,
+        shelter_repo=shelter_repo, notification_service=notification_svc,
     )
 
 

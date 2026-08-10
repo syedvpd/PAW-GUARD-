@@ -72,6 +72,7 @@ from pawguard.modules.notifications.service import NotificationService
 from pawguard.modules.storage.schemas import DownloadUrlResponse
 from pawguard.services.audit_service import AuditService
 from pawguard.services.storage_service import StorageService
+from pawguard.workers.pool import get_arq_pool
 
 router = APIRouter(prefix="/donations", tags=["donations"])
 
@@ -113,11 +114,12 @@ def _mask_donor_pii(
 def get_donation_service(
     db: AsyncSession = Depends(get_db),
     audit: AuditService = Depends(get_audit_service),
+    arq_pool: Any = Depends(get_arq_pool),
 ) -> DonationService:
     repo = DonationRepository(db)
     dog_repo = DogRepository(db)
     notification_repo = NotificationRepository(db)
-    notification_svc = NotificationService(repository=notification_repo)
+    notification_svc = NotificationService(repository=notification_repo, arq_pool=arq_pool)
     storage_svc = StorageService()
     try:
         gateway = get_payment_gateway()

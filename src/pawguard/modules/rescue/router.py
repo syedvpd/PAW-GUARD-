@@ -4,6 +4,7 @@ Routers only validate and call services (RULE-004).
 """
 
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,6 +48,7 @@ from pawguard.modules.rescue.schemas import (
 from pawguard.modules.rescue.service import RescueService
 from pawguard.redis.client import RedisClient, get_redis
 from pawguard.services.audit_service import AuditService
+from pawguard.workers.pool import get_arq_pool
 
 router = APIRouter(prefix="/rescue", tags=["rescue"])
 
@@ -61,10 +63,13 @@ def get_rescue_service(
     db: AsyncSession = Depends(get_db),
     redis: RedisClient = Depends(get_redis),
     audit: AuditService = Depends(get_audit_service),
+    arq_pool: Any = Depends(get_arq_pool),
 ) -> RescueService:
     repo = RescueRepository(db)
     dog_repo = DogRepository(db)
-    return RescueService(repo, audit_service=audit, dog_repo=dog_repo, redis_client=redis)
+    return RescueService(
+        repo, audit_service=audit, dog_repo=dog_repo, redis_client=redis, arq_pool=arq_pool
+    )
 
 
 
