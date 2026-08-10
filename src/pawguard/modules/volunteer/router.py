@@ -114,6 +114,24 @@ async def soft_delete_profile(
 
 
 @router.get(
+    "/shifts",
+    response_model=PaginatedResponse[VolunteerShiftResponse],
+    dependencies=[Depends(require_permission("public:read"))],
+)
+async def list_shifts(
+    params: PageParams = Depends(page_params),
+    role_name: str | None = Query(None, description="Filter by shift role"),
+    sort: SortParams = Depends(sort_params),
+    service: VolunteerService = Depends(get_volunteer_service),
+) -> PaginatedResponse[VolunteerShiftResponse]:
+    shifts, meta = await service.list_shifts(page_params=params, role_name=role_name, sort=sort)
+    return PaginatedResponse(
+        data=[VolunteerShiftResponse.model_validate(s) for s in shifts],
+        meta=meta,
+    )
+
+
+@router.get(
     "/{profile_id}",
     response_model=ApiResponse[VolunteerProfileResponse],
 )
@@ -195,24 +213,6 @@ async def check_out(
     return ApiResponse(
         data=ShiftAttendanceResponse.model_validate(attendance),
         message="Checked out from shift.",
-    )
-
-
-@router.get(
-    "/shifts",
-    response_model=PaginatedResponse[VolunteerShiftResponse],
-    dependencies=[Depends(require_permission("public:read"))],
-)
-async def list_shifts(
-    params: PageParams = Depends(page_params),
-    role_name: str | None = Query(None, description="Filter by shift role"),
-    sort: SortParams = Depends(sort_params),
-    service: VolunteerService = Depends(get_volunteer_service),
-) -> PaginatedResponse[VolunteerShiftResponse]:
-    shifts, meta = await service.list_shifts(page_params=params, role_name=role_name, sort=sort)
-    return PaginatedResponse(
-        data=[VolunteerShiftResponse.model_validate(s) for s in shifts],
-        meta=meta,
     )
 
 

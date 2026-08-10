@@ -91,6 +91,22 @@ async def list_tickets(
 
 
 @router.get(
+    "/feedback",
+    response_model=PaginatedResponse[ServiceFeedbackResponse],
+    dependencies=[Depends(require_permission("grievance:read"))],
+)
+async def list_feedback(
+    params: PageParams = Depends(page_params),
+    service: GrievanceService = Depends(get_grievance_service),
+) -> PaginatedResponse[ServiceFeedbackResponse]:
+    feedback, meta = await service.list_feedback(page_params=params)
+    return PaginatedResponse(
+        data=[ServiceFeedbackResponse.model_validate(f) for f in feedback],
+        meta=meta,
+    )
+
+
+@router.get(
     "/{ticket_id}",
     response_model=ApiResponse[GrievanceResponse],
     dependencies=[Depends(require_permission("grievance:read"))],
@@ -247,22 +263,6 @@ async def submit_feedback(
     return ApiResponse(
         data=ServiceFeedbackResponse.model_validate(fb),
         message="Feedback submitted.",
-    )
-
-
-@router.get(
-    "/feedback",
-    response_model=PaginatedResponse[ServiceFeedbackResponse],
-    dependencies=[Depends(require_permission("grievance:read"))],
-)
-async def list_feedback(
-    params: PageParams = Depends(page_params),
-    service: GrievanceService = Depends(get_grievance_service),
-) -> PaginatedResponse[ServiceFeedbackResponse]:
-    feedback, meta = await service.list_feedback(page_params=params)
-    return PaginatedResponse(
-        data=[ServiceFeedbackResponse.model_validate(f) for f in feedback],
-        meta=meta,
     )
 
 

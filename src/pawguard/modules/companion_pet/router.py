@@ -88,6 +88,37 @@ async def list_pets(
 
 
 @router.get(
+    "/clinics",
+    response_model=PaginatedResponse[VetClinicResponse],
+    summary="List active veterinary clinics",
+)
+async def list_clinics(
+    page: PageParams = Depends(page_params),
+    sort: SortParams = Depends(sort_params),
+    search: str | None = Query(None, max_length=128),
+    service: CompanionPetService = Depends(get_companion_pet_service),
+) -> PaginatedResponse[VetClinicResponse]:
+    return await service.list_clinics(page, sort, search)
+
+
+@router.get(
+    "/appointments",
+    response_model=PaginatedResponse[PetAppointmentResponse],
+    dependencies=[Depends(require_permission("appointment:read"))],
+    summary="List authorized veterinary appointments",
+)
+async def list_appointments(
+    page: PageParams = Depends(page_params),
+    sort: SortParams = Depends(sort_params),
+    clinic_id: uuid.UUID | None = Query(None),
+    pet_id: uuid.UUID | None = Query(None),
+    current_user: CurrentUser = Depends(get_current_user),
+    service: CompanionPetService = Depends(get_companion_pet_service),
+) -> PaginatedResponse[PetAppointmentResponse]:
+    return await service.list_appointments(page, sort, current_user, clinic_id, pet_id)
+
+
+@router.get(
     "/{pet_id}",
     response_model=ApiResponse[CompanionPetResponse],
     dependencies=[Depends(require_permission("companion_pet:read"))],
@@ -307,20 +338,6 @@ async def scan_safety_tag(
     )
 
 
-@router.get(
-    "/clinics",
-    response_model=PaginatedResponse[VetClinicResponse],
-    summary="List active veterinary clinics",
-)
-async def list_clinics(
-    page: PageParams = Depends(page_params),
-    sort: SortParams = Depends(sort_params),
-    search: str | None = Query(None, max_length=128),
-    service: CompanionPetService = Depends(get_companion_pet_service),
-) -> PaginatedResponse[VetClinicResponse]:
-    return await service.list_clinics(page, sort, search)
-
-
 @router.post(
     "/clinics",
     response_model=ApiResponse[VetClinicResponse],
@@ -407,23 +424,6 @@ async def create_appointment(
         payload, current_user, resolve_client_ip(request)
     )
     return ApiResponse(data=PetAppointmentResponse.model_validate(appointment))
-
-
-@router.get(
-    "/appointments",
-    response_model=PaginatedResponse[PetAppointmentResponse],
-    dependencies=[Depends(require_permission("appointment:read"))],
-    summary="List authorized veterinary appointments",
-)
-async def list_appointments(
-    page: PageParams = Depends(page_params),
-    sort: SortParams = Depends(sort_params),
-    clinic_id: uuid.UUID | None = Query(None),
-    pet_id: uuid.UUID | None = Query(None),
-    current_user: CurrentUser = Depends(get_current_user),
-    service: CompanionPetService = Depends(get_companion_pet_service),
-) -> PaginatedResponse[PetAppointmentResponse]:
-    return await service.list_appointments(page, sort, current_user, clinic_id, pet_id)
 
 
 @router.get(
