@@ -1,0 +1,1111 @@
+[
+  {
+    "module": "rescue",
+    "test": "public media upload url",
+    "method": "POST",
+    "path": "/api/v1/public/rescue/media-upload-url",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": ""
+  },
+  {
+    "module": "rescue",
+    "test": "public report",
+    "method": "POST",
+    "path": "/api/v1/public/rescue/report",
+    "status": 201,
+    "expected": 201,
+    "ok": true,
+    "error": "",
+    "id": "0a2f227b-3ca8-4215-a585-a3e2ee591841"
+  },
+  {
+    "module": "rescue",
+    "test": "public status lookup",
+    "method": "GET",
+    "path": "/api/v1/rescue/status",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": ""
+  },
+  {
+    "module": "rescue",
+    "test": "staff media upload url",
+    "method": "POST",
+    "path": "/api/v1/rescue/media-upload-url",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": ""
+  },
+  {
+    "module": "rescue",
+    "test": "staff report",
+    "method": "POST",
+    "path": "/api/v1/rescue/report",
+    "status": 201,
+    "expected": 201,
+    "ok": true,
+    "error": "",
+    "id": "c94a7d5f-a8fa-4e68-be29-b2bda1f093cf"
+  },
+  {
+    "module": "rescue",
+    "test": "list",
+    "method": "GET",
+    "path": "/api/v1/rescue",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "rescue",
+    "test": "get by id",
+    "method": "GET",
+    "path": "/api/v1/rescue/c94a7d5f-a8fa-4e68-be29-b2bda1f093cf",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "c94a7d5f-a8fa-4e68-be29-b2bda1f093cf"
+  },
+  {
+    "module": "rescue",
+    "test": "verify",
+    "method": "POST",
+    "path": "/api/v1/rescue/c94a7d5f-a8fa-4e68-be29-b2bda1f093cf/verify",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "c94a7d5f-a8fa-4e68-be29-b2bda1f093cf"
+  },
+  {
+    "module": "rescue",
+    "test": "dispatch",
+    "method": "POST",
+    "path": "/api/v1/rescue/c94a7d5f-a8fa-4e68-be29-b2bda1f093cf/dispatch",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "c94a7d5f-a8fa-4e68-be29-b2bda1f093cf"
+  },
+  {
+    "module": "rescue",
+    "test": "escalate",
+    "method": "POST",
+    "path": "/api/v1/rescue/c94a7d5f-a8fa-4e68-be29-b2bda1f093cf/escalate",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "c94a7d5f-a8fa-4e68-be29-b2bda1f093cf"
+  },
+  {
+    "module": "rescue",
+    "test": "mark located",
+    "method": "POST",
+    "path": "/api/v1/rescue/c94a7d5f-a8fa-4e68-be29-b2bda1f093cf/located",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "c94a7d5f-a8fa-4e68-be29-b2bda1f093cf"
+  },
+  {
+    "module": "rescue",
+    "test": "mark secured",
+    "method": "POST",
+    "path": "/api/v1/rescue/c94a7d5f-a8fa-4e68-be29-b2bda1f093cf/secured",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "c94a7d5f-a8fa-4e68-be29-b2bda1f093cf"
+  },
+  {
+    "module": "rescue",
+    "test": "mark admitted",
+    "method": "POST",
+    "path": "/api/v1/rescue/c94a7d5f-a8fa-4e68-be29-b2bda1f093cf/admitted",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "c94a7d5f-a8fa-4e68-be29-b2bda1f093cf"
+  },
+  {
+    "module": "rescue",
+    "test": "update dispatch",
+    "method": "PATCH",
+    "path": "/api/v1/rescue/dispatch/0f2ce191-632d-4a4d-b0d1-1e15d09c26e0",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "0f2ce191-632d-4a4d-b0d1-1e15d09c26e0"
+  },
+  {
+    "module": "rescue",
+    "test": "delete dispatch",
+    "method": "DELETE",
+    "path": "/api/v1/rescue/dispatch/0f2ce191-632d-4a4d-b0d1-1e15d09c26e0",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "rescue",
+    "test": "dispatches list",
+    "method": "GET",
+    "path": "/api/v1/rescue/dispatches",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "rescue",
+    "test": "delete",
+    "method": "DELETE",
+    "path": "/api/v1/rescue/c94a7d5f-a8fa-4e68-be29-b2bda1f093cf",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "rescue",
+    "test": "get after delete (404)",
+    "method": "GET",
+    "path": "/api/v1/rescue/c94a7d5f-a8fa-4e68-be29-b2bda1f093cf",
+    "status": 404,
+    "expected": [
+      404,
+      200
+    ],
+    "ok": true,
+    "error": "Rescue request not found."
+  },
+  {
+    "module": "rescue",
+    "test": "bulk-request create",
+    "method": "POST",
+    "path": "/api/v1/rescue/report",
+    "status": 201,
+    "expected": 201,
+    "ok": true,
+    "error": "",
+    "id": "47a6439b-c097-415a-af3e-8f13c1317e4b"
+  },
+  {
+    "module": "rescue",
+    "test": "bulk status-update",
+    "method": "POST",
+    "path": "/api/v1/rescue/bulk/status-update",
+    "status": 422,
+    "expected": [
+      200,
+      400,
+      409
+    ],
+    "ok": false,
+    "error": "Bulk status 'reported' is not supported."
+  },
+  {
+    "module": "rescue",
+    "test": "bulk delete",
+    "method": "POST",
+    "path": "/api/v1/rescue/bulk/delete",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": ""
+  },
+  {
+    "module": "adoption",
+    "test": "list",
+    "method": "GET",
+    "path": "/api/v1/adoptions",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "adoption",
+    "test": "my applications",
+    "method": "GET",
+    "path": "/api/v1/adoptions/my",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "adoption",
+    "test": "nearby shelters",
+    "method": "GET",
+    "path": "/api/v1/adoptions/nearby-shelters",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "adoption",
+    "test": "pre-clearance for adoption",
+    "method": "POST",
+    "path": "/api/v1/medical/clearance/b75cc2f5-d857-422a-b8a0-d7ae54feff47",
+    "status": 200,
+    "expected": [
+      200,
+      201
+    ],
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "adoption",
+    "test": "apply",
+    "method": "POST",
+    "path": "/api/v1/adoptions",
+    "status": 201,
+    "expected": 201,
+    "ok": true,
+    "error": "",
+    "id": "ce3f5299-4612-48b1-aa6e-bc15287a069d"
+  },
+  {
+    "module": "adoption",
+    "test": "get",
+    "method": "GET",
+    "path": "/api/v1/adoptions/ce3f5299-4612-48b1-aa6e-bc15287a069d",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "ce3f5299-4612-48b1-aa6e-bc15287a069d"
+  },
+  {
+    "module": "adoption",
+    "test": "update",
+    "method": "PUT",
+    "path": "/api/v1/adoptions/ce3f5299-4612-48b1-aa6e-bc15287a069d",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "ce3f5299-4612-48b1-aa6e-bc15287a069d"
+  },
+  {
+    "module": "adoption",
+    "test": "status update",
+    "method": "PATCH",
+    "path": "/api/v1/adoptions/ce3f5299-4612-48b1-aa6e-bc15287a069d/status",
+    "status": 200,
+    "expected": [
+      200,
+      400,
+      409
+    ],
+    "ok": true,
+    "error": "",
+    "id": "ce3f5299-4612-48b1-aa6e-bc15287a069d"
+  },
+  {
+    "module": "adoption",
+    "test": "set fee",
+    "method": "PUT",
+    "path": "/api/v1/adoptions/ce3f5299-4612-48b1-aa6e-bc15287a069d/fee",
+    "status": 200,
+    "expected": [
+      200,
+      400
+    ],
+    "ok": true,
+    "error": "",
+    "id": "ce3f5299-4612-48b1-aa6e-bc15287a069d"
+  },
+  {
+    "module": "adoption",
+    "test": "add score",
+    "method": "POST",
+    "path": "/api/v1/adoptions/ce3f5299-4612-48b1-aa6e-bc15287a069d/scores",
+    "status": 201,
+    "expected": 201,
+    "ok": true,
+    "error": "",
+    "id": "c5235a3c-bc97-4316-8034-ca5ffedae625"
+  },
+  {
+    "module": "adoption",
+    "test": "get scores",
+    "method": "GET",
+    "path": "/api/v1/adoptions/ce3f5299-4612-48b1-aa6e-bc15287a069d/scores",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "adoption",
+    "test": "create follow-up",
+    "method": "POST",
+    "path": "/api/v1/adoptions/ce3f5299-4612-48b1-aa6e-bc15287a069d/follow-ups",
+    "status": 201,
+    "expected": [
+      201,
+      400
+    ],
+    "ok": true,
+    "error": "",
+    "id": "77cbdb5c-05ce-4b09-b281-93f8315f5401"
+  },
+  {
+    "module": "adoption",
+    "test": "list follow-ups",
+    "method": "GET",
+    "path": "/api/v1/adoptions/ce3f5299-4612-48b1-aa6e-bc15287a069d/follow-ups",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "adoption",
+    "test": "submit follow-up proof",
+    "method": "POST",
+    "path": "/api/v1/adoptions/ce3f5299-4612-48b1-aa6e-bc15287a069d/follow-ups/77cbdb5c-05ce-4b09-b281-93f8315f5401/proof",
+    "status": 422,
+    "expected": [
+      200,
+      400,
+      404
+    ],
+    "ok": false,
+    "error": "Internal processing error: database entity relations failed to load during serialization."
+  },
+  {
+    "module": "adoption",
+    "test": "agreement",
+    "method": "GET",
+    "path": "/api/v1/adoptions/ce3f5299-4612-48b1-aa6e-bc15287a069d/agreement",
+    "status": 404,
+    "expected": [
+      200,
+      404
+    ],
+    "ok": true,
+    "error": "Agreement not yet generated for this application."
+  },
+  {
+    "module": "adoption",
+    "test": "bulk status-update",
+    "method": "POST",
+    "path": "/api/v1/adoptions/bulk/status-update",
+    "status": 422,
+    "expected": [
+      200,
+      400,
+      409
+    ],
+    "ok": false,
+    "error": "Bulk update to 'approved' is not permitted. These terminal approval states must be applied per-application via update_application so the per-dog exclusivity check runs."
+  },
+  {
+    "module": "adoption",
+    "test": "delete",
+    "method": "DELETE",
+    "path": "/api/v1/adoptions/ce3f5299-4612-48b1-aa6e-bc15287a069d",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "adoption",
+    "test": "bulk delete",
+    "method": "POST",
+    "path": "/api/v1/adoptions/bulk/delete",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": ""
+  },
+  {
+    "module": "foster",
+    "test": "list",
+    "method": "GET",
+    "path": "/api/v1/fosters",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "foster",
+    "test": "apply",
+    "method": "POST",
+    "path": "/api/v1/fosters/apply",
+    "status": 409,
+    "expected": [
+      201,
+      409
+    ],
+    "ok": true,
+    "error": "You have already applied or registered as a foster home."
+  },
+  {
+    "module": "foster",
+    "test": "update profile",
+    "method": "PUT",
+    "path": "/api/v1/fosters/c597375b-ae3b-4217-9d5b-2ba5fcbebc36",
+    "status": 200,
+    "expected": [
+      200,
+      400
+    ],
+    "ok": true,
+    "error": "",
+    "id": "c597375b-ae3b-4217-9d5b-2ba5fcbebc36"
+  },
+  {
+    "module": "foster",
+    "test": "create placement",
+    "method": "POST",
+    "path": "/api/v1/fosters/c597375b-ae3b-4217-9d5b-2ba5fcbebc36/placements",
+    "status": 201,
+    "expected": 201,
+    "ok": true,
+    "error": "",
+    "id": "d9fe1307-a946-4d8d-bba8-169051cad7ef"
+  },
+  {
+    "module": "foster",
+    "test": "log progress",
+    "method": "POST",
+    "path": "/api/v1/fosters/placements/d9fe1307-a946-4d8d-bba8-169051cad7ef/progress",
+    "status": 201,
+    "expected": 201,
+    "ok": true,
+    "error": "",
+    "id": "dbd20f06-3bff-4607-bcc0-22287f6e37a0"
+  },
+  {
+    "module": "foster",
+    "test": "list progress",
+    "method": "GET",
+    "path": "/api/v1/fosters/placements/d9fe1307-a946-4d8d-bba8-169051cad7ef/progress",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "foster",
+    "test": "dispatch supplies",
+    "method": "POST",
+    "path": "/api/v1/fosters/placements/d9fe1307-a946-4d8d-bba8-169051cad7ef/supplies",
+    "status": 201,
+    "expected": 201,
+    "ok": true,
+    "error": "",
+    "id": "e6d594b0-d6b0-411e-b192-b0bdcee47d0b"
+  },
+  {
+    "module": "foster",
+    "test": "list supplies",
+    "method": "GET",
+    "path": "/api/v1/fosters/placements/d9fe1307-a946-4d8d-bba8-169051cad7ef/supplies",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "foster",
+    "test": "return placement",
+    "method": "POST",
+    "path": "/api/v1/fosters/placements/d9fe1307-a946-4d8d-bba8-169051cad7ef/return",
+    "status": 200,
+    "expected": [
+      200,
+      400,
+      409
+    ],
+    "ok": true,
+    "error": "",
+    "id": "d9fe1307-a946-4d8d-bba8-169051cad7ef"
+  },
+  {
+    "module": "foster",
+    "test": "convert-to-adopt (404)",
+    "method": "POST",
+    "path": "/api/v1/fosters/placements/9908372f-27e9-41e6-84d0-76ee2fefe475/convert-to-adopt",
+    "status": 404,
+    "expected": [
+      200,
+      400,
+      404,
+      409
+    ],
+    "ok": true,
+    "error": "Foster placement not found."
+  },
+  {
+    "module": "foster",
+    "test": "delete profile",
+    "method": "DELETE",
+    "path": "/api/v1/fosters/c597375b-ae3b-4217-9d5b-2ba5fcbebc36",
+    "status": 200,
+    "expected": [
+      200,
+      400
+    ],
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "foster",
+    "test": "bulk delete",
+    "method": "POST",
+    "path": "/api/v1/fosters/bulk/delete",
+    "status": 200,
+    "expected": [
+      200,
+      400
+    ],
+    "ok": true,
+    "error": "",
+    "id": ""
+  },
+  {
+    "module": "medical",
+    "test": "exams list",
+    "method": "GET",
+    "path": "/api/v1/medical/exams",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "medical",
+    "test": "create exam",
+    "method": "POST",
+    "path": "/api/v1/medical/exams",
+    "status": 201,
+    "expected": 201,
+    "ok": true,
+    "error": "",
+    "id": "18580a06-d87b-43ca-8827-608d09e21c0e"
+  },
+  {
+    "module": "medical",
+    "test": "treatments list",
+    "method": "GET",
+    "path": "/api/v1/medical/treatments",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "medical",
+    "test": "create treatment",
+    "method": "POST",
+    "path": "/api/v1/medical/treatments",
+    "status": 201,
+    "expected": 201,
+    "ok": true,
+    "error": "",
+    "id": "b8d397c4-fef3-486d-9623-932fad3b4c0e"
+  },
+  {
+    "module": "medical",
+    "test": "vaccinations list",
+    "method": "GET",
+    "path": "/api/v1/medical/vaccinations",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "medical",
+    "test": "create vaccination",
+    "method": "POST",
+    "path": "/api/v1/medical/vaccinations",
+    "status": 201,
+    "expected": 201,
+    "ok": true,
+    "error": "",
+    "id": "b602db8a-5826-4ef5-8d5c-29bfe995efe1"
+  },
+  {
+    "module": "medical",
+    "test": "prescriptions list",
+    "method": "GET",
+    "path": "/api/v1/medical/prescriptions",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "medical",
+    "test": "create prescription",
+    "method": "POST",
+    "path": "/api/v1/medical/prescriptions",
+    "status": 201,
+    "expected": 201,
+    "ok": true,
+    "error": "",
+    "id": "105e5181-aee9-47fe-a235-51338a64e3a6"
+  },
+  {
+    "module": "medical",
+    "test": "update prescription",
+    "method": "PUT",
+    "path": "/api/v1/medical/prescriptions/105e5181-aee9-47fe-a235-51338a64e3a6",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "105e5181-aee9-47fe-a235-51338a64e3a6"
+  },
+  {
+    "module": "medical",
+    "test": "prescription status",
+    "method": "PATCH",
+    "path": "/api/v1/medical/prescriptions/105e5181-aee9-47fe-a235-51338a64e3a6/status",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "105e5181-aee9-47fe-a235-51338a64e3a6"
+  },
+  {
+    "module": "medical",
+    "test": "rx administrations",
+    "method": "GET",
+    "path": "/api/v1/medical/prescriptions/105e5181-aee9-47fe-a235-51338a64e3a6/administrations",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "medical",
+    "test": "bulk prescription status",
+    "method": "POST",
+    "path": "/api/v1/medical/bulk/prescriptions/status",
+    "status": 200,
+    "expected": [
+      200,
+      400
+    ],
+    "ok": true,
+    "error": "",
+    "id": ""
+  },
+  {
+    "module": "medical",
+    "test": "create administration",
+    "method": "POST",
+    "path": "/api/v1/medical/administrations",
+    "status": 201,
+    "expected": 201,
+    "ok": true,
+    "error": "",
+    "id": "7ab582ca-0381-4a33-9936-70c84eea831f"
+  },
+  {
+    "module": "medical",
+    "test": "dog administrations",
+    "method": "GET",
+    "path": "/api/v1/medical/dogs/b75cc2f5-d857-422a-b8a0-d7ae54feff47/administrations",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "medical",
+    "test": "dog history",
+    "method": "GET",
+    "path": "/api/v1/medical/dogs/b75cc2f5-d857-422a-b8a0-d7ae54feff47/history",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": ""
+  },
+  {
+    "module": "medical",
+    "test": "create clearance",
+    "method": "POST",
+    "path": "/api/v1/medical/clearance/b75cc2f5-d857-422a-b8a0-d7ae54feff47",
+    "status": 200,
+    "expected": [
+      200,
+      201,
+      409
+    ],
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "medical",
+    "test": "dog clearances",
+    "method": "GET",
+    "path": "/api/v1/medical/clearances/dogs/b75cc2f5-d857-422a-b8a0-d7ae54feff47",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "medical",
+    "test": "vaccine protocols list",
+    "method": "GET",
+    "path": "/api/v1/medical/vaccine-protocols",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "medical",
+    "test": "create vaccine protocol",
+    "method": "POST",
+    "path": "/api/v1/medical/vaccine-protocols",
+    "status": 201,
+    "expected": 201,
+    "ok": true,
+    "error": "",
+    "id": "7826d214-ea6e-402b-9834-3bb180a460eb"
+  },
+  {
+    "module": "medical",
+    "test": "delete vaccine protocol",
+    "method": "DELETE",
+    "path": "/api/v1/medical/vaccine-protocols/7826d214-ea6e-402b-9834-3bb180a460eb",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "medical",
+    "test": "delete vaccine protocol (404)",
+    "method": "DELETE",
+    "path": "/api/v1/medical/vaccine-protocols/ac9ad9f3-40c9-4113-b79f-cb4e1e6755d9",
+    "status": 200,
+    "expected": [
+      200,
+      404
+    ],
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "medical",
+    "test": "bulk delete",
+    "method": "POST",
+    "path": "/api/v1/medical/bulk/delete",
+    "status": 200,
+    "expected": [
+      200,
+      400
+    ],
+    "ok": true,
+    "error": "",
+    "id": ""
+  },
+  {
+    "module": "shelter",
+    "test": "create facility",
+    "method": "POST",
+    "path": "/api/v1/shelter/facilities",
+    "status": 201,
+    "expected": 201,
+    "ok": true,
+    "error": "",
+    "id": "4be458ad-cf3e-45d0-b9e4-2bdf047daa78"
+  },
+  {
+    "module": "shelter",
+    "test": "create facility 2",
+    "method": "POST",
+    "path": "/api/v1/shelter/facilities",
+    "status": 201,
+    "expected": 201,
+    "ok": true,
+    "error": "",
+    "id": "7c99bc7d-c0a1-4f0e-b0e0-2a6ee9bac2e5"
+  },
+  {
+    "module": "shelter",
+    "test": "list facilities",
+    "method": "GET",
+    "path": "/api/v1/shelter/facilities",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "shelter",
+    "test": "get facility",
+    "method": "GET",
+    "path": "/api/v1/shelter/facilities/4be458ad-cf3e-45d0-b9e4-2bdf047daa78",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "4be458ad-cf3e-45d0-b9e4-2bdf047daa78"
+  },
+  {
+    "module": "shelter",
+    "test": "update facility",
+    "method": "PUT",
+    "path": "/api/v1/shelter/facilities/4be458ad-cf3e-45d0-b9e4-2bdf047daa78",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "4be458ad-cf3e-45d0-b9e4-2bdf047daa78"
+  },
+  {
+    "module": "shelter",
+    "test": "facility status",
+    "method": "PUT",
+    "path": "/api/v1/shelter/facilities/4be458ad-cf3e-45d0-b9e4-2bdf047daa78/status",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "4be458ad-cf3e-45d0-b9e4-2bdf047daa78"
+  },
+  {
+    "module": "shelter",
+    "test": "create section",
+    "method": "POST",
+    "path": "/api/v1/shelter/facilities/4be458ad-cf3e-45d0-b9e4-2bdf047daa78/sections",
+    "status": 201,
+    "expected": 201,
+    "ok": true,
+    "error": "",
+    "id": "676d0e54-8234-483a-b119-70f89a3d21c4"
+  },
+  {
+    "module": "shelter",
+    "test": "list sections",
+    "method": "GET",
+    "path": "/api/v1/shelter/facilities/4be458ad-cf3e-45d0-b9e4-2bdf047daa78/sections",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "shelter",
+    "test": "create kennel",
+    "method": "POST",
+    "path": "/api/v1/shelter/sections/676d0e54-8234-483a-b119-70f89a3d21c4/kennels",
+    "status": 201,
+    "expected": 201,
+    "ok": true,
+    "error": "",
+    "id": "a6984731-943c-491f-ad68-c4f353ac94ef"
+  },
+  {
+    "module": "shelter",
+    "test": "list kennels",
+    "method": "GET",
+    "path": "/api/v1/shelter/sections/676d0e54-8234-483a-b119-70f89a3d21c4/kennels",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "shelter",
+    "test": "assign dog to kennel",
+    "method": "PATCH",
+    "path": "/api/v1/shelter/kennels/a6984731-943c-491f-ad68-c4f353ac94ef/assign/b75cc2f5-d857-422a-b8a0-d7ae54feff47",
+    "status": 200,
+    "expected": [
+      200,
+      400,
+      409
+    ],
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "shelter",
+    "test": "update sanitation",
+    "method": "PUT",
+    "path": "/api/v1/shelter/kennels/a6984731-943c-491f-ad68-c4f353ac94ef/sanitation",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "a6984731-943c-491f-ad68-c4f353ac94ef"
+  },
+  {
+    "module": "shelter",
+    "test": "log cleaning",
+    "method": "POST",
+    "path": "/api/v1/shelter/kennels/a6984731-943c-491f-ad68-c4f353ac94ef/cleaning-logs",
+    "status": 201,
+    "expected": 201,
+    "ok": true,
+    "error": "",
+    "id": "510de112-988e-46c2-a5e5-c41c154dc3cb"
+  },
+  {
+    "module": "shelter",
+    "test": "list cleaning logs",
+    "method": "GET",
+    "path": "/api/v1/shelter/kennels/a6984731-943c-491f-ad68-c4f353ac94ef/cleaning-logs",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "shelter",
+    "test": "request transfer",
+    "method": "POST",
+    "path": "/api/v1/shelter/transfers",
+    "status": 201,
+    "expected": 201,
+    "ok": true,
+    "error": "",
+    "id": "ef74957b-7457-43c9-b6cc-615af31015b9"
+  },
+  {
+    "module": "shelter",
+    "test": "list transfers",
+    "method": "GET",
+    "path": "/api/v1/shelter/transfers",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "shelter",
+    "test": "get transfer",
+    "method": "GET",
+    "path": "/api/v1/shelter/transfers/ef74957b-7457-43c9-b6cc-615af31015b9",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": "",
+    "id": "ef74957b-7457-43c9-b6cc-615af31015b9"
+  },
+  {
+    "module": "shelter",
+    "test": "confirm sender",
+    "method": "POST",
+    "path": "/api/v1/shelter/transfers/ef74957b-7457-43c9-b6cc-615af31015b9/confirm-sender",
+    "status": 200,
+    "expected": [
+      200,
+      400,
+      409
+    ],
+    "ok": true,
+    "error": "",
+    "id": "ef74957b-7457-43c9-b6cc-615af31015b9"
+  },
+  {
+    "module": "shelter",
+    "test": "confirm receiver",
+    "method": "POST",
+    "path": "/api/v1/shelter/transfers/ef74957b-7457-43c9-b6cc-615af31015b9/confirm-receiver",
+    "status": 409,
+    "expected": [
+      200,
+      400,
+      409
+    ],
+    "ok": true,
+    "error": "The same user cannot confirm both the sending and receiving side of a transfer."
+  },
+  {
+    "module": "shelter",
+    "test": "submit care log",
+    "method": "POST",
+    "path": "/api/v1/shelter/care-logs",
+    "status": 201,
+    "expected": 201,
+    "ok": true,
+    "error": "",
+    "id": "6f3541fb-e6fa-4787-85e6-b6dd709edd0e"
+  },
+  {
+    "module": "shelter",
+    "test": "list care logs",
+    "method": "GET",
+    "path": "/api/v1/shelter/dogs/b75cc2f5-d857-422a-b8a0-d7ae54feff47/care-logs",
+    "status": 200,
+    "expected": 200,
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "shelter",
+    "test": "delete facility 2",
+    "method": "DELETE",
+    "path": "/api/v1/shelter/facilities/7c99bc7d-c0a1-4f0e-b0e0-2a6ee9bac2e5",
+    "status": 200,
+    "expected": [
+      200,
+      400
+    ],
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "shelter",
+    "test": "bulk delete facilities",
+    "method": "POST",
+    "path": "/api/v1/shelter/facilities/bulk/delete",
+    "status": 200,
+    "expected": [
+      200,
+      400
+    ],
+    "ok": true,
+    "error": ""
+  },
+  {
+    "module": "shelter",
+    "test": "bulk status facilities",
+    "method": "POST",
+    "path": "/api/v1/shelter/facilities/bulk/status",
+    "status": 200,
+    "expected": [
+      200,
+      400
+    ],
+    "ok": true,
+    "error": ""
+  }
+]

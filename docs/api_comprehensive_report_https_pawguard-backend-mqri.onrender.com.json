@@ -8,7 +8,7 @@
     "expected": 201,
     "ok": true,
     "error": "",
-    "id": "30b12bbb-0332-47bd-9856-895cd15682d3"
+    "id": "fd93f6a6-a5f4-49d3-90d1-c1676cbbc0aa"
   },
   {
     "module": "dog",
@@ -24,29 +24,29 @@
     "module": "dog",
     "test": "get by id",
     "method": "GET",
-    "path": "/api/v1/dogs/30b12bbb-0332-47bd-9856-895cd15682d3",
+    "path": "/api/v1/dogs/fd93f6a6-a5f4-49d3-90d1-c1676cbbc0aa",
     "status": 200,
     "expected": 200,
     "ok": true,
     "error": "",
-    "id": "30b12bbb-0332-47bd-9856-895cd15682d3"
+    "id": "fd93f6a6-a5f4-49d3-90d1-c1676cbbc0aa"
   },
   {
     "module": "dog",
     "test": "admin get",
     "method": "GET",
-    "path": "/api/v1/dogs/admin/dogs/30b12bbb-0332-47bd-9856-895cd15682d3",
+    "path": "/api/v1/dogs/admin/dogs/fd93f6a6-a5f4-49d3-90d1-c1676cbbc0aa",
     "status": 200,
     "expected": 200,
     "ok": true,
     "error": "",
-    "id": "30b12bbb-0332-47bd-9856-895cd15682d3"
+    "id": "fd93f6a6-a5f4-49d3-90d1-c1676cbbc0aa"
   },
   {
     "module": "dog",
     "test": "public-scan",
     "method": "GET",
-    "path": "/api/v1/dogs/30b12bbb-0332-47bd-9856-895cd15682d3/public-scan",
+    "path": "/api/v1/dogs/fd93f6a6-a5f4-49d3-90d1-c1676cbbc0aa/public-scan",
     "status": 200,
     "expected": 200,
     "ok": true,
@@ -57,7 +57,7 @@
     "module": "dog",
     "test": "timeline",
     "method": "GET",
-    "path": "/api/v1/dogs/30b12bbb-0332-47bd-9856-895cd15682d3/timeline",
+    "path": "/api/v1/dogs/fd93f6a6-a5f4-49d3-90d1-c1676cbbc0aa/timeline",
     "status": 200,
     "expected": 200,
     "ok": true,
@@ -67,18 +67,18 @@
     "module": "dog",
     "test": "record weight",
     "method": "POST",
-    "path": "/api/v1/dogs/30b12bbb-0332-47bd-9856-895cd15682d3/weight",
+    "path": "/api/v1/dogs/fd93f6a6-a5f4-49d3-90d1-c1676cbbc0aa/weight",
     "status": 201,
     "expected": 201,
     "ok": true,
     "error": "",
-    "id": "559fd4e1-a3f2-41a1-bf8b-1d889f158ef2"
+    "id": "cacffa6e-a7d0-4174-907e-214758c7c7ec"
   },
   {
     "module": "dog",
     "test": "weights list",
     "method": "GET",
-    "path": "/api/v1/dogs/30b12bbb-0332-47bd-9856-895cd15682d3/weights",
+    "path": "/api/v1/dogs/fd93f6a6-a5f4-49d3-90d1-c1676cbbc0aa/weights",
     "status": 200,
     "expected": 200,
     "ok": true,
@@ -88,7 +88,7 @@
     "module": "dog",
     "test": "qr-image",
     "method": "GET",
-    "path": "/api/v1/dogs/30b12bbb-0332-47bd-9856-895cd15682d3/qr-image",
+    "path": "/api/v1/dogs/fd93f6a6-a5f4-49d3-90d1-c1676cbbc0aa/qr-image",
     "status": 422,
     "expected": 200,
     "ok": false,
@@ -98,34 +98,34 @@
     "module": "dog",
     "test": "update",
     "method": "PUT",
-    "path": "/api/v1/dogs/30b12bbb-0332-47bd-9856-895cd15682d3",
+    "path": "/api/v1/dogs/fd93f6a6-a5f4-49d3-90d1-c1676cbbc0aa",
     "status": 200,
     "expected": 200,
     "ok": true,
     "error": "",
-    "id": "30b12bbb-0332-47bd-9856-895cd15682d3"
+    "id": "fd93f6a6-a5f4-49d3-90d1-c1676cbbc0aa"
   },
   {
     "module": "dog",
     "test": "patch status",
     "method": "PATCH",
-    "path": "/api/v1/dogs/30b12bbb-0332-47bd-9856-895cd15682d3/status",
+    "path": "/api/v1/dogs/fd93f6a6-a5f4-49d3-90d1-c1676cbbc0aa/status",
     "status": 200,
     "expected": 200,
     "ok": true,
     "error": "",
-    "id": "30b12bbb-0332-47bd-9856-895cd15682d3"
+    "id": "fd93f6a6-a5f4-49d3-90d1-c1676cbbc0aa"
   },
   {
     "module": "dog",
     "test": "admin patch status",
     "method": "PATCH",
-    "path": "/api/v1/dogs/admin/dogs/30b12bbb-0332-47bd-9856-895cd15682d3/status",
+    "path": "/api/v1/dogs/admin/dogs/fd93f6a6-a5f4-49d3-90d1-c1676cbbc0aa/status",
     "status": 200,
     "expected": 200,
     "ok": true,
     "error": "",
-    "id": "30b12bbb-0332-47bd-9856-895cd15682d3"
+    "id": "fd93f6a6-a5f4-49d3-90d1-c1676cbbc0aa"
   },
   {
     "module": "dog",
@@ -142,7 +142,7 @@
     "module": "dog",
     "test": "delete",
     "method": "DELETE",
-    "path": "/api/v1/dogs/30b12bbb-0332-47bd-9856-895cd15682d3",
+    "path": "/api/v1/dogs/fd93f6a6-a5f4-49d3-90d1-c1676cbbc0aa",
     "status": 200,
     "expected": 200,
     "ok": true,
@@ -152,7 +152,7 @@
     "module": "dog",
     "test": "get after delete (404)",
     "method": "GET",
-    "path": "/api/v1/dogs/30b12bbb-0332-47bd-9856-895cd15682d3",
+    "path": "/api/v1/dogs/fd93f6a6-a5f4-49d3-90d1-c1676cbbc0aa",
     "status": 404,
     "expected": 404,
     "ok": true,
@@ -222,7 +222,7 @@
     "expected": 201,
     "ok": true,
     "error": "",
-    "id": "079258a1-defa-4bde-9e91-26dce995b084"
+    "id": "9074574b-5656-45c0-b437-da5e1eb13c48"
   },
   {
     "module": "donation",
@@ -256,7 +256,7 @@
     "module": "donation",
     "test": "receipt",
     "method": "GET",
-    "path": "/api/v1/donations/079258a1-defa-4bde-9e91-26dce995b084/receipt",
+    "path": "/api/v1/donations/9074574b-5656-45c0-b437-da5e1eb13c48/receipt",
     "status": 200,
     "expected": [
       200,
@@ -270,7 +270,7 @@
     "module": "donation",
     "test": "reconcile",
     "method": "POST",
-    "path": "/api/v1/donations/079258a1-defa-4bde-9e91-26dce995b084/reconcile",
+    "path": "/api/v1/donations/9074574b-5656-45c0-b437-da5e1eb13c48/reconcile",
     "status": 409,
     "expected": [
       200,
@@ -285,12 +285,12 @@
     "module": "donation",
     "test": "patch status",
     "method": "PATCH",
-    "path": "/api/v1/donations/079258a1-defa-4bde-9e91-26dce995b084/status",
+    "path": "/api/v1/donations/9074574b-5656-45c0-b437-da5e1eb13c48/status",
     "status": 200,
     "expected": 200,
     "ok": true,
     "error": "",
-    "id": "079258a1-defa-4bde-9e91-26dce995b084"
+    "id": "9074574b-5656-45c0-b437-da5e1eb13c48"
   },
   {
     "module": "donation",
@@ -322,12 +322,12 @@
     "module": "donation",
     "test": "donor update",
     "method": "PUT",
-    "path": "/api/v1/donations/donors/ccc354c2-c544-4b06-8147-db65221e2eb1",
+    "path": "/api/v1/donations/donors/9f6a7bf3-ebfa-47f0-968a-4783d2118e5c",
     "status": 200,
     "expected": 200,
     "ok": true,
     "error": "",
-    "id": "ccc354c2-c544-4b06-8147-db65221e2eb1"
+    "id": "9f6a7bf3-ebfa-47f0-968a-4783d2118e5c"
   },
   {
     "module": "donation",
@@ -374,35 +374,35 @@
     "expected": 201,
     "ok": true,
     "error": "",
-    "id": "f4a79f1c-4909-4b25-87ad-6a51ba617ccb"
+    "id": "6e7bf3e8-624b-4305-9930-19560a988055"
   },
   {
     "module": "donation",
     "test": "campaign get",
     "method": "GET",
-    "path": "/api/v1/donations/campaigns/f4a79f1c-4909-4b25-87ad-6a51ba617ccb",
+    "path": "/api/v1/donations/campaigns/6e7bf3e8-624b-4305-9930-19560a988055",
     "status": 200,
     "expected": 200,
     "ok": true,
     "error": "",
-    "id": "f4a79f1c-4909-4b25-87ad-6a51ba617ccb"
+    "id": "6e7bf3e8-624b-4305-9930-19560a988055"
   },
   {
     "module": "donation",
     "test": "campaign update",
     "method": "PATCH",
-    "path": "/api/v1/donations/campaigns/f4a79f1c-4909-4b25-87ad-6a51ba617ccb",
+    "path": "/api/v1/donations/campaigns/6e7bf3e8-624b-4305-9930-19560a988055",
     "status": 200,
     "expected": 200,
     "ok": true,
     "error": "",
-    "id": "f4a79f1c-4909-4b25-87ad-6a51ba617ccb"
+    "id": "6e7bf3e8-624b-4305-9930-19560a988055"
   },
   {
     "module": "donation",
     "test": "campaign delete",
     "method": "DELETE",
-    "path": "/api/v1/donations/campaigns/f4a79f1c-4909-4b25-87ad-6a51ba617ccb",
+    "path": "/api/v1/donations/campaigns/6e7bf3e8-624b-4305-9930-19560a988055",
     "status": 200,
     "expected": 200,
     "ok": true,
@@ -430,18 +430,18 @@
     ],
     "ok": true,
     "error": "",
-    "id": "d82391e9-d5fc-4f2a-8c36-d3a54d5e8da5"
+    "id": "71aebafb-b9e0-4b29-addf-e68c098b1037"
   },
   {
     "module": "donation",
     "test": "recurring delete",
     "method": "DELETE",
-    "path": "/api/v1/donations/recurring/d82391e9-d5fc-4f2a-8c36-d3a54d5e8da5",
+    "path": "/api/v1/donations/recurring/71aebafb-b9e0-4b29-addf-e68c098b1037",
     "status": 200,
     "expected": 200,
     "ok": true,
     "error": "",
-    "id": "d82391e9-d5fc-4f2a-8c36-d3a54d5e8da5"
+    "id": "71aebafb-b9e0-4b29-addf-e68c098b1037"
   },
   {
     "module": "donation",
@@ -465,7 +465,7 @@
     ],
     "ok": true,
     "error": "",
-    "id": "78528e7a-9123-4b06-a728-358f90d663f6"
+    "id": "b7941e30-948b-4cd1-9b80-f7f0c71b2a6a"
   },
   {
     "module": "donation",
@@ -481,23 +481,23 @@
     "module": "donation",
     "test": "sponsorship get",
     "method": "GET",
-    "path": "/api/v1/donations/sponsorships/78528e7a-9123-4b06-a728-358f90d663f6",
+    "path": "/api/v1/donations/sponsorships/b7941e30-948b-4cd1-9b80-f7f0c71b2a6a",
     "status": 200,
     "expected": 200,
     "ok": true,
     "error": "",
-    "id": "78528e7a-9123-4b06-a728-358f90d663f6"
+    "id": "b7941e30-948b-4cd1-9b80-f7f0c71b2a6a"
   },
   {
     "module": "donation",
     "test": "sponsorship pause",
     "method": "PATCH",
-    "path": "/api/v1/donations/sponsorships/78528e7a-9123-4b06-a728-358f90d663f6/status",
+    "path": "/api/v1/donations/sponsorships/b7941e30-948b-4cd1-9b80-f7f0c71b2a6a/status",
     "status": 200,
     "expected": 200,
     "ok": true,
     "error": "",
-    "id": "78528e7a-9123-4b06-a728-358f90d663f6"
+    "id": "b7941e30-948b-4cd1-9b80-f7f0c71b2a6a"
   },
   {
     "module": "grievance",
@@ -508,7 +508,7 @@
     "expected": 201,
     "ok": true,
     "error": "",
-    "id": "ce2847a4-ed19-4172-8bbd-bb89e88b1e4f"
+    "id": "8791e79f-18fb-4ac6-9127-278f26434f02"
   },
   {
     "module": "grievance",
@@ -524,62 +524,62 @@
     "module": "grievance",
     "test": "get by id",
     "method": "GET",
-    "path": "/api/v1/grievance/ce2847a4-ed19-4172-8bbd-bb89e88b1e4f",
+    "path": "/api/v1/grievance/8791e79f-18fb-4ac6-9127-278f26434f02",
     "status": 200,
     "expected": 200,
     "ok": true,
     "error": "",
-    "id": "ce2847a4-ed19-4172-8bbd-bb89e88b1e4f"
+    "id": "8791e79f-18fb-4ac6-9127-278f26434f02"
   },
   {
     "module": "grievance",
     "test": "update",
     "method": "PUT",
-    "path": "/api/v1/grievance/ce2847a4-ed19-4172-8bbd-bb89e88b1e4f",
+    "path": "/api/v1/grievance/8791e79f-18fb-4ac6-9127-278f26434f02",
     "status": 200,
     "expected": 200,
     "ok": true,
     "error": "",
-    "id": "ce2847a4-ed19-4172-8bbd-bb89e88b1e4f"
+    "id": "8791e79f-18fb-4ac6-9127-278f26434f02"
   },
   {
     "module": "grievance",
     "test": "assign",
     "method": "POST",
-    "path": "/api/v1/grievance/ce2847a4-ed19-4172-8bbd-bb89e88b1e4f/assign",
+    "path": "/api/v1/grievance/8791e79f-18fb-4ac6-9127-278f26434f02/assign",
     "status": 200,
     "expected": 200,
     "ok": true,
     "error": "",
-    "id": "ce2847a4-ed19-4172-8bbd-bb89e88b1e4f"
+    "id": "8791e79f-18fb-4ac6-9127-278f26434f02"
   },
   {
     "module": "grievance",
     "test": "escalate",
     "method": "POST",
-    "path": "/api/v1/grievance/ce2847a4-ed19-4172-8bbd-bb89e88b1e4f/escalate",
+    "path": "/api/v1/grievance/8791e79f-18fb-4ac6-9127-278f26434f02/escalate",
     "status": 200,
     "expected": 200,
     "ok": true,
     "error": "",
-    "id": "ce2847a4-ed19-4172-8bbd-bb89e88b1e4f"
+    "id": "8791e79f-18fb-4ac6-9127-278f26434f02"
   },
   {
     "module": "grievance",
     "test": "add comment",
     "method": "POST",
-    "path": "/api/v1/grievance/ce2847a4-ed19-4172-8bbd-bb89e88b1e4f/comments",
+    "path": "/api/v1/grievance/8791e79f-18fb-4ac6-9127-278f26434f02/comments",
     "status": 201,
     "expected": 201,
     "ok": true,
     "error": "",
-    "id": "d054c2b6-dd1e-49f0-ac2b-3a25a58075d3"
+    "id": "06fb1d11-f668-4d37-8fe7-56d1503570d4"
   },
   {
     "module": "grievance",
     "test": "list comments",
     "method": "GET",
-    "path": "/api/v1/grievance/ce2847a4-ed19-4172-8bbd-bb89e88b1e4f/comments",
+    "path": "/api/v1/grievance/8791e79f-18fb-4ac6-9127-278f26434f02/comments",
     "status": 200,
     "expected": 200,
     "ok": true,
@@ -589,18 +589,18 @@
     "module": "grievance",
     "test": "patch status (query param)",
     "method": "PATCH",
-    "path": "/api/v1/grievance/ce2847a4-ed19-4172-8bbd-bb89e88b1e4f/status",
+    "path": "/api/v1/grievance/8791e79f-18fb-4ac6-9127-278f26434f02/status",
     "status": 200,
     "expected": 200,
     "ok": true,
     "error": "",
-    "id": "ce2847a4-ed19-4172-8bbd-bb89e88b1e4f"
+    "id": "8791e79f-18fb-4ac6-9127-278f26434f02"
   },
   {
     "module": "grievance",
     "test": "delete",
     "method": "DELETE",
-    "path": "/api/v1/grievance/ce2847a4-ed19-4172-8bbd-bb89e88b1e4f",
+    "path": "/api/v1/grievance/8791e79f-18fb-4ac6-9127-278f26434f02",
     "status": 200,
     "expected": 200,
     "ok": true,
@@ -625,13 +625,13 @@
     "expected": 201,
     "ok": true,
     "error": "",
-    "id": "b717aa42-654f-4d21-9f55-d4a7e684465e"
+    "id": "0ea58303-f3ed-4680-929d-4ce8f2218ff2"
   },
   {
     "module": "grievance",
     "test": "feedback delete",
     "method": "DELETE",
-    "path": "/api/v1/grievance/feedback/b717aa42-654f-4d21-9f55-d4a7e684465e",
+    "path": "/api/v1/grievance/feedback/0ea58303-f3ed-4680-929d-4ce8f2218ff2",
     "status": 200,
     "expected": 200,
     "ok": true,
@@ -706,24 +706,24 @@
     "expected": 201,
     "ok": true,
     "error": "",
-    "id": "4e7efb11-3c71-4a00-96da-46cfe5e15817"
+    "id": "2e855c3e-0f9a-4a1d-b223-210badbf2854"
   },
   {
     "module": "lost_found",
     "test": "lost get",
     "method": "GET",
-    "path": "/api/v1/lost-found/lost/4e7efb11-3c71-4a00-96da-46cfe5e15817",
+    "path": "/api/v1/lost-found/lost/2e855c3e-0f9a-4a1d-b223-210badbf2854",
     "status": 200,
     "expected": 200,
     "ok": true,
     "error": "",
-    "id": "4e7efb11-3c71-4a00-96da-46cfe5e15817"
+    "id": "2e855c3e-0f9a-4a1d-b223-210badbf2854"
   },
   {
     "module": "lost_found",
     "test": "lost matches",
     "method": "GET",
-    "path": "/api/v1/lost-found/lost/4e7efb11-3c71-4a00-96da-46cfe5e15817/matches",
+    "path": "/api/v1/lost-found/lost/2e855c3e-0f9a-4a1d-b223-210badbf2854/matches",
     "status": 200,
     "expected": 200,
     "ok": true,
@@ -733,7 +733,7 @@
     "module": "lost_found",
     "test": "lost broadcast",
     "method": "POST",
-    "path": "/api/v1/lost-found/lost/4e7efb11-3c71-4a00-96da-46cfe5e15817/broadcast",
+    "path": "/api/v1/lost-found/lost/2e855c3e-0f9a-4a1d-b223-210badbf2854/broadcast",
     "status": 200,
     "expected": [
       200,
@@ -746,57 +746,17 @@
   },
   {
     "module": "lost_found",
-    "test": "match claim",
+    "test": "match claim/review/resolve",
     "method": "POST",
-    "path": "/api/v1/lost-found/matches/a29a5500-8829-4065-9b5d-324cb6314f79/claim",
-    "status": 200,
-    "expected": [
-      200,
-      201,
-      400,
-      403,
-      409
-    ],
-    "ok": true,
-    "error": "",
-    "id": "a29a5500-8829-4065-9b5d-324cb6314f79"
-  },
-  {
-    "module": "lost_found",
-    "test": "match claim review",
-    "method": "POST",
-    "path": "/api/v1/lost-found/matches/a29a5500-8829-4065-9b5d-324cb6314f79/claim/review",
-    "status": 200,
-    "expected": [
-      200,
-      400,
-      403,
-      409
-    ],
-    "ok": true,
-    "error": "",
-    "id": "a29a5500-8829-4065-9b5d-324cb6314f79"
-  },
-  {
-    "module": "lost_found",
-    "test": "match resolve",
-    "method": "POST",
-    "path": "/api/v1/lost-found/matches/a29a5500-8829-4065-9b5d-324cb6314f79/resolve",
-    "status": 422,
-    "expected": [
-      200,
-      400,
-      403,
-      409
-    ],
-    "ok": false,
-    "error": "This match has already been reviewed."
+    "path": "/api/v1/lost-found/matches/{id}/claim",
+    "status": "SKIPPED",
+    "reason": "no matches available"
   },
   {
     "module": "lost_found",
     "test": "lost delete",
     "method": "DELETE",
-    "path": "/api/v1/lost-found/lost/4e7efb11-3c71-4a00-96da-46cfe5e15817",
+    "path": "/api/v1/lost-found/lost/2e855c3e-0f9a-4a1d-b223-210badbf2854",
     "status": 200,
     "expected": 200,
     "ok": true,
@@ -811,24 +771,24 @@
     "expected": 201,
     "ok": true,
     "error": "",
-    "id": "1a3486b7-1b8c-4a2e-a0cb-9833e51afce3"
+    "id": "3b3f20e5-2ecd-45a4-bff4-ad4f42014a27"
   },
   {
     "module": "lost_found",
     "test": "found get",
     "method": "GET",
-    "path": "/api/v1/lost-found/found/1a3486b7-1b8c-4a2e-a0cb-9833e51afce3",
+    "path": "/api/v1/lost-found/found/3b3f20e5-2ecd-45a4-bff4-ad4f42014a27",
     "status": 200,
     "expected": 200,
     "ok": true,
     "error": "",
-    "id": "1a3486b7-1b8c-4a2e-a0cb-9833e51afce3"
+    "id": "3b3f20e5-2ecd-45a4-bff4-ad4f42014a27"
   },
   {
     "module": "lost_found",
     "test": "found matches",
     "method": "GET",
-    "path": "/api/v1/lost-found/found/1a3486b7-1b8c-4a2e-a0cb-9833e51afce3/matches",
+    "path": "/api/v1/lost-found/found/3b3f20e5-2ecd-45a4-bff4-ad4f42014a27/matches",
     "status": 200,
     "expected": 200,
     "ok": true,
@@ -838,7 +798,7 @@
     "module": "lost_found",
     "test": "found delete",
     "method": "DELETE",
-    "path": "/api/v1/lost-found/found/1a3486b7-1b8c-4a2e-a0cb-9833e51afce3",
+    "path": "/api/v1/lost-found/found/3b3f20e5-2ecd-45a4-bff4-ad4f42014a27",
     "status": 200,
     "expected": 200,
     "ok": true,
@@ -982,13 +942,13 @@
     "expected": 201,
     "ok": true,
     "error": "",
-    "id": "80751f15-fb3b-419a-998c-28b0b3f0b5b6"
+    "id": "3f7d3336-6258-4982-af65-8f7c66632d5c"
   },
   {
     "module": "volunteer",
     "test": "shift attendance list",
     "method": "GET",
-    "path": "/api/v1/volunteers/shifts/80751f15-fb3b-419a-998c-28b0b3f0b5b6/attendance",
+    "path": "/api/v1/volunteers/shifts/3f7d3336-6258-4982-af65-8f7c66632d5c/attendance",
     "status": 200,
     "expected": 200,
     "ok": true,
@@ -998,7 +958,7 @@
     "module": "volunteer",
     "test": "join shift",
     "method": "POST",
-    "path": "/api/v1/volunteers/shifts/80751f15-fb3b-419a-998c-28b0b3f0b5b6/join",
+    "path": "/api/v1/volunteers/shifts/3f7d3336-6258-4982-af65-8f7c66632d5c/join",
     "status": 403,
     "expected": [
       200,
