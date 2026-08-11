@@ -9,6 +9,7 @@ import uuid
 from datetime import UTC, datetime
 from io import BytesIO
 
+from botocore.exceptions import BotoCoreError
 from botocore.exceptions import ClientError as BotoClientError
 from PIL import Image as PILImage
 
@@ -51,8 +52,7 @@ def _cleanup_s3_safe(s3_client: S3StorageService, object_key: str) -> None:
 async def _cleanup_s3_async(s3_client: S3StorageService, object_key: str) -> None:
     """Non-blocking best-effort S3 deletion."""
     try:
-        loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, _cleanup_s3_safe, s3_client, object_key)
+        await asyncio.to_thread(_cleanup_s3_safe, s3_client, object_key)
     except Exception:
         logger.warning("s3_cleanup_failed", object_key=object_key, exc_info=True)
 
@@ -141,26 +141,30 @@ class StorageService:
         try:
             if batch_file_ids:
                 verify_batch_size(batch_sizes)
-            loop = asyncio.get_running_loop()
-            actual_size = await loop.run_in_executor(
-                None, self._s3.get_object_size, object_key=stored.object_key
+            actual_size = await asyncio.to_thread(
+                self._s3.get_object_size, object_key=stored.object_key
             )
             if actual_size > MAX_FILE_SIZE_BYTES:
                 raise UploadError(
                     f"Uploaded file exceeds maximum size of "
                     f"{MAX_FILE_SIZE_BYTES // (1024 * 1024)} MB (got {actual_size} bytes)."
                 )
-            prefix = await loop.run_in_executor(
-                None,
+            prefix = await asyncio.to_thread(
                 self._s3.get_object_prefix_bytes,
                 object_key=stored.object_key,
             )
             detected_mime = verify_mime_type(prefix, stored.mime_type)
-        except (UploadError, BotoClientError) as exc:
+        except (UploadError, BotoClientError, BotoCoreError, Exception) as exc:
             await _cleanup_s3_async(self._s3, stored.object_key)
             await self._repo._session.delete(stored)
             await self._repo._session.flush()
-            message = str(exc) if isinstance(exc, UploadError) else "Upload verification failed — file not found in storage."
+            if isinstance(exc, UploadError):
+                message = str(exc)
+            elif isinstance(exc, (BotoClientError, BotoCoreError)):
+                message = "Upload verification failed — file not found in storage or storage unavailable."
+            else:
+                logger.error("storage_confirm_upload_failed", file_id=str(file_id), exc_info=exc)
+                message = "Upload verification failed — could not verify file in storage."
             raise ValidationFailedError(message) from exc
 
         stored.mime_type = detected_mime
@@ -181,9 +185,8 @@ class StorageService:
         the stored file simply keeps ``thumbnail_object_key`` unset.
         """
         try:
-            loop = asyncio.get_running_loop()
-            content = await loop.run_in_executor(
-                None, self._s3.get_object, object_key=stored.object_key
+            content = await asyncio.to_thread(
+                self._s3.get_object, object_key=stored.object_key
             )
             thumbnail = create_thumbnail(content, max_size=400)
             if thumbnail is None:
@@ -198,8 +201,7 @@ class StorageService:
             else:
                 thumbnail_key = f"{base}_thumb.jpg"
                 thumbnail_mime = "image/jpeg"
-            await loop.run_in_executor(
-                None,
+            await asyncio.to_thread(
                 self._s3.put_object,
                 object_key=thumbnail_key,
                 content=thumbnail,
