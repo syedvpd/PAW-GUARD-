@@ -714,8 +714,9 @@ class RescueService:
             raise NotFoundError("Rescue request not found.")
 
         # Validate the coordinator user exists and is active.
-        from pawguard.modules.auth.models import User
         from sqlalchemy import select as sa_select
+
+        from pawguard.modules.auth.models import User
         user = await self._repo._session.scalar(
             sa_select(User.id).where(
                 User.id == coordinator_id,

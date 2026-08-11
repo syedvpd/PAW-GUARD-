@@ -53,7 +53,9 @@ class TestAdoptionService:
 
     @pytest.fixture
     def mock_dog_repo(self):
-        return AsyncMock(spec=DogRepository)
+        repo = AsyncMock(spec=DogRepository)
+        repo.get_by_id_for_update.side_effect = lambda *a, **kw: repo.get_by_id.return_value
+        return repo
 
     @pytest.fixture
     def mock_audit(self):
@@ -203,6 +205,7 @@ class TestAdoptionService:
             id=dog_id, registration_number="DOG-001", name="B", breed="Mix",
             gender="female", status=DogStatus.SHELTER, is_adoptable=True,
         )
+        mock_dog_repo.get_by_id.return_value = dog
         mock_dog_repo.get_by_id_for_update.return_value = dog
         result = await service.update_application_status(app_id, AdoptionStatus.HOME_CHECK)
         assert result.status == AdoptionStatus.HOME_CHECK
@@ -558,7 +561,9 @@ class TestAdoptionScores:
 
     @pytest.fixture
     def mock_dog_repo(self):
-        return AsyncMock(spec=DogRepository)
+        repo = AsyncMock(spec=DogRepository)
+        repo.get_by_id_for_update.side_effect = lambda *a, **kw: repo.get_by_id.return_value
+        return repo
 
     @pytest.fixture
     def mock_audit(self):

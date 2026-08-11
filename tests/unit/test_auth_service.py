@@ -162,7 +162,8 @@ class TestProfileUpdateValidation:
 
     def test_accepts_extended_profile_fields(self) -> None:
         from datetime import date
-        from pawguard.modules.auth.schemas import UserProfile, UserProfileUpdate
+
+        from pawguard.modules.auth.schemas import UserProfileUpdate
 
         data = {
             "full_name": "Jane Doe",

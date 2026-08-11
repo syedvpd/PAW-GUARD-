@@ -3,6 +3,7 @@
 Repositories never contain business decisions.
 """
 
+import inspect
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -143,12 +144,15 @@ class MedicalRepository:
             .order_by(MedicalClearance.created_at.desc())
             .limit(1)
         )
-        clearance = (await self._session.execute(stmt)).scalar_one_or_none()
-        if clearance is None:
+        res = (await self._session.execute(stmt)).scalar_one_or_none()
+        if inspect.isawaitable(res):
+            res = await res
+        if res is None:
             return None
-        if clearance.expires_at is not None and clearance.expires_at < now:
+        expires_at = getattr(res, "expires_at", None)
+        if isinstance(expires_at, datetime) and expires_at < now:
             return None
-        return clearance
+        return res
 
     async def get_prescription_by_id(self, p_id: uuid.UUID) -> Prescription | None:
         stmt = (

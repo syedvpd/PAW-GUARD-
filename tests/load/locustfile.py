@@ -1,6 +1,6 @@
 """Locust load test for PawGuard backend."""
 
-from locust import HttpUser, task, between
+from locust import HttpUser, between, task
 
 
 class PublicUser(HttpUser):

@@ -1,13 +1,12 @@
 """End-to-end regression tests for PRR acceptance criteria."""
 
-import pytest
 import asyncio
+
+import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
-from pawguard.modules.rescue.models import RescueRequest, RescueStatus
+
 from pawguard.modules.dog.models import DogProfile
-from pawguard.modules.medical.models import MedicalClearance
-from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
 
 
 @pytest.mark.regression

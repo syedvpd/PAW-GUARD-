@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import json
 from datetime import UTC, datetime
 from typing import Any
@@ -99,11 +100,9 @@ async def stream_rescue_dashboard(
                     yield ": snapshot unavailable, stream alive\n\n"
         finally:
             if pubsub is not None:
-                try:
+                with contextlib.suppress(Exception):
                     await pubsub.unsubscribe("dispatch:events")
                     await pubsub.close()
-                except Exception:
-                    pass
 
     return StreamingResponse(
         _event_stream(),

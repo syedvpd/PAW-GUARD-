@@ -4,10 +4,12 @@ Wraps the shared S3 StorageService for presigned URL generation and manages
 StoredFile metadata records in the database.
 """
 
+import asyncio
 import uuid
 from datetime import UTC, datetime
 from io import BytesIO
 
+from botocore.exceptions import ClientError as BotoClientError
 from PIL import Image as PILImage
 
 from pawguard.core.exceptions import NotFoundError, ValidationFailedError
@@ -36,6 +38,23 @@ from pawguard.modules.storage.schemas import (
 from pawguard.services.storage_service import StorageService as S3StorageService
 
 logger = get_logger(__name__)
+
+
+def _cleanup_s3_safe(s3_client: S3StorageService, object_key: str) -> None:
+    """Best-effort S3 object deletion that never raises."""
+    try:
+        s3_client.delete_object(object_key=object_key)
+    except Exception:
+        logger.warning("s3_cleanup_failed", object_key=object_key, exc_info=True)
+
+
+async def _cleanup_s3_async(s3_client: S3StorageService, object_key: str) -> None:
+    """Non-blocking best-effort S3 deletion."""
+    try:
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, _cleanup_s3_safe, s3_client, object_key)
+    except Exception:
+        logger.warning("s3_cleanup_failed", object_key=object_key, exc_info=True)
 
 
 class StorageService:
@@ -122,19 +141,27 @@ class StorageService:
         try:
             if batch_file_ids:
                 verify_batch_size(batch_sizes)
-            actual_size = self._s3.get_object_size(object_key=stored.object_key)
+            loop = asyncio.get_running_loop()
+            actual_size = await loop.run_in_executor(
+                None, self._s3.get_object_size, object_key=stored.object_key
+            )
             if actual_size > MAX_FILE_SIZE_BYTES:
                 raise UploadError(
                     f"Uploaded file exceeds maximum size of "
                     f"{MAX_FILE_SIZE_BYTES // (1024 * 1024)} MB (got {actual_size} bytes)."
                 )
-            prefix = self._s3.get_object_prefix_bytes(object_key=stored.object_key)
+            prefix = await loop.run_in_executor(
+                None,
+                self._s3.get_object_prefix_bytes,
+                object_key=stored.object_key,
+            )
             detected_mime = verify_mime_type(prefix, stored.mime_type)
-        except UploadError as exc:
-            self._s3.delete_object(object_key=stored.object_key)
+        except (UploadError, BotoClientError) as exc:
+            await _cleanup_s3_async(self._s3, stored.object_key)
             await self._repo._session.delete(stored)
             await self._repo._session.flush()
-            raise ValidationFailedError(str(exc)) from exc
+            message = str(exc) if isinstance(exc, UploadError) else "Upload verification failed — file not found in storage."
+            raise ValidationFailedError(message) from exc
 
         stored.mime_type = detected_mime
         stored.file_size = actual_size
@@ -154,7 +181,10 @@ class StorageService:
         the stored file simply keeps ``thumbnail_object_key`` unset.
         """
         try:
-            content = self._s3.get_object(object_key=stored.object_key)
+            loop = asyncio.get_running_loop()
+            content = await loop.run_in_executor(
+                None, self._s3.get_object, object_key=stored.object_key
+            )
             thumbnail = create_thumbnail(content, max_size=400)
             if thumbnail is None:
                 return
@@ -168,8 +198,12 @@ class StorageService:
             else:
                 thumbnail_key = f"{base}_thumb.jpg"
                 thumbnail_mime = "image/jpeg"
-            self._s3.put_object(
-                object_key=thumbnail_key, content=thumbnail, content_type=thumbnail_mime
+            await loop.run_in_executor(
+                None,
+                self._s3.put_object,
+                object_key=thumbnail_key,
+                content=thumbnail,
+                content_type=thumbnail_mime,
             )
             stored.thumbnail_object_key = thumbnail_key
         except Exception:

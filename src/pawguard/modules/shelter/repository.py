@@ -3,7 +3,6 @@
 Repositories never contain business decisions (RULE-002).
 """
 
-import math
 import uuid
 from collections.abc import Sequence
 

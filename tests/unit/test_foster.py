@@ -51,7 +51,9 @@ class TestFosterService:
 
     @pytest.fixture
     def mock_dog_repo(self):
-        return AsyncMock(spec=DogRepository)
+        repo = AsyncMock(spec=DogRepository)
+        repo.get_by_id_for_update.side_effect = lambda *a, **kw: repo.get_by_id.return_value
+        return repo
 
     @pytest.fixture
     def mock_audit(self):
@@ -237,7 +239,9 @@ class TestFosterProgressLog:
 
     @pytest.fixture
     def mock_dog_repo(self):
-        return AsyncMock(spec=DogRepository)
+        repo = AsyncMock(spec=DogRepository)
+        repo.get_by_id_for_update.side_effect = lambda *a, **kw: repo.get_by_id.return_value
+        return repo
 
     @pytest.fixture
     def mock_adoption_repo(self):
@@ -290,7 +294,9 @@ class TestFosterToAdopt:
 
     @pytest.fixture
     def mock_dog_repo(self):
-        return AsyncMock(spec=DogRepository)
+        repo = AsyncMock(spec=DogRepository)
+        repo.get_by_id_for_update.side_effect = lambda *a, **kw: repo.get_by_id.return_value
+        return repo
 
     @pytest.fixture
     def mock_adoption_repo(self):
@@ -381,7 +387,9 @@ class TestFosterSupplyDispatch:
 
     @pytest.fixture
     def mock_dog_repo(self):
-        return AsyncMock(spec=DogRepository)
+        repo = AsyncMock(spec=DogRepository)
+        repo.get_by_id_for_update.side_effect = lambda *a, **kw: repo.get_by_id.return_value
+        return repo
 
     @pytest.fixture
     def mock_adoption_repo(self):

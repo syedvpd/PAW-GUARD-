@@ -9,7 +9,7 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 import structlog
-from arq import ArqRedis, create_pool
+from arq import create_pool
 from arq.connections import RedisSettings
 
 from pawguard.core.config import get_settings

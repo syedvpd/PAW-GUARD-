@@ -2,6 +2,7 @@
 
 import uuid
 
+import structlog
 from arq import ArqRedis
 from fastapi import APIRouter, Depends, Header, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -57,6 +58,8 @@ from pawguard.modules.auth.schemas import (
 from pawguard.modules.auth.service import AuthenticatedTokens, AuthService, RequestContext
 from pawguard.services.audit_service import AuditService
 from pawguard.workers.pool import get_arq_pool
+
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -180,8 +183,8 @@ async def register(
         await arq_pool.enqueue_job(
             "send_email_verification_email_job", to=user.email, verify_url=verify_url
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("email_verification_job_enqueue_failed", error=str(exc))
     return ApiResponse(
         data=UserProfile.model_validate(user),
         message="Registration successful. Please verify your email.",
@@ -415,8 +418,8 @@ async def request_password_reset(
             await arq_pool.enqueue_job(
                 "send_password_reset_email_job", to=payload.email, reset_url=reset_url
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("password_reset_job_enqueue_failed", error=str(exc))
     return ApiResponse(message="If that email exists, a reset link has been sent.")
 
 

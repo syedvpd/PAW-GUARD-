@@ -27,7 +27,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready -U pawguard
+          --health-cmd="pg_isready -U pawguard -d pawguard_test"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -43,7 +43,7 @@ jobs:
           cache-dependency-glob: pyproject.toml
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --all-extras --dev
 
       - name: Apply pending migrations
         run: uv run alembic upgrade head

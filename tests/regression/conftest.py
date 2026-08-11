@@ -1,6 +1,5 @@
 """Configuration for regression and smoke test suites."""
 
-import pytest
 
 
 def pytest_configure(config):

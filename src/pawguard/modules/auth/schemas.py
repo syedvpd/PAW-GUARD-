@@ -215,7 +215,7 @@ class UserProfileUpdate(BaseModel):
             try:
                 return date.fromisoformat(v_str)
             except ValueError:
-                raise ValueError("Invalid date_of_birth format. Use YYYY-MM-DD.")
+                raise ValueError("Invalid date_of_birth format. Use YYYY-MM-DD.") from None
         return v
 
     @model_validator(mode="before")

@@ -30,7 +30,6 @@ from pawguard.core.security import (
     verify_password,
 )
 from pawguard.modules.auth import permission_codes as pc
-from pawguard.redis.client import RedisClient
 from pawguard.modules.auth.exceptions import (
     AccountInactiveError,
     AccountLockedError,
@@ -70,6 +69,7 @@ from pawguard.modules.auth.repository import (
     UserRoleRepository,
 )
 from pawguard.modules.auth.schemas import DeviceContext, MFADisableRequest
+from pawguard.redis.client import RedisClient
 from pawguard.services.audit_service import AuditService
 from pawguard.services.cache_service import CacheService
 
