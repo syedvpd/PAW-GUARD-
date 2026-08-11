@@ -120,7 +120,7 @@ class FakeArqPool:
         pass
 
 
-@pytest_asyncio.fixture(scope="module")
+@pytest_asyncio.fixture
 async def engine() -> AsyncGenerator[AsyncEngine]:
     settings = get_settings()
     test_url = settings.database_url_frontend or settings.database_url
