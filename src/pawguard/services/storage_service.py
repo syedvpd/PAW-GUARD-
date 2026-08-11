@@ -6,8 +6,24 @@ import boto3
 from botocore.client import Config
 
 from pawguard.core.config import get_settings
+from pawguard.core.exceptions import AppException
+from pawguard.core.logging import get_logger
 
 PRESIGNED_URL_EXPIRY_SECONDS = 900
+
+logger = get_logger(__name__)
+
+
+class StorageError(AppException):
+    """Storage is temporarily unable to prepare an upload URL.
+
+    Raised instead of silently returning a fake/broken URL: a client PUT
+    against an unsigned URL would fail with 403 "permission denied", which is
+    indistinguishable from a real auth failure and impossible to diagnose.
+    """
+
+    status_code = 503
+    code = "STORAGE_UNAVAILABLE"
 
 
 class StorageService:
@@ -37,17 +53,37 @@ class StorageService:
     def generate_presigned_upload_url(
         self, *, object_key: str, content_type: str, expires_in: int = PRESIGNED_URL_EXPIRY_SECONDS
     ) -> str:
-        bucket = self._bucket or "pawguard-media"
+        """Return a presigned PUT URL for direct client uploads.
+
+        ``content_type`` is intentionally NOT part of the signed headers.
+        S3/Supabase rejects a PUT whose ``Content-Type`` header does not
+        byte-for-byte match the one the URL was signed for, and many client
+        HTTP stacks (Flutter, mobile webviews, some fetch/XMLHttpRequest
+        wrappers, generic upload libraries) omit or rewrite that header —
+        the browser/app then gets a 403 "permission denied" even though the
+        user is fully authenticated. Signing only ``host`` makes the upload
+        succeed regardless of what header the client sends. When the client
+        does send a ``Content-Type``, S3 stores it with that type; real
+        content validation still happens in ``StorageService.confirm_upload``
+        (magic bytes + size).
+        """
         try:
             url: str = self._client.generate_presigned_url(
                 "put_object",
-                Params={"Bucket": bucket, "Key": object_key, "ContentType": content_type},
+                Params={"Bucket": self._bucket, "Key": object_key},
                 ExpiresIn=expires_in,
             )
             return url
-        except Exception:
-            endpoint = (self._endpoint or "https://pawguard-media.s3.amazonaws.com").rstrip("/")
-            return f"{endpoint}/{bucket}/{object_key}?token={uuid.uuid4()}"
+        except Exception as exc:
+            logger.error(
+                "presigned_upload_url_generation_failed",
+                bucket=self._bucket,
+                object_key=object_key,
+                exc_info=exc,
+            )
+            raise StorageError(
+                "Could not prepare the photo upload right now. Please try again shortly."
+            ) from exc
 
     def generate_presigned_download_url(
         self, *, object_key: str, expires_in: int = PRESIGNED_URL_EXPIRY_SECONDS

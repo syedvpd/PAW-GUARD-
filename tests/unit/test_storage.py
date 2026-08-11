@@ -4,7 +4,7 @@ import base64
 import uuid
 from datetime import UTC, datetime
 from io import BytesIO
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from PIL import Image
@@ -13,6 +13,8 @@ from pawguard.core.exceptions import NotFoundError, ValidationFailedError
 from pawguard.modules.storage.models import StoredFile
 from pawguard.modules.storage.repository import StorageRepository
 from pawguard.modules.storage.service import StorageService
+from pawguard.services.storage_service import StorageError
+from pawguard.services.storage_service import StorageService as S3StorageService
 
 # A real 1x1 PNG so python-magic's signature detection recognizes it.
 _PNG_BYTES = base64.b64decode(
@@ -160,4 +162,50 @@ class TestStorageService:
             await service.confirm_upload(
                 file_id,
                 batch_file_ids=[f.id for f in mock_repo.list_by_ids.return_value],
+            )
+
+
+class TestS3PresignedUploadUrl:
+    """Regression tests for the shared S3 presigned-upload contract.
+
+    Root cause of the recurring "photo upload blocked (permission denied)"
+    report: the upload URL used to be signed for ``content-type``, so S3
+    rejected any PUT whose Content-Type header did not byte-for-byte match
+    the value passed to ``/…/media-upload-url``. Real clients (Flutter,
+    mobile webviews, generic fetch/upload wrappers) often omit or rewrite
+    that header, producing a 403 that looked like an auth failure. The URL
+    must be signed for ``host`` only.
+    """
+
+    def _service(self, mock_client: MagicMock) -> S3StorageService:
+        with patch("pawguard.services.storage_service.boto3.client", return_value=mock_client):
+            return S3StorageService()
+
+    def test_upload_url_does_not_sign_content_type(self) -> None:
+        mock_client = MagicMock()
+        mock_client.generate_presigned_url.return_value = "https://bucket/signed?X-Amz-SignedHeaders=host"
+        svc = self._service(mock_client)
+
+        url = svc.generate_presigned_upload_url(
+            object_key="rescue/evidence.jpg", content_type="image/jpeg"
+        )
+
+        _, kwargs = mock_client.generate_presigned_url.call_args
+        params = kwargs["Params"]
+        assert params["Bucket"] == "pawguard-media"
+        assert params["Key"] == "rescue/evidence.jpg"
+        assert "ContentType" not in params, (
+            "Content-Type must NOT be signed or clients that omit/mismatch "
+            "the header get 403 permission denied."
+        )
+        assert "SignedHeaders=host" in url
+
+    def test_upload_url_raises_storage_error_instead_of_fake_url(self) -> None:
+        mock_client = MagicMock()
+        mock_client.generate_presigned_url.side_effect = RuntimeError("boom")
+        svc = self._service(mock_client)
+
+        with pytest.raises(StorageError):
+            svc.generate_presigned_upload_url(
+                object_key="rescue/evidence.jpg", content_type="image/jpeg"
             )
