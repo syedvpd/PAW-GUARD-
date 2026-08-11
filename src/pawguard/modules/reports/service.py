@@ -1,5 +1,6 @@
 import asyncio
 import os
+import uuid
 from datetime import UTC, date, datetime
 from typing import Any
 
@@ -725,7 +726,9 @@ class ReportService:
     async def _rescue_report(
         self, start: date | None, end: date | None, filters: dict[str, Any] | None
     ) -> dict[str, Any]:
-        stmt = select(RescueRequest)
+        stmt = select(RescueRequest, RescueDispatch).outerjoin(
+            RescueDispatch, RescueDispatch.rescue_request_id == RescueRequest.id
+        )
         if start:
             stmt = stmt.where(RescueRequest.created_at >= start)
         if end:
@@ -733,8 +736,17 @@ class ReportService:
         if filters and "status" in filters:
             stmt = stmt.where(RescueRequest.status == filters["status"])
         joined = (await self._session.execute(stmt)).all()
-        results = [row[0] for row in joined]
-        pairs = [(row[0], row[1]) for row in joined if row[1] is not None]
+
+        req_map: dict[uuid.UUID, RescueRequest] = {}
+        pairs: list[tuple[RescueRequest, RescueDispatch]] = []
+        for row in joined:
+            req, disp = row[0], row[1]
+            if req.id not in req_map:
+                req_map[req.id] = req
+            if disp is not None:
+                pairs.append((req, disp))
+
+        results = list(req_map.values())
         dispatches = [dispatch for _, dispatch in pairs]
 
         headers = [
@@ -742,8 +754,15 @@ class ReportService:
             "Location", "Animal Count", "Created",
         ]
         rows = [
-            [str(r.id), r.ticket_number, r.status, r.reporter_name,
-             r.location_address, r.animal_count, r.created_at.date()]
+            [
+                str(r.id),
+                r.ticket_number,
+                r.status,
+                r.reporter_name,
+                r.location_address,
+                r.animal_count,
+                r.created_at.date() if r.created_at else "",
+            ]
             for r in results
         ]
         rows = mask_report_data(rows, headers, {"Reporter"})
@@ -787,10 +806,19 @@ class ReportService:
                 1 for r in results
                 if r.status in (RescueStatus.RESCUED, RescueStatus.ADMITTED)
             )
-            response_times = [
-                (dispatch.created_at - request.created_at).total_seconds() / 3600.0
-                for request, dispatch in pairs
-            ]
+            response_times: list[float] = []
+            for request, dispatch in pairs:
+                disp_time = dispatch.dispatched_at or dispatch.created_at
+                req_time = request.created_at
+                if disp_time and req_time:
+                    if disp_time.tzinfo is not None and req_time.tzinfo is None:
+                        req_time = req_time.replace(tzinfo=UTC)
+                    elif disp_time.tzinfo is None and req_time.tzinfo is not None:
+                        disp_time = disp_time.replace(tzinfo=UTC)
+                    diff_hours = (disp_time - req_time).total_seconds() / 3600.0
+                    if diff_hours >= 0:
+                        response_times.append(diff_hours)
+
             avg_response_time = (
                 sum(response_times) / len(response_times) if response_times else None
             )
@@ -841,9 +869,14 @@ class ReportService:
 
             if dispatches:
                 dispatch_rows = [
-                    [str(d.id), str(d.rescue_request_id),
-                     d.assigned_driver_id or "", d.vehicle_id or "",
-                     d.dispatched_at, d.failure_reason or ""]
+                    [
+                        str(d.id),
+                        str(d.rescue_request_id),
+                        str(d.assigned_driver_id) if d.assigned_driver_id else "",
+                        str(d.vehicle_id or ""),
+                        d.dispatched_at.strftime("%Y-%m-%d %H:%M:%S") if d.dispatched_at else "",
+                        str(d.failure_reason or ""),
+                    ]
                     for d in dispatches
                 ]
                 sections.append({

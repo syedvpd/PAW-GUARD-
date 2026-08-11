@@ -471,11 +471,12 @@ class TestNewModules:
     async def test_reports_multiple_formats(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
 
-        for fmt in ["pdf", "csv", "xlsx"]:
-            payload = {"report_type": "adoption", "format": fmt}
-            resp = await client.post("/api/v1/reports/generate", json=payload, headers=headers)
-            assert resp.status_code == 200, f"{fmt} failed: {resp.text}"
-            assert resp.json()["data"]["format"] == fmt
+        for report_type in ["adoption", "rescue"]:
+            for fmt in ["pdf", "csv", "xlsx"]:
+                payload = {"report_type": report_type, "format": fmt}
+                resp = await client.post("/api/v1/reports/generate", json=payload, headers=headers)
+                assert resp.status_code == 200, f"{report_type}/{fmt} failed: {resp.text}"
+                assert resp.json()["data"]["format"] == fmt
 
     async def test_reports_with_period_filter(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
