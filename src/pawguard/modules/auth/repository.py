@@ -90,6 +90,26 @@ class UserRepository:
         )
         return list((await self._session.execute(stmt)).scalars().all())
 
+    async def get_user_ids_by_roles(self, role_names: list[str]) -> list[uuid.UUID]:
+        """Active users who hold ANY of the given role names.
+
+        Used by the notification module to fan-out role-targeted alerts.
+        """
+        from pawguard.modules.auth.models import Role, UserRole
+
+        stmt = (
+            select(User.id)
+            .join(UserRole, UserRole.user_id == User.id)
+            .join(Role, Role.id == UserRole.role_id)
+            .where(
+                User.is_active.is_(True),
+                User.deleted_at.is_(None),
+                Role.name.in_(role_names),
+            )
+            .distinct()
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
+
 
 class SessionRepository:
     def __init__(self, session: AsyncSession) -> None:

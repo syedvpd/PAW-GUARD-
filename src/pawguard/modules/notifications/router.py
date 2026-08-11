@@ -1,6 +1,7 @@
 """API router for in-app notifications (RULE-004)."""
 
 import uuid
+from typing import Any
 
 from arq import ArqRedis
 from fastapi import APIRouter, Depends, Query, Request, status
@@ -140,7 +141,6 @@ async def bulk_delete_notifications(
 
 @router.post(
     "/send",
-    response_model=ApiResponse[NotificationResponse],
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_permission("notification:manage"))],
 )
@@ -150,20 +150,25 @@ async def send_notification(
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
     service: NotificationService = Depends(get_notification_service),
-) -> ApiResponse[NotificationResponse]:
+) -> ApiResponse[Any]:
     user_email = None
-    if payload.send_email:
+    if payload.send_email and payload.user_id:
         user_repo = UserRepository(db)
         user = await user_repo.get_by_id(payload.user_id)
         if user is not None:
             user_email = user.email
-    notification = await service.send_notification(
+    result = await service.send_notification(
         payload, user_email=user_email,
         actor_id=current_user.id,
         ip_address=request.client.host if request.client else None,
     )
+    if isinstance(result, list):
+        return ApiResponse(
+            data=[NotificationResponse.model_validate(n) for n in result],
+            message=f"{len(result)} notification(s) sent.",
+        )
     return ApiResponse(
-        data=NotificationResponse.model_validate(notification),
+        data=NotificationResponse.model_validate(result),
         message="Notification sent.",
     )
 

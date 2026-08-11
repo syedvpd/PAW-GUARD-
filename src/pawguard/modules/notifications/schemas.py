@@ -38,6 +38,11 @@ class BroadcastCreate(BaseModel):
     )
     notification_type: str = Field("broadcast", examples=["announcement"])
     action_url: str | None = Field(None, examples=["/announcements/shelter-closure"])
+    target_roles: list[str] | None = Field(
+        None,
+        examples=[["rescue_centre_admin", "shelter_manager"]],
+        description="Broadcast to all active users holding any of these roles.",
+    )
 
 
 class NotificationPreferenceResponse(BaseModel):
@@ -61,7 +66,11 @@ class NotificationPreferenceUpdate(BaseModel):
 
 
 class NotificationSend(BaseModel):
-    user_id: uuid.UUID
+    user_id: uuid.UUID | None = Field(
+        None,
+        examples=["550e8400-e29b-41d4-a716-446655440000"],
+        description="Target user (required unless target_roles is provided).",
+    )
     title: str = Field(..., min_length=1, max_length=255, examples=["Adoption Application Update"])
     body: str = Field(
         ..., min_length=1, examples=["Your application for Barnaby has been approved!"]
@@ -69,6 +78,11 @@ class NotificationSend(BaseModel):
     notification_type: str = Field("general", examples=["adoption_update"])
     action_url: str | None = Field(None, examples=["/adoptions/my-applications"])
     send_email: bool = False
+    target_roles: list[str] | None = Field(
+        None,
+        examples=[["rescue_centre_admin"]],
+        description="Send to all active users holding any of these roles.",
+    )
 
 
 class UnreadCountResponse(BaseModel):

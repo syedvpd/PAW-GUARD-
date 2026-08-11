@@ -343,6 +343,7 @@ class RescueRequestResponse(BaseModel):
     reporter_notes: str | None
     status: RescueStatus
     rejection_rationale: str | None
+    coordinator_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
     dispatch: RescueDispatchResponse | None = None
@@ -381,6 +382,7 @@ class RescueRequestResponse(BaseModel):
                 "reporter_notes": data.reporter_notes,
                 "status": data.status,
                 "rejection_rationale": data.rejection_rationale,
+                "coordinator_id": getattr(data, "coordinator_id", None),
                 "created_at": data.created_at,
                 "updated_at": data.updated_at,
                 "dispatch": getattr(data, "dispatch", None),
@@ -393,3 +395,18 @@ class RescueRequestResponse(BaseModel):
     )
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class RescueAssignCoordinator(BaseModel):
+    """Payload for assigning a coordinator to a rescue case (PRR 3.2)."""
+
+    coordinator_id: uuid.UUID = Field(
+        ...,
+        examples=["550e8400-e29b-41d4-a716-446655440000"],
+        description="UUID of the user to assign as coordinator.",
+    )
+    notes: str | None = Field(
+        None,
+        examples=["Please prioritise this case — animal is in critical condition."],
+        description="Optional notes for the coordinator.",
+    )

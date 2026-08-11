@@ -47,6 +47,7 @@ class AuthAuditEventType(StrEnum):
     RESCUE_DISPATCHED = "rescue_dispatched"
     RESCUE_STATUS_UPDATED = "rescue_status_updated"
     RESCUE_DELETED = "rescue_deleted"
+    RESCUE_COORDINATOR_ASSIGNED = "rescue_coordinator_assigned"
     BULK_RESCUE_STATUS_UPDATED = "bulk_rescue_status_updated"
     BULK_RESCUE_DELETED = "bulk_rescue_deleted"
     ADOPTION_SUBMITTED = "adoption_submitted"

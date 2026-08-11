@@ -138,6 +138,13 @@ class RescueRequest(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
         Boolean, default=False, nullable=False, index=True
     )
     rejection_rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Coordinator assigned to oversee this rescue case (PRR 3.2).
+    coordinator_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     dispatch: Mapped["RescueDispatch | None"] = relationship(
         back_populates="rescue_request", uselist=False, cascade="all, delete-orphan"

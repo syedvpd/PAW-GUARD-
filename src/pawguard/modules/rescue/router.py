@@ -34,6 +34,7 @@ from pawguard.modules.rescue.models import RescueRequest, RescueSeverity, Rescue
 from pawguard.modules.rescue.repository import RescueRepository
 from pawguard.modules.rescue.schemas import (
     PublicRescueStatusResponse,
+    RescueAssignCoordinator,
     RescueDispatchCreate,
     RescueDispatchResponse,
     RescueDispatchUpdate,
@@ -260,6 +261,32 @@ async def verify_request(
         rescue,
         current_user,
         message="Rescue incident verification updated.",
+    )
+
+
+@router.post(
+    "/{request_id}/assign-coordinator",
+    response_model=ApiResponse[RescueRequestResponse],
+    dependencies=[Depends(require_permission("rescue:dispatch"))],
+)
+async def assign_coordinator(
+    request_id: uuid.UUID,
+    payload: RescueAssignCoordinator,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: RescueService = Depends(get_rescue_service),
+) -> ApiResponse[RescueRequestResponse]:
+    rescue = await service.assign_coordinator(
+        request_id,
+        coordinator_id=payload.coordinator_id,
+        notes=payload.notes,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return _masked_rescue_response(
+        rescue,
+        current_user,
+        message="Coordinator assigned to rescue case.",
     )
 
 

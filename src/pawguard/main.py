@@ -94,6 +94,16 @@ async def _seed_roles() -> None:
 def create_app() -> FastAPI:
     settings = get_settings()
 
+    # Fail closed: refuse to start without a configured database URL.
+    # Defense-in-depth alongside the empty default in config.py so a
+    # production deploy cannot accidentally boot pointed at a stale URL.
+    if not settings.database_url:
+        raise RuntimeError(
+            "DATABASE_URL is not configured. Set it in the environment "
+            "before starting the application (e.g. via .env or your "
+            "platform's secret manager)."
+        )
+
     app = FastAPI(
         title=settings.app_name,
         version="0.1.0",

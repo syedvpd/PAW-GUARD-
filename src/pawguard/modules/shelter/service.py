@@ -235,6 +235,7 @@ class ShelterService:
 
         kennel.sanitation_state = status
         await self._repo._session.flush()
+        await self._repo._session.refresh(kennel, attribute_names=["updated_at"])
         if self._audit and actor_id:
             await self._audit.record(
                 event_type=AuthAuditEventType.KENNEL_SANITATION_UPDATED,
@@ -384,6 +385,7 @@ class ShelterService:
             transfer.status = TransferStatus.COMPLETED
 
         await self._repo._session.flush()
+        await self._repo._session.refresh(transfer, attribute_names=["updated_at"])
         return transfer
 
     async def confirm_transfer_sender(

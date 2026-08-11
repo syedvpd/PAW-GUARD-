@@ -4,7 +4,7 @@ import uuid
 
 from arq import ArqRedis
 
-from pawguard.core.exceptions import NotFoundError
+from pawguard.core.exceptions import NotFoundError, ValidationFailedError
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
@@ -64,6 +64,17 @@ class NotificationService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> list[Notification]:
+        # Merge explicit user_ids with users resolved from target_roles
+        target_ids = set(user_ids)
+        if payload.target_roles:
+            from pawguard.modules.auth.repository import UserRepository
+            user_repo = UserRepository(self._repo._session)
+            role_user_ids = await user_repo.get_user_ids_by_roles(payload.target_roles)
+            target_ids.update(role_user_ids)
+
+        if not target_ids:
+            return []
+
         notifications = [
             Notification(
                 user_id=uid,
@@ -73,7 +84,7 @@ class NotificationService:
                 is_broadcast=True,
                 action_url=payload.action_url,
             )
-            for uid in user_ids
+            for uid in target_ids
         ]
         created = await self._repo.create_many(notifications)
         await self._repo._session.flush()
@@ -83,7 +94,11 @@ class NotificationService:
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
-                metadata={"notification_ids": [str(n.id) for n in created], "count": len(created)},
+                metadata={
+                    "notification_ids": [str(n.id) for n in created],
+                    "count": len(created),
+                    "target_roles": payload.target_roles,
+                },
             )
         return created
 
@@ -149,7 +164,44 @@ class NotificationService:
         user_email: str | None = None,
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
-    ) -> Notification:
+    ) -> Notification | list[Notification]:
+        """Send a notification to a specific user or to all users with target_roles."""
+        # Role-targeted fan-out
+        if payload.target_roles:
+            from pawguard.modules.auth.repository import UserRepository
+            user_repo = UserRepository(self._repo._session)
+            role_user_ids = await user_repo.get_user_ids_by_roles(payload.target_roles)
+            if not role_user_ids:
+                return []
+            notifications = [
+                Notification(
+                    user_id=uid,
+                    title=payload.title,
+                    body=payload.body,
+                    notification_type=payload.notification_type,
+                    action_url=payload.action_url,
+                )
+                for uid in role_user_ids
+            ]
+            created = await self._repo.create_many(notifications)
+            await self._repo._session.flush()
+            if self._audit and actor_id:
+                await self._audit.record(
+                    event_type=AuthAuditEventType.NOTIFICATION_SENT,
+                    actor_id=actor_id,
+                    ip_address=ip_address or "",
+                    user_agent="",
+                    metadata={
+                        "notification_ids": [str(n.id) for n in created],
+                        "count": len(created),
+                        "target_roles": payload.target_roles,
+                    },
+                )
+            return created
+
+        # Single-user notification (legacy path)
+        if payload.user_id is None:
+            raise ValidationFailedError("Either user_id or target_roles must be provided.")
         notification = Notification(
             user_id=payload.user_id,
             title=payload.title,

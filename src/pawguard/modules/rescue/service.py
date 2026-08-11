@@ -482,6 +482,7 @@ class RescueService:
             dispatch.failed_at = payload.failed_at
 
         await self._repo._session.flush()
+        await self._repo._session.refresh(dispatch, attribute_names=["updated_at"])
         return dispatch
 
     async def delete_dispatch(
@@ -520,7 +521,6 @@ class RescueService:
         dispatch.escalation_type = escalation_type
         dispatch.escalation_notes = escalation_notes
         await self._repo._session.flush()
-        await self._repo._session.refresh(request)
 
         if self._audit and actor_id:
             await self._audit.record(
@@ -535,7 +535,10 @@ class RescueService:
                 },
             )
 
-        return request
+        res = await self._repo.get_request_by_id(request_id)
+        if res is None:
+            raise NotFoundError("Rescue request not found after escalation.")
+        return res
 
     async def update_dispatch_status(
         self,
@@ -694,6 +697,52 @@ class RescueService:
         request = await self._repo.get_request_by_id(request_id)
         if request is None:
             raise NotFoundError("Rescue request not found.")
+        return request
+
+    async def assign_coordinator(
+        self,
+        request_id: uuid.UUID,
+        coordinator_id: uuid.UUID,
+        notes: str | None = None,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> RescueRequest:
+        """Assign a coordinator to a rescue case and notify them (PRR 3.2)."""
+        request = await self._repo.get_request_by_id(request_id)
+        if request is None:
+            raise NotFoundError("Rescue request not found.")
+
+        # Validate the coordinator user exists and is active.
+        from pawguard.modules.auth.models import User
+        from sqlalchemy import select as sa_select
+        user = await self._repo._session.scalar(
+            sa_select(User.id).where(
+                User.id == coordinator_id,
+                User.is_active.is_(True),
+                User.deleted_at.is_(None),
+            )
+        )
+        if user is None:
+            raise NotFoundError("Coordinator user not found or inactive.")
+
+        request.coordinator_id = coordinator_id
+        await self._repo._session.flush()
+        await self._repo._session.refresh(request, attribute_names=["updated_at"])
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.RESCUE_COORDINATOR_ASSIGNED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "rescue_id": str(request_id),
+                    "coordinator_id": str(coordinator_id),
+                    "notes": notes,
+                },
+            )
+
         return request
 
     async def lookup_public_status(
