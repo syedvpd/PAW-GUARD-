@@ -199,12 +199,11 @@ class ShelterRepository:
     ) -> tuple[Sequence[KennelCleaningLog], int]:
         stmt = select(KennelCleaningLog).where(KennelCleaningLog.kennel_id == kennel_id)
 
-        valid_fields = {"cleaned_at", "sanitation_state_after", "created_at"}
-        stmt = apply_sorting(stmt, sort, valid_fields)
-
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self._session.execute(count_stmt)).scalar_one()
 
+        valid_fields = {"cleaned_at", "sanitation_state_after", "created_at"}
+        stmt = apply_sorting(stmt, sort, valid_fields)
         stmt = stmt.offset(page_params.offset).limit(page_params.limit)
         results = (await self._session.execute(stmt)).scalars().all()
 
@@ -229,15 +228,14 @@ class ShelterRepository:
         if facility_type is not None:
             stmt = stmt.where(ShelterFacility.facility_type == facility_type)
 
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = (await self._session.execute(count_stmt)).scalar_one()
+
         valid_fields = {
             "name", "total_capacity", "status",
             "facility_type", "created_at", "updated_at",
         }
         stmt = apply_sorting(stmt, sort, valid_fields)
-
-        count_stmt = select(func.count()).select_from(stmt.subquery())
-        total = (await self._session.execute(count_stmt)).scalar_one()
-
         stmt = stmt.offset(page_params.offset).limit(page_params.limit)
         results = (await self._session.execute(stmt)).scalars().all()
 
@@ -263,12 +261,11 @@ class ShelterRepository:
         if search_filter is not None:
             stmt = stmt.where(search_filter)
 
-        valid_fields = {"name", "section_type", "capacity", "created_at"}
-        stmt = apply_sorting(stmt, sort, valid_fields)
-
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self._session.execute(count_stmt)).scalar_one()
 
+        valid_fields = {"name", "section_type", "capacity", "created_at"}
+        stmt = apply_sorting(stmt, sort, valid_fields)
         stmt = stmt.offset(page_params.offset).limit(page_params.limit)
         results = (await self._session.execute(stmt)).scalars().all()
 
@@ -285,12 +282,11 @@ class ShelterRepository:
         if section_id is not None:
             stmt = stmt.where(Kennel.section_id == section_id)
 
-        valid_fields = {"identifier", "capacity", "sanitation_state", "created_at"}
-        stmt = apply_sorting(stmt, sort, valid_fields)
-
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self._session.execute(count_stmt)).scalar_one()
 
+        valid_fields = {"identifier", "capacity", "sanitation_state", "created_at"}
+        stmt = apply_sorting(stmt, sort, valid_fields)
         stmt = stmt.offset(page_params.offset).limit(page_params.limit)
         results = (await self._session.execute(stmt)).scalars().all()
 

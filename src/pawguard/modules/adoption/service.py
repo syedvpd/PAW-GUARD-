@@ -583,9 +583,10 @@ class AdoptionService:
         for app in completed_apps:
             if app.completed_at is None:
                 continue
+            existing_follow_ups = await self._repo.get_follow_ups_for_application(app.id)
+            existing_days = {fu.due_day for fu in existing_follow_ups}
             for days in FOLLOW_UP_INTERVALS:
-                existing = await self._repo.get_follow_up_for_milestone(app.id, days)
-                if existing is None:
+                if days not in existing_days:
                     await self._repo.create_follow_up(
                         AdoptionFollowUp(
                             adoption_application_id=app.id,

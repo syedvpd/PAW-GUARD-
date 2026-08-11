@@ -29,6 +29,7 @@ class CurrentUser:
     claims: AccessTokenClaims
     db: AsyncSession
     redis: RedisClient
+    session: UserSession | None = None
 
     @property
     def id(self) -> uuid.UUID:
@@ -62,24 +63,16 @@ async def get_current_user(
     session = await session_repo.get_by_id(claims.session_id)
     if session is None or not session.is_active:
         raise InvalidSessionError("Session has been revoked or has expired.")
+    if session.expires_at < datetime.now(UTC):
+        raise InvalidSessionError("Session has expired.")
 
     user_repo = UserRepository(db)
     user = await user_repo.get_by_id(claims.user_id)
     if user is None or not user.is_active:
         raise AccountInactiveError("Account is inactive or no longer exists.")
 
-    # A valid JWT signature is not enough: the backing session must still be
-    # active and unexpired. This makes logout / password change / account
-    # lockout revoke access immediately instead of leaving a usable token
-    # until its 15-minute expiry (the refresh path already rotates tokens).
-    session = await SessionRepository(db).get_by_id(claims.session_id)
-    if session is None or not session.is_active:
-        raise InvalidSessionError("Session has been revoked or has expired.")
-    if session.expires_at < datetime.now(UTC):
-        raise InvalidSessionError("Session has expired.")
-
     request.state.user_id = user.id
-    return CurrentUser(user=user, claims=claims, db=db, redis=redis)
+    return CurrentUser(user=user, claims=claims, db=db, redis=redis, session=session)
 
 
 async def get_optional_current_user(
@@ -108,32 +101,34 @@ async def get_optional_current_user(
     except TokenError:
         return None
 
+    session_repo = SessionRepository(db)
+    session = await session_repo.get_by_id(claims.session_id)
+    if session is None or not session.is_active or session.expires_at < datetime.now(UTC):
+        return None
+
     user_repo = UserRepository(db)
     user = await user_repo.get_by_id(claims.user_id)
     if user is None or not user.is_active:
         return None
 
-    # Same session check as get_current_user: a revoked/expired session makes
-    # the caller anonymous rather than authenticated.
-    session = await SessionRepository(db).get_by_id(claims.session_id)
-    if session is None or not session.is_active or session.expires_at < datetime.now(UTC):
-        return None
-
     request.state.user_id = user.id
-    return CurrentUser(user=user, claims=claims, db=db, redis=redis)
+    return CurrentUser(user=user, claims=claims, db=db, redis=redis, session=session)
 
 
 async def get_current_session(
     current: CurrentUser = Depends(get_current_user),
 ) -> UserSession:
-    session_repo = SessionRepository(current.db)
-    session = await session_repo.get_by_id(current.claims.session_id)
+    session = current.session
+    if session is None:
+        session_repo = SessionRepository(current.db)
+        session = await session_repo.get_by_id(current.claims.session_id)
     if session is None or not session.is_active:
         raise InvalidSessionError("Session has been revoked or has expired.")
 
     # Inactivity timeout — auto-revoke sessions idle longer than threshold.
     idle = datetime.now(UTC) - session.last_used_at
     if idle > timedelta(days=SESSION_INACTIVITY_TIMEOUT_DAYS):
+        session_repo = SessionRepository(current.db)
         await session_repo.revoke(session.id, reason="inactivity_timeout")
         raise InvalidSessionError("Session has expired due to inactivity.")
 

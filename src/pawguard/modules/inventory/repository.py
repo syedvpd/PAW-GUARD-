@@ -37,6 +37,19 @@ class InventoryRepository:
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    async def get_items_by_ids(self, item_ids: list[uuid.UUID]) -> dict[uuid.UUID, InventoryItem | None]:
+        """Fetch multiple items by ID in a single query.
+        
+        Returns a dict mapping item_id -> item (or None if not found).
+        More efficient than calling get_item in a loop (N+1 problem).
+        """
+        stmt = select(InventoryItem).where(
+            InventoryItem.id.in_(item_ids),
+            InventoryItem.deleted_at.is_(None),
+        )
+        result = await self._session.execute(stmt)
+        return {row.id: row for row in result.scalars().all()}
+
     async def get_item_by_name(self, name: str) -> InventoryItem | None:
         stmt = select(InventoryItem).where(InventoryItem.name == name)
         return (await self._session.execute(stmt)).scalar_one_or_none()
@@ -89,12 +102,11 @@ class InventoryRepository:
         if category is not None:
             stmt = stmt.where(InventoryItem.category == category)
 
-        valid_fields = {"name", "quantity", "category", "created_at", "updated_at", "expiry_date"}
-        stmt = apply_sorting(stmt, sort, valid_fields)
-
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self._session.execute(count_stmt)).scalar_one()
 
+        valid_fields = {"name", "quantity", "category", "created_at", "updated_at", "expiry_date"}
+        stmt = apply_sorting(stmt, sort, valid_fields)
         stmt = stmt.offset(page_params.offset).limit(page_params.limit)
         results = (await self._session.execute(stmt)).scalars().all()
 
@@ -114,12 +126,11 @@ class InventoryRepository:
         if movement_type is not None:
             stmt = stmt.where(InventoryMovement.movement_type == movement_type)
 
-        valid_fields = {"created_at", "quantity", "movement_type"}
-        stmt = apply_sorting(stmt, sort, valid_fields)
-
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self._session.execute(count_stmt)).scalar_one()
 
+        valid_fields = {"created_at", "quantity", "movement_type"}
+        stmt = apply_sorting(stmt, sort, valid_fields)
         stmt = stmt.offset(page_params.offset).limit(page_params.limit)
         results = (await self._session.execute(stmt)).scalars().all()
 
@@ -136,12 +147,11 @@ class InventoryRepository:
         if status is not None:
             stmt = stmt.where(RequisitionOrder.status == status)
 
-        valid_fields = {"created_at", "status", "quantity", "updated_at"}
-        stmt = apply_sorting(stmt, sort, valid_fields)
-
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self._session.execute(count_stmt)).scalar_one()
 
+        valid_fields = {"created_at", "status", "quantity", "updated_at"}
+        stmt = apply_sorting(stmt, sort, valid_fields)
         stmt = stmt.offset(page_params.offset).limit(page_params.limit)
         results = (await self._session.execute(stmt)).scalars().all()
 

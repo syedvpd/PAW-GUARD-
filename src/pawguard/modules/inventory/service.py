@@ -198,6 +198,14 @@ class InventoryService:
             raise NotFoundError("Inventory item not found.")
         return item
 
+    async def get_items_by_ids(self, item_ids: list[uuid.UUID]) -> dict[uuid.UUID, InventoryItem | None]:
+        """Fetch multiple items by ID in a single query.
+
+        Returns a dict mapping item_id -> item (or None if not found).
+        More efficient than calling get_item in a loop (N+1 problem).
+        """
+        return await self._repo.get_items_by_ids(item_ids)
+
     async def list_items(self) -> Sequence[InventoryItem]:
         return await self._repo.list_items()
 

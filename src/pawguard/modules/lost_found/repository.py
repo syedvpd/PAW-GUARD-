@@ -154,12 +154,11 @@ class LostFoundRepository:
         if species is not None:
             stmt = stmt.where(LostReport.species == species)
 
-        valid_fields = {"created_at", "lost_at", "pet_name", "breed", "status"}
-        stmt = apply_sorting(stmt, sort, valid_fields)
-
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self._session.execute(count_stmt)).scalar_one()
 
+        valid_fields = {"created_at", "lost_at", "pet_name", "breed", "status"}
+        stmt = apply_sorting(stmt, sort, valid_fields)
         stmt = stmt.offset(page_params.offset).limit(page_params.limit)
         results = (await self._session.execute(stmt)).scalars().all()
 
@@ -190,12 +189,11 @@ class LostFoundRepository:
         if species is not None:
             stmt = stmt.where(FoundReport.species == species)
 
-        valid_fields = {"created_at", "found_at", "status"}
-        stmt = apply_sorting(stmt, sort, valid_fields)
-
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self._session.execute(count_stmt)).scalar_one()
 
+        valid_fields = {"created_at", "found_at", "status"}
+        stmt = apply_sorting(stmt, sort, valid_fields)
         stmt = stmt.offset(page_params.offset).limit(page_params.limit)
         results = (await self._session.execute(stmt)).scalars().all()
 
@@ -222,12 +220,11 @@ class LostFoundRepository:
         if found_report_id is not None:
             stmt = stmt.where(ReportMatch.found_report_id == found_report_id)
 
-        valid_fields = {"created_at", "confidence_score", "status"}
-        stmt = apply_sorting(stmt, sort, valid_fields)
-
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self._session.execute(count_stmt)).scalar_one()
 
+        valid_fields = {"created_at", "confidence_score", "status"}
+        stmt = apply_sorting(stmt, sort, valid_fields)
         stmt = stmt.offset(page_params.offset).limit(page_params.limit)
         results = (await self._session.execute(stmt)).scalars().all()
 

@@ -96,9 +96,9 @@ class FinanceRepository:
             stmt = stmt.where(ChartOfAccounts.category == category)
         if is_active is not None:
             stmt = stmt.where(ChartOfAccounts.is_active == is_active)
-        stmt = apply_sorting(stmt, sort, self.SORTABLE_FIELDS_ACCOUNTS)
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self._session.execute(count_stmt)).scalar_one()
+        stmt = apply_sorting(stmt, sort, self.SORTABLE_FIELDS_ACCOUNTS)
         stmt = stmt.offset(page.offset).limit(page.limit)
         results = (await self._session.execute(stmt)).scalars().all()
         return results, total
@@ -142,22 +142,29 @@ class FinanceRepository:
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def list_transactions_paginated(
-        self, page: PageParams, sort: SortParams,
+        self,
+        page: PageParams,
+        sort: SortParams,
         search_term: str | None = None,
+        account_id: uuid.UUID | None = None,
         transaction_type: TransactionType | None = None,
         status: TransactionStatus | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
     ) -> tuple[Sequence[FinancialTransaction], int]:
-        stmt = select(FinancialTransaction).where(
-            FinancialTransaction.deleted_at.is_(None)
-        )
+        stmt = select(FinancialTransaction).options(
+            selectinload(FinancialTransaction.account)
+        ).where(FinancialTransaction.deleted_at.is_(None))
         search_filter = build_search_filter(
             FinancialTransaction, search_term,
             self.SEARCH_FIELDS_TRANSACTIONS,
         )
         if search_filter is not None:
             stmt = stmt.where(search_filter)
+        if account_id is not None:
+            stmt = stmt.where(
+                FinancialTransaction.account_id == account_id
+            )
         if transaction_type is not None:
             stmt = stmt.where(
                 FinancialTransaction.transaction_type == transaction_type
@@ -172,9 +179,9 @@ class FinanceRepository:
             stmt = stmt.where(
                 FinancialTransaction.transaction_date <= date_to
             )
-        stmt = apply_sorting(stmt, sort, self.SORTABLE_FIELDS_TRANSACTIONS)
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self._session.execute(count_stmt)).scalar_one()
+        stmt = apply_sorting(stmt, sort, self.SORTABLE_FIELDS_TRANSACTIONS)
         stmt = stmt.offset(page.offset).limit(page.limit)
         results = (await self._session.execute(stmt)).scalars().all()
         return results, total
@@ -489,9 +496,9 @@ class FinanceRepository:
             stmt = stmt.where(Budget.fiscal_year == fiscal_year)
         if is_active is not None:
             stmt = stmt.where(Budget.is_active == is_active)
-        stmt = apply_sorting(stmt, sort, self.SORTABLE_FIELDS_BUDGETS)
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self._session.execute(count_stmt)).scalar_one()
+        stmt = apply_sorting(stmt, sort, self.SORTABLE_FIELDS_BUDGETS)
         stmt = stmt.offset(page.offset).limit(page.limit)
         results = (await self._session.execute(stmt)).scalars().all()
         return results, total
@@ -535,9 +542,9 @@ class FinanceRepository:
             stmt = stmt.where(
                 RecurringTransaction.is_active == is_active
             )
-        stmt = apply_sorting(stmt, sort, self.SORTABLE_FIELDS_RECURRING)
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self._session.execute(count_stmt)).scalar_one()
+        stmt = apply_sorting(stmt, sort, self.SORTABLE_FIELDS_RECURRING)
         stmt = stmt.offset(page.offset).limit(page.limit)
         results = (await self._session.execute(stmt)).scalars().all()
         return results, total

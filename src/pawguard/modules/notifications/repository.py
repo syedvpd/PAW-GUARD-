@@ -56,11 +56,10 @@ class NotificationRepository:
         if search_filter is not None:
             stmt = stmt.where(search_filter)
 
-        stmt = apply_sorting(stmt, sort, self.SORTABLE_FIELDS)
-
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self._session.execute(count_stmt)).scalar_one()
 
+        stmt = apply_sorting(stmt, sort, self.SORTABLE_FIELDS)
         stmt = stmt.offset(page.offset).limit(page.limit)
         results = (await self._session.execute(stmt)).scalars().all()
 

@@ -49,9 +49,9 @@ class CompanionPetRepository:
         stmt = select(CompanionPet).where(CompanionPet.deleted_at.is_(None))
         if owner_id is not None:
             stmt = stmt.where(CompanionPet.owner_id == owner_id)
-        stmt = apply_sorting(stmt, sort, self.PET_SORTABLE_FIELDS, "created_at")
         count = await self._session.execute(select(func.count()).select_from(stmt.subquery()))
         total = count.scalar_one()
+        stmt = apply_sorting(stmt, sort, self.PET_SORTABLE_FIELDS, "created_at")
         rows = (
             (await self._session.execute(stmt.offset(page.offset).limit(page.limit)))
             .scalars()
@@ -126,10 +126,10 @@ class CompanionPetRepository:
         search_filter = build_search_filter(VetClinic, search, ("name", "address", "services"))
         if search_filter is not None:
             stmt = stmt.where(search_filter)
-        stmt = apply_sorting(stmt, sort, self.CLINIC_SORTABLE_FIELDS, "name")
         total = (
             await self._session.execute(select(func.count()).select_from(stmt.subquery()))
         ).scalar_one()
+        stmt = apply_sorting(stmt, sort, self.CLINIC_SORTABLE_FIELDS, "name")
         rows = (
             (await self._session.execute(stmt.offset(page.offset).limit(page.limit)))
             .scalars()
@@ -221,10 +221,10 @@ class CompanionPetRepository:
             stmt = stmt.where(PetAppointment.clinic_id == clinic_id)
         if pet_id is not None:
             stmt = stmt.where(PetAppointment.pet_id == pet_id)
-        stmt = apply_sorting(stmt, sort, self.APPOINTMENT_SORTABLE_FIELDS, "starts_at")
         total = (
             await self._session.execute(select(func.count()).select_from(stmt.subquery()))
         ).scalar_one()
+        stmt = apply_sorting(stmt, sort, self.APPOINTMENT_SORTABLE_FIELDS, "starts_at")
         rows = (
             (await self._session.execute(stmt.offset(page.offset).limit(page.limit)))
             .scalars()

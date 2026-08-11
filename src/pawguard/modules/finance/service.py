@@ -326,24 +326,73 @@ class FinanceService:
     ) -> dict[str, Any]:
         unreconciled = await self._repo.get_unreconciled_donations()
         income_account, cash_account = await self._get_reconcile_accounts()
-        count = 0
-        for donation in unreconciled:
-            await self._reconcile_one_donation(
-                donation, income_account=income_account, cash_account=cash_account
+
+        if not unreconciled:
+            return {"reconciled": 0, "total_amount": 0}
+
+        # Batch: pre-fetch sequence numbers and build all entities in one transaction
+        sequences = []
+        for _ in unreconciled:
+            seq = await self._repo.next_transaction_sequence()
+            sequences.append(seq)
+
+        # Build all transaction + ledger entries
+        for i, donation in enumerate(unreconciled):
+            seq = sequences[i]
+            tx = FinancialTransaction(
+                transaction_number=(
+                    f"DR-{datetime.now(UTC).strftime('%Y%m%d')}-{seq:05d}"
+                ),
+                transaction_type=TransactionType.RECONCILIATION,
+                transaction_date=datetime.now(UTC).date(),
+                amount=donation.amount,
+                currency=donation.currency or "USD",
+                description=f"Donation reconciliation - {donation.id}",
+                donation_id=donation.id,
+                status=TransactionStatus.RECONCILED,
+                reconciled_at=datetime.now(UTC),
             )
-            count += 1
+            await self._repo.create_transaction(tx)
+
+            if income_account and cash_account:
+                entry1 = GeneralLedgerEntry(
+                    account_id=cash_account.id,
+                    transaction_id=tx.id,
+                    debit_amount=donation.amount,
+                    credit_amount=0,
+                    entry_date=datetime.now(UTC).date(),
+                    description=(
+                        f"Donation {donation.id} reconciliation"
+                    ),
+                )
+                await self._repo.create_ledger_entry(entry1)
+
+                entry2 = GeneralLedgerEntry(
+                    account_id=income_account.id,
+                    transaction_id=tx.id,
+                    debit_amount=0,
+                    credit_amount=donation.amount,
+                    entry_date=datetime.now(UTC).date(),
+                    description=(
+                        f"Donation {donation.id} reconciliation"
+                    ),
+                )
+                await self._repo.create_ledger_entry(entry2)
+
+        await self._repo._session.flush()
+
+        count = len(unreconciled)
+        total_amount = sum(d.amount for d in unreconciled)
+
         if self._audit and actor_id:
             await self._audit.record(
                 event_type=AuthAuditEventType.FINANCE_DONATIONS_RECONCILED,
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
-                metadata={"count": count},
+                metadata={"count": count, "total_amount": str(total_amount)},
             )
-        return {
-            "reconciled": count,
-            "total_amount": sum(d.amount for d in unreconciled),
-        }
+        return {"reconciled": count, "total_amount": total_amount}
 
     async def reconcile_donation(
         self,

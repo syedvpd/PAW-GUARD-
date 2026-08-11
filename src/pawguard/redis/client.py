@@ -71,21 +71,29 @@ class _NullRedis:
 
 
 
+_redis_available: bool | None = None
+
 async def _ensure_client() -> RedisClient:
-    global _pool, _client
+    global _pool, _client, _redis_available
     if _client is not None:
         return _client
+    if _redis_available is False:
+        _client = cast(RedisClient, _NullRedis())
+        return _client
     try:
-        _pool = ConnectionPool.from_url(
+        test_client = Redis.from_url(
             _settings.redis_url,
             decode_responses=True,
-            max_connections=100,
+            socket_connect_timeout=0.1,
+            socket_timeout=0.1,
+            retry_on_timeout=False,
         )
-        _client = cast(RedisClient, Redis(connection_pool=_pool))
-        await _client.ping()
+        await test_client.ping()
+        _redis_available = True
+        _client = cast(RedisClient, test_client)
     except Exception:
+        _redis_available = False
         _client = cast(RedisClient, _NullRedis())
-    assert _client is not None
     return _client
 
 

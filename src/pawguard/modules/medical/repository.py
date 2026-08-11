@@ -220,11 +220,10 @@ class MedicalRepository:
         if vet_id is not None:
             stmt = stmt.where(ClinicalExam.vet_id == vet_id)
 
-        stmt = apply_sorting(stmt, sort, self.SORTABLE_FIELDS, "exam_date")
-
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self._session.execute(count_stmt)).scalar_one()
 
+        stmt = apply_sorting(stmt, sort, self.SORTABLE_FIELDS, "exam_date")
         stmt = stmt.offset(page.offset).limit(page.limit)
         results = (await self._session.execute(stmt)).scalars().all()
 
@@ -249,11 +248,10 @@ class MedicalRepository:
         if vet_id is not None:
             stmt = stmt.where(MedicalTreatment.vet_id == vet_id)
 
-        stmt = apply_sorting(stmt, sort, self.SORTABLE_FIELDS, "treatment_date")
-
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self._session.execute(count_stmt)).scalar_one()
 
+        stmt = apply_sorting(stmt, sort, self.SORTABLE_FIELDS, "treatment_date")
         stmt = stmt.offset(page.offset).limit(page.limit)
         results = (await self._session.execute(stmt)).scalars().all()
 
@@ -278,11 +276,10 @@ class MedicalRepository:
         if vet_id is not None:
             stmt = stmt.where(VaccinationRecord.administered_by == vet_id)
 
-        stmt = apply_sorting(stmt, sort, self.SORTABLE_FIELDS, "vaccine_name")
-
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self._session.execute(count_stmt)).scalar_one()
 
+        stmt = apply_sorting(stmt, sort, self.SORTABLE_FIELDS, "vaccine_name")
         stmt = stmt.offset(page.offset).limit(page.limit)
         results = (await self._session.execute(stmt)).scalars().all()
 
@@ -307,11 +304,10 @@ class MedicalRepository:
         if vet_id is not None:
             stmt = stmt.where(Prescription.vet_id == vet_id)
 
-        stmt = apply_sorting(stmt, sort, self.SORTABLE_FIELDS, "drug_name")
-
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self._session.execute(count_stmt)).scalar_one()
 
+        stmt = apply_sorting(stmt, sort, self.SORTABLE_FIELDS, "drug_name")
         stmt = stmt.offset(page.offset).limit(page.limit)
         results = (await self._session.execute(stmt)).scalars().all()
 
