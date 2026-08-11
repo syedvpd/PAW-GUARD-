@@ -230,6 +230,7 @@ class User(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     country: Mapped[str | None] = mapped_column(String(128), nullable=True)
     postal_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
     push_notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    fcm_token: Mapped[str | None] = mapped_column(String(512), nullable=True, index=True)
 
     roles: Mapped[list["Role"]] = relationship(secondary="user_roles", back_populates="users")
     # passive_deletes: these FKs are ON DELETE CASCADE at the DB level: let

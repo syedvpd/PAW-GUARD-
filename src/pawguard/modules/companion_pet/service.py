@@ -24,6 +24,7 @@ from pawguard.modules.companion_pet.models import (
     PetMedicalRecord,
     PetReminder,
     ReminderDelivery,
+    ReminderKind,
     SafetyTag,
     VetClinic,
 )
@@ -219,6 +220,24 @@ class CompanionPetService:
             ip_address,
             {"pet_id": pet.id, "record_id": record.id},
         )
+
+        # Auto-create a reminder when next_reminder_at is provided
+        if payload.next_reminder_at is not None:
+            reminder_kind = payload.reminder_kind or ReminderKind.VACCINATION
+            reminder = PetReminder(
+                owner_id=pet.owner_id,
+                pet_id=pet.id,
+                kind=reminder_kind,
+                title=f"{reminder_kind.value.title()}: {payload.title}",
+                details=payload.notes or f"Reminder for {payload.record_type} record.",
+                due_at=payload.next_reminder_at,
+                source_key=f"medical_record:{record.id}:{reminder_kind.value}",
+            )
+            try:
+                await self._repo.create_reminder(reminder)
+            except IntegrityError:
+                await self._session.rollback()
+
         return record
 
     async def delete_medical_record(
@@ -342,6 +361,32 @@ class CompanionPetService:
             {"pet_id": pet.id, "tag_id": tag.id},
         )
         return tag, pet
+
+    async def get_pet_photo_url(self, pet_id: uuid.UUID) -> str | None:
+        """Return the first uploaded photo URL for a companion pet, or None."""
+        if self._storage is None:
+            return None
+        from sqlalchemy import select
+
+        from pawguard.modules.storage.models import StoredFile
+
+        stmt = (
+            select(StoredFile)
+            .where(
+                StoredFile.deleted_at.is_(None),
+                StoredFile.entity_type == "companion_pet",
+                StoredFile.entity_id == pet_id,
+                StoredFile.is_uploaded.is_(True),
+                StoredFile.mime_type.like("image/%"),
+            )
+            .order_by(StoredFile.created_at.desc())
+            .limit(1)
+        )
+        result = await self._storage._repo._session.execute(stmt)
+        stored = result.scalar_one_or_none()
+        if stored is None:
+            return None
+        return await self._storage.get_download_url_for_object(stored.object_key)
 
     async def get_safety_tag(
         self, pet_id: uuid.UUID, current_user: CurrentUser
@@ -611,7 +656,11 @@ async def deliver_reminder_once(
     notification_service: NotificationService,
     reminder: PetReminder,
 ) -> bool:
-    """Create one in-app reminder delivery; the unique row makes retries safe."""
+    """Create one in-app reminder delivery; the unique row makes retries safe.
+
+    Also sends a push notification via FCM when the owner has push
+    notifications enabled and a valid FCM token is registered.
+    """
     scheduled_for = reminder.due_at.replace(microsecond=0)
     if await repository.get_delivery(reminder.id, reminder.owner_id, scheduled_for) is not None:
         return False
@@ -633,6 +682,15 @@ async def deliver_reminder_once(
                 action_url=f"/api/v1/companion-pets/{reminder.pet_id}/reminders",
             )
         )
+
+        # Push notification via FCM
+        await notification_service._send_push_to_users(
+            [reminder.owner_id],
+            reminder.title,
+            reminder.details or f"Reminder due for companion pet {reminder.pet_id}.",
+            f"/api/v1/companion-pets/{reminder.pet_id}/reminders",
+        )
+
         return True
     except IntegrityError:
         await repository._session.rollback()

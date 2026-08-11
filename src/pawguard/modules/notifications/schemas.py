@@ -78,6 +78,10 @@ class NotificationSend(BaseModel):
     notification_type: str = Field("general", examples=["adoption_update"])
     action_url: str | None = Field(None, examples=["/adoptions/my-applications"])
     send_email: bool = False
+    send_push: bool = Field(
+        False,
+        description="Also deliver as a push notification via FCM when configured.",
+    )
     target_roles: list[str] | None = Field(
         None,
         examples=[["rescue_centre_admin"]],

@@ -58,6 +58,17 @@ class MedicalRecordCreate(BaseModel):
     occurred_at: datetime | None = None
     clinic_id: uuid.UUID | None = None
     stored_file_id: uuid.UUID | None = None
+    next_reminder_at: datetime | None = Field(
+        None,
+        description=(
+            "When set, a vaccination or medication reminder is automatically "
+            "created for the pet owner with due_at set to this timestamp."
+        ),
+    )
+    reminder_kind: ReminderKind | None = Field(
+        None,
+        description="Reminder type (vaccination or medication). Defaults to 'vaccination'.",
+    )
 
 
 class MedicalUploadRequest(BaseModel):
@@ -112,6 +123,7 @@ class SafetyTagScanResponse(BaseModel):
     breed: str | None
     color: str | None
     emergency_notes: str | None
+    photo_url: str | None = None
     message: str = "If this pet needs urgent care, contact a local veterinary clinic."
 
 

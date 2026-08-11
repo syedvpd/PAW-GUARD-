@@ -327,6 +327,33 @@ class DogService:
         image.save(output, format="PNG")
         return output.getvalue()
 
+    async def get_dog_photo_urls(self, dog_id: uuid.UUID, limit: int = 5) -> list[str]:
+        """Return presigned download URLs for up to *limit* dog photos."""
+        from sqlalchemy import select
+
+        from pawguard.modules.storage.models import StoredFile
+
+        stmt = (
+            select(StoredFile)
+            .where(
+                StoredFile.deleted_at.is_(None),
+                StoredFile.entity_type == "dog",
+                StoredFile.entity_id == dog_id,
+                StoredFile.is_uploaded.is_(True),
+                StoredFile.mime_type.like("image/%"),
+            )
+            .order_by(StoredFile.created_at.desc())
+            .limit(limit)
+        )
+        result = await self._repo._session.execute(stmt)
+        files = result.scalars().all()
+        if not files:
+            return []
+        from pawguard.services.storage_service import StorageService as S3Storage
+
+        s3 = S3Storage()
+        return [s3.generate_presigned_download_url(f.object_key) for f in files]
+
     async def update_dog(
         self,
         dog_id: uuid.UUID,
