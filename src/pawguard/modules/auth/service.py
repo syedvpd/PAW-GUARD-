@@ -878,6 +878,7 @@ class AuthService:
         country: str | None = None,
         postal_code: str | None = None,
         push_notifications_enabled: bool | None = None,
+        fcm_token: str | None = None,
         ctx: RequestContext,
     ) -> User:
         user = await self._users.get_by_id(user_id)
@@ -910,6 +911,8 @@ class AuthService:
             user.postal_code = postal_code
         if push_notifications_enabled is not None:
             user.push_notifications_enabled = push_notifications_enabled
+        if fcm_token is not None:
+            user.fcm_token = fcm_token if fcm_token else None
 
         await self._users._session.flush()
         await self._users._session.refresh(user)

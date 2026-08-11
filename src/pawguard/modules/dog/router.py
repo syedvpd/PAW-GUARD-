@@ -218,6 +218,7 @@ async def public_scan_dog(
     resolve_client_ip(request)
     dog = await service.get_dog(dog_id)
     public = _public_dog_view(DogProfileResponse.model_validate(dog))
+    photo_urls = await service.get_dog_photo_urls(dog_id)
     return ApiResponse(
         data=PublicDogScanResponse(
             name=public.name,
@@ -228,6 +229,7 @@ async def public_scan_dog(
             weight_kg=public.weight,
             temperament=public.temperament,
             color=public.color,
+            photo_gallery_urls=photo_urls,
             current_status=public.status,
             is_adoptable=public.is_adoptable,
             registration_number=public.registration_number,

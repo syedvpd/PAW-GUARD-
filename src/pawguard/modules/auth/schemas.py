@@ -171,6 +171,10 @@ class UserProfileUpdate(BaseModel):
     country: str | None = Field(None, examples=["India"])
     postal_code: str | None = Field(None, alias="pin_code", examples=["500081"])
     push_notifications_enabled: bool | None = Field(None, alias="push_notifications", examples=[True])
+    fcm_token: str | None = Field(
+        None,
+        description="FCM device token for push notifications.",
+    )
 
     model_config = {
         "populate_by_name": True,

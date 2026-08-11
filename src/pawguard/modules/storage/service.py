@@ -228,6 +228,10 @@ class StorageService:
             file_id=stored.id,
         )
 
+    async def get_download_url_for_object(self, object_key: str) -> str:
+        """Generate a presigned download URL directly from an S3 object key."""
+        return self._s3.generate_presigned_download_url(object_key=object_key)
+
     async def get_file(self, file_id: uuid.UUID) -> StoredFile:
         stored = await self._repo.get_by_id(file_id)
         if stored is None:

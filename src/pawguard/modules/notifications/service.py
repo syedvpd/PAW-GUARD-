@@ -5,6 +5,7 @@ import uuid
 from arq import ArqRedis
 
 from pawguard.core.exceptions import NotFoundError, ValidationFailedError
+from pawguard.core.logging import get_logger
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
@@ -21,6 +22,8 @@ from pawguard.modules.notifications.schemas import (
     NotificationSend,
 )
 from pawguard.services.audit_service import AuditService
+
+logger = get_logger(__name__)
 
 
 class NotificationService:
@@ -197,6 +200,12 @@ class NotificationService:
                         "target_roles": payload.target_roles,
                     },
                 )
+
+            if payload.send_push and role_user_ids:
+                await self._send_push_to_users(
+                    role_user_ids, payload.title, payload.body, payload.action_url
+                )
+
             return created
 
         # Single-user notification (legacy path)
@@ -228,7 +237,48 @@ class NotificationService:
                 body=payload.body,
             )
 
+        if payload.send_push:
+            await self._send_push_to_users(
+                [payload.user_id], payload.title, payload.body, payload.action_url
+            )
+
         return created
+
+    async def _send_push_to_users(
+        self,
+        user_ids: list[uuid.UUID],
+        title: str,
+        body: str,
+        action_url: str | None = None,
+    ) -> int:
+        """Send push notifications to users who have FCM tokens and push enabled."""
+        from sqlalchemy import select
+
+        from pawguard.modules.auth.models import User
+        from pawguard.services.push_service import send_push_notification_to_users
+
+        if not user_ids:
+            return 0
+
+        stmt = select(User.id, User.fcm_token).where(
+            User.id.in_(user_ids),
+            User.is_active.is_(True),
+            User.deleted_at.is_(None),
+            User.push_notifications_enabled.is_(True),
+            User.fcm_token.isnot(None),
+            User.fcm_token != "",
+        )
+        result = await self._repo._session.execute(stmt)
+        rows = result.all()
+
+        if not rows:
+            return 0
+
+        tokens = [(row[0], row[1]) for row in rows]
+        data = {"action_url": action_url} if action_url else None
+        return await send_push_notification_to_users(
+            tokens, title=title, body=body, data=data
+        )
 
     async def broadcast_to_all_users(
         self,

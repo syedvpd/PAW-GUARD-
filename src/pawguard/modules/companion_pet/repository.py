@@ -250,10 +250,14 @@ class CompanionPetRepository:
         )
         return (await self._session.execute(stmt)).scalars().all()
 
-    async def list_due_reminders(self, until: datetime) -> Sequence[PetReminder]:
+    async def list_due_reminders(
+        self, from_at: datetime, until: datetime
+    ) -> Sequence[PetReminder]:
+        """Return active, non-deleted reminders due within [from_at, until]."""
         stmt = select(PetReminder).where(
             PetReminder.deleted_at.is_(None),
             PetReminder.is_active.is_(True),
+            PetReminder.due_at >= from_at,
             PetReminder.due_at <= until,
         )
         return (await self._session.execute(stmt)).scalars().all()

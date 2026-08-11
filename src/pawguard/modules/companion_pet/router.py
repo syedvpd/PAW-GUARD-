@@ -326,6 +326,7 @@ async def scan_safety_tag(
     service: CompanionPetService = Depends(get_companion_pet_service),
 ) -> ApiResponse[SafetyTagScanResponse]:
     _tag, pet = await service.scan_safety_tag(payload.token, resolve_client_ip(request))
+    photo_url = await service.get_pet_photo_url(pet.id)
     return ApiResponse(
         data=SafetyTagScanResponse(
             pet_id=pet.id,
@@ -334,6 +335,7 @@ async def scan_safety_tag(
             breed=pet.breed,
             color=pet.color,
             emergency_notes=pet.emergency_notes,
+            photo_url=photo_url,
         )
     )
 
