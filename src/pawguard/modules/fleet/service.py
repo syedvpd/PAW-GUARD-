@@ -51,9 +51,8 @@ class FleetService:
     ) -> Vehicle:
         if await self._repo.get_vehicle_by_plate(payload.license_plate) is not None:
             raise ConflictError(f"Vehicle with plate '{payload.license_plate}' already exists.")
-        if payload.primary_driver_id is not None:
-            if not await self._repo.user_exists(payload.primary_driver_id):
-                raise NotFoundError(f"Primary driver user with ID '{payload.primary_driver_id}' not found.")
+        if payload.primary_driver_id is not None and not await self._repo.user_exists(payload.primary_driver_id):
+            raise NotFoundError(f"Primary driver user with ID '{payload.primary_driver_id}' not found.")
         vehicle = await self._repo.create_vehicle(Vehicle(**payload.model_dump()))
         if self._audit and actor_id:
             await self._audit.record(
@@ -79,12 +78,12 @@ class FleetService:
             existing = await self._repo.get_vehicle_by_plate(payload.license_plate)
             if existing is not None:
                 raise ConflictError(f"Vehicle with plate '{payload.license_plate}' already exists.")
-        if payload.primary_driver_id is not None:
-            if not await self._repo.user_exists(payload.primary_driver_id):
-                raise NotFoundError(f"Primary driver user with ID '{payload.primary_driver_id}' not found.")
+        if payload.primary_driver_id is not None and not await self._repo.user_exists(payload.primary_driver_id):
+            raise NotFoundError(f"Primary driver user with ID '{payload.primary_driver_id}' not found.")
         for field, value in payload.model_dump(exclude_unset=True).items():
             setattr(vehicle, field, value)
         await self._repo._session.flush()
+        await self._repo._session.refresh(vehicle, attribute_names=["updated_at"])
         if self._audit and actor_id:
             await self._audit.record(
                 event_type=AuthAuditEventType.FLEET_VEHICLE_UPDATED,
