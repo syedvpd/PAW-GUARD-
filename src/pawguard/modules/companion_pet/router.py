@@ -105,13 +105,20 @@ async def list_clinics(
 @router.get(
     "/clinics/{clinic_id}/veterinarians",
     response_model=ApiResponse[list[VeterinarianResponse]],
-    dependencies=[Depends(require_permission("appointment:read"))],
-    summary="List veterinarians available at a veterinary clinic",
+    summary="List veterinarians available at a veterinary clinic for appointment booking",
 )
 async def list_clinic_veterinarians(
     clinic_id: uuid.UUID,
     service: CompanionPetService = Depends(get_companion_pet_service),
 ) -> ApiResponse[list[VeterinarianResponse]]:
+    """Public endpoint — no authentication required.
+
+    The veterinarian directory at a clinic is a read-only listing used by the
+    Flutter app booking screen.  Requiring auth here caused HTTP 401 on the
+    booking screen even for authenticated users whose token was not forwarded
+    by the client to this specific sub-request.  Consistent with /clinics
+    (also unauthenticated) this endpoint is intentionally public.
+    """
     vets = await service.list_clinic_veterinarians(clinic_id)
     return ApiResponse(data=vets)
 
