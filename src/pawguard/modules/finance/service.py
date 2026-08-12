@@ -1,4 +1,5 @@
 import uuid
+from collections.abc import Sequence
 from datetime import UTC, date, datetime
 from typing import Any
 
@@ -321,10 +322,34 @@ class FinanceService:
     async def reconcile_donations(
         self,
         *,
+        donation_ids: list[uuid.UUID] | None = None,
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> dict[str, Any]:
-        unreconciled = await self._repo.get_unreconciled_donations()
+        if donation_ids:
+            unreconciled: Sequence[Donation] = []
+            seen: set[uuid.UUID] = set()
+            for donation_id in donation_ids:
+                if donation_id in seen:
+                    continue
+                seen.add(donation_id)
+                donation = await self._repo.get_donation_by_id(donation_id)
+                if donation is None:
+                    raise NotFoundError(
+                        f"Donation record not found for id: {donation_id}."
+                    )
+                if donation.status != DonationStatus.SUCCESS:
+                    raise ValidationFailedError(
+                        "Only successful donations can be reconciled."
+                    )
+                if await self._repo.is_donation_reconciled(donation_id):
+                    raise ConflictError(
+                        f"Donation {donation_id} is already reconciled."
+                    )
+                unreconciled.append(donation)
+        else:
+            unreconciled = await self._repo.get_unreconciled_donations()
+
         income_account, cash_account = await self._get_reconcile_accounts()
 
         if not unreconciled:

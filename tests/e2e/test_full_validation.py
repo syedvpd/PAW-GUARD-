@@ -896,19 +896,19 @@ class TestCompanionPets:
 
 @pytest.mark.asyncio
 class TestDashboards:
-    async def test_rescue(self, c, d): await call(c,"dashboards","GET","/api/v1/dashboards/rescue",headers=S.admin_headers,expected=200)
-    async def test_shelter(self, c, d): await call(c,"dashboards","GET","/api/v1/dashboards/shelter",headers=S.admin_headers,expected=200)
-    async def test_medical(self, c, d): await call(c,"dashboards","GET","/api/v1/dashboards/medical",headers=S.admin_headers,expected=200)
-    async def test_adoption(self, c, d): await call(c,"dashboards","GET","/api/v1/dashboards/adoption",headers=S.admin_headers,expected=200)
-    async def test_foster(self, c, d): await call(c,"dashboards","GET","/api/v1/dashboards/foster",headers=S.admin_headers,expected=200)
-    async def test_volunteer(self, c, d): await call(c,"dashboards","GET","/api/v1/dashboards/volunteer",headers=S.admin_headers,expected=200)
-    async def test_inventory(self, c, d): await call(c,"dashboards","GET","/api/v1/dashboards/inventory",headers=S.admin_headers,expected=200)
-    async def test_finance(self, c, d): await call(c,"dashboards","GET","/api/v1/dashboards/finance",headers=S.admin_headers,expected=200)
-    async def test_donor(self, c, d): await call(c,"dashboards","GET","/api/v1/dashboards/donor",headers=S.admin_headers,expected=200)
-    async def test_staff(self, c, d): await call(c,"dashboards","GET","/api/v1/dashboards/staff",headers=S.admin_headers,expected=200)
-    async def test_executive(self, c, d): await call(c,"dashboards","GET","/api/v1/dashboards/executive",headers=S.admin_headers,expected=200)
-    async def test_public(self, c, d): await call(c,"dashboards","GET","/api/v1/dashboards/public",expected=200)
-    async def test_operations(self, c, d): await call(c,"dashboards","GET","/api/v1/dashboards/operations",headers=S.admin_headers,expected=200)
+    async def test_rescue(self, client, db_session): await call(client,"dashboards","GET","/api/v1/dashboards/rescue",headers=S.admin_headers,expected=200)
+    async def test_shelter(self, client, db_session): await call(client,"dashboards","GET","/api/v1/dashboards/shelter",headers=S.admin_headers,expected=200)
+    async def test_medical(self, client, db_session): await call(client,"dashboards","GET","/api/v1/dashboards/medical",headers=S.admin_headers,expected=200)
+    async def test_adoption(self, client, db_session): await call(client,"dashboards","GET","/api/v1/dashboards/adoption",headers=S.admin_headers,expected=200)
+    async def test_foster(self, client, db_session): await call(client,"dashboards","GET","/api/v1/dashboards/foster",headers=S.admin_headers,expected=200)
+    async def test_volunteer(self, client, db_session): await call(client,"dashboards","GET","/api/v1/dashboards/volunteer",headers=S.admin_headers,expected=200)
+    async def test_inventory(self, client, db_session): await call(client,"dashboards","GET","/api/v1/dashboards/inventory",headers=S.admin_headers,expected=200)
+    async def test_finance(self, client, db_session): await call(client,"dashboards","GET","/api/v1/dashboards/finance",headers=S.admin_headers,expected=200)
+    async def test_donor(self, client, db_session): await call(client,"dashboards","GET","/api/v1/dashboards/donor",headers=S.admin_headers,expected=200)
+    async def test_staff(self, client, db_session): await call(client,"dashboards","GET","/api/v1/dashboards/staff",headers=S.admin_headers,expected=200)
+    async def test_executive(self, client, db_session): await call(client,"dashboards","GET","/api/v1/dashboards/executive",headers=S.admin_headers,expected=200)
+    async def test_public(self, client, db_session): await call(client,"dashboards","GET","/api/v1/dashboards/public",expected=200)
+    async def test_operations(self, client, db_session): await call(client,"dashboards","GET","/api/v1/dashboards/operations",headers=S.admin_headers,expected=200)
 
 
 @pytest.mark.asyncio
@@ -925,10 +925,10 @@ class TestAdminDashboard:
 
 @pytest.mark.asyncio
 class TestAdminAudit:
-    async def test_list(self, c, d): await call(c,"admin-audit","GET","/api/v1/admin/audit-logs",headers=S.admin_headers,expected=200)
-    async def test_export_get(self, c, d): await call(c,"admin-audit","GET","/api/v1/admin/audit-logs/export",headers=S.admin_headers,expected=200)
-    async def test_export_post(self, c, d): await call(c,"admin-audit","POST","/api/v1/admin/audit-logs/export",headers=S.admin_headers,expected=200)
-    async def test_get_one(self, c, d): await call(c,"admin-audit","GET",f"/api/v1/admin/audit-logs/{uuid.uuid4()}",headers=S.admin_headers,expected=404)
+    async def test_list(self, client, db_session): await call(client,"admin-audit","GET","/api/v1/admin/audit-logs",headers=S.admin_headers,expected=200)
+    async def test_export_get(self, client, db_session): await call(client,"admin-audit","GET","/api/v1/admin/audit-logs/export",headers=S.admin_headers,expected=200)
+    async def test_export_post(self, client, db_session): await call(client,"admin-audit","POST","/api/v1/admin/audit-logs/export",headers=S.admin_headers,expected=200)
+    async def test_get_one(self, client, db_session): await call(client,"admin-audit","GET",f"/api/v1/admin/audit-logs/{uuid.uuid4()}",headers=S.admin_headers,expected=404)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -937,9 +937,9 @@ class TestAdminAudit:
 
 @pytest.mark.asyncio
 class TestHealth:
-    async def test_health(self, c, d): await call(c,"common","GET","/health",expected=200)
-    async def test_live(self, c, d): await call(c,"common","GET","/live",expected=200)
-    async def test_ready(self, c, d): await call(c,"common","GET","/ready",expected=200)
+    async def test_health(self, client, db_session): await call(client,"common","GET","/health",expected=200)
+    async def test_live(self, client, db_session): await call(client,"common","GET","/live",expected=200)
+    async def test_ready(self, client, db_session): await call(client,"common","GET","/ready",expected=200)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -948,10 +948,10 @@ class TestHealth:
 
 @pytest.mark.asyncio
 class TestReports:
-    async def test_types(self, c, d): await call(c,"reports","GET","/api/v1/reports/types",headers=S.admin_headers,expected=200)
-    async def test_formats(self, c, d): await call(c,"reports","GET","/api/v1/reports/formats",headers=S.admin_headers,expected=200)
-    async def test_generate(self, c, d): await call(c,"reports","POST","/api/v1/reports/generate",headers=S.admin_headers,json={"report_type":"rescue_summary","format":"pdf"},expected=200)
-    async def test_download(self, c, d): await call(c,"reports","GET",f"/api/v1/reports/download/{uid()}.pdf",headers=S.admin_headers,expected=404)
+    async def test_types(self, client, db_session): await call(client,"reports","GET","/api/v1/reports/types",headers=S.admin_headers,expected=200)
+    async def test_formats(self, client, db_session): await call(client,"reports","GET","/api/v1/reports/formats",headers=S.admin_headers,expected=200)
+    async def test_generate(self, client, db_session): await call(client,"reports","POST","/api/v1/reports/generate",headers=S.admin_headers,json={"report_type":"rescue_summary","format":"pdf"},expected=200)
+    async def test_download(self, client, db_session): await call(client,"reports","GET",f"/api/v1/reports/download/{uid()}.pdf",headers=S.admin_headers,expected=404)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1580,8 +1580,12 @@ class TestFinance:
 
     async def test_reconcile_donations(self, client, db_session):
         await call(client, "finance", "POST", "/api/v1/finance/reconcile/donations",
+                   headers=S.admin_headers, expected=200)
+
+    async def test_reconcile_donations_rejects_unknown_fields(self, client, db_session):
+        await call(client, "finance", "POST", "/api/v1/finance/reconcile/donations",
                    headers=S.admin_headers,
-                   json={"start_date": "2026-01-01", "end_date": "2026-12-31"}, expected=200)
+                   json={"start_date": "2026-01-01", "end_date": "2026-12-31"}, expected=422)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -2506,125 +2510,125 @@ class TestPortal:
     cms_slug = None
 
     # --- Public (14) ---
-    async def test_stats(self, c, d): await call(c,"portal","GET","/api/v1/portal/stats",expected=200)
-    async def test_blog(self, c, d): await call(c,"portal","GET","/api/v1/portal/blog",expected=200)
-    async def test_blog_slug(self, c, d): await call(c,"portal","GET","/api/v1/portal/blog/slug/test-slug",expected=404)
-    async def test_faq(self, c, d): await call(c,"portal","GET","/api/v1/portal/faq",expected=200)
-    async def test_contact(self, c, d): await call(c,"portal","GET","/api/v1/portal/contact",expected=200)
-    async def test_legal(self, c, d): await call(c,"portal","GET","/api/v1/portal/legal",expected=200)
-    async def test_legal_slug(self, c, d): await call(c,"portal","GET","/api/v1/portal/legal/test-slug",expected=404)
-    async def test_success_stories(self, c, d): await call(c,"portal","GET","/api/v1/portal/success-stories",expected=200)
-    async def test_story_detail(self, c, d): await call(c,"portal","GET",f"/api/v1/portal/success-stories/{uuid.uuid4()}",expected=404)
-    async def test_urgent_alerts(self, c, d): await call(c,"portal","GET","/api/v1/portal/urgent-alerts",expected=200)
-    async def test_transparency(self, c, d): await call(c,"portal","GET","/api/v1/portal/transparency",expected=200)
-    async def test_vet_network(self, c, d): await call(c,"portal","GET","/api/v1/portal/veterinary-network",expected=200)
-    async def test_me_dashboard(self, c, d): await call(c,"portal","GET","/api/v1/portal/me/dashboard",headers=S.user_headers,expected=200)
-    async def test_cms_public(self, c, d): await call(c,"portal","GET","/api/v1/portal/cms/pages/about",expected=200)
+    async def test_stats(self, client, db_session): await call(client,"portal","GET","/api/v1/portal/stats",expected=200)
+    async def test_blog(self, client, db_session): await call(client,"portal","GET","/api/v1/portal/blog",expected=200)
+    async def test_blog_slug(self, client, db_session): await call(client,"portal","GET","/api/v1/portal/blog/slug/test-slug",expected=404)
+    async def test_faq(self, client, db_session): await call(client,"portal","GET","/api/v1/portal/faq",expected=200)
+    async def test_contact(self, client, db_session): await call(client,"portal","GET","/api/v1/portal/contact",expected=200)
+    async def test_legal(self, client, db_session): await call(client,"portal","GET","/api/v1/portal/legal",expected=200)
+    async def test_legal_slug(self, client, db_session): await call(client,"portal","GET","/api/v1/portal/legal/test-slug",expected=404)
+    async def test_success_stories(self, client, db_session): await call(client,"portal","GET","/api/v1/portal/success-stories",expected=200)
+    async def test_story_detail(self, client, db_session): await call(client,"portal","GET",f"/api/v1/portal/success-stories/{uuid.uuid4()}",expected=404)
+    async def test_urgent_alerts(self, client, db_session): await call(client,"portal","GET","/api/v1/portal/urgent-alerts",expected=200)
+    async def test_transparency(self, client, db_session): await call(client,"portal","GET","/api/v1/portal/transparency",expected=200)
+    async def test_vet_network(self, client, db_session): await call(client,"portal","GET","/api/v1/portal/veterinary-network",expected=200)
+    async def test_me_dashboard(self, client, db_session): await call(client,"portal","GET","/api/v1/portal/me/dashboard",headers=S.user_headers,expected=200)
+    async def test_cms_public(self, client, db_session): await call(client,"portal","GET","/api/v1/portal/cms/pages/about",expected=200)
 
     # --- Admin Blog (6) ---
-    async def test_admin_blog_create(self, c, d):
-        r = await call(c,"portal","POST","/api/v1/portal/admin/blog",headers=S.admin_headers,json={"title":f"Blog_{uid()}","content":"Test","status":"draft"},expected=201)
+    async def test_admin_blog_create(self, client, db_session):
+        r = await call(client,"portal","POST","/api/v1/portal/admin/blog",headers=S.admin_headers,json={"title":f"Blog_{uid()}","content":"Test","status":"draft"},expected=201)
         if r.status_code==201: TestPortal.blog_id=r.json()["data"]["id"]
-    async def test_admin_blog_list(self, c, d): await call(c,"portal","GET","/api/v1/portal/admin/blog",headers=S.admin_headers,expected=200)
-    async def test_admin_blog_update(self, c, d):
-        if TestPortal.blog_id: await call(c,"portal","PUT",f"/api/v1/portal/admin/blog/{TestPortal.blog_id}",headers=S.admin_headers,json={"title":"Updated"},expected=200)
-    async def test_admin_blog_delete(self, c, d):
-        r = await c.post("/api/v1/portal/admin/blog",headers=S.admin_headers,json={"title":f"Del_{uid()}","content":"x","status":"draft"})
+    async def test_admin_blog_list(self, client, db_session): await call(client,"portal","GET","/api/v1/portal/admin/blog",headers=S.admin_headers,expected=200)
+    async def test_admin_blog_update(self, client, db_session):
+        if TestPortal.blog_id: await call(client,"portal","PUT",f"/api/v1/portal/admin/blog/{TestPortal.blog_id}",headers=S.admin_headers,json={"title":"Updated"},expected=200)
+    async def test_admin_blog_delete(self, client, db_session):
+        r = await client.post("/api/v1/portal/admin/blog",headers=S.admin_headers,json={"title":f"Del_{uid()}","content":"x","status":"draft"})
         if r.status_code==201:
             bid=r.json()["data"]["id"]
-            await call(c,"portal","DELETE",f"/api/v1/portal/admin/blog/{bid}",headers=S.admin_headers,expected=200)
-    async def test_admin_blog_bulk_delete(self, c, d): await call(c,"portal","POST","/api/v1/portal/admin/blog/bulk/delete",headers=S.admin_headers,json={"ids":[]},expected=200)
-    async def test_admin_blog_bulk_status(self, c, d): await call(c,"portal","POST","/api/v1/portal/admin/blog/bulk/status",headers=S.admin_headers,json={"ids":[],"status":"published"},expected=200)
+            await call(client,"portal","DELETE",f"/api/v1/portal/admin/blog/{bid}",headers=S.admin_headers,expected=200)
+    async def test_admin_blog_bulk_delete(self, client, db_session): await call(client,"portal","POST","/api/v1/portal/admin/blog/bulk/delete",headers=S.admin_headers,json={"ids":[]},expected=200)
+    async def test_admin_blog_bulk_status(self, client, db_session): await call(client,"portal","POST","/api/v1/portal/admin/blog/bulk/status",headers=S.admin_headers,json={"ids":[],"status":"published"},expected=200)
 
     # --- Admin FAQ (6) ---
-    async def test_admin_faq_create(self, c, d):
-        r = await call(c,"portal","POST","/api/v1/portal/admin/faq",headers=S.admin_headers,json={"question":f"Q_{uid()}?","answer":"A","category":"general"},expected=201)
+    async def test_admin_faq_create(self, client, db_session):
+        r = await call(client,"portal","POST","/api/v1/portal/admin/faq",headers=S.admin_headers,json={"question":f"Q_{uid()}?","answer":"A","category":"general"},expected=201)
         if r.status_code==201: TestPortal.faq_id=r.json()["data"]["id"]
-    async def test_admin_faq_list(self, c, d): await call(c,"portal","GET","/api/v1/portal/admin/faq",headers=S.admin_headers,expected=200)
-    async def test_admin_faq_update(self, c, d):
-        if TestPortal.faq_id: await call(c,"portal","PUT",f"/api/v1/portal/admin/faq/{TestPortal.faq_id}",headers=S.admin_headers,json={"answer":"Updated"},expected=200)
-    async def test_admin_faq_delete(self, c, d):
-        r = await c.post("/api/v1/portal/admin/faq",headers=S.admin_headers,json={"question":"Del?","answer":"x","category":"general"})
+    async def test_admin_faq_list(self, client, db_session): await call(client,"portal","GET","/api/v1/portal/admin/faq",headers=S.admin_headers,expected=200)
+    async def test_admin_faq_update(self, client, db_session):
+        if TestPortal.faq_id: await call(client,"portal","PUT",f"/api/v1/portal/admin/faq/{TestPortal.faq_id}",headers=S.admin_headers,json={"answer":"Updated"},expected=200)
+    async def test_admin_faq_delete(self, client, db_session):
+        r = await client.post("/api/v1/portal/admin/faq",headers=S.admin_headers,json={"question":"Del?","answer":"x","category":"general"})
         if r.status_code==201:
             fid=r.json()["data"]["id"]
-            await call(c,"portal","DELETE",f"/api/v1/portal/admin/faq/{fid}",headers=S.admin_headers,expected=200)
-    async def test_admin_faq_bulk_delete(self, c, d): await call(c,"portal","POST","/api/v1/portal/admin/faq/bulk/delete",headers=S.admin_headers,json={"ids":[]},expected=200)
-    async def test_admin_faq_bulk_status(self, c, d): await call(c,"portal","POST","/api/v1/portal/admin/faq/bulk/status",headers=S.admin_headers,json={"ids":[],"status":"published"},expected=200)
+            await call(client,"portal","DELETE",f"/api/v1/portal/admin/faq/{fid}",headers=S.admin_headers,expected=200)
+    async def test_admin_faq_bulk_delete(self, client, db_session): await call(client,"portal","POST","/api/v1/portal/admin/faq/bulk/delete",headers=S.admin_headers,json={"ids":[]},expected=200)
+    async def test_admin_faq_bulk_status(self, client, db_session): await call(client,"portal","POST","/api/v1/portal/admin/faq/bulk/status",headers=S.admin_headers,json={"ids":[],"status":"published"},expected=200)
 
     # --- Admin Contact (2) ---
-    async def test_admin_contact_create(self, c, d):
-        r = await call(c,"portal","POST","/api/v1/portal/admin/contact",headers=S.admin_headers,json={"location_name":f"Contact_{uid()}","address":"123","phone":"+1","email":"c@test.com"},expected=201)
+    async def test_admin_contact_create(self, client, db_session):
+        r = await call(client,"portal","POST","/api/v1/portal/admin/contact",headers=S.admin_headers,json={"location_name":f"Contact_{uid()}","address":"123","phone":"+1","email":"c@test.com"},expected=201)
         if r.status_code==201: TestPortal.contact_id=r.json()["data"]["id"]
-    async def test_admin_contact_update(self, c, d):
-        if TestPortal.contact_id: await call(c,"portal","PUT",f"/api/v1/portal/admin/contact/{TestPortal.contact_id}",headers=S.admin_headers,json={"phone":"+2"},expected=200)
+    async def test_admin_contact_update(self, client, db_session):
+        if TestPortal.contact_id: await call(client,"portal","PUT",f"/api/v1/portal/admin/contact/{TestPortal.contact_id}",headers=S.admin_headers,json={"phone":"+2"},expected=200)
 
     # --- Admin Legal (4) ---
-    async def test_admin_legal_create(self, c, d):
-        r = await call(c,"portal","POST","/api/v1/portal/admin/legal",headers=S.admin_headers,json={"title":f"Legal_{uid()}","content":"Content","document_type":"privacy_policy"},expected=201)
+    async def test_admin_legal_create(self, client, db_session):
+        r = await call(client,"portal","POST","/api/v1/portal/admin/legal",headers=S.admin_headers,json={"title":f"Legal_{uid()}","content":"Content","document_type":"privacy_policy"},expected=201)
         if r.status_code==201: TestPortal.legal_id=r.json()["data"]["id"]
-    async def test_admin_legal_list(self, c, d): await call(c,"portal","GET","/api/v1/portal/admin/legal",headers=S.admin_headers,expected=200)
-    async def test_admin_legal_update(self, c, d):
-        if TestPortal.legal_id: await call(c,"portal","PUT",f"/api/v1/portal/admin/legal/{TestPortal.legal_id}",headers=S.admin_headers,json={"content":"Updated"},expected=200)
-    async def test_admin_legal_delete(self, c, d):
-        r = await c.post("/api/v1/portal/admin/legal",headers=S.admin_headers,json={"title":"Del","content":"x","document_type":"privacy_policy"})
+    async def test_admin_legal_list(self, client, db_session): await call(client,"portal","GET","/api/v1/portal/admin/legal",headers=S.admin_headers,expected=200)
+    async def test_admin_legal_update(self, client, db_session):
+        if TestPortal.legal_id: await call(client,"portal","PUT",f"/api/v1/portal/admin/legal/{TestPortal.legal_id}",headers=S.admin_headers,json={"content":"Updated"},expected=200)
+    async def test_admin_legal_delete(self, client, db_session):
+        r = await client.post("/api/v1/portal/admin/legal",headers=S.admin_headers,json={"title":"Del","content":"x","document_type":"privacy_policy"})
         if r.status_code==201:
             lid=r.json()["data"]["id"]
-            await call(c,"portal","DELETE",f"/api/v1/portal/admin/legal/{lid}",headers=S.admin_headers,expected=200)
+            await call(client,"portal","DELETE",f"/api/v1/portal/admin/legal/{lid}",headers=S.admin_headers,expected=200)
 
     # --- Admin Success Stories (6) ---
-    async def test_admin_story_create(self, c, d):
-        r = await call(c,"portal","POST","/api/v1/portal/admin/success-stories",headers=S.admin_headers,json={"title":f"Story_{uid()}","content":"Happy story","dog_name":"Buddy"},expected=201)
+    async def test_admin_story_create(self, client, db_session):
+        r = await call(client,"portal","POST","/api/v1/portal/admin/success-stories",headers=S.admin_headers,json={"title":f"Story_{uid()}","content":"Happy story","dog_name":"Buddy"},expected=201)
         if r.status_code==201: TestPortal.story_id=r.json()["data"]["id"]
-    async def test_admin_story_list(self, c, d): await call(c,"portal","GET","/api/v1/portal/admin/success-stories",headers=S.admin_headers,expected=200)
-    async def test_admin_story_update(self, c, d):
-        if TestPortal.story_id: await call(c,"portal","PUT",f"/api/v1/portal/admin/success-stories/{TestPortal.story_id}",headers=S.admin_headers,json={"content":"Updated"},expected=200)
-    async def test_admin_story_delete(self, c, d):
-        r = await c.post("/api/v1/portal/admin/success-stories",headers=S.admin_headers,json={"title":"Del","content":"x","dog_name":"X"})
+    async def test_admin_story_list(self, client, db_session): await call(client,"portal","GET","/api/v1/portal/admin/success-stories",headers=S.admin_headers,expected=200)
+    async def test_admin_story_update(self, client, db_session):
+        if TestPortal.story_id: await call(client,"portal","PUT",f"/api/v1/portal/admin/success-stories/{TestPortal.story_id}",headers=S.admin_headers,json={"content":"Updated"},expected=200)
+    async def test_admin_story_delete(self, client, db_session):
+        r = await client.post("/api/v1/portal/admin/success-stories",headers=S.admin_headers,json={"title":"Del","content":"x","dog_name":"X"})
         if r.status_code==201:
             sid=r.json()["data"]["id"]
-            await call(c,"portal","DELETE",f"/api/v1/portal/admin/success-stories/{sid}",headers=S.admin_headers,expected=200)
-    async def test_admin_story_bulk_delete(self, c, d): await call(c,"portal","POST","/api/v1/portal/admin/success-stories/bulk/delete",headers=S.admin_headers,json={"ids":[]},expected=200)
-    async def test_admin_story_bulk_status(self, c, d): await call(c,"portal","POST","/api/v1/portal/admin/success-stories/bulk/status",headers=S.admin_headers,json={"ids":[],"status":"published"},expected=200)
+            await call(client,"portal","DELETE",f"/api/v1/portal/admin/success-stories/{sid}",headers=S.admin_headers,expected=200)
+    async def test_admin_story_bulk_delete(self, client, db_session): await call(client,"portal","POST","/api/v1/portal/admin/success-stories/bulk/delete",headers=S.admin_headers,json={"ids":[]},expected=200)
+    async def test_admin_story_bulk_status(self, client, db_session): await call(client,"portal","POST","/api/v1/portal/admin/success-stories/bulk/status",headers=S.admin_headers,json={"ids":[],"status":"published"},expected=200)
 
     # --- Admin Urgent Alerts (4) ---
-    async def test_admin_alert_create(self, c, d):
-        r = await call(c,"portal","POST","/api/v1/portal/admin/urgent-alerts",headers=S.admin_headers,json={"title":f"Alert_{uid()}","message":"Emergency","severity":"high"},expected=201)
+    async def test_admin_alert_create(self, client, db_session):
+        r = await call(client,"portal","POST","/api/v1/portal/admin/urgent-alerts",headers=S.admin_headers,json={"title":f"Alert_{uid()}","message":"Emergency","severity":"high"},expected=201)
         if r.status_code==201: TestPortal.alert_id=r.json()["data"]["id"]
-    async def test_admin_alert_list(self, c, d): await call(c,"portal","GET","/api/v1/portal/admin/urgent-alerts",headers=S.admin_headers,expected=200)
-    async def test_admin_alert_update(self, c, d):
-        if TestPortal.alert_id: await call(c,"portal","PUT",f"/api/v1/portal/admin/urgent-alerts/{TestPortal.alert_id}",headers=S.admin_headers,json={"message":"Updated"},expected=200)
-    async def test_admin_alert_delete(self, c, d):
-        r = await c.post("/api/v1/portal/admin/urgent-alerts",headers=S.admin_headers,json={"title":"Del","message":"x","severity":"low"})
+    async def test_admin_alert_list(self, client, db_session): await call(client,"portal","GET","/api/v1/portal/admin/urgent-alerts",headers=S.admin_headers,expected=200)
+    async def test_admin_alert_update(self, client, db_session):
+        if TestPortal.alert_id: await call(client,"portal","PUT",f"/api/v1/portal/admin/urgent-alerts/{TestPortal.alert_id}",headers=S.admin_headers,json={"message":"Updated"},expected=200)
+    async def test_admin_alert_delete(self, client, db_session):
+        r = await client.post("/api/v1/portal/admin/urgent-alerts",headers=S.admin_headers,json={"title":"Del","message":"x","severity":"low"})
         if r.status_code==201:
             aid=r.json()["data"]["id"]
-            await call(c,"portal","DELETE",f"/api/v1/portal/admin/urgent-alerts/{aid}",headers=S.admin_headers,expected=200)
+            await call(client,"portal","DELETE",f"/api/v1/portal/admin/urgent-alerts/{aid}",headers=S.admin_headers,expected=200)
 
     # --- Admin Vet Network (2) ---
-    async def test_admin_vet_create(self, c, d):
-        r = await call(c,"portal","POST","/api/v1/portal/admin/veterinary-network",headers=S.admin_headers,json={"name":f"Vet_{uid()}","address":"Vet St","phone":"+1"},expected=201)
+    async def test_admin_vet_create(self, client, db_session):
+        r = await call(client,"portal","POST","/api/v1/portal/admin/veterinary-network",headers=S.admin_headers,json={"name":f"Vet_{uid()}","address":"Vet St","phone":"+1"},expected=201)
         if r.status_code==201: TestPortal.vet_partner_id=r.json()["data"]["id"]
-    async def test_admin_vet_update(self, c, d):
-        if TestPortal.vet_partner_id: await call(c,"portal","PUT",f"/api/v1/portal/admin/veterinary-network/{TestPortal.vet_partner_id}",headers=S.admin_headers,json={"phone":"+2"},expected=200)
+    async def test_admin_vet_update(self, client, db_session):
+        if TestPortal.vet_partner_id: await call(client,"portal","PUT",f"/api/v1/portal/admin/veterinary-network/{TestPortal.vet_partner_id}",headers=S.admin_headers,json={"phone":"+2"},expected=200)
 
     # --- Admin Settings (2) ---
-    async def test_admin_settings_get(self, c, d): await call(c,"portal","GET","/api/v1/portal/admin/settings",headers=S.admin_headers,expected=200)
-    async def test_admin_settings_update(self, c, d):
-        r = await c.get("/api/v1/portal/admin/settings",headers=S.admin_headers)
+    async def test_admin_settings_get(self, client, db_session): await call(client,"portal","GET","/api/v1/portal/admin/settings",headers=S.admin_headers,expected=200)
+    async def test_admin_settings_update(self, client, db_session):
+        r = await client.get("/api/v1/portal/admin/settings",headers=S.admin_headers)
         if r.status_code==200:
             data=r.json().get("data",{})
             if data:
                 key=list(data.keys())[0]
-                await call(c,"portal","PUT",f"/api/v1/portal/admin/settings/{key}",headers=S.admin_headers,json={"value":"Updated"},expected=200)
+                await call(client,"portal","PUT",f"/api/v1/portal/admin/settings/{key}",headers=S.admin_headers,json={"value":"Updated"},expected=200)
 
     # --- Admin CMS (5) ---
-    async def test_admin_cms_list(self, c, d): await call(c,"portal","GET","/api/v1/portal/admin/cms/pages",headers=S.admin_headers,expected=200)
-    async def test_admin_cms_get(self, c, d): await call(c,"portal","GET",f"/api/v1/portal/admin/cms/pages/about",headers=S.admin_headers,expected=200)
-    async def test_admin_cms_update(self, c, d):
-        await call(c,"portal","PUT",f"/api/v1/portal/admin/cms/pages/about",headers=S.admin_headers,json={"title":"About Us","content":"Updated"},expected=200)
-    async def test_admin_cms_publish(self, c, d):
-        await call(c,"portal","POST",f"/api/v1/portal/admin/cms/pages/about/publish",headers=S.admin_headers,expected=200)
-    async def test_admin_cms_discard(self, c, d):
-        await call(c,"portal","POST",f"/api/v1/portal/admin/cms/pages/about/discard",headers=S.admin_headers,expected=200)
+    async def test_admin_cms_list(self, client, db_session): await call(client,"portal","GET","/api/v1/portal/admin/cms/pages",headers=S.admin_headers,expected=200)
+    async def test_admin_cms_get(self, client, db_session): await call(client,"portal","GET",f"/api/v1/portal/admin/cms/pages/about",headers=S.admin_headers,expected=200)
+    async def test_admin_cms_update(self, client, db_session):
+        await call(client,"portal","PUT",f"/api/v1/portal/admin/cms/pages/about",headers=S.admin_headers,json={"title":"About Us","content":"Updated"},expected=200)
+    async def test_admin_cms_publish(self, client, db_session):
+        await call(client,"portal","POST",f"/api/v1/portal/admin/cms/pages/about/publish",headers=S.admin_headers,expected=200)
+    async def test_admin_cms_discard(self, client, db_session):
+        await call(client,"portal","POST",f"/api/v1/portal/admin/cms/pages/about/discard",headers=S.admin_headers,expected=200)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

@@ -295,7 +295,11 @@ class TestFinanceEndpoints:
 
     async def test_finance_reconcile_donations(self, client, setup):
         r = await call(client, "finance", "POST", "/api/v1/finance/reconcile/donations",
+                       headers=setup.admin_headers, expected=200)
+
+    async def test_finance_reconcile_donations_rejects_unknown_fields(self, client, setup):
+        r = await call(client, "finance", "POST", "/api/v1/finance/reconcile/donations",
                        headers=setup.admin_headers, json={
                            "start_date": "2026-01-01",
                            "end_date": "2026-01-31",
-                       }, expected=200)
+                       }, expected=422)

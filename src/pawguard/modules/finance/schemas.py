@@ -217,3 +217,24 @@ class DonationReconciliationResponse(BaseModel):
     reconciled_amount: Decimal
     unreconciled_count: int
     unreconciled_amount: Decimal
+
+
+class DonationReconcileRequest(BaseModel):
+    """Request body for reconciling donations into the finance ledger.
+
+    Unknown fields (e.g. ``dog_id``, ``file_id``, ``start_date``) are rejected
+    with a 422 so callers cannot silently pass ignored IDs.
+    """
+
+    donation_ids: list[uuid.UUID] | None = Field(
+        default=None,
+        min_length=1,
+        max_length=500,
+        description=(
+            "Optional subset of successful donations to reconcile. "
+            "When omitted, all unreconciled successful donations are reconciled."
+        ),
+        examples=[["3fa85f64-5717-4562-b3fc-2c963f66afa6"]],
+    )
+
+    model_config = ConfigDict(extra="forbid")

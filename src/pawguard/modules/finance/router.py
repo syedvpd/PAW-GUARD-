@@ -26,6 +26,7 @@ from pawguard.modules.finance.schemas import (
     ChartOfAccountsCreate,
     ChartOfAccountsResponse,
     ChartOfAccountsUpdate,
+    DonationReconcileRequest,
     FinancialTransactionCreate,
     FinancialTransactionResponse,
     FinancialTransactionUpdate,
@@ -283,12 +284,15 @@ async def get_account_balances(
 )
 async def reconcile_donations(
     request: Request,
+    payload: DonationReconcileRequest | None = None,
     current_user: CurrentUser = Depends(get_current_user),
     service: FinanceService = Depends(get_finance_service),
 ) -> ApiResponse[dict[str, Any]]:
     ip = request.client.host if request.client else None
     result = await service.reconcile_donations(
-        actor_id=current_user.id, ip_address=ip
+        donation_ids=payload.donation_ids if payload else None,
+        actor_id=current_user.id,
+        ip_address=ip,
     )
     return ApiResponse(
         data=result, message=f"Reconciled {result['reconciled']} donations."
