@@ -522,6 +522,53 @@ async def reconcile_roles(
     return created_roles, granted_total
 
 
+async def backfill_default_role(
+    session: AsyncSession,
+    *,
+    role_name: str = "general_public",
+    verbose: bool = True,
+) -> int:
+    """Assign the default public role to every active user that has no role.
+
+    Some legacy accounts were created before role assignment was enforced at
+    registration / OAuth sign-in, leaving them with zero roles. A role-less
+    account passes authentication but fails every permission check (e.g.
+    ``companion_pet:read``), so the booking screen's "my pets" list returns
+    HTTP 403 and the UI renders an empty "No pets yet" state even though the
+    user does own pets. Granting the lowest-privilege public role restores
+    access without widening any capability. Idempotent: only users with no
+    role at all are touched.
+    """
+    from pawguard.modules.auth.models import Role, User, UserRole
+
+    role = (await session.execute(select(Role).where(Role.name == role_name))).scalars().first()
+    if role is None:
+        if verbose:
+            print(f"  [SKIP] default role '{role_name}' does not exist yet")
+        return 0
+
+    orphan_users = (
+        await session.execute(
+            select(User)
+            .where(User.is_active.is_(True), User.deleted_at.is_(None))
+            .where(~User.id.in_(select(UserRole.user_id)))
+        )
+    ).scalars().all()
+
+    granted = 0
+    for user in orphan_users:
+        session.add(UserRole(user_id=user.id, role_id=role.id))
+        granted += 1
+    await session.flush()
+
+    if verbose:
+        if granted:
+            print(f"  [FIX] {granted} role-less user(s) granted '{role_name}'")
+        else:
+            print(f"  [OK] no role-less users need the '{role_name}' role")
+    return granted
+
+
 async def seed_db(label: str, database_url: str) -> None:
     if not database_url:
         print(f"SKIP [{label}]: No database URL configured.")
