@@ -1,5 +1,6 @@
 """VolunteerService: owns volunteer shifts, attendance, and onboarding logic (RULE-003)."""
 
+import asyncio
 import uuid
 from datetime import UTC, datetime
 from logging import getLogger
@@ -376,7 +377,8 @@ class VolunteerService:
 
         volunteer_name = profile.user.full_name if profile.user else "Volunteer"
         settings = get_settings()
-        pdf_bytes = generate_volunteer_certificate(
+        pdf_bytes = await asyncio.to_thread(
+            generate_volunteer_certificate,
             volunteer_name=volunteer_name,
             total_hours=summary.total_hours,
             shifts_count=summary.shifts_count,
@@ -393,7 +395,8 @@ class VolunteerService:
                 folder=FileFolder.CERTIFICATES.value,
                 filename=f"service_certificate_{profile_id}.pdf",
             )
-            storage_service.put_object(
+            await asyncio.to_thread(
+                storage_service.put_object,
                 object_key=object_key,
                 content=pdf_bytes,
                 content_type="application/pdf",

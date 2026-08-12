@@ -1,5 +1,6 @@
 """Cross-cutting HTTP middleware: request ID, timing/logging, security headers, body size."""
 
+import re
 import time
 import uuid
 from collections.abc import Awaitable, Callable
@@ -12,54 +13,115 @@ from starlette.responses import Response
 from pawguard.core.config import get_settings
 from pawguard.core.constants import REQUEST_ID_HEADER
 from pawguard.core.logging import get_logger
-from pawguard.core.metrics import increment_counter, observe_histogram
+from pawguard.core.metrics import (
+    dec_gauge,
+    inc_gauge,
+    increment_counter,
+    observe_histogram,
+)
 
 logger = get_logger(__name__)
 
 RequestResponseEndpoint = Callable[[Request], Awaitable[Response]]
 
+TRACE_ID_HEADER = "x-trace-id"
+SPAN_ID_HEADER = "x-span-id"
+
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
-    """Assigns a request ID and binds structlog context for the LOGGING CONTRACT."""
+    """Assigns request_id, trace_id, and span_id, binding context for structured logging and distributed tracing."""
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        request_id = request.headers.get(REQUEST_ID_HEADER, str(uuid.uuid4()))
+        request_id = request.headers.get("x-request-id", request.headers.get(REQUEST_ID_HEADER, str(uuid.uuid4())))
+        trace_id = request.headers.get("x-trace-id", request.headers.get("traceparent", str(uuid.uuid4().hex)))
+        span_id = request.headers.get("x-span-id", str(uuid.uuid4().hex[:16]))
+
         request.state.request_id = request_id
+        request.state.trace_id = trace_id
+        request.state.span_id = span_id
+
         structlog.contextvars.clear_contextvars()
-        structlog.contextvars.bind_contextvars(request_id=request_id)
+        structlog.contextvars.bind_contextvars(
+            request_id=request_id,
+            trace_id=trace_id,
+            span_id=span_id,
+        )
 
         response = await call_next(request)
         response.headers[REQUEST_ID_HEADER] = request_id
+        response.headers["X-Trace-ID"] = trace_id
+        response.headers["X-Span-ID"] = span_id
         return response
+
+
+_UUID_REGEX = re.compile(
+    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+)
+
+
+def _resolve_route_path(request: Request) -> str:
+    """Resolve low-cardinality route template (e.g. /api/v1/dogs/{id}) to prevent metric explosion."""
+    route = request.scope.get("route")
+    if route is not None and hasattr(route, "path"):
+        return str(route.path)
+    return _UUID_REGEX.sub("{id}", request.url.path)
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
-    """Logs one structured line per request: method, path, status, latency, user."""
+    """Logs structured metrics & RED telemetry per request: rate, error rate, duration, and in-flight gauge."""
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        method = request.method
+        inc_gauge("http_requests_in_flight", {"method": method})
         start = time.perf_counter()
-        response = await call_next(request)
-        latency_ms = round((time.perf_counter() - start) * 1000, 2)
 
-        user_id = getattr(request.state, "user_id", None)
-        labels = {
-            "method": request.method,
-            "path": request.url.path,
-            "status": str(response.status_code),
-        }
-        increment_counter("http_requests_total", labels)
-        observe_histogram("http_request_duration_ms", latency_ms, labels)
+        try:
+            response = await call_next(request)
+            latency_ms = round((time.perf_counter() - start) * 1000, 2)
+            status_code = response.status_code
+            status_class = f"{status_code // 100}xx"
+            route_path = _resolve_route_path(request)
 
-        logger.info(
-            "request_completed",
-            method=request.method,
-            path=request.url.path,
-            module=request.url.path.strip("/").split("/")[:3],
-            status_code=response.status_code,
-            latency_ms=latency_ms,
-            user_id=str(user_id) if user_id else None,
-        )
-        return response
+            red_labels = {
+                "method": method,
+                "route": route_path,
+                "status_class": status_class,
+                "status": str(status_code),
+            }
+            increment_counter("http_requests_total", red_labels)
+
+            if status_code >= 400:
+                increment_counter(
+                    "http_requests_errors_total",
+                    {"method": method, "route": route_path, "status_class": status_class},
+                )
+            if status_code in (408, 504):
+                increment_counter(
+                    "http_request_timeouts_total",
+                    {"method": method, "route": route_path},
+                )
+
+            observe_histogram(
+                "http_request_duration_ms",
+                latency_ms,
+                {"method": method, "route": route_path, "status_class": status_class},
+            )
+
+            user_id = getattr(request.state, "user_id", None)
+            logger.info(
+                "request_completed",
+                method=method,
+                path=request.url.path,
+                route=route_path,
+                module=request.url.path.strip("/").split("/")[:3],
+                status_code=status_code,
+                status_class=status_class,
+                latency_ms=latency_ms,
+                user_id=str(user_id) if user_id else None,
+            )
+            return response
+        finally:
+            dec_gauge("http_requests_in_flight", {"method": method})
 
 
 # Paths whose HTML pages need to load JS/CSS from a CDN (Swagger UI / ReDoc assets).

@@ -1,5 +1,6 @@
 """AdoptionService: owns all adoption vetting and exclusivity logic (RULE-003)."""
 
+import asyncio
 import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -32,7 +33,7 @@ from pawguard.modules.notifications.service import NotificationService
 from pawguard.modules.shelter.repository import ShelterRepository
 from pawguard.modules.shelter.schemas import NearbyShelterResponse
 from pawguard.modules.storage.models import FileFolder, StoredFile
-from pawguard.redis.client import RedisClient
+from pawguard.redis.client import RedisClient, _NullRedis
 from pawguard.services.audit_service import AuditService
 from pawguard.services.cache_service import CacheService
 from pawguard.services.storage_service import StorageService
@@ -127,7 +128,8 @@ class AdoptionService:
             )
             dog = application.dog
             settings = get_settings()
-            pdf_bytes = generate_adoption_agreement(
+            pdf_bytes = await asyncio.to_thread(
+                generate_adoption_agreement,
                 adopter_name=adopter_name,
                 dog_name=dog.name if dog else "Dog",
                 dog_registration_number=dog.registration_number if dog else "",
@@ -139,7 +141,8 @@ class AdoptionService:
             object_key = self._storage.build_object_key(
                 folder="documents", filename=f"agreement_{application.id}.pdf"
             )
-            self._storage.put_object(
+            await asyncio.to_thread(
+                self._storage.put_object,
                 object_key=object_key,
                 content=pdf_bytes,
                 content_type="application/pdf",
@@ -231,7 +234,7 @@ class AdoptionService:
         lock_token = str(uuid.uuid4())
         lock_acquired = False
         cache_svc = None
-        if self._redis is not None:
+        if self._redis is not None and not isinstance(self._redis, _NullRedis):
             cache_svc = CacheService(self._redis, namespace="adoptions")
             lock_acquired = await cache_svc.acquire_lock(
                 f"lock:dog:{payload.dog_id}", lock_token, expire_ms=10000
@@ -309,7 +312,7 @@ class AdoptionService:
                 lock_token = str(uuid.uuid4())
                 lock_acquired = False
                 cache_svc = None
-                if self._redis is not None:
+                if self._redis is not None and not isinstance(self._redis, _NullRedis):
                     cache_svc = CacheService(self._redis, namespace="adoptions")
                     lock_acquired = await cache_svc.acquire_lock(
                         f"lock:dog:{app.dog_id}", lock_token, expire_ms=10000
@@ -387,7 +390,7 @@ class AdoptionService:
             lock_token = str(uuid.uuid4())
             lock_acquired = False
             cache_svc = None
-            if self._redis is not None:
+            if self._redis is not None and not isinstance(self._redis, _NullRedis):
                 cache_svc = CacheService(self._redis, namespace="adoptions")
                 lock_acquired = await cache_svc.acquire_lock(
                     f"lock:dog:{app.dog_id}", lock_token, expire_ms=10000

@@ -7,12 +7,14 @@ the request path per TRANSACTION RULES.
 import calendar
 import uuid
 from datetime import UTC, date, datetime, timedelta
+from typing import Any
 
 from arq import Retry
 from sqlalchemy import and_, select
 from sqlalchemy.exc import InterfaceError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from pawguard.core.logging import get_logger
 from pawguard.core.payments import PaymentGatewayError, get_payment_gateway
 from pawguard.db.session import AsyncSessionLocal
 from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
@@ -32,6 +34,8 @@ from pawguard.modules.notifications.repository import NotificationRepository
 from pawguard.modules.notifications.schemas import NotificationCreate, NotificationSend
 from pawguard.modules.notifications.service import NotificationService
 from pawguard.workers.jobs.retry import retry_defer
+
+logger = get_logger(__name__)
 
 
 def _notification_service(
@@ -259,79 +263,91 @@ def _next_month_clamped(current: date) -> date:
 
 
 async def _run_sponsorship_charges(today: date, ctx: dict[str, object]) -> None:
+    # 1. Fetch due sponsorships in a quick read-only query
+    async with AsyncSessionLocal() as session:
+        donation_repo = DonationRepository(session)
+        sponsorships = await donation_repo.get_due_sponsorships(today)
+
+    if not sponsorships:
+        return
+
+    # 2. Process each due sponsorship in an independent, short atomic transaction
+    for sp in sponsorships:
+        await _process_single_sponsorship(sp, ctx)
+
+
+async def _process_single_sponsorship(sp: Any, ctx: dict[str, object]) -> None:
     async with AsyncSessionLocal() as session:
         donation_repo = DonationRepository(session)
         notification_svc = _notification_service(session, ctx)
 
-        sponsorships = await donation_repo.get_due_sponsorships(today)
-        if not sponsorships:
+        # Idempotency guard: Skip if there is already an active PENDING donation (PRD 3.11)
+        if await donation_repo.has_pending_donation_for_sponsorship(sp.id):
             return
 
-        for sp in sponsorships:
-            # Check if there is already an active PENDING donation for this sponsorship (PRD 3.11)
-            if await donation_repo.has_pending_donation_for_sponsorship(sp.id):
-                continue
+        donation = Donation(
+            donor_id=sp.donor_id,
+            dog_id=sp.dog_id,
+            amount=sp.monthly_amount,
+            currency=sp.currency,
+            donation_type=DonationType.SPONSORSHIP,
+            status=DonationStatus.PENDING,
+            sponsorship_id=sp.id,
+            notes="Monthly sponsorship charge requires manual collection.",
+        )
 
-            donation = Donation(
-                donor_id=sp.donor_id,
-                dog_id=sp.dog_id,
-                amount=sp.monthly_amount,
-                currency=sp.currency,
-                donation_type=DonationType.SPONSORSHIP,
-                status=DonationStatus.PENDING,
-                sponsorship_id=sp.id,
-                notes="Monthly sponsorship charge requires manual collection.",
-            )
+        try:
+            gateway = get_payment_gateway()
+        except PaymentGatewayError:
+            gateway = None
 
+        if gateway is not None:
+            receipt_id = f"spons_{sp.id}_{sp.next_charge_date.strftime('%Y%m')}"
             try:
-                gateway = get_payment_gateway()
-            except PaymentGatewayError:
-                gateway = None
-
-            if gateway is not None:
-                try:
-                    order = await gateway.create_order(
-                        amount=sp.monthly_amount,
-                        currency=sp.currency,
-                        receipt=str(uuid.uuid4()),
-                        notes={
-                            "sponsorship_id": str(sp.id),
-                            "donor_id": str(sp.donor_id),
-                        },
-                    )
-                except PaymentGatewayError:
-                    order = None
-
-                if order is not None:
-                    donation.payment_provider = order.provider
-                    donation.gateway_order_id = order.order_id
-                    donation.notes = (
-                        "Monthly sponsorship charge initiated; awaiting payment."
-                    )
-
-            await donation_repo.create_donation(donation)
-
-            next_date = _next_month_clamped(sp.next_charge_date)
-            await donation_repo.advance_charge_date(sp.id, next_date)
-
-            if sp.donor and sp.donor.user_id:
-                n_payload = NotificationSend(
-                    user_id=sp.donor.user_id,
-                    title="Monthly Sponsorship Charge",
-                    body=(
-                        f"Your monthly sponsorship of {sp.monthly_amount} {sp.currency} "
-                        f"for dog {sp.dog_id} is now due. We'll let you know once "
-                        f"your payment has been received."
-                    ),
-                    notification_type="sponsorship_charge",
-                    send_email=True,
+                order = await gateway.create_order(
+                    amount=sp.monthly_amount,
+                    currency=sp.currency,
+                    receipt=receipt_id,
+                    notes={
+                        "sponsorship_id": str(sp.id),
+                        "donor_id": str(sp.donor_id),
+                    },
                 )
+            except PaymentGatewayError:
+                order = None
+
+            if order is not None:
+                donation.payment_provider = order.provider
+                donation.gateway_order_id = order.order_id
+                donation.notes = (
+                    "Monthly sponsorship charge initiated; awaiting payment."
+                )
+
+        await donation_repo.create_donation(donation)
+        next_date = _next_month_clamped(sp.next_charge_date)
+        await donation_repo.advance_charge_date(sp.id, next_date)
+        await session.commit()
+
+        if sp.donor and sp.donor.user_id:
+            n_payload = NotificationSend(
+                user_id=sp.donor.user_id,
+                title="Monthly Sponsorship Charge",
+                body=(
+                    f"Your monthly sponsorship of {sp.monthly_amount} {sp.currency} "
+                    f"for dog {sp.dog_id} is now due. We'll let you know once "
+                    f"your payment has been received."
+                ),
+                notification_type="sponsorship_charge",
+                send_email=True,
+            )
+            try:
                 await notification_svc.send_notification(
                     payload=n_payload,
                     user_email=sp.donor.user.email if sp.donor.user else None,
                 )
-
-        await session.commit()
+                await session.commit()
+            except Exception as exc:
+                logger.warning("sponsorship_notification_failed", sponsorship_id=str(sp.id), error=str(exc))
 
 
 async def check_grievance_sla_escalation(ctx: dict[str, object]) -> None:

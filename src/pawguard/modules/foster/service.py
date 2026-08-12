@@ -1,5 +1,6 @@
 """FosterService: owns foster applications, home availability, and placements (RULE-003)."""
 
+import asyncio
 import uuid
 from datetime import UTC, datetime
 
@@ -462,7 +463,8 @@ class FosterService:
         try:
             adopter_name = foster.user.full_name if foster.user else "Foster Parent"
             settings = get_settings()
-            pdf_bytes = generate_adoption_agreement(
+            pdf_bytes = await asyncio.to_thread(
+                generate_adoption_agreement,
                 adopter_name=adopter_name,
                 dog_name=dog.name if dog else "Dog",
                 dog_registration_number=dog.registration_number if dog else "",
@@ -474,7 +476,8 @@ class FosterService:
             object_key = storage.build_object_key(
                 folder="documents", filename=f"agreement_{app.id}.pdf"
             )
-            storage.put_object(
+            await asyncio.to_thread(
+                storage.put_object,
                 object_key=object_key,
                 content=pdf_bytes,
                 content_type="application/pdf",

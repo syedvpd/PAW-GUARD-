@@ -1,0 +1,3498 @@
+[
+  {
+    "id": 1,
+    "method": "GET",
+    "path": "/api/v1/admin/audit-logs",
+    "module": "admin-audit",
+    "operation_id": "list_audit_logs_api_v1_admin_audit_logs_get",
+    "summary": "List Audit Logs"
+  },
+  {
+    "id": 2,
+    "method": "GET",
+    "path": "/api/v1/admin/audit-logs/export",
+    "module": "admin-audit",
+    "operation_id": "export_audit_logs_api_v1_admin_audit_logs_export_get",
+    "summary": "Export Audit Logs"
+  },
+  {
+    "id": 3,
+    "method": "POST",
+    "path": "/api/v1/admin/audit-logs/export",
+    "module": "admin-audit",
+    "operation_id": "export_audit_logs_api_v1_admin_audit_logs_export_post",
+    "summary": "Export Audit Logs"
+  },
+  {
+    "id": 4,
+    "method": "GET",
+    "path": "/api/v1/admin/audit-logs/{entry_id}",
+    "module": "admin-audit",
+    "operation_id": "get_audit_log_api_v1_admin_audit_logs__entry_id__get",
+    "summary": "Get Audit Log"
+  },
+  {
+    "id": 5,
+    "method": "GET",
+    "path": "/api/v1/admin/dashboard/adoption-stats",
+    "module": "admin-dashboard",
+    "operation_id": "get_adoption_stats_api_v1_admin_dashboard_adoption_stats_get",
+    "summary": "Get Adoption Stats"
+  },
+  {
+    "id": 6,
+    "method": "GET",
+    "path": "/api/v1/admin/dashboard/charts",
+    "module": "admin-dashboard",
+    "operation_id": "get_charts_api_v1_admin_dashboard_charts_get",
+    "summary": "Get Charts"
+  },
+  {
+    "id": 7,
+    "method": "GET",
+    "path": "/api/v1/admin/dashboard/donation-summary",
+    "module": "admin-dashboard",
+    "operation_id": "get_donation_summary_api_v1_admin_dashboard_donation_summary_get",
+    "summary": "Get Donation Summary"
+  },
+  {
+    "id": 8,
+    "method": "GET",
+    "path": "/api/v1/admin/dashboard/foster-stats",
+    "module": "admin-dashboard",
+    "operation_id": "get_foster_stats_api_v1_admin_dashboard_foster_stats_get",
+    "summary": "Get Foster Stats"
+  },
+  {
+    "id": 9,
+    "method": "GET",
+    "path": "/api/v1/admin/dashboard/grievance-stats",
+    "module": "admin-dashboard",
+    "operation_id": "get_grievance_stats_api_v1_admin_dashboard_grievance_stats_get",
+    "summary": "Get Grievance Stats"
+  },
+  {
+    "id": 10,
+    "method": "GET",
+    "path": "/api/v1/admin/dashboard/inventory-alerts",
+    "module": "admin-dashboard",
+    "operation_id": "get_inventory_alerts_api_v1_admin_dashboard_inventory_alerts_get",
+    "summary": "Get Inventory Alerts"
+  },
+  {
+    "id": 11,
+    "method": "GET",
+    "path": "/api/v1/admin/dashboard/kpis",
+    "module": "admin-dashboard",
+    "operation_id": "get_kpis_api_v1_admin_dashboard_kpis_get",
+    "summary": "Get Kpis"
+  },
+  {
+    "id": 12,
+    "method": "GET",
+    "path": "/api/v1/admin/dashboard/lost-found-stats",
+    "module": "admin-dashboard",
+    "operation_id": "get_lost_found_stats_api_v1_admin_dashboard_lost_found_stats_get",
+    "summary": "Get Lost Found Stats"
+  },
+  {
+    "id": 13,
+    "method": "GET",
+    "path": "/api/v1/admin/dashboard/medical-stats",
+    "module": "admin-dashboard",
+    "operation_id": "get_medical_stats_api_v1_admin_dashboard_medical_stats_get",
+    "summary": "Get Medical Stats"
+  },
+  {
+    "id": 14,
+    "method": "GET",
+    "path": "/api/v1/admin/dashboard/metrics",
+    "module": "admin-dashboard",
+    "operation_id": "get_system_metrics_api_v1_admin_dashboard_metrics_get",
+    "summary": "Get System Metrics"
+  },
+  {
+    "id": 15,
+    "method": "GET",
+    "path": "/api/v1/admin/dashboard/notification-summary",
+    "module": "admin-dashboard",
+    "operation_id": "get_notification_summary_api_v1_admin_dashboard_notification_summary_get",
+    "summary": "Get Notification Summary"
+  },
+  {
+    "id": 16,
+    "method": "GET",
+    "path": "/api/v1/admin/dashboard/recent-activity",
+    "module": "admin-dashboard",
+    "operation_id": "get_recent_activity_api_v1_admin_dashboard_recent_activity_get",
+    "summary": "Get Recent Activity"
+  },
+  {
+    "id": 17,
+    "method": "GET",
+    "path": "/api/v1/admin/dashboard/rescue-stats",
+    "module": "admin-dashboard",
+    "operation_id": "get_rescue_stats_api_v1_admin_dashboard_rescue_stats_get",
+    "summary": "Get Rescue Stats"
+  },
+  {
+    "id": 18,
+    "method": "GET",
+    "path": "/api/v1/admin/dashboard/shelter-stats",
+    "module": "admin-dashboard",
+    "operation_id": "get_shelter_stats_api_v1_admin_dashboard_shelter_stats_get",
+    "summary": "Get Shelter Stats"
+  },
+  {
+    "id": 19,
+    "method": "GET",
+    "path": "/api/v1/admin/dashboard/summary",
+    "module": "admin-dashboard",
+    "operation_id": "get_summary_api_v1_admin_dashboard_summary_get",
+    "summary": "Get Summary"
+  },
+  {
+    "id": 20,
+    "method": "GET",
+    "path": "/api/v1/admin/dashboard/volunteer-stats",
+    "module": "admin-dashboard",
+    "operation_id": "get_volunteer_stats_api_v1_admin_dashboard_volunteer_stats_get",
+    "summary": "Get Volunteer Stats"
+  },
+  {
+    "id": 21,
+    "method": "GET",
+    "path": "/api/v1/admin/permissions",
+    "module": "admin",
+    "operation_id": "list_permissions_api_v1_admin_permissions_get",
+    "summary": "List Permissions"
+  },
+  {
+    "id": 22,
+    "method": "GET",
+    "path": "/api/v1/admin/roles",
+    "module": "admin",
+    "operation_id": "list_roles_api_v1_admin_roles_get",
+    "summary": "List Roles"
+  },
+  {
+    "id": 23,
+    "method": "POST",
+    "path": "/api/v1/admin/roles",
+    "module": "admin",
+    "operation_id": "create_role_api_v1_admin_roles_post",
+    "summary": "Create Role"
+  },
+  {
+    "id": 24,
+    "method": "GET",
+    "path": "/api/v1/admin/roles/{role_id}",
+    "module": "admin",
+    "operation_id": "get_role_api_v1_admin_roles__role_id__get",
+    "summary": "Get Role"
+  },
+  {
+    "id": 25,
+    "method": "PUT",
+    "path": "/api/v1/admin/roles/{role_id}",
+    "module": "admin",
+    "operation_id": "update_role_api_v1_admin_roles__role_id__put",
+    "summary": "Update Role"
+  },
+  {
+    "id": 26,
+    "method": "DELETE",
+    "path": "/api/v1/admin/roles/{role_id}",
+    "module": "admin",
+    "operation_id": "delete_role_api_v1_admin_roles__role_id__delete",
+    "summary": "Delete Role"
+  },
+  {
+    "id": 27,
+    "method": "GET",
+    "path": "/api/v1/admin/users",
+    "module": "admin",
+    "operation_id": "list_users_api_v1_admin_users_get",
+    "summary": "List Users"
+  },
+  {
+    "id": 28,
+    "method": "POST",
+    "path": "/api/v1/admin/users",
+    "module": "admin",
+    "operation_id": "create_user_api_v1_admin_users_post",
+    "summary": "Create User"
+  },
+  {
+    "id": 29,
+    "method": "GET",
+    "path": "/api/v1/admin/users/{user_id}",
+    "module": "admin",
+    "operation_id": "get_user_api_v1_admin_users__user_id__get",
+    "summary": "Get User"
+  },
+  {
+    "id": 30,
+    "method": "PUT",
+    "path": "/api/v1/admin/users/{user_id}",
+    "module": "admin",
+    "operation_id": "update_user_api_v1_admin_users__user_id__put",
+    "summary": "Update User"
+  },
+  {
+    "id": 31,
+    "method": "DELETE",
+    "path": "/api/v1/admin/users/{user_id}",
+    "module": "admin",
+    "operation_id": "delete_user_api_v1_admin_users__user_id__delete",
+    "summary": "Delete User"
+  },
+  {
+    "id": 32,
+    "method": "GET",
+    "path": "/api/v1/adoptions",
+    "module": "adoptions",
+    "operation_id": "list_applications_api_v1_adoptions_get",
+    "summary": "List Applications"
+  },
+  {
+    "id": 33,
+    "method": "POST",
+    "path": "/api/v1/adoptions",
+    "module": "adoptions",
+    "operation_id": "apply_for_adoption_api_v1_adoptions_post",
+    "summary": "Apply For Adoption"
+  },
+  {
+    "id": 34,
+    "method": "DELETE",
+    "path": "/api/v1/adoptions/admin/adoptions/{app_id}",
+    "module": "adoptions",
+    "operation_id": "soft_delete_application_api_v1_adoptions_admin_adoptions__app_id__delete",
+    "summary": "Soft Delete Application"
+  },
+  {
+    "id": 35,
+    "method": "POST",
+    "path": "/api/v1/adoptions/bulk/delete",
+    "module": "adoptions",
+    "operation_id": "bulk_delete_applications_api_v1_adoptions_bulk_delete_post",
+    "summary": "Bulk Delete Applications"
+  },
+  {
+    "id": 36,
+    "method": "POST",
+    "path": "/api/v1/adoptions/bulk/status-update",
+    "module": "adoptions",
+    "operation_id": "bulk_update_application_status_api_v1_adoptions_bulk_status_update_post",
+    "summary": "Bulk Update Application Status"
+  },
+  {
+    "id": 37,
+    "method": "GET",
+    "path": "/api/v1/adoptions/my",
+    "module": "adoptions",
+    "operation_id": "list_my_applications_api_v1_adoptions_my_get",
+    "summary": "List My Applications"
+  },
+  {
+    "id": 38,
+    "method": "GET",
+    "path": "/api/v1/adoptions/nearby-shelters",
+    "module": "adoptions",
+    "operation_id": "find_nearby_shelters_api_v1_adoptions_nearby_shelters_get",
+    "summary": "Find Nearby Shelters"
+  },
+  {
+    "id": 39,
+    "method": "GET",
+    "path": "/api/v1/adoptions/{app_id}",
+    "module": "adoptions",
+    "operation_id": "get_application_api_v1_adoptions__app_id__get",
+    "summary": "Get Application"
+  },
+  {
+    "id": 40,
+    "method": "PUT",
+    "path": "/api/v1/adoptions/{app_id}",
+    "module": "adoptions",
+    "operation_id": "update_application_api_v1_adoptions__app_id__put",
+    "summary": "Update Application"
+  },
+  {
+    "id": 41,
+    "method": "DELETE",
+    "path": "/api/v1/adoptions/{app_id}",
+    "module": "adoptions",
+    "operation_id": "soft_delete_application_api_v1_adoptions__app_id__delete",
+    "summary": "Soft Delete Application"
+  },
+  {
+    "id": 42,
+    "method": "GET",
+    "path": "/api/v1/adoptions/{app_id}/agreement",
+    "module": "adoptions",
+    "operation_id": "get_adoption_agreement_api_v1_adoptions__app_id__agreement_get",
+    "summary": "Get Adoption Agreement"
+  },
+  {
+    "id": 43,
+    "method": "PUT",
+    "path": "/api/v1/adoptions/{app_id}/fee",
+    "module": "adoptions",
+    "operation_id": "update_adoption_fee_api_v1_adoptions__app_id__fee_put",
+    "summary": "Update Adoption Fee"
+  },
+  {
+    "id": 44,
+    "method": "GET",
+    "path": "/api/v1/adoptions/{app_id}/follow-ups",
+    "module": "adoptions",
+    "operation_id": "get_follow_ups_api_v1_adoptions__app_id__follow_ups_get",
+    "summary": "Get Follow Ups"
+  },
+  {
+    "id": 45,
+    "method": "POST",
+    "path": "/api/v1/adoptions/{app_id}/follow-ups",
+    "module": "adoptions",
+    "operation_id": "create_follow_up_api_v1_adoptions__app_id__follow_ups_post",
+    "summary": "Create Follow Up"
+  },
+  {
+    "id": 46,
+    "method": "POST",
+    "path": "/api/v1/adoptions/{app_id}/follow-ups/{follow_up_id}/proof",
+    "module": "adoptions",
+    "operation_id": "submit_follow_up_proof_api_v1_adoptions__app_id__follow_ups__follow_up_id__proof_post",
+    "summary": "Submit Follow Up Proof"
+  },
+  {
+    "id": 47,
+    "method": "GET",
+    "path": "/api/v1/adoptions/{app_id}/scores",
+    "module": "adoptions",
+    "operation_id": "get_scores_api_v1_adoptions__app_id__scores_get",
+    "summary": "Get Scores"
+  },
+  {
+    "id": 48,
+    "method": "POST",
+    "path": "/api/v1/adoptions/{app_id}/scores",
+    "module": "adoptions",
+    "operation_id": "add_score_api_v1_adoptions__app_id__scores_post",
+    "summary": "Add Score"
+  },
+  {
+    "id": 49,
+    "method": "PATCH",
+    "path": "/api/v1/adoptions/{app_id}/status",
+    "module": "adoptions",
+    "operation_id": "update_application_status_api_v1_adoptions__app_id__status_patch",
+    "summary": "Update Application Status"
+  },
+  {
+    "id": 50,
+    "method": "POST",
+    "path": "/api/v1/auth/email/verify/confirm",
+    "module": "auth",
+    "operation_id": "confirm_email_verification_api_v1_auth_email_verify_confirm_post",
+    "summary": "Confirm Email Verification"
+  },
+  {
+    "id": 51,
+    "method": "POST",
+    "path": "/api/v1/auth/email/verify/request",
+    "module": "auth",
+    "operation_id": "request_email_verification_api_v1_auth_email_verify_request_post",
+    "summary": "Request Email Verification"
+  },
+  {
+    "id": 52,
+    "method": "POST",
+    "path": "/api/v1/auth/login",
+    "module": "auth",
+    "operation_id": "login_api_v1_auth_login_post",
+    "summary": "Login"
+  },
+  {
+    "id": 53,
+    "method": "POST",
+    "path": "/api/v1/auth/logout",
+    "module": "auth",
+    "operation_id": "logout_api_v1_auth_logout_post",
+    "summary": "Logout"
+  },
+  {
+    "id": 54,
+    "method": "POST",
+    "path": "/api/v1/auth/logout-all",
+    "module": "auth",
+    "operation_id": "logout_all_api_v1_auth_logout_all_post",
+    "summary": "Logout All"
+  },
+  {
+    "id": 55,
+    "method": "GET",
+    "path": "/api/v1/auth/me",
+    "module": "auth",
+    "operation_id": "get_me_api_v1_auth_me_get",
+    "summary": "Get Me"
+  },
+  {
+    "id": 56,
+    "method": "PUT",
+    "path": "/api/v1/auth/me",
+    "module": "auth",
+    "operation_id": "update_profile_api_v1_auth_me_put",
+    "summary": "Update Profile"
+  },
+  {
+    "id": 57,
+    "method": "POST",
+    "path": "/api/v1/auth/mfa/disable",
+    "module": "auth",
+    "operation_id": "disable_mfa_api_v1_auth_mfa_disable_post",
+    "summary": "Disable Mfa"
+  },
+  {
+    "id": 58,
+    "method": "POST",
+    "path": "/api/v1/auth/mfa/enroll",
+    "module": "auth",
+    "operation_id": "enroll_mfa_api_v1_auth_mfa_enroll_post",
+    "summary": "Enroll Mfa"
+  },
+  {
+    "id": 59,
+    "method": "POST",
+    "path": "/api/v1/auth/mfa/enroll/confirm",
+    "module": "auth",
+    "operation_id": "confirm_mfa_enrollment_api_v1_auth_mfa_enroll_confirm_post",
+    "summary": "Confirm Mfa Enrollment"
+  },
+  {
+    "id": 60,
+    "method": "POST",
+    "path": "/api/v1/auth/mfa/verify",
+    "module": "auth",
+    "operation_id": "verify_mfa_login_api_v1_auth_mfa_verify_post",
+    "summary": "Verify Mfa Login"
+  },
+  {
+    "id": 61,
+    "method": "GET",
+    "path": "/api/v1/auth/oauth/accounts",
+    "module": "auth",
+    "operation_id": "list_oauth_accounts_api_v1_auth_oauth_accounts_get",
+    "summary": "List Oauth Accounts"
+  },
+  {
+    "id": 62,
+    "method": "DELETE",
+    "path": "/api/v1/auth/oauth/accounts/{account_id}",
+    "module": "auth",
+    "operation_id": "unlink_oauth_account_api_v1_auth_oauth_accounts__account_id__delete",
+    "summary": "Unlink Oauth Account"
+  },
+  {
+    "id": 63,
+    "method": "POST",
+    "path": "/api/v1/auth/oauth/link",
+    "module": "auth",
+    "operation_id": "link_oauth_account_api_v1_auth_oauth_link_post",
+    "summary": "Link Oauth Account"
+  },
+  {
+    "id": 64,
+    "method": "POST",
+    "path": "/api/v1/auth/oauth/login",
+    "module": "auth",
+    "operation_id": "oauth_login_api_v1_auth_oauth_login_post",
+    "summary": "Oauth Login"
+  },
+  {
+    "id": 65,
+    "method": "POST",
+    "path": "/api/v1/auth/password/change",
+    "module": "auth",
+    "operation_id": "change_password_api_v1_auth_password_change_post",
+    "summary": "Change Password"
+  },
+  {
+    "id": 66,
+    "method": "POST",
+    "path": "/api/v1/auth/password/reset/confirm",
+    "module": "auth",
+    "operation_id": "confirm_password_reset_api_v1_auth_password_reset_confirm_post",
+    "summary": "Confirm Password Reset"
+  },
+  {
+    "id": 67,
+    "method": "POST",
+    "path": "/api/v1/auth/password/reset/request",
+    "module": "auth",
+    "operation_id": "request_password_reset_api_v1_auth_password_reset_request_post",
+    "summary": "Request Password Reset"
+  },
+  {
+    "id": 68,
+    "method": "POST",
+    "path": "/api/v1/auth/refresh",
+    "module": "auth",
+    "operation_id": "refresh_api_v1_auth_refresh_post",
+    "summary": "Refresh"
+  },
+  {
+    "id": 69,
+    "method": "POST",
+    "path": "/api/v1/auth/register",
+    "module": "auth",
+    "operation_id": "register_api_v1_auth_register_post",
+    "summary": "Register"
+  },
+  {
+    "id": 70,
+    "method": "GET",
+    "path": "/api/v1/auth/sessions",
+    "module": "auth",
+    "operation_id": "list_sessions_api_v1_auth_sessions_get",
+    "summary": "List Sessions"
+  },
+  {
+    "id": 71,
+    "method": "DELETE",
+    "path": "/api/v1/auth/sessions/{session_id}",
+    "module": "auth",
+    "operation_id": "revoke_session_api_v1_auth_sessions__session_id__delete",
+    "summary": "Revoke Session"
+  },
+  {
+    "id": 72,
+    "method": "GET",
+    "path": "/api/v1/companion-pets",
+    "module": "companion-pets",
+    "operation_id": "list_pets_api_v1_companion_pets_get",
+    "summary": "List companion pets visible to the caller"
+  },
+  {
+    "id": 73,
+    "method": "POST",
+    "path": "/api/v1/companion-pets",
+    "module": "companion-pets",
+    "operation_id": "create_pet_api_v1_companion_pets_post",
+    "summary": "Create an owner companion pet"
+  },
+  {
+    "id": 74,
+    "method": "GET",
+    "path": "/api/v1/companion-pets/appointments",
+    "module": "companion-pets",
+    "operation_id": "list_appointments_api_v1_companion_pets_appointments_get",
+    "summary": "List authorized veterinary appointments"
+  },
+  {
+    "id": 75,
+    "method": "POST",
+    "path": "/api/v1/companion-pets/appointments",
+    "module": "companion-pets",
+    "operation_id": "create_appointment_api_v1_companion_pets_appointments_post",
+    "summary": "Book a veterinary appointment"
+  },
+  {
+    "id": 76,
+    "method": "GET",
+    "path": "/api/v1/companion-pets/appointments/{appointment_id}",
+    "module": "companion-pets",
+    "operation_id": "get_appointment_api_v1_companion_pets_appointments__appointment_id__get",
+    "summary": "Get an authorized appointment"
+  },
+  {
+    "id": 77,
+    "method": "POST",
+    "path": "/api/v1/companion-pets/appointments/{appointment_id}/cancel",
+    "module": "companion-pets",
+    "operation_id": "cancel_appointment_api_v1_companion_pets_appointments__appointment_id__cancel_post",
+    "summary": "Cancel an appointment"
+  },
+  {
+    "id": 78,
+    "method": "POST",
+    "path": "/api/v1/companion-pets/appointments/{appointment_id}/confirm",
+    "module": "companion-pets",
+    "operation_id": "confirm_appointment_api_v1_companion_pets_appointments__appointment_id__confirm_post",
+    "summary": "Confirm an appointment as clinic staff"
+  },
+  {
+    "id": 79,
+    "method": "GET",
+    "path": "/api/v1/companion-pets/clinics",
+    "module": "companion-pets",
+    "operation_id": "list_clinics_api_v1_companion_pets_clinics_get",
+    "summary": "List active veterinary clinics"
+  },
+  {
+    "id": 80,
+    "method": "POST",
+    "path": "/api/v1/companion-pets/clinics",
+    "module": "companion-pets",
+    "operation_id": "create_clinic_api_v1_companion_pets_clinics_post",
+    "summary": "Create a veterinary clinic directory entry"
+  },
+  {
+    "id": 81,
+    "method": "PATCH",
+    "path": "/api/v1/companion-pets/clinics/{clinic_id}",
+    "module": "companion-pets",
+    "operation_id": "update_clinic_api_v1_companion_pets_clinics__clinic_id__patch",
+    "summary": "Update a veterinary clinic directory entry"
+  },
+  {
+    "id": 82,
+    "method": "DELETE",
+    "path": "/api/v1/companion-pets/clinics/{clinic_id}",
+    "module": "companion-pets",
+    "operation_id": "delete_clinic_api_v1_companion_pets_clinics__clinic_id__delete",
+    "summary": "Soft-delete a veterinary clinic directory entry"
+  },
+  {
+    "id": 83,
+    "method": "POST",
+    "path": "/api/v1/companion-pets/clinics/{clinic_id}/memberships",
+    "module": "companion-pets",
+    "operation_id": "add_clinic_membership_api_v1_companion_pets_clinics__clinic_id__memberships_post",
+    "summary": "Authorize a user for a veterinary clinic"
+  },
+  {
+    "id": 84,
+    "method": "DELETE",
+    "path": "/api/v1/companion-pets/medical-records/{record_id}",
+    "module": "companion-pets",
+    "operation_id": "delete_medical_record_api_v1_companion_pets_medical_records__record_id__delete",
+    "summary": "Soft-delete an authorized medical-history record"
+  },
+  {
+    "id": 85,
+    "method": "POST",
+    "path": "/api/v1/companion-pets/safety-tag/scan",
+    "module": "companion-pets",
+    "operation_id": "scan_safety_tag_api_v1_companion_pets_safety_tag_scan_post",
+    "summary": "Privacy-safe public QR safety-tag scan"
+  },
+  {
+    "id": 86,
+    "method": "GET",
+    "path": "/api/v1/companion-pets/{pet_id}",
+    "module": "companion-pets",
+    "operation_id": "get_pet_api_v1_companion_pets__pet_id__get",
+    "summary": "Get an authorized companion pet profile"
+  },
+  {
+    "id": 87,
+    "method": "PATCH",
+    "path": "/api/v1/companion-pets/{pet_id}",
+    "module": "companion-pets",
+    "operation_id": "update_pet_api_v1_companion_pets__pet_id__patch",
+    "summary": "Update an authorized companion pet profile"
+  },
+  {
+    "id": 88,
+    "method": "DELETE",
+    "path": "/api/v1/companion-pets/{pet_id}",
+    "module": "companion-pets",
+    "operation_id": "delete_pet_api_v1_companion_pets__pet_id__delete",
+    "summary": "Soft-delete an owned companion pet"
+  },
+  {
+    "id": 89,
+    "method": "GET",
+    "path": "/api/v1/companion-pets/{pet_id}/medical-files",
+    "module": "companion-pets",
+    "operation_id": "list_medical_files_api_v1_companion_pets__pet_id__medical_files_get",
+    "summary": "List authorized medical-history files"
+  },
+  {
+    "id": 90,
+    "method": "POST",
+    "path": "/api/v1/companion-pets/{pet_id}/medical-files/upload-url",
+    "module": "companion-pets",
+    "operation_id": "request_medical_upload_api_v1_companion_pets__pet_id__medical_files_upload_url_post",
+    "summary": "Request a presigned medical-history upload"
+  },
+  {
+    "id": 91,
+    "method": "PUT",
+    "path": "/api/v1/companion-pets/{pet_id}/medical-files/{file_id}/confirm",
+    "module": "companion-pets",
+    "operation_id": "confirm_medical_upload_api_v1_companion_pets__pet_id__medical_files__file_id__confirm_put",
+    "summary": "Confirm a medical-history upload"
+  },
+  {
+    "id": 92,
+    "method": "GET",
+    "path": "/api/v1/companion-pets/{pet_id}/medical-records",
+    "module": "companion-pets",
+    "operation_id": "list_medical_records_api_v1_companion_pets__pet_id__medical_records_get",
+    "summary": "List a pet's authorized medical history"
+  },
+  {
+    "id": 93,
+    "method": "POST",
+    "path": "/api/v1/companion-pets/{pet_id}/medical-records",
+    "module": "companion-pets",
+    "operation_id": "create_medical_record_api_v1_companion_pets__pet_id__medical_records_post",
+    "summary": "Create a medical-history record"
+  },
+  {
+    "id": 94,
+    "method": "GET",
+    "path": "/api/v1/companion-pets/{pet_id}/reminders",
+    "module": "companion-pets",
+    "operation_id": "list_reminders_api_v1_companion_pets__pet_id__reminders_get",
+    "summary": "List vaccination and medication reminders"
+  },
+  {
+    "id": 95,
+    "method": "POST",
+    "path": "/api/v1/companion-pets/{pet_id}/reminders",
+    "module": "companion-pets",
+    "operation_id": "create_reminder_api_v1_companion_pets__pet_id__reminders_post",
+    "summary": "Create a vaccination or medication reminder"
+  },
+  {
+    "id": 96,
+    "method": "DELETE",
+    "path": "/api/v1/companion-pets/{pet_id}/reminders/{reminder_id}",
+    "module": "companion-pets",
+    "operation_id": "delete_reminder_api_v1_companion_pets__pet_id__reminders__reminder_id__delete",
+    "summary": "Soft-delete a vaccination or medication reminder"
+  },
+  {
+    "id": 97,
+    "method": "GET",
+    "path": "/api/v1/companion-pets/{pet_id}/safety-tag",
+    "module": "companion-pets",
+    "operation_id": "get_safety_tag_api_v1_companion_pets__pet_id__safety_tag_get",
+    "summary": "Read safety-tag metadata without revealing its token"
+  },
+  {
+    "id": 98,
+    "method": "POST",
+    "path": "/api/v1/companion-pets/{pet_id}/safety-tag",
+    "module": "companion-pets",
+    "operation_id": "provision_safety_tag_api_v1_companion_pets__pet_id__safety_tag_post",
+    "summary": "Provision or rotate a QR safety tag"
+  },
+  {
+    "id": 99,
+    "method": "GET",
+    "path": "/api/v1/dashboards/adoption",
+    "module": "dashboards",
+    "operation_id": "get_adoption_dashboard_api_v1_dashboards_adoption_get",
+    "summary": "Get Adoption Dashboard"
+  },
+  {
+    "id": 100,
+    "method": "GET",
+    "path": "/api/v1/dashboards/donor",
+    "module": "dashboards",
+    "operation_id": "get_donor_dashboard_api_v1_dashboards_donor_get",
+    "summary": "Get Donor Dashboard"
+  },
+  {
+    "id": 101,
+    "method": "GET",
+    "path": "/api/v1/dashboards/executive",
+    "module": "dashboards",
+    "operation_id": "get_executive_dashboard_api_v1_dashboards_executive_get",
+    "summary": "Get Executive Dashboard"
+  },
+  {
+    "id": 102,
+    "method": "GET",
+    "path": "/api/v1/dashboards/finance",
+    "module": "dashboards",
+    "operation_id": "get_finance_dashboard_api_v1_dashboards_finance_get",
+    "summary": "Get Finance Dashboard"
+  },
+  {
+    "id": 103,
+    "method": "GET",
+    "path": "/api/v1/dashboards/foster",
+    "module": "dashboards",
+    "operation_id": "get_foster_dashboard_api_v1_dashboards_foster_get",
+    "summary": "Get Foster Dashboard"
+  },
+  {
+    "id": 104,
+    "method": "GET",
+    "path": "/api/v1/dashboards/inventory",
+    "module": "dashboards",
+    "operation_id": "get_inventory_dashboard_api_v1_dashboards_inventory_get",
+    "summary": "Get Inventory Dashboard"
+  },
+  {
+    "id": 105,
+    "method": "GET",
+    "path": "/api/v1/dashboards/medical",
+    "module": "dashboards",
+    "operation_id": "get_medical_dashboard_api_v1_dashboards_medical_get",
+    "summary": "Get Medical Dashboard"
+  },
+  {
+    "id": 106,
+    "method": "GET",
+    "path": "/api/v1/dashboards/operations",
+    "module": "dashboards",
+    "operation_id": "get_operations_dashboard_api_v1_dashboards_operations_get",
+    "summary": "Get Operations Dashboard"
+  },
+  {
+    "id": 107,
+    "method": "GET",
+    "path": "/api/v1/dashboards/public",
+    "module": "dashboards",
+    "operation_id": "get_public_dashboard_api_v1_dashboards_public_get",
+    "summary": "Get Public Dashboard"
+  },
+  {
+    "id": 108,
+    "method": "GET",
+    "path": "/api/v1/dashboards/rescue",
+    "module": "dashboards",
+    "operation_id": "get_rescue_dashboard_api_v1_dashboards_rescue_get",
+    "summary": "Get Rescue Dashboard"
+  },
+  {
+    "id": 109,
+    "method": "GET",
+    "path": "/api/v1/dashboards/rescue/stream",
+    "module": "dashboards",
+    "operation_id": "stream_rescue_dashboard_api_v1_dashboards_rescue_stream_get",
+    "summary": "Stream Rescue Dashboard"
+  },
+  {
+    "id": 110,
+    "method": "GET",
+    "path": "/api/v1/dashboards/shelter",
+    "module": "dashboards",
+    "operation_id": "get_shelter_dashboard_api_v1_dashboards_shelter_get",
+    "summary": "Get Shelter Dashboard"
+  },
+  {
+    "id": 111,
+    "method": "GET",
+    "path": "/api/v1/dashboards/staff",
+    "module": "dashboards",
+    "operation_id": "get_staff_dashboard_api_v1_dashboards_staff_get",
+    "summary": "Get Staff Dashboard"
+  },
+  {
+    "id": 112,
+    "method": "GET",
+    "path": "/api/v1/dashboards/volunteer",
+    "module": "dashboards",
+    "operation_id": "get_volunteer_dashboard_api_v1_dashboards_volunteer_get",
+    "summary": "Get Volunteer Dashboard"
+  },
+  {
+    "id": 113,
+    "method": "GET",
+    "path": "/api/v1/dogs",
+    "module": "dogs",
+    "operation_id": "list_dogs_api_v1_dogs_get",
+    "summary": "List Dogs"
+  },
+  {
+    "id": 114,
+    "method": "POST",
+    "path": "/api/v1/dogs",
+    "module": "dogs",
+    "operation_id": "register_dog_api_v1_dogs_post",
+    "summary": "Register Dog"
+  },
+  {
+    "id": 115,
+    "method": "GET",
+    "path": "/api/v1/dogs/admin/dogs/{dog_id}",
+    "module": "dogs",
+    "operation_id": "get_dog_api_v1_dogs_admin_dogs__dog_id__get",
+    "summary": "Get Dog"
+  },
+  {
+    "id": 116,
+    "method": "PATCH",
+    "path": "/api/v1/dogs/admin/dogs/{dog_id}/status",
+    "module": "dogs",
+    "operation_id": "update_dog_status_api_v1_dogs_admin_dogs__dog_id__status_patch",
+    "summary": "Update Dog Status"
+  },
+  {
+    "id": 117,
+    "method": "POST",
+    "path": "/api/v1/dogs/bulk/delete",
+    "module": "dogs",
+    "operation_id": "bulk_delete_dogs_api_v1_dogs_bulk_delete_post",
+    "summary": "Bulk Delete Dogs"
+  },
+  {
+    "id": 118,
+    "method": "POST",
+    "path": "/api/v1/dogs/bulk/status-update",
+    "module": "dogs",
+    "operation_id": "bulk_update_dog_status_api_v1_dogs_bulk_status_update_post",
+    "summary": "Bulk Update Dog Status"
+  },
+  {
+    "id": 119,
+    "method": "GET",
+    "path": "/api/v1/dogs/{dog_id}",
+    "module": "dogs",
+    "operation_id": "get_dog_api_v1_dogs__dog_id__get",
+    "summary": "Get Dog"
+  },
+  {
+    "id": 120,
+    "method": "PUT",
+    "path": "/api/v1/dogs/{dog_id}",
+    "module": "dogs",
+    "operation_id": "update_dog_api_v1_dogs__dog_id__put",
+    "summary": "Update Dog"
+  },
+  {
+    "id": 121,
+    "method": "DELETE",
+    "path": "/api/v1/dogs/{dog_id}",
+    "module": "dogs",
+    "operation_id": "soft_delete_dog_api_v1_dogs__dog_id__delete",
+    "summary": "Soft Delete Dog"
+  },
+  {
+    "id": 122,
+    "method": "PATCH",
+    "path": "/api/v1/dogs/{dog_id}/status",
+    "module": "dogs",
+    "operation_id": "update_dog_status_api_v1_dogs__dog_id__status_patch",
+    "summary": "Update Dog Status"
+  },
+  {
+    "id": 123,
+    "method": "GET",
+    "path": "/api/v1/dogs/{dog_id}/timeline",
+    "module": "dogs",
+    "operation_id": "get_dog_timeline_api_v1_dogs__dog_id__timeline_get",
+    "summary": "Get Dog Timeline"
+  },
+  {
+    "id": 124,
+    "method": "POST",
+    "path": "/api/v1/dogs/{dog_id}/weight",
+    "module": "dogs",
+    "operation_id": "record_dog_weight_api_v1_dogs__dog_id__weight_post",
+    "summary": "Record Dog Weight"
+  },
+  {
+    "id": 125,
+    "method": "GET",
+    "path": "/api/v1/dogs/{dog_id}/weights",
+    "module": "dogs",
+    "operation_id": "get_dog_weight_history_api_v1_dogs__dog_id__weights_get",
+    "summary": "Get Dog Weight History"
+  },
+  {
+    "id": 126,
+    "method": "GET",
+    "path": "/api/v1/donations",
+    "module": "donations",
+    "operation_id": "list_all_donations_api_v1_donations_get",
+    "summary": "List All Donations"
+  },
+  {
+    "id": 127,
+    "method": "POST",
+    "path": "/api/v1/donations",
+    "module": "donations",
+    "operation_id": "record_manual_donation_api_v1_donations_post",
+    "summary": "Record Manual Donation"
+  },
+  {
+    "id": 128,
+    "method": "POST",
+    "path": "/api/v1/donations/bulk/status-update",
+    "module": "donations",
+    "operation_id": "bulk_update_donation_status_api_v1_donations_bulk_status_update_post",
+    "summary": "Bulk Update Donation Status"
+  },
+  {
+    "id": 129,
+    "method": "GET",
+    "path": "/api/v1/donations/campaigns",
+    "module": "donations",
+    "operation_id": "list_public_campaigns_api_v1_donations_campaigns_get",
+    "summary": "List Public Campaigns"
+  },
+  {
+    "id": 130,
+    "method": "POST",
+    "path": "/api/v1/donations/campaigns",
+    "module": "donations",
+    "operation_id": "create_campaign_api_v1_donations_campaigns_post",
+    "summary": "Create Campaign"
+  },
+  {
+    "id": 131,
+    "method": "GET",
+    "path": "/api/v1/donations/campaigns/manage",
+    "module": "donations",
+    "operation_id": "list_all_campaigns_api_v1_donations_campaigns_manage_get",
+    "summary": "List All Campaigns"
+  },
+  {
+    "id": 132,
+    "method": "GET",
+    "path": "/api/v1/donations/campaigns/{campaign_id}",
+    "module": "donations",
+    "operation_id": "get_campaign_api_v1_donations_campaigns__campaign_id__get",
+    "summary": "Get Campaign"
+  },
+  {
+    "id": 133,
+    "method": "PATCH",
+    "path": "/api/v1/donations/campaigns/{campaign_id}",
+    "module": "donations",
+    "operation_id": "update_campaign_api_v1_donations_campaigns__campaign_id__patch",
+    "summary": "Update Campaign"
+  },
+  {
+    "id": 134,
+    "method": "DELETE",
+    "path": "/api/v1/donations/campaigns/{campaign_id}",
+    "module": "donations",
+    "operation_id": "delete_campaign_api_v1_donations_campaigns__campaign_id__delete",
+    "summary": "Delete Campaign"
+  },
+  {
+    "id": 135,
+    "method": "POST",
+    "path": "/api/v1/donations/checkout",
+    "module": "donations",
+    "operation_id": "initiate_donation_checkout_api_v1_donations_checkout_post",
+    "summary": "Initiate Donation Checkout"
+  },
+  {
+    "id": 136,
+    "method": "GET",
+    "path": "/api/v1/donations/donors",
+    "module": "donations",
+    "operation_id": "list_donors_api_v1_donations_donors_get",
+    "summary": "List Donors"
+  },
+  {
+    "id": 137,
+    "method": "POST",
+    "path": "/api/v1/donations/donors/bulk/delete",
+    "module": "donations",
+    "operation_id": "bulk_delete_donors_api_v1_donations_donors_bulk_delete_post",
+    "summary": "Bulk Delete Donors"
+  },
+  {
+    "id": 138,
+    "method": "GET",
+    "path": "/api/v1/donations/donors/me",
+    "module": "donations",
+    "operation_id": "get_my_donor_profile_api_v1_donations_donors_me_get",
+    "summary": "Get My Donor Profile"
+  },
+  {
+    "id": 139,
+    "method": "PUT",
+    "path": "/api/v1/donations/donors/{donor_id}",
+    "module": "donations",
+    "operation_id": "update_donor_api_v1_donations_donors__donor_id__put",
+    "summary": "Update Donor"
+  },
+  {
+    "id": 140,
+    "method": "DELETE",
+    "path": "/api/v1/donations/donors/{donor_id}",
+    "module": "donations",
+    "operation_id": "soft_delete_donor_api_v1_donations_donors__donor_id__delete",
+    "summary": "Soft Delete Donor"
+  },
+  {
+    "id": 141,
+    "method": "GET",
+    "path": "/api/v1/donations/history",
+    "module": "donations",
+    "operation_id": "get_donation_history_api_v1_donations_history_get",
+    "summary": "Get Donation History"
+  },
+  {
+    "id": 142,
+    "method": "GET",
+    "path": "/api/v1/donations/recurring",
+    "module": "donations",
+    "operation_id": "list_my_recurring_subscriptions_api_v1_donations_recurring_get",
+    "summary": "List My Recurring Subscriptions"
+  },
+  {
+    "id": 143,
+    "method": "POST",
+    "path": "/api/v1/donations/recurring",
+    "module": "donations",
+    "operation_id": "create_recurring_subscription_api_v1_donations_recurring_post",
+    "summary": "Create Recurring Subscription"
+  },
+  {
+    "id": 144,
+    "method": "DELETE",
+    "path": "/api/v1/donations/recurring/{subscription_id}",
+    "module": "donations",
+    "operation_id": "cancel_recurring_subscription_api_v1_donations_recurring__subscription_id__delete",
+    "summary": "Cancel Recurring Subscription"
+  },
+  {
+    "id": 145,
+    "method": "POST",
+    "path": "/api/v1/donations/register",
+    "module": "donations",
+    "operation_id": "register_donor_api_v1_donations_register_post",
+    "summary": "Register Donor"
+  },
+  {
+    "id": 146,
+    "method": "GET",
+    "path": "/api/v1/donations/sponsorships",
+    "module": "donations",
+    "operation_id": "list_all_sponsorships_api_v1_donations_sponsorships_get",
+    "summary": "List All Sponsorships"
+  },
+  {
+    "id": 147,
+    "method": "POST",
+    "path": "/api/v1/donations/sponsorships",
+    "module": "donations",
+    "operation_id": "create_sponsorship_api_v1_donations_sponsorships_post",
+    "summary": "Create Sponsorship"
+  },
+  {
+    "id": 148,
+    "method": "GET",
+    "path": "/api/v1/donations/sponsorships/my",
+    "module": "donations",
+    "operation_id": "list_my_sponsorships_api_v1_donations_sponsorships_my_get",
+    "summary": "List My Sponsorships"
+  },
+  {
+    "id": 149,
+    "method": "GET",
+    "path": "/api/v1/donations/sponsorships/{sponsorship_id}",
+    "module": "donations",
+    "operation_id": "get_sponsorship_api_v1_donations_sponsorships__sponsorship_id__get",
+    "summary": "Get Sponsorship"
+  },
+  {
+    "id": 150,
+    "method": "PATCH",
+    "path": "/api/v1/donations/sponsorships/{sponsorship_id}/status",
+    "module": "donations",
+    "operation_id": "update_sponsorship_status_api_v1_donations_sponsorships__sponsorship_id__status_patch",
+    "summary": "Update Sponsorship Status"
+  },
+  {
+    "id": 151,
+    "method": "POST",
+    "path": "/api/v1/donations/verify",
+    "module": "donations",
+    "operation_id": "verify_donation_checkout_api_v1_donations_verify_post",
+    "summary": "Verify Donation Checkout"
+  },
+  {
+    "id": 152,
+    "method": "GET",
+    "path": "/api/v1/donations/{donation_id}/receipt",
+    "module": "donations",
+    "operation_id": "get_donation_receipt_api_v1_donations__donation_id__receipt_get",
+    "summary": "Get Donation Receipt"
+  },
+  {
+    "id": 153,
+    "method": "POST",
+    "path": "/api/v1/donations/{donation_id}/reconcile",
+    "module": "donations",
+    "operation_id": "reconcile_donation_api_v1_donations__donation_id__reconcile_post",
+    "summary": "Reconcile Donation"
+  },
+  {
+    "id": 154,
+    "method": "PATCH",
+    "path": "/api/v1/donations/{donation_id}/status",
+    "module": "donations",
+    "operation_id": "update_donation_status_api_v1_donations__donation_id__status_patch",
+    "summary": "Update Donation Status"
+  },
+  {
+    "id": 155,
+    "method": "GET",
+    "path": "/api/v1/finance/account-balances",
+    "module": "finance",
+    "operation_id": "get_account_balances_api_v1_finance_account_balances_get",
+    "summary": "Get Account Balances"
+  },
+  {
+    "id": 156,
+    "method": "GET",
+    "path": "/api/v1/finance/accounts",
+    "module": "finance",
+    "operation_id": "list_accounts_api_v1_finance_accounts_get",
+    "summary": "List Accounts"
+  },
+  {
+    "id": 157,
+    "method": "POST",
+    "path": "/api/v1/finance/accounts",
+    "module": "finance",
+    "operation_id": "create_account_api_v1_finance_accounts_post",
+    "summary": "Create Account"
+  },
+  {
+    "id": 158,
+    "method": "POST",
+    "path": "/api/v1/finance/accounts/bulk/delete",
+    "module": "finance",
+    "operation_id": "bulk_delete_accounts_api_v1_finance_accounts_bulk_delete_post",
+    "summary": "Bulk Delete Accounts"
+  },
+  {
+    "id": 159,
+    "method": "GET",
+    "path": "/api/v1/finance/accounts/{account_id}",
+    "module": "finance",
+    "operation_id": "get_account_api_v1_finance_accounts__account_id__get",
+    "summary": "Get Account"
+  },
+  {
+    "id": 160,
+    "method": "PUT",
+    "path": "/api/v1/finance/accounts/{account_id}",
+    "module": "finance",
+    "operation_id": "update_account_api_v1_finance_accounts__account_id__put",
+    "summary": "Update Account"
+  },
+  {
+    "id": 161,
+    "method": "DELETE",
+    "path": "/api/v1/finance/accounts/{account_id}",
+    "module": "finance",
+    "operation_id": "delete_account_api_v1_finance_accounts__account_id__delete",
+    "summary": "Delete Account"
+  },
+  {
+    "id": 162,
+    "method": "GET",
+    "path": "/api/v1/finance/budgets",
+    "module": "finance",
+    "operation_id": "list_budgets_api_v1_finance_budgets_get",
+    "summary": "List Budgets"
+  },
+  {
+    "id": 163,
+    "method": "POST",
+    "path": "/api/v1/finance/budgets",
+    "module": "finance",
+    "operation_id": "create_budget_api_v1_finance_budgets_post",
+    "summary": "Create Budget"
+  },
+  {
+    "id": 164,
+    "method": "GET",
+    "path": "/api/v1/finance/budgets/{budget_id}",
+    "module": "finance",
+    "operation_id": "get_budget_api_v1_finance_budgets__budget_id__get",
+    "summary": "Get Budget"
+  },
+  {
+    "id": 165,
+    "method": "DELETE",
+    "path": "/api/v1/finance/budgets/{budget_id}",
+    "module": "finance",
+    "operation_id": "delete_budget_api_v1_finance_budgets__budget_id__delete",
+    "summary": "Delete Budget"
+  },
+  {
+    "id": 166,
+    "method": "POST",
+    "path": "/api/v1/finance/budgets/{budget_id}/items",
+    "module": "finance",
+    "operation_id": "add_budget_item_api_v1_finance_budgets__budget_id__items_post",
+    "summary": "Add Budget Item"
+  },
+  {
+    "id": 167,
+    "method": "GET",
+    "path": "/api/v1/finance/pnl",
+    "module": "finance",
+    "operation_id": "get_pnl_api_v1_finance_pnl_get",
+    "summary": "Get Pnl"
+  },
+  {
+    "id": 168,
+    "method": "POST",
+    "path": "/api/v1/finance/reconcile/donations",
+    "module": "finance",
+    "operation_id": "reconcile_donations_api_v1_finance_reconcile_donations_post",
+    "summary": "Reconcile Donations"
+  },
+  {
+    "id": 169,
+    "method": "GET",
+    "path": "/api/v1/finance/reconcile/summary",
+    "module": "finance",
+    "operation_id": "get_reconciliation_summary_api_v1_finance_reconcile_summary_get",
+    "summary": "Get Reconciliation Summary"
+  },
+  {
+    "id": 170,
+    "method": "GET",
+    "path": "/api/v1/finance/recurring",
+    "module": "finance",
+    "operation_id": "list_recurring_api_v1_finance_recurring_get",
+    "summary": "List Recurring"
+  },
+  {
+    "id": 171,
+    "method": "POST",
+    "path": "/api/v1/finance/recurring",
+    "module": "finance",
+    "operation_id": "create_recurring_api_v1_finance_recurring_post",
+    "summary": "Create Recurring"
+  },
+  {
+    "id": 172,
+    "method": "DELETE",
+    "path": "/api/v1/finance/recurring/{rtx_id}",
+    "module": "finance",
+    "operation_id": "delete_recurring_api_v1_finance_recurring__rtx_id__delete",
+    "summary": "Delete Recurring"
+  },
+  {
+    "id": 173,
+    "method": "GET",
+    "path": "/api/v1/finance/summary",
+    "module": "finance",
+    "operation_id": "get_finance_summary_api_v1_finance_summary_get",
+    "summary": "Get Finance Summary"
+  },
+  {
+    "id": 174,
+    "method": "GET",
+    "path": "/api/v1/finance/transactions",
+    "module": "finance",
+    "operation_id": "list_transactions_api_v1_finance_transactions_get",
+    "summary": "List Transactions"
+  },
+  {
+    "id": 175,
+    "method": "POST",
+    "path": "/api/v1/finance/transactions",
+    "module": "finance",
+    "operation_id": "create_transaction_api_v1_finance_transactions_post",
+    "summary": "Create Transaction"
+  },
+  {
+    "id": 176,
+    "method": "POST",
+    "path": "/api/v1/finance/transactions/bulk/delete",
+    "module": "finance",
+    "operation_id": "bulk_delete_transactions_api_v1_finance_transactions_bulk_delete_post",
+    "summary": "Bulk Delete Transactions"
+  },
+  {
+    "id": 177,
+    "method": "GET",
+    "path": "/api/v1/finance/transactions/{tx_id}",
+    "module": "finance",
+    "operation_id": "get_transaction_api_v1_finance_transactions__tx_id__get",
+    "summary": "Get Transaction"
+  },
+  {
+    "id": 178,
+    "method": "DELETE",
+    "path": "/api/v1/finance/transactions/{tx_id}",
+    "module": "finance",
+    "operation_id": "delete_transaction_api_v1_finance_transactions__tx_id__delete",
+    "summary": "Delete Transaction"
+  },
+  {
+    "id": 179,
+    "method": "PATCH",
+    "path": "/api/v1/finance/transactions/{tx_id}/status",
+    "module": "finance",
+    "operation_id": "update_transaction_status_api_v1_finance_transactions__tx_id__status_patch",
+    "summary": "Update Transaction Status"
+  },
+  {
+    "id": 180,
+    "method": "POST",
+    "path": "/api/v1/fleet/bulk/delete",
+    "module": "fleet",
+    "operation_id": "bulk_delete_vehicles_api_v1_fleet_bulk_delete_post",
+    "summary": "Bulk Delete Vehicles"
+  },
+  {
+    "id": 181,
+    "method": "POST",
+    "path": "/api/v1/fleet/bulk/status-update",
+    "module": "fleet",
+    "operation_id": "bulk_update_vehicle_status_api_v1_fleet_bulk_status_update_post",
+    "summary": "Bulk Update Vehicle Status"
+  },
+  {
+    "id": 182,
+    "method": "GET",
+    "path": "/api/v1/fleet/equipment",
+    "module": "fleet",
+    "operation_id": "list_equipment_checkouts_api_v1_fleet_equipment_get",
+    "summary": "List Equipment Checkouts"
+  },
+  {
+    "id": 183,
+    "method": "POST",
+    "path": "/api/v1/fleet/equipment",
+    "module": "fleet",
+    "operation_id": "checkout_equipment_api_v1_fleet_equipment_post",
+    "summary": "Checkout Equipment"
+  },
+  {
+    "id": 184,
+    "method": "GET",
+    "path": "/api/v1/fleet/equipment/{checkout_id}",
+    "module": "fleet",
+    "operation_id": "get_equipment_checkout_api_v1_fleet_equipment__checkout_id__get",
+    "summary": "Get Equipment Checkout"
+  },
+  {
+    "id": 185,
+    "method": "POST",
+    "path": "/api/v1/fleet/equipment/{checkout_id}/return",
+    "module": "fleet",
+    "operation_id": "return_equipment_api_v1_fleet_equipment__checkout_id__return_post",
+    "summary": "Return Equipment"
+  },
+  {
+    "id": 186,
+    "method": "GET",
+    "path": "/api/v1/fleet/fuel/{log_id}",
+    "module": "fleet",
+    "operation_id": "get_fuel_log_api_v1_fleet_fuel__log_id__get",
+    "summary": "Get Fuel Log"
+  },
+  {
+    "id": 187,
+    "method": "POST",
+    "path": "/api/v1/fleet/maintenance",
+    "module": "fleet",
+    "operation_id": "log_maintenance_api_v1_fleet_maintenance_post",
+    "summary": "Log Maintenance"
+  },
+  {
+    "id": 188,
+    "method": "GET",
+    "path": "/api/v1/fleet/vehicles",
+    "module": "fleet",
+    "operation_id": "list_vehicles_api_v1_fleet_vehicles_get",
+    "summary": "List Vehicles"
+  },
+  {
+    "id": 189,
+    "method": "POST",
+    "path": "/api/v1/fleet/vehicles",
+    "module": "fleet",
+    "operation_id": "create_vehicle_api_v1_fleet_vehicles_post",
+    "summary": "Create Vehicle"
+  },
+  {
+    "id": 190,
+    "method": "GET",
+    "path": "/api/v1/fleet/vehicles/{vehicle_id}",
+    "module": "fleet",
+    "operation_id": "get_vehicle_api_v1_fleet_vehicles__vehicle_id__get",
+    "summary": "Get Vehicle"
+  },
+  {
+    "id": 191,
+    "method": "PUT",
+    "path": "/api/v1/fleet/vehicles/{vehicle_id}",
+    "module": "fleet",
+    "operation_id": "update_vehicle_api_v1_fleet_vehicles__vehicle_id__put",
+    "summary": "Update Vehicle"
+  },
+  {
+    "id": 192,
+    "method": "DELETE",
+    "path": "/api/v1/fleet/vehicles/{vehicle_id}",
+    "module": "fleet",
+    "operation_id": "soft_delete_vehicle_api_v1_fleet_vehicles__vehicle_id__delete",
+    "summary": "Soft Delete Vehicle"
+  },
+  {
+    "id": 193,
+    "method": "GET",
+    "path": "/api/v1/fleet/vehicles/{vehicle_id}/fuel",
+    "module": "fleet",
+    "operation_id": "list_fuel_logs_api_v1_fleet_vehicles__vehicle_id__fuel_get",
+    "summary": "List Fuel Logs"
+  },
+  {
+    "id": 194,
+    "method": "POST",
+    "path": "/api/v1/fleet/vehicles/{vehicle_id}/fuel",
+    "module": "fleet",
+    "operation_id": "log_fuel_api_v1_fleet_vehicles__vehicle_id__fuel_post",
+    "summary": "Log Fuel"
+  },
+  {
+    "id": 195,
+    "method": "GET",
+    "path": "/api/v1/fleet/vehicles/{vehicle_id}/maintenance",
+    "module": "fleet",
+    "operation_id": "list_maintenance_api_v1_fleet_vehicles__vehicle_id__maintenance_get",
+    "summary": "List Maintenance"
+  },
+  {
+    "id": 196,
+    "method": "PATCH",
+    "path": "/api/v1/fleet/vehicles/{vehicle_id}/status",
+    "module": "fleet",
+    "operation_id": "update_vehicle_status_api_v1_fleet_vehicles__vehicle_id__status_patch",
+    "summary": "Update Vehicle Status"
+  },
+  {
+    "id": 197,
+    "method": "GET",
+    "path": "/api/v1/fosters",
+    "module": "fosters",
+    "operation_id": "list_profiles_api_v1_fosters_get",
+    "summary": "List Profiles"
+  },
+  {
+    "id": 198,
+    "method": "DELETE",
+    "path": "/api/v1/fosters/admin/fosters/{profile_id}",
+    "module": "fosters",
+    "operation_id": "soft_delete_profile_api_v1_fosters_admin_fosters__profile_id__delete",
+    "summary": "Soft Delete Profile"
+  },
+  {
+    "id": 199,
+    "method": "POST",
+    "path": "/api/v1/fosters/apply",
+    "module": "fosters",
+    "operation_id": "apply_to_foster_api_v1_fosters_apply_post",
+    "summary": "Apply To Foster"
+  },
+  {
+    "id": 200,
+    "method": "POST",
+    "path": "/api/v1/fosters/bulk/delete",
+    "module": "fosters",
+    "operation_id": "bulk_delete_profiles_api_v1_fosters_bulk_delete_post",
+    "summary": "Bulk Delete Profiles"
+  },
+  {
+    "id": 201,
+    "method": "POST",
+    "path": "/api/v1/fosters/placements/{placement_id}/convert-to-adopt",
+    "module": "fosters",
+    "operation_id": "convert_to_adopt_api_v1_fosters_placements__placement_id__convert_to_adopt_post",
+    "summary": "Convert To Adopt"
+  },
+  {
+    "id": 202,
+    "method": "GET",
+    "path": "/api/v1/fosters/placements/{placement_id}/progress",
+    "module": "fosters",
+    "operation_id": "get_progress_logs_api_v1_fosters_placements__placement_id__progress_get",
+    "summary": "Get Progress Logs"
+  },
+  {
+    "id": 203,
+    "method": "POST",
+    "path": "/api/v1/fosters/placements/{placement_id}/progress",
+    "module": "fosters",
+    "operation_id": "log_progress_api_v1_fosters_placements__placement_id__progress_post",
+    "summary": "Log Progress"
+  },
+  {
+    "id": 204,
+    "method": "POST",
+    "path": "/api/v1/fosters/placements/{placement_id}/return",
+    "module": "fosters",
+    "operation_id": "return_dog_api_v1_fosters_placements__placement_id__return_post",
+    "summary": "Return Dog"
+  },
+  {
+    "id": 205,
+    "method": "GET",
+    "path": "/api/v1/fosters/placements/{placement_id}/supplies",
+    "module": "fosters",
+    "operation_id": "list_supply_dispatches_api_v1_fosters_placements__placement_id__supplies_get",
+    "summary": "List Supply Dispatches"
+  },
+  {
+    "id": 206,
+    "method": "POST",
+    "path": "/api/v1/fosters/placements/{placement_id}/supplies",
+    "module": "fosters",
+    "operation_id": "log_supply_dispatch_api_v1_fosters_placements__placement_id__supplies_post",
+    "summary": "Log Supply Dispatch"
+  },
+  {
+    "id": 207,
+    "method": "PUT",
+    "path": "/api/v1/fosters/{profile_id}",
+    "module": "fosters",
+    "operation_id": "update_profile_api_v1_fosters__profile_id__put",
+    "summary": "Update Profile"
+  },
+  {
+    "id": 208,
+    "method": "DELETE",
+    "path": "/api/v1/fosters/{profile_id}",
+    "module": "fosters",
+    "operation_id": "soft_delete_profile_api_v1_fosters__profile_id__delete",
+    "summary": "Soft Delete Profile"
+  },
+  {
+    "id": 209,
+    "method": "POST",
+    "path": "/api/v1/fosters/{profile_id}/placements",
+    "module": "fosters",
+    "operation_id": "place_dog_api_v1_fosters__profile_id__placements_post",
+    "summary": "Place Dog"
+  },
+  {
+    "id": 210,
+    "method": "GET",
+    "path": "/api/v1/grievance",
+    "module": "grievance",
+    "operation_id": "list_tickets_api_v1_grievance_get",
+    "summary": "List Tickets"
+  },
+  {
+    "id": 211,
+    "method": "POST",
+    "path": "/api/v1/grievance",
+    "module": "grievance",
+    "operation_id": "submit_complaint_api_v1_grievance_post",
+    "summary": "Submit Complaint"
+  },
+  {
+    "id": 212,
+    "method": "POST",
+    "path": "/api/v1/grievance/bulk/delete",
+    "module": "grievance",
+    "operation_id": "bulk_delete_tickets_api_v1_grievance_bulk_delete_post",
+    "summary": "Bulk Delete Tickets"
+  },
+  {
+    "id": 213,
+    "method": "POST",
+    "path": "/api/v1/grievance/bulk/status",
+    "module": "grievance",
+    "operation_id": "bulk_update_ticket_status_api_v1_grievance_bulk_status_post",
+    "summary": "Bulk Update Ticket Status"
+  },
+  {
+    "id": 214,
+    "method": "GET",
+    "path": "/api/v1/grievance/feedback",
+    "module": "grievance",
+    "operation_id": "list_feedback_api_v1_grievance_feedback_get",
+    "summary": "List Feedback"
+  },
+  {
+    "id": 215,
+    "method": "POST",
+    "path": "/api/v1/grievance/feedback",
+    "module": "grievance",
+    "operation_id": "submit_feedback_api_v1_grievance_feedback_post",
+    "summary": "Submit Feedback"
+  },
+  {
+    "id": 216,
+    "method": "POST",
+    "path": "/api/v1/grievance/feedback/bulk/delete",
+    "module": "grievance",
+    "operation_id": "bulk_delete_feedback_api_v1_grievance_feedback_bulk_delete_post",
+    "summary": "Bulk Delete Feedback"
+  },
+  {
+    "id": 217,
+    "method": "DELETE",
+    "path": "/api/v1/grievance/feedback/{feedback_id}",
+    "module": "grievance",
+    "operation_id": "soft_delete_feedback_api_v1_grievance_feedback__feedback_id__delete",
+    "summary": "Soft Delete Feedback"
+  },
+  {
+    "id": 218,
+    "method": "GET",
+    "path": "/api/v1/grievance/{ticket_id}",
+    "module": "grievance",
+    "operation_id": "get_ticket_api_v1_grievance__ticket_id__get",
+    "summary": "Get Ticket"
+  },
+  {
+    "id": 219,
+    "method": "PUT",
+    "path": "/api/v1/grievance/{ticket_id}",
+    "module": "grievance",
+    "operation_id": "update_ticket_api_v1_grievance__ticket_id__put",
+    "summary": "Update Ticket"
+  },
+  {
+    "id": 220,
+    "method": "DELETE",
+    "path": "/api/v1/grievance/{ticket_id}",
+    "module": "grievance",
+    "operation_id": "soft_delete_ticket_api_v1_grievance__ticket_id__delete",
+    "summary": "Soft Delete Ticket"
+  },
+  {
+    "id": 221,
+    "method": "POST",
+    "path": "/api/v1/grievance/{ticket_id}/assign",
+    "module": "grievance",
+    "operation_id": "assign_ticket_api_v1_grievance__ticket_id__assign_post",
+    "summary": "Assign Ticket"
+  },
+  {
+    "id": 222,
+    "method": "GET",
+    "path": "/api/v1/grievance/{ticket_id}/comments",
+    "module": "grievance",
+    "operation_id": "list_comments_api_v1_grievance__ticket_id__comments_get",
+    "summary": "List Comments"
+  },
+  {
+    "id": 223,
+    "method": "POST",
+    "path": "/api/v1/grievance/{ticket_id}/comments",
+    "module": "grievance",
+    "operation_id": "add_comment_api_v1_grievance__ticket_id__comments_post",
+    "summary": "Add Comment"
+  },
+  {
+    "id": 224,
+    "method": "POST",
+    "path": "/api/v1/grievance/{ticket_id}/escalate",
+    "module": "grievance",
+    "operation_id": "escalate_ticket_api_v1_grievance__ticket_id__escalate_post",
+    "summary": "Escalate Ticket"
+  },
+  {
+    "id": 225,
+    "method": "PATCH",
+    "path": "/api/v1/grievance/{ticket_id}/status",
+    "module": "grievance",
+    "operation_id": "update_ticket_status_api_v1_grievance__ticket_id__status_patch",
+    "summary": "Update Ticket Status"
+  },
+  {
+    "id": 226,
+    "method": "DELETE",
+    "path": "/api/v1/inventory/admin/inventory/items/{item_id}",
+    "module": "inventory",
+    "operation_id": "delete_item_api_v1_inventory_admin_inventory_items__item_id__delete",
+    "summary": "Delete Item"
+  },
+  {
+    "id": 227,
+    "method": "GET",
+    "path": "/api/v1/inventory/items",
+    "module": "inventory",
+    "operation_id": "list_items_api_v1_inventory_items_get",
+    "summary": "List Items"
+  },
+  {
+    "id": 228,
+    "method": "POST",
+    "path": "/api/v1/inventory/items",
+    "module": "inventory",
+    "operation_id": "create_item_api_v1_inventory_items_post",
+    "summary": "Create Item"
+  },
+  {
+    "id": 229,
+    "method": "POST",
+    "path": "/api/v1/inventory/items/bulk/delete",
+    "module": "inventory",
+    "operation_id": "bulk_delete_items_api_v1_inventory_items_bulk_delete_post",
+    "summary": "Bulk Delete Items"
+  },
+  {
+    "id": 230,
+    "method": "GET",
+    "path": "/api/v1/inventory/items/{item_id}",
+    "module": "inventory",
+    "operation_id": "get_item_api_v1_inventory_items__item_id__get",
+    "summary": "Get Item"
+  },
+  {
+    "id": 231,
+    "method": "DELETE",
+    "path": "/api/v1/inventory/items/{item_id}",
+    "module": "inventory",
+    "operation_id": "delete_item_api_v1_inventory_items__item_id__delete",
+    "summary": "Delete Item"
+  },
+  {
+    "id": 232,
+    "method": "GET",
+    "path": "/api/v1/inventory/items/{item_id}/movements",
+    "module": "inventory",
+    "operation_id": "list_movements_api_v1_inventory_items__item_id__movements_get",
+    "summary": "List Movements"
+  },
+  {
+    "id": 233,
+    "method": "POST",
+    "path": "/api/v1/inventory/movements",
+    "module": "inventory",
+    "operation_id": "record_movement_api_v1_inventory_movements_post",
+    "summary": "Record Movement"
+  },
+  {
+    "id": 234,
+    "method": "GET",
+    "path": "/api/v1/inventory/requisitions",
+    "module": "inventory",
+    "operation_id": "list_requisitions_api_v1_inventory_requisitions_get",
+    "summary": "List Requisitions"
+  },
+  {
+    "id": 235,
+    "method": "POST",
+    "path": "/api/v1/inventory/requisitions",
+    "module": "inventory",
+    "operation_id": "create_requisition_api_v1_inventory_requisitions_post",
+    "summary": "Create Requisition"
+  },
+  {
+    "id": 236,
+    "method": "POST",
+    "path": "/api/v1/inventory/requisitions/bulk/status",
+    "module": "inventory",
+    "operation_id": "bulk_update_requisition_status_api_v1_inventory_requisitions_bulk_status_post",
+    "summary": "Bulk Update Requisition Status"
+  },
+  {
+    "id": 237,
+    "method": "PUT",
+    "path": "/api/v1/inventory/requisitions/{req_id}/status",
+    "module": "inventory",
+    "operation_id": "update_requisition_status_api_v1_inventory_requisitions__req_id__status_put",
+    "summary": "Update Requisition Status"
+  },
+  {
+    "id": 238,
+    "method": "GET",
+    "path": "/api/v1/lost-found/found",
+    "module": "lost-found",
+    "operation_id": "list_found_reports_api_v1_lost_found_found_get",
+    "summary": "List Found Reports"
+  },
+  {
+    "id": 239,
+    "method": "POST",
+    "path": "/api/v1/lost-found/found",
+    "module": "lost-found",
+    "operation_id": "report_found_pet_api_v1_lost_found_found_post",
+    "summary": "Report Found Pet"
+  },
+  {
+    "id": 240,
+    "method": "POST",
+    "path": "/api/v1/lost-found/found/bulk/delete",
+    "module": "lost-found",
+    "operation_id": "bulk_delete_found_reports_api_v1_lost_found_found_bulk_delete_post",
+    "summary": "Bulk Delete Found Reports"
+  },
+  {
+    "id": 241,
+    "method": "GET",
+    "path": "/api/v1/lost-found/found/{report_id}",
+    "module": "lost-found",
+    "operation_id": "get_found_report_api_v1_lost_found_found__report_id__get",
+    "summary": "Get Found Report"
+  },
+  {
+    "id": 242,
+    "method": "DELETE",
+    "path": "/api/v1/lost-found/found/{report_id}",
+    "module": "lost-found",
+    "operation_id": "delete_found_report_api_v1_lost_found_found__report_id__delete",
+    "summary": "Delete Found Report"
+  },
+  {
+    "id": 243,
+    "method": "GET",
+    "path": "/api/v1/lost-found/found/{report_id}/matches",
+    "module": "lost-found",
+    "operation_id": "get_matches_for_found_api_v1_lost_found_found__report_id__matches_get",
+    "summary": "Get Matches For Found"
+  },
+  {
+    "id": 244,
+    "method": "GET",
+    "path": "/api/v1/lost-found/lost",
+    "module": "lost-found",
+    "operation_id": "list_lost_reports_api_v1_lost_found_lost_get",
+    "summary": "List Lost Reports"
+  },
+  {
+    "id": 245,
+    "method": "POST",
+    "path": "/api/v1/lost-found/lost",
+    "module": "lost-found",
+    "operation_id": "report_lost_pet_api_v1_lost_found_lost_post",
+    "summary": "Report Lost Pet"
+  },
+  {
+    "id": 246,
+    "method": "POST",
+    "path": "/api/v1/lost-found/lost/bulk/delete",
+    "module": "lost-found",
+    "operation_id": "bulk_delete_lost_reports_api_v1_lost_found_lost_bulk_delete_post",
+    "summary": "Bulk Delete Lost Reports"
+  },
+  {
+    "id": 247,
+    "method": "GET",
+    "path": "/api/v1/lost-found/lost/{report_id}",
+    "module": "lost-found",
+    "operation_id": "get_lost_report_api_v1_lost_found_lost__report_id__get",
+    "summary": "Get Lost Report"
+  },
+  {
+    "id": 248,
+    "method": "DELETE",
+    "path": "/api/v1/lost-found/lost/{report_id}",
+    "module": "lost-found",
+    "operation_id": "delete_lost_report_api_v1_lost_found_lost__report_id__delete",
+    "summary": "Delete Lost Report"
+  },
+  {
+    "id": 249,
+    "method": "POST",
+    "path": "/api/v1/lost-found/lost/{report_id}/broadcast",
+    "module": "lost-found",
+    "operation_id": "broadcast_lost_pet_alert_api_v1_lost_found_lost__report_id__broadcast_post",
+    "summary": "Broadcast Lost Pet Alert"
+  },
+  {
+    "id": 250,
+    "method": "GET",
+    "path": "/api/v1/lost-found/lost/{report_id}/matches",
+    "module": "lost-found",
+    "operation_id": "get_matches_for_lost_api_v1_lost_found_lost__report_id__matches_get",
+    "summary": "Get Matches For Lost"
+  },
+  {
+    "id": 251,
+    "method": "POST",
+    "path": "/api/v1/lost-found/matches/{match_id}/claim",
+    "module": "lost-found",
+    "operation_id": "submit_ownership_claim_api_v1_lost_found_matches__match_id__claim_post",
+    "summary": "Submit Ownership Claim"
+  },
+  {
+    "id": 252,
+    "method": "POST",
+    "path": "/api/v1/lost-found/matches/{match_id}/claim/review",
+    "module": "lost-found",
+    "operation_id": "review_ownership_claim_api_v1_lost_found_matches__match_id__claim_review_post",
+    "summary": "Review Ownership Claim"
+  },
+  {
+    "id": 253,
+    "method": "POST",
+    "path": "/api/v1/lost-found/matches/{match_id}/resolve",
+    "module": "lost-found",
+    "operation_id": "resolve_match_api_v1_lost_found_matches__match_id__resolve_post",
+    "summary": "Resolve Match"
+  },
+  {
+    "id": 254,
+    "method": "GET",
+    "path": "/api/v1/lost-found/reunion-stories",
+    "module": "lost-found",
+    "operation_id": "get_reunion_stories_api_v1_lost_found_reunion_stories_get",
+    "summary": "Get Reunion Stories"
+  },
+  {
+    "id": 255,
+    "method": "GET",
+    "path": "/api/v1/lost-found/stories",
+    "module": "lost-found",
+    "operation_id": "get_reunion_stories_api_v1_lost_found_stories_get",
+    "summary": "Get Reunion Stories"
+  },
+  {
+    "id": 256,
+    "method": "POST",
+    "path": "/api/v1/medical/administrations",
+    "module": "medical",
+    "operation_id": "log_medication_administration_api_v1_medical_administrations_post",
+    "summary": "Log Medication Administration"
+  },
+  {
+    "id": 257,
+    "method": "POST",
+    "path": "/api/v1/medical/bulk/delete",
+    "module": "medical",
+    "operation_id": "bulk_delete_entities_api_v1_medical_bulk_delete_post",
+    "summary": "Bulk Delete Entities"
+  },
+  {
+    "id": 258,
+    "method": "POST",
+    "path": "/api/v1/medical/bulk/prescriptions/status",
+    "module": "medical",
+    "operation_id": "bulk_update_prescription_status_api_v1_medical_bulk_prescriptions_status_post",
+    "summary": "Bulk Update Prescription Status"
+  },
+  {
+    "id": 259,
+    "method": "POST",
+    "path": "/api/v1/medical/clearance/{dog_id}",
+    "module": "medical",
+    "operation_id": "authorize_adoption_clearance_api_v1_medical_clearance__dog_id__post",
+    "summary": "Authorize Adoption Clearance"
+  },
+  {
+    "id": 260,
+    "method": "GET",
+    "path": "/api/v1/medical/clearances/dogs/{dog_id}",
+    "module": "medical",
+    "operation_id": "get_dog_clearances_api_v1_medical_clearances_dogs__dog_id__get",
+    "summary": "Get Dog Clearances"
+  },
+  {
+    "id": 261,
+    "method": "GET",
+    "path": "/api/v1/medical/dogs/{dog_id}/administrations",
+    "module": "medical",
+    "operation_id": "get_dog_administrations_api_v1_medical_dogs__dog_id__administrations_get",
+    "summary": "Get Dog Administrations"
+  },
+  {
+    "id": 262,
+    "method": "GET",
+    "path": "/api/v1/medical/dogs/{dog_id}/history",
+    "module": "medical",
+    "operation_id": "get_medical_history_api_v1_medical_dogs__dog_id__history_get",
+    "summary": "Get Medical History"
+  },
+  {
+    "id": 263,
+    "method": "GET",
+    "path": "/api/v1/medical/exams",
+    "module": "medical",
+    "operation_id": "list_exams_api_v1_medical_exams_get",
+    "summary": "List Exams"
+  },
+  {
+    "id": 264,
+    "method": "POST",
+    "path": "/api/v1/medical/exams",
+    "module": "medical",
+    "operation_id": "perform_clinical_exam_api_v1_medical_exams_post",
+    "summary": "Perform Clinical Exam"
+  },
+  {
+    "id": 265,
+    "method": "GET",
+    "path": "/api/v1/medical/prescriptions",
+    "module": "medical",
+    "operation_id": "list_prescriptions_api_v1_medical_prescriptions_get",
+    "summary": "List Prescriptions"
+  },
+  {
+    "id": 266,
+    "method": "POST",
+    "path": "/api/v1/medical/prescriptions",
+    "module": "medical",
+    "operation_id": "prescribe_medication_api_v1_medical_prescriptions_post",
+    "summary": "Prescribe Medication"
+  },
+  {
+    "id": 267,
+    "method": "PUT",
+    "path": "/api/v1/medical/prescriptions/{prescription_id}",
+    "module": "medical",
+    "operation_id": "update_prescription_api_v1_medical_prescriptions__prescription_id__put",
+    "summary": "Update Prescription"
+  },
+  {
+    "id": 268,
+    "method": "GET",
+    "path": "/api/v1/medical/prescriptions/{prescription_id}/administrations",
+    "module": "medical",
+    "operation_id": "get_prescription_administrations_api_v1_medical_prescriptions__prescription_id__administrations_get",
+    "summary": "Get Prescription Administrations"
+  },
+  {
+    "id": 269,
+    "method": "PATCH",
+    "path": "/api/v1/medical/prescriptions/{prescription_id}/status",
+    "module": "medical",
+    "operation_id": "update_prescription_status_api_v1_medical_prescriptions__prescription_id__status_patch",
+    "summary": "Update Prescription Status"
+  },
+  {
+    "id": 270,
+    "method": "GET",
+    "path": "/api/v1/medical/treatments",
+    "module": "medical",
+    "operation_id": "list_treatments_api_v1_medical_treatments_get",
+    "summary": "List Treatments"
+  },
+  {
+    "id": 271,
+    "method": "POST",
+    "path": "/api/v1/medical/treatments",
+    "module": "medical",
+    "operation_id": "record_treatment_api_v1_medical_treatments_post",
+    "summary": "Record Treatment"
+  },
+  {
+    "id": 272,
+    "method": "GET",
+    "path": "/api/v1/medical/vaccinations",
+    "module": "medical",
+    "operation_id": "list_vaccinations_api_v1_medical_vaccinations_get",
+    "summary": "List Vaccinations"
+  },
+  {
+    "id": 273,
+    "method": "POST",
+    "path": "/api/v1/medical/vaccinations",
+    "module": "medical",
+    "operation_id": "administer_vaccine_api_v1_medical_vaccinations_post",
+    "summary": "Administer Vaccine"
+  },
+  {
+    "id": 274,
+    "method": "GET",
+    "path": "/api/v1/medical/vaccine-protocols",
+    "module": "medical",
+    "operation_id": "list_vaccine_protocols_api_v1_medical_vaccine_protocols_get",
+    "summary": "List Vaccine Protocols"
+  },
+  {
+    "id": 275,
+    "method": "POST",
+    "path": "/api/v1/medical/vaccine-protocols",
+    "module": "medical",
+    "operation_id": "create_vaccine_protocol_api_v1_medical_vaccine_protocols_post",
+    "summary": "Create Vaccine Protocol"
+  },
+  {
+    "id": 276,
+    "method": "DELETE",
+    "path": "/api/v1/medical/{entity_type}/{entity_id}",
+    "module": "medical",
+    "operation_id": "soft_delete_entity_api_v1_medical__entity_type___entity_id__delete",
+    "summary": "Soft Delete Entity"
+  },
+  {
+    "id": 277,
+    "method": "GET",
+    "path": "/api/v1/notifications",
+    "module": "notifications",
+    "operation_id": "list_notifications_api_v1_notifications_get",
+    "summary": "List Notifications"
+  },
+  {
+    "id": 278,
+    "method": "POST",
+    "path": "/api/v1/notifications/broadcast",
+    "module": "notifications",
+    "operation_id": "broadcast_notification_api_v1_notifications_broadcast_post",
+    "summary": "Broadcast Notification"
+  },
+  {
+    "id": 279,
+    "method": "POST",
+    "path": "/api/v1/notifications/bulk/delete",
+    "module": "notifications",
+    "operation_id": "bulk_delete_notifications_api_v1_notifications_bulk_delete_post",
+    "summary": "Bulk Delete Notifications"
+  },
+  {
+    "id": 280,
+    "method": "GET",
+    "path": "/api/v1/notifications/preferences",
+    "module": "notifications",
+    "operation_id": "get_preferences_api_v1_notifications_preferences_get",
+    "summary": "Get Preferences"
+  },
+  {
+    "id": 281,
+    "method": "PUT",
+    "path": "/api/v1/notifications/preferences",
+    "module": "notifications",
+    "operation_id": "update_preferences_api_v1_notifications_preferences_put",
+    "summary": "Update Preferences"
+  },
+  {
+    "id": 282,
+    "method": "PUT",
+    "path": "/api/v1/notifications/read-all",
+    "module": "notifications",
+    "operation_id": "mark_all_read_api_v1_notifications_read_all_put",
+    "summary": "Mark All Read"
+  },
+  {
+    "id": 283,
+    "method": "POST",
+    "path": "/api/v1/notifications/send",
+    "module": "notifications",
+    "operation_id": "send_notification_api_v1_notifications_send_post",
+    "summary": "Send Notification"
+  },
+  {
+    "id": 284,
+    "method": "GET",
+    "path": "/api/v1/notifications/unread-count",
+    "module": "notifications",
+    "operation_id": "unread_count_api_v1_notifications_unread_count_get",
+    "summary": "Unread Count"
+  },
+  {
+    "id": 285,
+    "method": "DELETE",
+    "path": "/api/v1/notifications/{notification_id}",
+    "module": "notifications",
+    "operation_id": "delete_notification_api_v1_notifications__notification_id__delete",
+    "summary": "Delete Notification"
+  },
+  {
+    "id": 286,
+    "method": "PUT",
+    "path": "/api/v1/notifications/{notification_id}/read",
+    "module": "notifications",
+    "operation_id": "mark_read_api_v1_notifications__notification_id__read_put",
+    "summary": "Mark Read"
+  },
+  {
+    "id": 287,
+    "method": "GET",
+    "path": "/api/v1/portal/admin/blog",
+    "module": "portal",
+    "operation_id": "admin_list_blogs_api_v1_portal_admin_blog_get",
+    "summary": "Admin List Blogs"
+  },
+  {
+    "id": 288,
+    "method": "POST",
+    "path": "/api/v1/portal/admin/blog",
+    "module": "portal",
+    "operation_id": "create_blog_api_v1_portal_admin_blog_post",
+    "summary": "Create Blog"
+  },
+  {
+    "id": 289,
+    "method": "POST",
+    "path": "/api/v1/portal/admin/blog/bulk/delete",
+    "module": "portal",
+    "operation_id": "bulk_delete_blogs_api_v1_portal_admin_blog_bulk_delete_post",
+    "summary": "Bulk Delete Blogs"
+  },
+  {
+    "id": 290,
+    "method": "POST",
+    "path": "/api/v1/portal/admin/blog/bulk/status",
+    "module": "portal",
+    "operation_id": "bulk_update_blog_status_api_v1_portal_admin_blog_bulk_status_post",
+    "summary": "Bulk Update Blog Status"
+  },
+  {
+    "id": 291,
+    "method": "PUT",
+    "path": "/api/v1/portal/admin/blog/{post_id}",
+    "module": "portal",
+    "operation_id": "update_blog_api_v1_portal_admin_blog__post_id__put",
+    "summary": "Update Blog"
+  },
+  {
+    "id": 292,
+    "method": "DELETE",
+    "path": "/api/v1/portal/admin/blog/{post_id}",
+    "module": "portal",
+    "operation_id": "soft_delete_blog_api_v1_portal_admin_blog__post_id__delete",
+    "summary": "Soft Delete Blog"
+  },
+  {
+    "id": 293,
+    "method": "GET",
+    "path": "/api/v1/portal/admin/cms/pages",
+    "module": "portal",
+    "operation_id": "list_admin_cms_pages_api_v1_portal_admin_cms_pages_get",
+    "summary": "List Admin Cms Pages"
+  },
+  {
+    "id": 294,
+    "method": "GET",
+    "path": "/api/v1/portal/admin/cms/pages/{slug}",
+    "module": "portal",
+    "operation_id": "get_admin_cms_page_api_v1_portal_admin_cms_pages__slug__get",
+    "summary": "Get Admin Cms Page"
+  },
+  {
+    "id": 295,
+    "method": "PUT",
+    "path": "/api/v1/portal/admin/cms/pages/{slug}",
+    "module": "portal",
+    "operation_id": "update_admin_cms_page_api_v1_portal_admin_cms_pages__slug__put",
+    "summary": "Update Admin Cms Page"
+  },
+  {
+    "id": 296,
+    "method": "POST",
+    "path": "/api/v1/portal/admin/cms/pages/{slug}/discard",
+    "module": "portal",
+    "operation_id": "discard_admin_cms_page_api_v1_portal_admin_cms_pages__slug__discard_post",
+    "summary": "Discard Admin Cms Page"
+  },
+  {
+    "id": 297,
+    "method": "POST",
+    "path": "/api/v1/portal/admin/cms/pages/{slug}/publish",
+    "module": "portal",
+    "operation_id": "publish_admin_cms_page_api_v1_portal_admin_cms_pages__slug__publish_post",
+    "summary": "Publish Admin Cms Page"
+  },
+  {
+    "id": 298,
+    "method": "POST",
+    "path": "/api/v1/portal/admin/contact",
+    "module": "portal",
+    "operation_id": "create_contact_api_v1_portal_admin_contact_post",
+    "summary": "Create Contact"
+  },
+  {
+    "id": 299,
+    "method": "PUT",
+    "path": "/api/v1/portal/admin/contact/{location_id}",
+    "module": "portal",
+    "operation_id": "update_contact_api_v1_portal_admin_contact__location_id__put",
+    "summary": "Update Contact"
+  },
+  {
+    "id": 300,
+    "method": "GET",
+    "path": "/api/v1/portal/admin/faq",
+    "module": "portal",
+    "operation_id": "admin_list_faqs_api_v1_portal_admin_faq_get",
+    "summary": "Admin List Faqs"
+  },
+  {
+    "id": 301,
+    "method": "POST",
+    "path": "/api/v1/portal/admin/faq",
+    "module": "portal",
+    "operation_id": "create_faq_api_v1_portal_admin_faq_post",
+    "summary": "Create Faq"
+  },
+  {
+    "id": 302,
+    "method": "POST",
+    "path": "/api/v1/portal/admin/faq/bulk/delete",
+    "module": "portal",
+    "operation_id": "bulk_delete_faqs_api_v1_portal_admin_faq_bulk_delete_post",
+    "summary": "Bulk Delete Faqs"
+  },
+  {
+    "id": 303,
+    "method": "POST",
+    "path": "/api/v1/portal/admin/faq/bulk/status",
+    "module": "portal",
+    "operation_id": "bulk_update_faq_status_api_v1_portal_admin_faq_bulk_status_post",
+    "summary": "Bulk Update Faq Status"
+  },
+  {
+    "id": 304,
+    "method": "PUT",
+    "path": "/api/v1/portal/admin/faq/{entry_id}",
+    "module": "portal",
+    "operation_id": "update_faq_api_v1_portal_admin_faq__entry_id__put",
+    "summary": "Update Faq"
+  },
+  {
+    "id": 305,
+    "method": "DELETE",
+    "path": "/api/v1/portal/admin/faq/{entry_id}",
+    "module": "portal",
+    "operation_id": "soft_delete_faq_api_v1_portal_admin_faq__entry_id__delete",
+    "summary": "Soft Delete Faq"
+  },
+  {
+    "id": 306,
+    "method": "GET",
+    "path": "/api/v1/portal/admin/legal",
+    "module": "portal",
+    "operation_id": "admin_list_legal_docs_api_v1_portal_admin_legal_get",
+    "summary": "Admin List Legal Docs"
+  },
+  {
+    "id": 307,
+    "method": "POST",
+    "path": "/api/v1/portal/admin/legal",
+    "module": "portal",
+    "operation_id": "create_legal_doc_api_v1_portal_admin_legal_post",
+    "summary": "Create Legal Doc"
+  },
+  {
+    "id": 308,
+    "method": "PUT",
+    "path": "/api/v1/portal/admin/legal/{doc_id}",
+    "module": "portal",
+    "operation_id": "update_legal_doc_api_v1_portal_admin_legal__doc_id__put",
+    "summary": "Update Legal Doc"
+  },
+  {
+    "id": 309,
+    "method": "DELETE",
+    "path": "/api/v1/portal/admin/legal/{doc_id}",
+    "module": "portal",
+    "operation_id": "soft_delete_legal_doc_api_v1_portal_admin_legal__doc_id__delete",
+    "summary": "Soft Delete Legal Doc"
+  },
+  {
+    "id": 310,
+    "method": "GET",
+    "path": "/api/v1/portal/admin/settings",
+    "module": "portal",
+    "operation_id": "list_settings_api_v1_portal_admin_settings_get",
+    "summary": "List Settings"
+  },
+  {
+    "id": 311,
+    "method": "PUT",
+    "path": "/api/v1/portal/admin/settings/{key}",
+    "module": "portal",
+    "operation_id": "upsert_setting_api_v1_portal_admin_settings__key__put",
+    "summary": "Upsert Setting"
+  },
+  {
+    "id": 312,
+    "method": "GET",
+    "path": "/api/v1/portal/admin/success-stories",
+    "module": "portal",
+    "operation_id": "admin_list_stories_api_v1_portal_admin_success_stories_get",
+    "summary": "Admin List Stories"
+  },
+  {
+    "id": 313,
+    "method": "POST",
+    "path": "/api/v1/portal/admin/success-stories",
+    "module": "portal",
+    "operation_id": "create_story_api_v1_portal_admin_success_stories_post",
+    "summary": "Create Story"
+  },
+  {
+    "id": 314,
+    "method": "POST",
+    "path": "/api/v1/portal/admin/success-stories/bulk/delete",
+    "module": "portal",
+    "operation_id": "bulk_delete_stories_api_v1_portal_admin_success_stories_bulk_delete_post",
+    "summary": "Bulk Delete Stories"
+  },
+  {
+    "id": 315,
+    "method": "POST",
+    "path": "/api/v1/portal/admin/success-stories/bulk/status",
+    "module": "portal",
+    "operation_id": "bulk_update_story_status_api_v1_portal_admin_success_stories_bulk_status_post",
+    "summary": "Bulk Update Story Status"
+  },
+  {
+    "id": 316,
+    "method": "PUT",
+    "path": "/api/v1/portal/admin/success-stories/{story_id}",
+    "module": "portal",
+    "operation_id": "update_story_api_v1_portal_admin_success_stories__story_id__put",
+    "summary": "Update Story"
+  },
+  {
+    "id": 317,
+    "method": "DELETE",
+    "path": "/api/v1/portal/admin/success-stories/{story_id}",
+    "module": "portal",
+    "operation_id": "soft_delete_story_api_v1_portal_admin_success_stories__story_id__delete",
+    "summary": "Soft Delete Story"
+  },
+  {
+    "id": 318,
+    "method": "GET",
+    "path": "/api/v1/portal/admin/urgent-alerts",
+    "module": "portal",
+    "operation_id": "admin_list_urgent_alerts_api_v1_portal_admin_urgent_alerts_get",
+    "summary": "Admin List Urgent Alerts"
+  },
+  {
+    "id": 319,
+    "method": "POST",
+    "path": "/api/v1/portal/admin/urgent-alerts",
+    "module": "portal",
+    "operation_id": "create_urgent_alert_api_v1_portal_admin_urgent_alerts_post",
+    "summary": "Create Urgent Alert"
+  },
+  {
+    "id": 320,
+    "method": "PUT",
+    "path": "/api/v1/portal/admin/urgent-alerts/{alert_id}",
+    "module": "portal",
+    "operation_id": "update_urgent_alert_api_v1_portal_admin_urgent_alerts__alert_id__put",
+    "summary": "Update Urgent Alert"
+  },
+  {
+    "id": 321,
+    "method": "DELETE",
+    "path": "/api/v1/portal/admin/urgent-alerts/{alert_id}",
+    "module": "portal",
+    "operation_id": "soft_delete_urgent_alert_api_v1_portal_admin_urgent_alerts__alert_id__delete",
+    "summary": "Soft Delete Urgent Alert"
+  },
+  {
+    "id": 322,
+    "method": "POST",
+    "path": "/api/v1/portal/admin/veterinary-network",
+    "module": "portal",
+    "operation_id": "create_vet_api_v1_portal_admin_veterinary_network_post",
+    "summary": "Create Vet"
+  },
+  {
+    "id": 323,
+    "method": "PUT",
+    "path": "/api/v1/portal/admin/veterinary-network/{partner_id}",
+    "module": "portal",
+    "operation_id": "update_vet_api_v1_portal_admin_veterinary_network__partner_id__put",
+    "summary": "Update Vet"
+  },
+  {
+    "id": 324,
+    "method": "GET",
+    "path": "/api/v1/portal/blog",
+    "module": "portal",
+    "operation_id": "list_published_blog_api_v1_portal_blog_get",
+    "summary": "List Published Blog"
+  },
+  {
+    "id": 325,
+    "method": "GET",
+    "path": "/api/v1/portal/blog/slug/{slug}",
+    "module": "portal",
+    "operation_id": "get_blog_by_slug_api_v1_portal_blog_slug__slug__get",
+    "summary": "Get Blog By Slug"
+  },
+  {
+    "id": 326,
+    "method": "GET",
+    "path": "/api/v1/portal/cms/pages/{slug}",
+    "module": "portal",
+    "operation_id": "get_public_cms_page_api_v1_portal_cms_pages__slug__get",
+    "summary": "Get Public Cms Page"
+  },
+  {
+    "id": 327,
+    "method": "GET",
+    "path": "/api/v1/portal/contact",
+    "module": "portal",
+    "operation_id": "list_contact_locations_api_v1_portal_contact_get",
+    "summary": "List Contact Locations"
+  },
+  {
+    "id": 328,
+    "method": "GET",
+    "path": "/api/v1/portal/faq",
+    "module": "portal",
+    "operation_id": "list_faq_api_v1_portal_faq_get",
+    "summary": "List Faq"
+  },
+  {
+    "id": 329,
+    "method": "GET",
+    "path": "/api/v1/portal/legal",
+    "module": "portal",
+    "operation_id": "list_published_legal_docs_api_v1_portal_legal_get",
+    "summary": "List Published Legal Docs"
+  },
+  {
+    "id": 330,
+    "method": "GET",
+    "path": "/api/v1/portal/legal/{slug}",
+    "module": "portal",
+    "operation_id": "get_published_legal_doc_api_v1_portal_legal__slug__get",
+    "summary": "Get Published Legal Doc"
+  },
+  {
+    "id": 331,
+    "method": "GET",
+    "path": "/api/v1/portal/me/dashboard",
+    "module": "portal",
+    "operation_id": "get_user_dashboard_api_v1_portal_me_dashboard_get",
+    "summary": "Get User Dashboard"
+  },
+  {
+    "id": 332,
+    "method": "GET",
+    "path": "/api/v1/portal/stats",
+    "module": "portal",
+    "operation_id": "get_hero_stats_api_v1_portal_stats_get",
+    "summary": "Get Hero Stats"
+  },
+  {
+    "id": 333,
+    "method": "GET",
+    "path": "/api/v1/portal/success-stories",
+    "module": "portal",
+    "operation_id": "list_published_stories_api_v1_portal_success_stories_get",
+    "summary": "List Published Stories"
+  },
+  {
+    "id": 334,
+    "method": "GET",
+    "path": "/api/v1/portal/success-stories/{story_id}",
+    "module": "portal",
+    "operation_id": "get_published_story_api_v1_portal_success_stories__story_id__get",
+    "summary": "Get Published Story"
+  },
+  {
+    "id": 335,
+    "method": "GET",
+    "path": "/api/v1/portal/transparency",
+    "module": "portal",
+    "operation_id": "get_transparency_stats_api_v1_portal_transparency_get",
+    "summary": "Get Transparency Stats"
+  },
+  {
+    "id": 336,
+    "method": "GET",
+    "path": "/api/v1/portal/urgent-alerts",
+    "module": "portal",
+    "operation_id": "list_active_urgent_alerts_api_v1_portal_urgent_alerts_get",
+    "summary": "List Active Urgent Alerts"
+  },
+  {
+    "id": 337,
+    "method": "GET",
+    "path": "/api/v1/portal/veterinary-network",
+    "module": "portal",
+    "operation_id": "list_veterinary_partners_api_v1_portal_veterinary_network_get",
+    "summary": "List Veterinary Partners"
+  },
+  {
+    "id": 338,
+    "method": "POST",
+    "path": "/api/v1/public/rescue/report",
+    "module": "public-rescue",
+    "operation_id": "public_report_incident_api_v1_public_rescue_report_post",
+    "summary": "Public Report Incident"
+  },
+  {
+    "id": 339,
+    "method": "GET",
+    "path": "/api/v1/reports/download/{filename}",
+    "module": "reports",
+    "operation_id": "download_report_api_v1_reports_download__filename__get",
+    "summary": "Download Report"
+  },
+  {
+    "id": 340,
+    "method": "GET",
+    "path": "/api/v1/reports/formats",
+    "module": "reports",
+    "operation_id": "list_report_formats_api_v1_reports_formats_get",
+    "summary": "List Report Formats"
+  },
+  {
+    "id": 341,
+    "method": "POST",
+    "path": "/api/v1/reports/generate",
+    "module": "reports",
+    "operation_id": "generate_report_api_v1_reports_generate_post",
+    "summary": "Generate Report"
+  },
+  {
+    "id": 342,
+    "method": "GET",
+    "path": "/api/v1/reports/types",
+    "module": "reports",
+    "operation_id": "list_report_types_api_v1_reports_types_get",
+    "summary": "List Report Types"
+  },
+  {
+    "id": 343,
+    "method": "GET",
+    "path": "/api/v1/rescue",
+    "module": "rescue",
+    "operation_id": "list_requests_api_v1_rescue_get",
+    "summary": "List Requests"
+  },
+  {
+    "id": 344,
+    "method": "GET",
+    "path": "/api/v1/rescue-centres",
+    "module": "rescue-centres",
+    "operation_id": "list_rescue_centres_api_v1_rescue_centres_get",
+    "summary": "List Rescue Centres"
+  },
+  {
+    "id": 345,
+    "method": "POST",
+    "path": "/api/v1/rescue-centres",
+    "module": "rescue-centres",
+    "operation_id": "create_rescue_centre_api_v1_rescue_centres_post",
+    "summary": "Create Rescue Centre"
+  },
+  {
+    "id": 346,
+    "method": "POST",
+    "path": "/api/v1/rescue-centres/bulk/delete",
+    "module": "rescue-centres",
+    "operation_id": "bulk_delete_rescue_centres_api_v1_rescue_centres_bulk_delete_post",
+    "summary": "Bulk Delete Rescue Centres"
+  },
+  {
+    "id": 347,
+    "method": "POST",
+    "path": "/api/v1/rescue-centres/bulk/status",
+    "module": "rescue-centres",
+    "operation_id": "bulk_update_rescue_centre_status_api_v1_rescue_centres_bulk_status_post",
+    "summary": "Bulk Update Rescue Centre Status"
+  },
+  {
+    "id": 348,
+    "method": "GET",
+    "path": "/api/v1/rescue-centres/{facility_id}",
+    "module": "rescue-centres",
+    "operation_id": "get_rescue_centre_api_v1_rescue_centres__facility_id__get",
+    "summary": "Get Rescue Centre"
+  },
+  {
+    "id": 349,
+    "method": "PUT",
+    "path": "/api/v1/rescue-centres/{facility_id}",
+    "module": "rescue-centres",
+    "operation_id": "update_rescue_centre_api_v1_rescue_centres__facility_id__put",
+    "summary": "Update Rescue Centre"
+  },
+  {
+    "id": 350,
+    "method": "DELETE",
+    "path": "/api/v1/rescue-centres/{facility_id}",
+    "module": "rescue-centres",
+    "operation_id": "delete_rescue_centre_api_v1_rescue_centres__facility_id__delete",
+    "summary": "Delete Rescue Centre"
+  },
+  {
+    "id": 351,
+    "method": "PUT",
+    "path": "/api/v1/rescue-centres/{facility_id}/status",
+    "module": "rescue-centres",
+    "operation_id": "update_rescue_centre_status_api_v1_rescue_centres__facility_id__status_put",
+    "summary": "Update Rescue Centre Status"
+  },
+  {
+    "id": 352,
+    "method": "POST",
+    "path": "/api/v1/rescue/bulk/delete",
+    "module": "rescue",
+    "operation_id": "bulk_delete_rescue_requests_api_v1_rescue_bulk_delete_post",
+    "summary": "Bulk Delete Rescue Requests"
+  },
+  {
+    "id": 353,
+    "method": "POST",
+    "path": "/api/v1/rescue/bulk/status-update",
+    "module": "rescue",
+    "operation_id": "bulk_update_rescue_status_api_v1_rescue_bulk_status_update_post",
+    "summary": "Bulk Update Rescue Status"
+  },
+  {
+    "id": 354,
+    "method": "PATCH",
+    "path": "/api/v1/rescue/dispatch/{dispatch_id}",
+    "module": "rescue",
+    "operation_id": "update_dispatch_api_v1_rescue_dispatch__dispatch_id__patch",
+    "summary": "Update Dispatch"
+  },
+  {
+    "id": 355,
+    "method": "DELETE",
+    "path": "/api/v1/rescue/dispatch/{dispatch_id}",
+    "module": "rescue",
+    "operation_id": "delete_dispatch_api_v1_rescue_dispatch__dispatch_id__delete",
+    "summary": "Delete Dispatch"
+  },
+  {
+    "id": 356,
+    "method": "GET",
+    "path": "/api/v1/rescue/dispatches",
+    "module": "rescue",
+    "operation_id": "list_dispatches_api_v1_rescue_dispatches_get",
+    "summary": "List Dispatches"
+  },
+  {
+    "id": 357,
+    "method": "PATCH",
+    "path": "/api/v1/rescue/dispatches/{dispatch_id}",
+    "module": "rescue",
+    "operation_id": "update_dispatch_api_v1_rescue_dispatches__dispatch_id__patch",
+    "summary": "Update Dispatch"
+  },
+  {
+    "id": 358,
+    "method": "DELETE",
+    "path": "/api/v1/rescue/dispatches/{dispatch_id}",
+    "module": "rescue",
+    "operation_id": "delete_dispatch_api_v1_rescue_dispatches__dispatch_id__delete",
+    "summary": "Delete Dispatch"
+  },
+  {
+    "id": 359,
+    "method": "POST",
+    "path": "/api/v1/rescue/media-upload-url",
+    "module": "rescue",
+    "operation_id": "request_rescue_media_upload_url_api_v1_rescue_media_upload_url_post",
+    "summary": "Request Rescue Media Upload Url"
+  },
+  {
+    "id": 360,
+    "method": "POST",
+    "path": "/api/v1/rescue/report",
+    "module": "rescue",
+    "operation_id": "report_incident_api_v1_rescue_report_post",
+    "summary": "Report Incident"
+  },
+  {
+    "id": 361,
+    "method": "GET",
+    "path": "/api/v1/rescue/status",
+    "module": "rescue",
+    "operation_id": "get_public_status_api_v1_rescue_status_get",
+    "summary": "Get Public Status"
+  },
+  {
+    "id": 362,
+    "method": "GET",
+    "path": "/api/v1/rescue/{request_id}",
+    "module": "rescue",
+    "operation_id": "get_request_api_v1_rescue__request_id__get",
+    "summary": "Get Request"
+  },
+  {
+    "id": 363,
+    "method": "DELETE",
+    "path": "/api/v1/rescue/{request_id}",
+    "module": "rescue",
+    "operation_id": "soft_delete_request_api_v1_rescue__request_id__delete",
+    "summary": "Soft Delete Request"
+  },
+  {
+    "id": 364,
+    "method": "POST",
+    "path": "/api/v1/rescue/{request_id}/admitted",
+    "module": "rescue",
+    "operation_id": "mark_admitted_api_v1_rescue__request_id__admitted_post",
+    "summary": "Mark Admitted"
+  },
+  {
+    "id": 365,
+    "method": "POST",
+    "path": "/api/v1/rescue/{request_id}/dispatch",
+    "module": "rescue",
+    "operation_id": "dispatch_team_api_v1_rescue__request_id__dispatch_post",
+    "summary": "Dispatch Team"
+  },
+  {
+    "id": 366,
+    "method": "POST",
+    "path": "/api/v1/rescue/{request_id}/escalate",
+    "module": "rescue",
+    "operation_id": "escalate_rescue_api_v1_rescue__request_id__escalate_post",
+    "summary": "Escalate Rescue"
+  },
+  {
+    "id": 367,
+    "method": "POST",
+    "path": "/api/v1/rescue/{request_id}/fail",
+    "module": "rescue",
+    "operation_id": "fail_rescue_api_v1_rescue__request_id__fail_post",
+    "summary": "Fail Rescue"
+  },
+  {
+    "id": 368,
+    "method": "POST",
+    "path": "/api/v1/rescue/{request_id}/located",
+    "module": "rescue",
+    "operation_id": "mark_located_api_v1_rescue__request_id__located_post",
+    "summary": "Mark Located"
+  },
+  {
+    "id": 369,
+    "method": "POST",
+    "path": "/api/v1/rescue/{request_id}/secured",
+    "module": "rescue",
+    "operation_id": "mark_rescued_api_v1_rescue__request_id__secured_post",
+    "summary": "Mark Rescued"
+  },
+  {
+    "id": 370,
+    "method": "POST",
+    "path": "/api/v1/rescue/{request_id}/verify",
+    "module": "rescue",
+    "operation_id": "verify_request_api_v1_rescue__request_id__verify_post",
+    "summary": "Verify Request"
+  },
+  {
+    "id": 371,
+    "method": "GET",
+    "path": "/api/v1/settings/business-rules",
+    "module": "settings",
+    "operation_id": "list_business_rules_api_v1_settings_business_rules_get",
+    "summary": "List Business Rules"
+  },
+  {
+    "id": 372,
+    "method": "POST",
+    "path": "/api/v1/settings/business-rules",
+    "module": "settings",
+    "operation_id": "create_business_rule_api_v1_settings_business_rules_post",
+    "summary": "Create Business Rule"
+  },
+  {
+    "id": 373,
+    "method": "DELETE",
+    "path": "/api/v1/settings/business-rules/{rule_id}",
+    "module": "settings",
+    "operation_id": "delete_business_rule_api_v1_settings_business_rules__rule_id__delete",
+    "summary": "Delete Business Rule"
+  },
+  {
+    "id": 374,
+    "method": "GET",
+    "path": "/api/v1/settings/business-rules/{rule_key}",
+    "module": "settings",
+    "operation_id": "get_business_rule_api_v1_settings_business_rules__rule_key__get",
+    "summary": "Get Business Rule"
+  },
+  {
+    "id": 375,
+    "method": "PUT",
+    "path": "/api/v1/settings/business-rules/{rule_key}",
+    "module": "settings",
+    "operation_id": "update_business_rule_api_v1_settings_business_rules__rule_key__put",
+    "summary": "Update Business Rule"
+  },
+  {
+    "id": 376,
+    "method": "GET",
+    "path": "/api/v1/settings/email",
+    "module": "settings",
+    "operation_id": "get_email_settings_api_v1_settings_email_get",
+    "summary": "Get Email Settings"
+  },
+  {
+    "id": 377,
+    "method": "GET",
+    "path": "/api/v1/settings/general",
+    "module": "settings",
+    "operation_id": "get_general_settings_api_v1_settings_general_get",
+    "summary": "Get General Settings"
+  },
+  {
+    "id": 378,
+    "method": "GET",
+    "path": "/api/v1/settings/password-policy",
+    "module": "settings",
+    "operation_id": "get_password_policy_api_v1_settings_password_policy_get",
+    "summary": "Get Password Policy"
+  },
+  {
+    "id": 379,
+    "method": "PUT",
+    "path": "/api/v1/settings/password-policy",
+    "module": "settings",
+    "operation_id": "update_password_policy_api_v1_settings_password_policy_put",
+    "summary": "Update Password Policy"
+  },
+  {
+    "id": 380,
+    "method": "GET",
+    "path": "/api/v1/settings/public-content",
+    "module": "settings",
+    "operation_id": "get_public_content_api_v1_settings_public_content_get",
+    "summary": "Get Public Content"
+  },
+  {
+    "id": 381,
+    "method": "PUT",
+    "path": "/api/v1/settings/public-content",
+    "module": "settings",
+    "operation_id": "update_public_content_api_v1_settings_public_content_put",
+    "summary": "Update Public Content"
+  },
+  {
+    "id": 382,
+    "method": "GET",
+    "path": "/api/v1/settings/storage",
+    "module": "settings",
+    "operation_id": "get_storage_settings_api_v1_settings_storage_get",
+    "summary": "Get Storage Settings"
+  },
+  {
+    "id": 383,
+    "method": "GET",
+    "path": "/api/v1/settings/system",
+    "module": "settings",
+    "operation_id": "list_settings_api_v1_settings_system_get",
+    "summary": "List Settings"
+  },
+  {
+    "id": 384,
+    "method": "POST",
+    "path": "/api/v1/settings/system",
+    "module": "settings",
+    "operation_id": "create_setting_api_v1_settings_system_post",
+    "summary": "Create Setting"
+  },
+  {
+    "id": 385,
+    "method": "GET",
+    "path": "/api/v1/settings/system/{key}",
+    "module": "settings",
+    "operation_id": "get_setting_api_v1_settings_system__key__get",
+    "summary": "Get Setting"
+  },
+  {
+    "id": 386,
+    "method": "PUT",
+    "path": "/api/v1/settings/system/{key}",
+    "module": "settings",
+    "operation_id": "update_setting_api_v1_settings_system__key__put",
+    "summary": "Update Setting"
+  },
+  {
+    "id": 387,
+    "method": "DELETE",
+    "path": "/api/v1/settings/system/{setting_id}",
+    "module": "settings",
+    "operation_id": "delete_setting_api_v1_settings_system__setting_id__delete",
+    "summary": "Delete Setting"
+  },
+  {
+    "id": 388,
+    "method": "POST",
+    "path": "/api/v1/shelter/care-logs",
+    "module": "shelter",
+    "operation_id": "submit_daily_care_log_api_v1_shelter_care_logs_post",
+    "summary": "Submit Daily Care Log"
+  },
+  {
+    "id": 389,
+    "method": "GET",
+    "path": "/api/v1/shelter/dogs/{dog_id}/care-logs",
+    "module": "shelter",
+    "operation_id": "list_care_logs_api_v1_shelter_dogs__dog_id__care_logs_get",
+    "summary": "List Care Logs"
+  },
+  {
+    "id": 390,
+    "method": "GET",
+    "path": "/api/v1/shelter/facilities",
+    "module": "shelter",
+    "operation_id": "list_facilities_api_v1_shelter_facilities_get",
+    "summary": "List Facilities"
+  },
+  {
+    "id": 391,
+    "method": "POST",
+    "path": "/api/v1/shelter/facilities",
+    "module": "shelter",
+    "operation_id": "create_facility_api_v1_shelter_facilities_post",
+    "summary": "Create Facility"
+  },
+  {
+    "id": 392,
+    "method": "POST",
+    "path": "/api/v1/shelter/facilities/bulk/delete",
+    "module": "shelter",
+    "operation_id": "bulk_delete_facilities_api_v1_shelter_facilities_bulk_delete_post",
+    "summary": "Bulk Delete Facilities"
+  },
+  {
+    "id": 393,
+    "method": "POST",
+    "path": "/api/v1/shelter/facilities/bulk/status",
+    "module": "shelter",
+    "operation_id": "bulk_update_facility_status_api_v1_shelter_facilities_bulk_status_post",
+    "summary": "Bulk Update Facility Status"
+  },
+  {
+    "id": 394,
+    "method": "GET",
+    "path": "/api/v1/shelter/facilities/{facility_id}",
+    "module": "shelter",
+    "operation_id": "get_facility_api_v1_shelter_facilities__facility_id__get",
+    "summary": "Get Facility"
+  },
+  {
+    "id": 395,
+    "method": "PUT",
+    "path": "/api/v1/shelter/facilities/{facility_id}",
+    "module": "shelter",
+    "operation_id": "update_facility_api_v1_shelter_facilities__facility_id__put",
+    "summary": "Update Facility"
+  },
+  {
+    "id": 396,
+    "method": "DELETE",
+    "path": "/api/v1/shelter/facilities/{facility_id}",
+    "module": "shelter",
+    "operation_id": "delete_facility_api_v1_shelter_facilities__facility_id__delete",
+    "summary": "Delete Facility"
+  },
+  {
+    "id": 397,
+    "method": "GET",
+    "path": "/api/v1/shelter/facilities/{facility_id}/sections",
+    "module": "shelter",
+    "operation_id": "list_sections_api_v1_shelter_facilities__facility_id__sections_get",
+    "summary": "List Sections"
+  },
+  {
+    "id": 398,
+    "method": "POST",
+    "path": "/api/v1/shelter/facilities/{facility_id}/sections",
+    "module": "shelter",
+    "operation_id": "create_section_api_v1_shelter_facilities__facility_id__sections_post",
+    "summary": "Create Section"
+  },
+  {
+    "id": 399,
+    "method": "PUT",
+    "path": "/api/v1/shelter/facilities/{facility_id}/status",
+    "module": "shelter",
+    "operation_id": "update_facility_status_api_v1_shelter_facilities__facility_id__status_put",
+    "summary": "Update Facility Status"
+  },
+  {
+    "id": 400,
+    "method": "POST",
+    "path": "/api/v1/shelter/kennels/{kennel_id}/assign/{dog_id}",
+    "module": "shelter",
+    "operation_id": "assign_dog_to_kennel_api_v1_shelter_kennels__kennel_id__assign__dog_id__post",
+    "summary": "Assign Dog To Kennel"
+  },
+  {
+    "id": 401,
+    "method": "PATCH",
+    "path": "/api/v1/shelter/kennels/{kennel_id}/assign/{dog_id}",
+    "module": "shelter",
+    "operation_id": "assign_dog_to_kennel_api_v1_shelter_kennels__kennel_id__assign__dog_id__patch",
+    "summary": "Assign Dog To Kennel"
+  },
+  {
+    "id": 402,
+    "method": "GET",
+    "path": "/api/v1/shelter/kennels/{kennel_id}/cleaning-logs",
+    "module": "shelter",
+    "operation_id": "list_kennel_cleaning_logs_api_v1_shelter_kennels__kennel_id__cleaning_logs_get",
+    "summary": "List Kennel Cleaning Logs"
+  },
+  {
+    "id": 403,
+    "method": "POST",
+    "path": "/api/v1/shelter/kennels/{kennel_id}/cleaning-logs",
+    "module": "shelter",
+    "operation_id": "log_kennel_cleaning_api_v1_shelter_kennels__kennel_id__cleaning_logs_post",
+    "summary": "Log Kennel Cleaning"
+  },
+  {
+    "id": 404,
+    "method": "PUT",
+    "path": "/api/v1/shelter/kennels/{kennel_id}/sanitation",
+    "module": "shelter",
+    "operation_id": "update_kennel_sanitation_api_v1_shelter_kennels__kennel_id__sanitation_put",
+    "summary": "Update Kennel Sanitation"
+  },
+  {
+    "id": 405,
+    "method": "GET",
+    "path": "/api/v1/shelter/sections/{section_id}/kennels",
+    "module": "shelter",
+    "operation_id": "list_kennels_api_v1_shelter_sections__section_id__kennels_get",
+    "summary": "List Kennels"
+  },
+  {
+    "id": 406,
+    "method": "POST",
+    "path": "/api/v1/shelter/sections/{section_id}/kennels",
+    "module": "shelter",
+    "operation_id": "create_kennel_api_v1_shelter_sections__section_id__kennels_post",
+    "summary": "Create Kennel"
+  },
+  {
+    "id": 407,
+    "method": "GET",
+    "path": "/api/v1/shelter/transfers",
+    "module": "shelter",
+    "operation_id": "list_transfers_api_v1_shelter_transfers_get",
+    "summary": "List Transfers"
+  },
+  {
+    "id": 408,
+    "method": "POST",
+    "path": "/api/v1/shelter/transfers",
+    "module": "shelter",
+    "operation_id": "request_transfer_api_v1_shelter_transfers_post",
+    "summary": "Request Transfer"
+  },
+  {
+    "id": 409,
+    "method": "GET",
+    "path": "/api/v1/shelter/transfers/{transfer_id}",
+    "module": "shelter",
+    "operation_id": "get_transfer_api_v1_shelter_transfers__transfer_id__get",
+    "summary": "Get Transfer"
+  },
+  {
+    "id": 410,
+    "method": "POST",
+    "path": "/api/v1/shelter/transfers/{transfer_id}/confirm-receiver",
+    "module": "shelter",
+    "operation_id": "confirm_transfer_receiver_api_v1_shelter_transfers__transfer_id__confirm_receiver_post",
+    "summary": "Confirm Transfer Receiver"
+  },
+  {
+    "id": 411,
+    "method": "POST",
+    "path": "/api/v1/shelter/transfers/{transfer_id}/confirm-sender",
+    "module": "shelter",
+    "operation_id": "confirm_transfer_sender_api_v1_shelter_transfers__transfer_id__confirm_sender_post",
+    "summary": "Confirm Transfer Sender"
+  },
+  {
+    "id": 412,
+    "method": "GET",
+    "path": "/api/v1/storage",
+    "module": "storage",
+    "operation_id": "list_files_api_v1_storage_get",
+    "summary": "List Files"
+  },
+  {
+    "id": 413,
+    "method": "POST",
+    "path": "/api/v1/storage/bulk/delete",
+    "module": "storage",
+    "operation_id": "bulk_delete_files_api_v1_storage_bulk_delete_post",
+    "summary": "Bulk Delete Files"
+  },
+  {
+    "id": 414,
+    "method": "GET",
+    "path": "/api/v1/storage/entity/{entity_type}/{entity_id}",
+    "module": "storage",
+    "operation_id": "list_files_by_entity_api_v1_storage_entity__entity_type___entity_id__get",
+    "summary": "List Files By Entity"
+  },
+  {
+    "id": 415,
+    "method": "POST",
+    "path": "/api/v1/storage/upload-url",
+    "module": "storage",
+    "operation_id": "request_upload_url_api_v1_storage_upload_url_post",
+    "summary": "Request Upload Url"
+  },
+  {
+    "id": 416,
+    "method": "GET",
+    "path": "/api/v1/storage/{file_id}",
+    "module": "storage",
+    "operation_id": "get_file_api_v1_storage__file_id__get",
+    "summary": "Get File"
+  },
+  {
+    "id": 417,
+    "method": "DELETE",
+    "path": "/api/v1/storage/{file_id}",
+    "module": "storage",
+    "operation_id": "delete_file_api_v1_storage__file_id__delete",
+    "summary": "Delete File"
+  },
+  {
+    "id": 418,
+    "method": "PUT",
+    "path": "/api/v1/storage/{file_id}/confirm",
+    "module": "storage",
+    "operation_id": "confirm_upload_api_v1_storage__file_id__confirm_put",
+    "summary": "Confirm Upload"
+  },
+  {
+    "id": 419,
+    "method": "GET",
+    "path": "/api/v1/storage/{file_id}/download-url",
+    "module": "storage",
+    "operation_id": "get_download_url_api_v1_storage__file_id__download_url_get",
+    "summary": "Get Download Url"
+  },
+  {
+    "id": 420,
+    "method": "GET",
+    "path": "/api/v1/volunteers",
+    "module": "volunteers",
+    "operation_id": "list_profiles_api_v1_volunteers_get",
+    "summary": "List Profiles"
+  },
+  {
+    "id": 421,
+    "method": "POST",
+    "path": "/api/v1/volunteers/apply",
+    "module": "volunteers",
+    "operation_id": "apply_to_volunteer_api_v1_volunteers_apply_post",
+    "summary": "Apply To Volunteer"
+  },
+  {
+    "id": 422,
+    "method": "POST",
+    "path": "/api/v1/volunteers/attendance/{attendance_id}/check-in",
+    "module": "volunteers",
+    "operation_id": "check_in_api_v1_volunteers_attendance__attendance_id__check_in_post",
+    "summary": "Check In"
+  },
+  {
+    "id": 423,
+    "method": "POST",
+    "path": "/api/v1/volunteers/attendance/{attendance_id}/check-out",
+    "module": "volunteers",
+    "operation_id": "check_out_api_v1_volunteers_attendance__attendance_id__check_out_post",
+    "summary": "Check Out"
+  },
+  {
+    "id": 424,
+    "method": "POST",
+    "path": "/api/v1/volunteers/bulk/delete",
+    "module": "volunteers",
+    "operation_id": "bulk_delete_profiles_api_v1_volunteers_bulk_delete_post",
+    "summary": "Bulk Delete Profiles"
+  },
+  {
+    "id": 425,
+    "method": "POST",
+    "path": "/api/v1/volunteers/bulk/status",
+    "module": "volunteers",
+    "operation_id": "bulk_update_profile_status_api_v1_volunteers_bulk_status_post",
+    "summary": "Bulk Update Profile Status"
+  },
+  {
+    "id": 426,
+    "method": "GET",
+    "path": "/api/v1/volunteers/shifts",
+    "module": "volunteers",
+    "operation_id": "list_shifts_api_v1_volunteers_shifts_get",
+    "summary": "List Shifts"
+  },
+  {
+    "id": 427,
+    "method": "POST",
+    "path": "/api/v1/volunteers/shifts",
+    "module": "volunteers",
+    "operation_id": "create_shift_api_v1_volunteers_shifts_post",
+    "summary": "Create Shift"
+  },
+  {
+    "id": 428,
+    "method": "GET",
+    "path": "/api/v1/volunteers/shifts/{shift_id}/attendance",
+    "module": "volunteers",
+    "operation_id": "list_shift_attendance_api_v1_volunteers_shifts__shift_id__attendance_get",
+    "summary": "List Shift Attendance"
+  },
+  {
+    "id": 429,
+    "method": "POST",
+    "path": "/api/v1/volunteers/shifts/{shift_id}/join",
+    "module": "volunteers",
+    "operation_id": "join_shift_api_v1_volunteers_shifts__shift_id__join_post",
+    "summary": "Join Shift"
+  },
+  {
+    "id": 430,
+    "method": "GET",
+    "path": "/api/v1/volunteers/{profile_id}",
+    "module": "volunteers",
+    "operation_id": "get_profile_api_v1_volunteers__profile_id__get",
+    "summary": "Get Profile"
+  },
+  {
+    "id": 431,
+    "method": "PUT",
+    "path": "/api/v1/volunteers/{profile_id}",
+    "module": "volunteers",
+    "operation_id": "update_profile_api_v1_volunteers__profile_id__put",
+    "summary": "Update Profile"
+  },
+  {
+    "id": 432,
+    "method": "DELETE",
+    "path": "/api/v1/volunteers/{profile_id}",
+    "module": "volunteers",
+    "operation_id": "soft_delete_profile_api_v1_volunteers__profile_id__delete",
+    "summary": "Soft Delete Profile"
+  },
+  {
+    "id": 433,
+    "method": "GET",
+    "path": "/api/v1/volunteers/{profile_id}/certificate",
+    "module": "volunteers",
+    "operation_id": "issue_service_certificate_api_v1_volunteers__profile_id__certificate_get",
+    "summary": "Issue Service Certificate"
+  },
+  {
+    "id": 434,
+    "method": "GET",
+    "path": "/api/v1/volunteers/{profile_id}/service-summary",
+    "module": "volunteers",
+    "operation_id": "get_service_summary_api_v1_volunteers__profile_id__service_summary_get",
+    "summary": "Get Service Summary"
+  },
+  {
+    "id": 435,
+    "method": "GET",
+    "path": "/health",
+    "module": "unknown",
+    "operation_id": "health_health_get",
+    "summary": "Health"
+  },
+  {
+    "id": 436,
+    "method": "GET",
+    "path": "/live",
+    "module": "unknown",
+    "operation_id": "live_live_get",
+    "summary": "Live"
+  },
+  {
+    "id": 437,
+    "method": "GET",
+    "path": "/ready",
+    "module": "unknown",
+    "operation_id": "ready_ready_get",
+    "summary": "Ready"
+  }
+]

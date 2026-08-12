@@ -1,0 +1,79 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "title": "SQLAlchemy Pool Utilization",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "db_pool_size",
+          "legendFormat": "Pool Configured Size"
+        },
+        {
+          "expr": "db_pool_checked_out",
+          "legendFormat": "Active Connections (Checked Out)"
+        },
+        {
+          "expr": "db_pool_overflow",
+          "legendFormat": "Pool Overflow Connections"
+        }
+      ]
+    },
+    {
+      "title": "Database Query Throughput (QPS by Type)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(db_queries_total[1m])) by (type)",
+          "legendFormat": "QPS ({{type}})"
+        }
+      ]
+    },
+    {
+      "title": "Database Query Latency Percentiles",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(db_query_duration_ms_bucket[1m])) by (le))",
+          "legendFormat": "p50 (ms)"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(db_query_duration_ms_bucket[1m])) by (le))",
+          "legendFormat": "p95 (ms)"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(db_query_duration_ms_bucket[1m])) by (le))",
+          "legendFormat": "p99 (ms)"
+        }
+      ]
+    },
+    {
+      "title": "Slow Queries Rate (>100ms)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(db_slow_queries_total[1m])) by (type)",
+          "legendFormat": "Slow Queries / sec ({{type}})"
+        }
+      ]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["pawguard", "database", "postgresql"],
+  "time": { "from": "now-15m", "to": "now" },
+  "timezone": "browser",
+  "title": "PawGuard — 02 PostgreSQL Database",
+  "uid": "pawguard-postgresql-db"
+}

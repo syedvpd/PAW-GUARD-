@@ -407,6 +407,26 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
             pc.LOST_FOUND_BROADCAST,
         ],
     ),
+    (
+        "app_user",
+        "Public application user for companion pets, lost & found, and emergency reporting.",
+        False,
+        [
+            pc.PUBLIC_READ,
+            pc.PUBLIC_CREATE,
+            pc.COMPANION_PET_CREATE,
+            pc.COMPANION_PET_READ,
+            pc.COMPANION_PET_UPDATE,
+            pc.COMPANION_PET_DELETE,
+            pc.COMPANION_PET_MEDICAL_UPLOAD,
+            pc.SAFETY_TAG_MANAGE,
+            pc.VET_CLINIC_READ,
+            pc.APPOINTMENT_CREATE,
+            pc.APPOINTMENT_READ,
+            pc.APPOINTMENT_CANCEL,
+            pc.LOST_FOUND_BROADCAST,
+        ],
+    ),
 ]
 
 

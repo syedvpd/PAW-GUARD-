@@ -82,11 +82,11 @@ async def test_distributed_locks_with_mock_redis() -> None:
 
 
 @pytest.mark.asyncio
-async def test_locks_noop_gracefully_without_redis() -> None:
+async def test_locks_fail_closed_without_redis() -> None:
     redis = _NullRedis()
     cache = CacheService(redis, namespace="test")
 
-    # Without redis config, lock acquisition/release should fail open gracefully so business logic is not blocked
-    assert await cache.acquire_lock("my_lock", "token") is True
-    assert await cache.release_lock("my_lock", "token") is True
+    # Distributed lock must fail closed when Redis is unavailable to prevent race conditions
+    assert await cache.acquire_lock("my_lock", "token") is False
+    assert await cache.release_lock("my_lock", "token") is False
 

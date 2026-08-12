@@ -1,5 +1,6 @@
 """DonationService: owns donor registers, contributions, and sponsorships (RULE-003)."""
 
+import asyncio
 import calendar
 import uuid
 from datetime import UTC, date, datetime
@@ -100,7 +101,8 @@ class DonationService:
                 else "Donor"
             )
             settings = get_settings()
-            pdf_bytes = generate_tax_receipt(
+            pdf_bytes = await asyncio.to_thread(
+                generate_tax_receipt,
                 donor_name=donor_name,
                 amount=float(donation.amount),
                 currency=donation.currency,
@@ -112,7 +114,8 @@ class DonationService:
             object_key = self._storage.build_object_key(
                 folder="documents", filename=f"receipt_{donation.id}.pdf"
             )
-            self._storage.put_object(
+            await asyncio.to_thread(
+                self._storage.put_object,
                 object_key=object_key,
                 content=pdf_bytes,
                 content_type="application/pdf",

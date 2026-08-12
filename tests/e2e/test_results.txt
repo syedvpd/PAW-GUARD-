@@ -1,0 +1,20 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.14.5, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\win10\Downloads\PAW-GUARD-\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\win10\Downloads\PAW-GUARD-
+configfile: pyproject.toml
+plugins: anyio-4.14.2, asyncio-1.4.0, cov-7.1.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 442 items
+
+tests/e2e/test_admin.py::TestAdminEndpoints::test_list_roles PASSED      [  0%]
+tests/e2e/test_admin.py::TestAdminEndpoints::test_create_role PASSED     [  0%]
+tests/e2e/test_admin.py::TestAdminEndpoints::test_get_role PASSED        [  0%]
+tests/e2e/test_admin.py::TestAdminEndpoints::test_get_role_not_found PASSED [  0%]
+tests/e2e/test_admin.py::TestAdminEndpoints::test_update_role PASSED     [  1%]
+tests/e2e/test_admin.py::TestAdminEndpoints::test_delete_role PASSED     [  1%]
+tests/e2e/test_admin.py::TestAdminEndpoints::test_list_permissions PASSED [  1%]
+tests/e2e/test_admin.py::TestAdminEndpoints::test_list_users PASSED      [  1%]
+tests/e2e/test_admin.py::TestAdminEndpoints::test_create_user PASSED     [  2%]
+tests/e2e/test_admin.py::TestAdminEndpoints::test_get_user PASSED        [  2%]
+tests/e2e/test_admin.py::TestAdminEndpoints::test_update_user PASSED     [  2%]

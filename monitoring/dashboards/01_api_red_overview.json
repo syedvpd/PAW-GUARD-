@@ -1,0 +1,82 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "title": "API Request Rate (RPS by Route & Method)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total[1m])) by (method, route)",
+          "legendFormat": "{{method}} {{route}}"
+        }
+      ]
+    },
+    {
+      "title": "Active In-Flight Requests",
+      "type": "gauge",
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(http_requests_in_flight)",
+          "legendFormat": "In-Flight"
+        }
+      ]
+    },
+    {
+      "title": "HTTP Error Rate (4xx & 5xx RPS)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_errors_total[1m])) by (status_class)",
+          "legendFormat": "{{status_class}} Errors"
+        }
+      ]
+    },
+    {
+      "title": "Request Duration Percentiles (p50, p95, p99)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_ms_bucket[1m])) by (le))",
+          "legendFormat": "p50 (ms)"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_ms_bucket[1m])) by (le))",
+          "legendFormat": "p95 (ms)"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_ms_bucket[1m])) by (le))",
+          "legendFormat": "p99 (ms)"
+        }
+      ]
+    },
+    {
+      "title": "HTTP Timeouts (408 & 504)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(http_request_timeouts_total[1m])) by (route)",
+          "legendFormat": "Timeouts {{route}}"
+        }
+      ]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["pawguard", "api", "red"],
+  "time": { "from": "now-15m", "to": "now" },
+  "timezone": "browser",
+  "title": "PawGuard — 01 API RED Overview",
+  "uid": "pawguard-api-red"
+}

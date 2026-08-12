@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from sqlalchemy import text
 
 from pawguard.api.v1.router import api_v1_router
@@ -22,8 +22,6 @@ from pawguard.core.middleware import (
 from pawguard.core.responses import ApiResponse
 from pawguard.db.session import engine
 from pawguard.redis.client import ping_redis
-
-logger = get_logger(__name__)
 
 logger = get_logger(__name__)
 
@@ -189,6 +187,26 @@ def create_app() -> FastAPI:
             "redis": "ok" if redis_ok else "unavailable",
         }
         return ApiResponse(data=status_payload, success=db_ok and redis_ok)
+
+    @app.get(
+        "/metrics",
+        include_in_schema=True,
+        response_class=Response,
+        summary="Prometheus Metrics Exposition",
+        description="Standard Prometheus-compatible exposition format for RED metrics, DB pool, Redis, and Worker telemetry.",
+    )
+    async def metrics_endpoint() -> Response:
+        from starlette.responses import PlainTextResponse
+
+        from pawguard.core.metrics import generate_prometheus_metrics
+        from pawguard.db.session import collect_db_pool_metrics
+
+        collect_db_pool_metrics()
+        content = generate_prometheus_metrics()
+        return PlainTextResponse(
+            content=content,
+            media_type="text/plain; version=0.0.4; charset=utf-8",
+        )
 
     return app
 

@@ -447,3 +447,16 @@ class TestScheduledJobs:
         payload = mock_notif.send_notification.call_args.kwargs["payload"]
         assert isinstance(payload, NotificationSend)
         assert payload.notification_type == "sponsorship_charge"
+
+    @pytest.mark.asyncio
+    async def test_arq_worker_startup_preserves_in_progress_locks(self):
+        """Worker startup must NOT purge arq:in-progress:* keys so sibling workers are protected."""
+        from pawguard.workers.arq_worker import startup
+
+        mock_redis = AsyncMock()
+        mock_redis.delete = AsyncMock()
+        ctx = {"redis": mock_redis}
+
+        await startup(ctx)
+
+        mock_redis.delete.assert_not_called()

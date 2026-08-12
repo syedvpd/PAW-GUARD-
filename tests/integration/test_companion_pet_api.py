@@ -117,3 +117,38 @@ async def test_owner_admin_vet_scoping_qr_privacy_and_appointment_conflict(
 
     vet_view = await client.get(f"/api/v1/companion-pets/{pet_id}", headers=vet_headers)
     assert vet_view.status_code == 200, vet_view.text
+
+
+@pytest.mark.asyncio
+async def test_app_user_role_companion_pets_listing_and_scoping(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Ensure normal app_user gets 200 OK for GET /api/v1/companion-pets and sees only own pets."""
+    user1_headers = await register_and_auth(
+        client, db_session, email="app-user-1@example.com", role="app_user"
+    )
+    user2_headers = await register_and_auth(
+        client, db_session, email="app-user-2@example.com", role="app_user"
+    )
+
+    # 1. User 1 creates a pet
+    create_res = await client.post(
+        "/api/v1/companion-pets",
+        json={"name": "Buddy", "species": "dog", "emergency_notes": "Friendly"},
+        headers=user1_headers,
+    )
+    assert create_res.status_code == 201, create_res.text
+    pet1_id = create_res.json()["data"]["id"]
+
+    # 2. User 1 lists pets -> 200 OK, includes Buddy
+    list1_res = await client.get("/api/v1/companion-pets", headers=user1_headers)
+    assert list1_res.status_code == 200, list1_res.text
+    pets1 = list1_res.json()["data"]
+    assert any(p["id"] == pet1_id for p in pets1)
+
+    # 3. User 2 lists pets -> 200 OK, does NOT include User 1's pet (scoped)
+    list2_res = await client.get("/api/v1/companion-pets", headers=user2_headers)
+    assert list2_res.status_code == 200, list2_res.text
+    pets2 = list2_res.json()["data"]
+    assert not any(p["id"] == pet1_id for p in pets2)
+

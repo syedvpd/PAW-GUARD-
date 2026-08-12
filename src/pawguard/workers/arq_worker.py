@@ -1,5 +1,4 @@
-"""ARQ worker entrypoint. Run with: `arq pawguard.workers.arq_worker.WorkerSettings`."""
-
+import time
 from collections.abc import Awaitable, Callable
 from functools import wraps
 from typing import Any
@@ -8,14 +7,10 @@ from arq import Retry
 from arq.connections import RedisSettings
 from arq.cron import cron
 
-# Importing the versioned API router registers every ORM model in the worker
-# process (the web app does the same in main.py). Without it, string-referenced
-# relationships (e.g. AdoptionApplication.dog -> "DogProfile") fail to resolve
-# at mapper configuration time and the first scheduled job query crashes.
 from pawguard.api.v1.router import api_v1_router  # noqa: F401  (side effects)
 from pawguard.core.config import get_settings
 from pawguard.core.logging import configure_logging, get_logger
-from pawguard.core.metrics import increment_counter
+from pawguard.core.metrics import increment_counter, observe_histogram
 from pawguard.workers.jobs.companion_pet_jobs import send_companion_pet_reminders
 from pawguard.workers.jobs.email_jobs import (
     send_email_verification_email_job,
@@ -37,25 +32,31 @@ settings = get_settings()
 
 
 def _track_failures(fn: Callable[..., Awaitable[Any]]) -> Any:
-    """Log and count every job failure, then re-raise so ARQ retries apply.
+    """Log and instrument job execution duration, success, retries, and failures.
 
-    ARQ 0.28 has no ``on_job_failure`` hook (``on_job_end`` receives only the
-    context, not the result), so each job is wrapped at registration time. The
-    counter ``arq_job_failed_total`` is labeled by job name.
+    ARQ 0.28 has no ``on_job_failure`` hook, so each job is wrapped at registration time.
     """
 
     @wraps(fn)
     async def wrapper(ctx: dict[str, Any], *args: Any, **kwargs: Any) -> Any:
+        job_name = fn.__name__
+        start = time.perf_counter()
+        increment_counter("worker_jobs_total", {"job": job_name, "status": "started"})
         try:
-            return await fn(ctx, *args, **kwargs)
+            res = await fn(ctx, *args, **kwargs)
+            elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
+            observe_histogram("worker_job_duration_ms", elapsed_ms, {"job": job_name})
+            increment_counter("worker_jobs_total", {"job": job_name, "status": "success"})
+            return res
         except Retry:
-            # A deliberate, scheduled retry is not a terminal failure: let ARQ
-            # re-queue the job and keep it out of the failure metric/log.
+            increment_counter("worker_job_retries_total", {"job": job_name})
             raise
         except Exception as exc:
+            elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
+            observe_histogram("worker_job_duration_ms", elapsed_ms, {"job": job_name})
             logger.error(
                 "arq_job_failed",
-                job=fn.__name__,
+                job=job_name,
                 job_id=ctx.get("job_id"),
                 job_try=ctx.get("job_try"),
                 args=args,
@@ -64,7 +65,9 @@ def _track_failures(fn: Callable[..., Awaitable[Any]]) -> Any:
                 error=str(exc),
                 exc_info=exc,
             )
-            increment_counter("arq_job_failed_total", {"job": fn.__name__})
+            increment_counter("arq_job_failed_total", {"job": job_name})
+            increment_counter("worker_job_failures_total", {"job": job_name})
+            increment_counter("worker_jobs_total", {"job": job_name, "status": "failed"})
             raise
 
     return wrapper
@@ -72,24 +75,7 @@ def _track_failures(fn: Callable[..., Awaitable[Any]]) -> Any:
 
 async def startup(ctx: dict[str, object]) -> None:
     configure_logging()
-
-    # Self-healing for crash recovery: this backend runs exactly ONE ARQ worker
-    # process (single-instance / free tier), so any `arq:in-progress:*` lock
-    # left behind by a previous process is by definition stale — a deploy or
-    # instance kill during a job strands it, and ARQ then logs an endless
-    # "job ... already running elsewhere" loop and never delivers the email.
-    # Delete those locks (and any dead jobs) on every startup so queued work
-    # is always picked up fresh. Safe: there is no second worker that could be
-    # legitimately running these jobs.
-    pool = ctx.get("redis")
-    if pool is not None:
-        try:
-            keys = [key async for key in pool.scan_iter(match="arq:in-progress:*")]
-            if keys:
-                await pool.delete(*keys)
-                logger.info("arq_startup_purged_stale_locks", count=len(keys))
-        except Exception as exc:  # never block worker boot on cleanup
-            logger.warning("arq_startup_purge_failed", error=str(exc))
+    logger.info("arq_worker_startup", max_tries=WorkerSettings.max_tries)
 
 
 _send_password_reset_email_job = _track_failures(send_password_reset_email_job)

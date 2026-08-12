@@ -98,11 +98,12 @@ class ReportService:
         sections = raw_data.get("sections") or None
 
         if fmt == ReportFormat.CSV:
-            content = generate_csv(headers, rows, sections=sections)
+            content = await asyncio.to_thread(generate_csv, headers, rows, sections=sections)
             ext = "csv"
             content_type = "text/csv"
         elif fmt == ReportFormat.EXCEL:
-            content = generate_excel(
+            content = await asyncio.to_thread(
+                generate_excel,
                 report_type.value, headers, rows, title=title, sections=sections
             )
             ext = "xlsx"
@@ -111,15 +112,21 @@ class ReportService:
                 ".spreadsheetml.sheet"
             )
         else:
-            content = generate_pdf(title, headers, rows, subtitle=subtitle, sections=sections)
+            content = await asyncio.to_thread(
+                generate_pdf, title, headers, rows, subtitle=subtitle, sections=sections
+            )
             ext = "pdf"
             content_type = "application/pdf"
 
         fname = report_filename(report_type.value, ext)
         reports_dir = ensure_reports_dir()
         filepath = os.path.join(reports_dir, fname)
-        with open(filepath, "wb") as f:  # noqa: ASYNC230
-            f.write(content)
+
+        def _write_file(path: str, data: bytes) -> None:
+            with open(path, "wb") as f:
+                f.write(data)
+
+        await asyncio.to_thread(_write_file, filepath, content)
 
         return {
             "report_type": report_type.value,

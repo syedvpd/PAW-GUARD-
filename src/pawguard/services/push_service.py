@@ -1,10 +1,4 @@
-"""Push notification service using Firebase Cloud Messaging (FCM).
-
-Gracefully degrades when Firebase credentials are not configured:
-all public methods return silently instead of raising, so the rest
-of the notification pipeline (in-app + email) continues to work.
-"""
-
+import asyncio
 import uuid
 from typing import Any
 
@@ -76,7 +70,7 @@ async def send_push_notification(
                 )
             ),
         )
-        response = messaging.send(message, app=app)
+        response = await asyncio.to_thread(messaging.send, message, app=app)
         logger.debug(
             "push_sent",
             message_id=response,
@@ -98,8 +92,9 @@ async def send_push_notification_to_users(
     title: str,
     body: str,
     data: dict[str, str] | None = None,
+    max_concurrency: int = 10,
 ) -> int:
-    """Send the same push notification to multiple devices.
+    """Send the same push notification to multiple devices concurrently.
 
     ``user_tokens`` is a list of (user_id, fcm_token) tuples.
     Returns the count of successfully sent messages.
@@ -108,17 +103,20 @@ async def send_push_notification_to_users(
     if app is None:
         return 0
 
-    sent = 0
-    for user_id, fcm_token in user_tokens:
-        if not fcm_token:
-            continue
-        ok = await send_push_notification(
-            fcm_token,
-            title=title,
-            body=body,
-            data=data,
-            user_id=user_id,
-        )
-        if ok:
-            sent += 1
-    return sent
+    valid_tokens = [(uid, tok) for uid, tok in user_tokens if tok]
+    if not valid_tokens:
+        return 0
+
+    sem = asyncio.Semaphore(max_concurrency)
+
+    async def _send_one(uid: uuid.UUID, tok: str) -> bool:
+        async with sem:
+            return await send_push_notification(
+                tok, title=title, body=body, data=data, user_id=uid
+            )
+
+    results = await asyncio.gather(
+        *[_send_one(uid, tok) for uid, tok in valid_tokens],
+        return_exceptions=True,
+    )
+    return sum(1 for r in results if r is True)

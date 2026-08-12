@@ -11,7 +11,7 @@ and rate-limiting / caching degrade gracefully.
 from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any, cast
 
-from redis.asyncio import ConnectionPool, Redis
+from redis.asyncio import Redis
 
 from pawguard.core.config import get_settings
 
@@ -41,7 +41,7 @@ class _NullRedis:
         px: int | None = None,
         nx: bool | None = None,
     ) -> Any:
-        return True if nx else None
+        return None
 
     async def delete(self, key: str) -> None:
         return None

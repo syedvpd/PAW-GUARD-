@@ -188,7 +188,7 @@ class StorageService:
             content = await asyncio.to_thread(
                 self._s3.get_object, object_key=stored.object_key
             )
-            thumbnail = create_thumbnail(content, max_size=400)
+            thumbnail = await asyncio.to_thread(create_thumbnail, content, max_size=400)
             if thumbnail is None:
                 return
             fmt = PILImage.open(BytesIO(thumbnail)).format
