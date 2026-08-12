@@ -167,6 +167,18 @@ class VetClinicResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class VeterinarianResponse(BaseModel):
+    """A veterinarian available at a clinic for appointment booking."""
+
+    id: uuid.UUID
+    full_name: str
+    email: str | None = None
+    phone: str | None = None
+    profile_picture_url: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ClinicMembershipCreate(BaseModel):
     user_id: uuid.UUID
     membership_role: str = Field("staff", min_length=1, max_length=32)

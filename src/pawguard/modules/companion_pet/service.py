@@ -40,6 +40,7 @@ from pawguard.modules.companion_pet.schemas import (
     VetClinicCreate,
     VetClinicResponse,
     VetClinicUpdate,
+    VeterinarianResponse,
 )
 from pawguard.modules.notifications.schemas import NotificationCreate
 from pawguard.modules.notifications.service import NotificationService
@@ -417,6 +418,14 @@ class CompanionPetService:
             data=[VetClinicResponse.model_validate(row) for row in rows],
             meta=build_pagination_meta(total=total, params=page),
         )
+
+    async def list_clinic_veterinarians(
+        self, clinic_id: uuid.UUID
+    ) -> list[VeterinarianResponse]:
+        if await self._repo.get_clinic(clinic_id) is None:
+            raise NotFoundError("Veterinary clinic not found.")
+        vets = await self._repo.list_clinic_veterinarians(clinic_id)
+        return [VeterinarianResponse.model_validate(v) for v in vets]
 
     async def update_clinic(
         self,

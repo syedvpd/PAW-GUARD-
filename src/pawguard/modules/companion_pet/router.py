@@ -35,6 +35,7 @@ from pawguard.modules.companion_pet.schemas import (
     VetClinicCreate,
     VetClinicResponse,
     VetClinicUpdate,
+    VeterinarianResponse,
 )
 from pawguard.modules.companion_pet.service import CompanionPetService
 from pawguard.modules.storage.repository import StorageRepository
@@ -99,6 +100,20 @@ async def list_clinics(
     service: CompanionPetService = Depends(get_companion_pet_service),
 ) -> PaginatedResponse[VetClinicResponse]:
     return await service.list_clinics(page, sort, search)
+
+
+@router.get(
+    "/clinics/{clinic_id}/veterinarians",
+    response_model=ApiResponse[list[VeterinarianResponse]],
+    dependencies=[Depends(require_permission("appointment:read"))],
+    summary="List veterinarians available at a veterinary clinic",
+)
+async def list_clinic_veterinarians(
+    clinic_id: uuid.UUID,
+    service: CompanionPetService = Depends(get_companion_pet_service),
+) -> ApiResponse[list[VeterinarianResponse]]:
+    vets = await service.list_clinic_veterinarians(clinic_id)
+    return ApiResponse(data=vets)
 
 
 @router.get(

@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.pagination import PageParams
 from pawguard.core.search import SortParams, apply_sorting, build_search_filter
+from pawguard.modules.auth.models import Role, User
 from pawguard.modules.companion_pet.models import (
     AppointmentStatus,
     ClinicMembership,
@@ -141,6 +142,26 @@ class CompanionPetRepository:
         self._session.add(membership)
         await self._session.flush()
         return membership
+
+    async def list_clinic_veterinarians(self, clinic_id: uuid.UUID) -> Sequence[User]:
+        stmt = (
+            select(User)
+            .join(User.roles)
+            .join(
+                ClinicMembership,
+                ClinicMembership.user_id == User.id,
+            )
+            .where(
+                Role.name == "veterinarian",
+                ClinicMembership.clinic_id == clinic_id,
+                ClinicMembership.is_active.is_(True),
+                ClinicMembership.deleted_at.is_(None),
+                User.is_active.is_(True),
+                User.deleted_at.is_(None),
+            )
+            .order_by(User.full_name)
+        )
+        return (await self._session.execute(stmt)).scalars().all()
 
     async def has_membership(self, user_id: uuid.UUID, clinic_id: uuid.UUID) -> bool:
         stmt = select(ClinicMembership.id).where(

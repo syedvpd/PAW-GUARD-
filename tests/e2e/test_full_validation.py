@@ -725,6 +725,27 @@ class TestCompanionPets:
         if r.status_code == 201:
             S.vet_clinic_id = r.json()["data"]["id"]
 
+    async def test_clinic_veterinarians_list(self, client, db_session):
+        if not S.vet_clinic_id:
+            return
+        vet_email = f"vet_{uid()}@test.com"
+        vet_headers = await register_and_auth(client, db_session, email=vet_email, role="veterinarian")
+        me = await call(client, "auth", "GET", "/api/v1/auth/me", headers=vet_headers, expected=200)
+        if me.status_code == 200:
+            vet_id = me.json()["data"]["id"]
+            m = await call(client, "companion-pets", "POST",
+                           f"/api/v1/companion-pets/clinics/{S.vet_clinic_id}/memberships",
+                           headers=S.admin_headers, json={"user_id": vet_id}, expected=201)
+            if m.status_code == 201:
+                r = await call(client, "companion-pets", "GET",
+                               f"/api/v1/companion-pets/clinics/{S.vet_clinic_id}/veterinarians",
+                               headers=S.user_headers, expected=200)
+                if r.status_code == 200:
+                    assert any(v["id"] == vet_id for v in r.json()["data"])
+        await call(client, "companion-pets", "GET",
+                   f"/api/v1/companion-pets/clinics/{uuid.uuid4()}/veterinarians",
+                   headers=S.user_headers, expected=404)
+
     async def test_appointments_list(self, client, db_session):
         await call(client, "companion-pets", "GET", "/api/v1/companion-pets/appointments",
                    headers=S.admin_headers, expected=200)
