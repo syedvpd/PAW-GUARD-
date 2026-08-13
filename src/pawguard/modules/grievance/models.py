@@ -9,7 +9,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from pawguard.db.base import Base
-from pawguard.db.mixins import SoftDeleteMixin, TimestampMixin, UUIDPkMixin
+from pawguard.db.mixins import AuditMixin, SoftDeleteMixin, TimestampMixin, UUIDPkMixin
 
 # Default response-SLA window (PRR 3.14: "mandatory response SLAs").
 DEFAULT_SLA_HOURS = 72
@@ -23,7 +23,7 @@ class GrievanceStatus(StrEnum):
     CLOSED = "closed"
 
 
-class GrievanceTicket(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class GrievanceTicket(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "grievance_tickets"
 
     reporter_name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -36,6 +36,8 @@ class GrievanceTicket(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     )
     assigned_to_admin_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    ,
+        index=True
     )
     resolution_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -48,10 +50,12 @@ class GrievanceTicket(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     escalated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     escalated_to_admin_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    ,
+        index=True
     )
 
 
-class GrievanceComment(UUIDPkMixin, TimestampMixin, Base):
+class GrievanceComment(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "grievance_comments"
 
     ticket_id: Mapped[uuid.UUID] = mapped_column(
@@ -62,21 +66,27 @@ class GrievanceComment(UUIDPkMixin, TimestampMixin, Base):
     )
     author_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    ,
+        index=True
     )
     body: Mapped[str] = mapped_column(Text, nullable=False)
     is_internal: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 
-class ServiceFeedback(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class ServiceFeedback(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "service_feedbacks"
 
     rescue_case_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("rescue_requests.id", ondelete="SET NULL"), nullable=True
+    ,
+        index=True
     )
     adoption_application_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("adoption_applications.id", ondelete="SET NULL"),
         nullable=True,
+    
+        index=True
     )
     rating: Mapped[int] = mapped_column(Integer, nullable=False)
     comments: Mapped[str | None] = mapped_column(Text, nullable=True)

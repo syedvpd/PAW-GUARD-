@@ -9,7 +9,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from pawguard.db.base import Base
-from pawguard.db.mixins import SoftDeleteMixin, TimestampMixin, UUIDPkMixin
+from pawguard.db.mixins import AuditMixin, SoftDeleteMixin, TimestampMixin, UUIDPkMixin
 
 
 class ItemCategory(StrEnum):
@@ -35,7 +35,7 @@ class RequisitionStatus(StrEnum):
     RECEIVED = "received"
 
 
-class InventoryItem(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class InventoryItem(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "inventory_items"
 
     __table_args__ = (
@@ -58,14 +58,18 @@ class InventoryItem(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     )
 
 
-class InventoryMovement(UUIDPkMixin, TimestampMixin, Base):
+class InventoryMovement(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "inventory_movements"
 
     item_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("inventory_items.id", ondelete="CASCADE"), nullable=False
+    ,
+        index=True
     )
     moved_by: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    ,
+        index=True
     )
     movement_type: Mapped[MovementType] = mapped_column(String(32), nullable=False)
     quantity: Mapped[float] = mapped_column(Numeric(10, 2, asdecimal=False), nullable=False)
@@ -74,14 +78,18 @@ class InventoryMovement(UUIDPkMixin, TimestampMixin, Base):
     reference_id: Mapped[uuid.UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
 
 
-class RequisitionOrder(UUIDPkMixin, TimestampMixin, Base):
+class RequisitionOrder(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "requisition_orders"
 
     item_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("inventory_items.id", ondelete="CASCADE"), nullable=False
+    ,
+        index=True
     )
     requester_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    ,
+        index=True
     )
     quantity: Mapped[float] = mapped_column(Numeric(10, 2, asdecimal=False), nullable=False)
     status: Mapped[RequisitionStatus] = mapped_column(

@@ -20,7 +20,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from pawguard.db.base import Base
-from pawguard.db.mixins import SoftDeleteMixin, TimestampMixin, UUIDPkMixin
+from pawguard.db.mixins import AuditMixin, SoftDeleteMixin, TimestampMixin, UUIDPkMixin
 
 
 class AppointmentStatus(StrEnum):
@@ -36,7 +36,7 @@ class ReminderKind(StrEnum):
     MEDICATION = "medication"
 
 
-class CompanionPet(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class CompanionPet(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "companion_pets"
 
     owner_id: Mapped[uuid.UUID] = mapped_column(
@@ -58,7 +58,7 @@ class CompanionPet(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     is_scan_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     original_dog_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
-        ForeignKey("dogs.id", ondelete="SET NULL"),
+        ForeignKey("dog_profiles.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
@@ -72,7 +72,7 @@ class CompanionPet(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     __table_args__ = (Index("ix_companion_pets_owner_active", "owner_id", "deleted_at"),)
 
 
-class VetClinic(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class VetClinic(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "vet_clinics"
 
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
@@ -86,7 +86,7 @@ class VetClinic(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
 
 
-class ClinicMembership(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class ClinicMembership(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "vet_clinic_memberships"
 
     clinic_id: Mapped[uuid.UUID] = mapped_column(
@@ -115,7 +115,7 @@ class ClinicMembership(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     )
 
 
-class PetClinicAccess(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class PetClinicAccess(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "pet_clinic_access"
 
     pet_id: Mapped[uuid.UUID] = mapped_column(
@@ -132,6 +132,8 @@ class PetClinicAccess(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     )
     granted_by_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    ,
+        index=True
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
@@ -146,7 +148,7 @@ class PetClinicAccess(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     )
 
 
-class PetMedicalRecord(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class PetMedicalRecord(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "pet_medical_records"
 
     pet_id: Mapped[uuid.UUID] = mapped_column(
@@ -163,6 +165,8 @@ class PetMedicalRecord(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     )
     authored_by_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    ,
+        index=True
     )
     stored_file_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
@@ -176,7 +180,7 @@ class PetMedicalRecord(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
-class SafetyTag(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class SafetyTag(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "pet_safety_tags"
 
     pet_id: Mapped[uuid.UUID] = mapped_column(
@@ -201,7 +205,7 @@ class SafetyTag(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     )
 
 
-class PetReminder(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class PetReminder(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "pet_reminders"
 
     pet_id: Mapped[uuid.UUID] = mapped_column(
@@ -224,7 +228,7 @@ class PetReminder(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
 
 
-class ReminderDelivery(UUIDPkMixin, TimestampMixin, Base):
+class ReminderDelivery(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "pet_reminder_deliveries"
 
     reminder_id: Mapped[uuid.UUID] = mapped_column(
@@ -253,7 +257,7 @@ class ReminderDelivery(UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class PetAppointment(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class PetAppointment(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "pet_appointments"
 
     pet_id: Mapped[uuid.UUID] = mapped_column(

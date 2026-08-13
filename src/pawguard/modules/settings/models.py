@@ -6,10 +6,10 @@ from sqlalchemy import Boolean, DateTime, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from pawguard.db.base import Base
-from pawguard.db.mixins import TimestampMixin, UUIDPkMixin
+from pawguard.db.mixins import AuditMixin, TimestampMixin, UUIDPkMixin
 
 
-class SystemSetting(UUIDPkMixin, TimestampMixin, Base):
+class SystemSetting(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "system_settings"
 
     key: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
@@ -22,7 +22,7 @@ class SystemSetting(UUIDPkMixin, TimestampMixin, Base):
     is_editable: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
 
-class PasswordPolicy(UUIDPkMixin, TimestampMixin, Base):
+class PasswordPolicy(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "password_policies"
 
     min_length: Mapped[int] = mapped_column(Integer, default=8, nullable=False)
@@ -40,7 +40,7 @@ class PasswordPolicy(UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class BusinessRule(UUIDPkMixin, TimestampMixin, Base):
+class BusinessRule(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "business_rules"
 
     rule_key: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)

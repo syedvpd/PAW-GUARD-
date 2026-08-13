@@ -20,7 +20,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pawguard.db.base import Base
-from pawguard.db.mixins import SoftDeleteMixin, TimestampMixin, UUIDPkMixin
+from pawguard.db.mixins import AuditMixin, SoftDeleteMixin, TimestampMixin, UUIDPkMixin
 
 
 class RescueStatus(StrEnum):
@@ -92,7 +92,7 @@ class RescueFailureReason(StrEnum):
     OTHER = "other"  # catch-all for unmappable legacy values
 
 
-class RescueRequest(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class RescueRequest(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "rescue_requests"
 
     ticket_number: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
@@ -154,7 +154,7 @@ class RescueRequest(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     )
 
 
-class RescueDispatch(UUIDPkMixin, TimestampMixin, Base):
+class RescueDispatch(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "rescue_dispatches"
 
     rescue_request_id: Mapped[uuid.UUID] = mapped_column(
@@ -165,6 +165,8 @@ class RescueDispatch(UUIDPkMixin, TimestampMixin, Base):
     )
     assigned_driver_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    ,
+        index=True
     )
     vehicle_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # FK-validated vehicle reference (PRR 3.2 resource assignment). The
@@ -206,7 +208,7 @@ class RescueDispatch(UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class RescueDispatchAgent(UUIDPkMixin, TimestampMixin, Base):
+class RescueDispatchAgent(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     """Association of a rescue dispatch to one of its assigned field agents.
 
     A dispatch has one or more agents (PRR 3.2 resource assignment). The
@@ -239,14 +241,18 @@ class RescueDispatchAgent(UUIDPkMixin, TimestampMixin, Base):
     dispatch: Mapped["RescueDispatch"] = relationship(back_populates="agents")
 
 
-class RescueReport(UUIDPkMixin, TimestampMixin, Base):
+class RescueReport(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "rescue_reports"
 
     rescue_request_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("rescue_requests.id", ondelete="CASCADE"), nullable=False
+    ,
+        index=True
     )
     agent_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    ,
+        index=True
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     photos: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)  # Store up to 5 URLs

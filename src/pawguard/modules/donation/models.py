@@ -11,7 +11,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pawguard.db.base import Base
-from pawguard.db.mixins import SoftDeleteMixin, TimestampMixin, UUIDPkMixin
+from pawguard.db.mixins import AuditMixin, SoftDeleteMixin, TimestampMixin, UUIDPkMixin
 
 if TYPE_CHECKING:
     from pawguard.modules.auth.models import User
@@ -60,7 +60,7 @@ class CampaignStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
-class DonorProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class DonorProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "donor_profiles"
 
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -72,19 +72,17 @@ class DonorProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     tax_identifier: Mapped[str | None] = mapped_column(String(64), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    user: Mapped["User"] = relationship("User", lazy="joined")
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id], lazy="joined")
     donations: Mapped[list["Donation"]] = relationship(
         back_populates="donor", cascade="all, delete-orphan"
     )
 
 
-class DogSponsorship(UUIDPkMixin, TimestampMixin, Base):
+class DogSponsorship(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "dog_sponsorships"
 
     __table_args__ = (
-        CheckConstraint(
-            "monthly_amount > 0", name="ck_dog_sponsorships_monthly_amount_positive"
-        ),
+        CheckConstraint("monthly_amount > 0", name="ck_dog_sponsorships_monthly_amount_positive"),
     )
 
     donor_id: Mapped[uuid.UUID] = mapped_column(
@@ -97,6 +95,7 @@ class DogSponsorship(UUIDPkMixin, TimestampMixin, Base):
         PG_UUID(as_uuid=True),
         ForeignKey("dog_profiles.id", ondelete="CASCADE"),
         nullable=False,
+        index=True,
     )
     monthly_amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
@@ -104,18 +103,14 @@ class DogSponsorship(UUIDPkMixin, TimestampMixin, Base):
         String(32), default=SponsorshipStatus.ACTIVE, nullable=False, index=True
     )
     next_charge_date: Mapped[date_type] = mapped_column(Date, nullable=False)
-    started_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
-    cancelled_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     donor: Mapped["DonorProfile"] = relationship("DonorProfile", lazy="joined")
     dog: Mapped["DogProfile"] = relationship("DogProfile", lazy="joined")
 
 
-class RecurringSubscription(UUIDPkMixin, TimestampMixin, Base):
+class RecurringSubscription(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     """A monthly recurring donation linked to a donor profile (audit 3.11).
 
     Each due charge is recorded as a PENDING `Donation` (donation_type=RECURRING,
@@ -140,12 +135,8 @@ class RecurringSubscription(UUIDPkMixin, TimestampMixin, Base):
         String(32), default=RecurringStatus.ACTIVE, nullable=False, index=True
     )
     next_charge_date: Mapped[date_type] = mapped_column(Date, nullable=False)
-    started_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
-    cancelled_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     donor: Mapped["DonorProfile"] = relationship("DonorProfile", lazy="joined")
     donations: Mapped[list["Donation"]] = relationship(
@@ -153,35 +144,40 @@ class RecurringSubscription(UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class Donation(UUIDPkMixin, TimestampMixin, Base):
+class Donation(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "donations"
 
-    __table_args__ = (
-        CheckConstraint("amount > 0", name="ck_donations_amount_positive"),
-    )
+    __table_args__ = (CheckConstraint("amount > 0", name="ck_donations_amount_positive"),)
 
     donor_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("donor_profiles.id", ondelete="CASCADE"),
         nullable=False,
+        index=True,
     )
     dog_id: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("dog_profiles.id", ondelete="SET NULL"), nullable=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("dog_profiles.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     sponsorship_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("dog_sponsorships.id", ondelete="SET NULL"),
-        nullable=True, index=True,
+        nullable=True,
+        index=True,
     )
     recurring_subscription_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("recurring_subscriptions.id", ondelete="SET NULL"),
-        nullable=True, index=True,
+        nullable=True,
+        index=True,
     )
     campaign_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("donation_campaigns.id", ondelete="SET NULL"),
-        nullable=True, index=True,
+        nullable=True,
+        index=True,
     )
 
     amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
@@ -212,7 +208,7 @@ class Donation(UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class DonationCampaign(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class DonationCampaign(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     """A goal-oriented fundraising drive (PRR 3.1.7 / 3.11).
 
     Donations can be attributed to a campaign via `Donation.campaign_id`.
@@ -238,11 +234,8 @@ class DonationCampaign(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
         PG_UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
+        index=True,
     )
-    goal_reached_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    goal_reached_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    donations: Mapped[list["Donation"]] = relationship(
-        back_populates="campaign", lazy="selectin"
-    )
+    donations: Mapped[list["Donation"]] = relationship(back_populates="campaign", lazy="selectin")

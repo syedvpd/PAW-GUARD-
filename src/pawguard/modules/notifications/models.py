@@ -8,10 +8,10 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from pawguard.db.base import Base
-from pawguard.db.mixins import SoftDeleteMixin, TimestampMixin, UUIDPkMixin
+from pawguard.db.mixins import AuditMixin, SoftDeleteMixin, TimestampMixin, UUIDPkMixin
 
 
-class Notification(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class Notification(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "notifications"
 
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -32,7 +32,7 @@ class Notification(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     )
 
 
-class NotificationPreference(UUIDPkMixin, TimestampMixin, Base):
+class NotificationPreference(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "notification_preferences"
 
     user_id: Mapped[uuid.UUID] = mapped_column(

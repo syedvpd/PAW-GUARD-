@@ -19,7 +19,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pawguard.db.base import Base
-from pawguard.db.mixins import SoftDeleteMixin, TimestampMixin, UUIDPkMixin
+from pawguard.db.mixins import AuditMixin, SoftDeleteMixin, TimestampMixin, UUIDPkMixin
 
 if TYPE_CHECKING:
     pass
@@ -73,7 +73,7 @@ class RecurringInterval(StrEnum):
     YEARLY = "yearly"
 
 
-class ChartOfAccounts(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class ChartOfAccounts(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "chart_of_accounts"
 
     account_code: Mapped[str] = mapped_column(
@@ -92,6 +92,8 @@ class ChartOfAccounts(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
         PG_UUID(as_uuid=True),
         ForeignKey("chart_of_accounts.id", ondelete="SET NULL"),
         nullable=True,
+    
+        index=True
     )
     opening_balance: Mapped[Decimal] = mapped_column(
         Numeric(14, 2), default=Decimal("0.00"), nullable=False
@@ -106,7 +108,7 @@ class ChartOfAccounts(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     )
 
 
-class GeneralLedgerEntry(UUIDPkMixin, TimestampMixin, Base):
+class GeneralLedgerEntry(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "general_ledger_entries"
 
     account_id: Mapped[uuid.UUID] = mapped_column(
@@ -136,7 +138,7 @@ class GeneralLedgerEntry(UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class FinancialTransaction(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class FinancialTransaction(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "financial_transactions"
 
     __table_args__ = (
@@ -171,6 +173,8 @@ class FinancialTransaction(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
         PG_UUID(as_uuid=True),
         ForeignKey("donations.id", ondelete="SET NULL"),
         nullable=True,
+    
+        index=True
     )
     reconciled_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -179,6 +183,8 @@ class FinancialTransaction(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
         PG_UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
+    
+        index=True
     )
 
     entries: Mapped[list["GeneralLedgerEntry"]] = relationship(
@@ -187,7 +193,7 @@ class FinancialTransaction(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     )
 
 
-class RecurringTransaction(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class RecurringTransaction(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "recurring_transactions"
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -210,11 +216,15 @@ class RecurringTransaction(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
         PG_UUID(as_uuid=True),
         ForeignKey("chart_of_accounts.id", ondelete="RESTRICT"),
         nullable=False,
+    
+        index=True
     )
     credit_account_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("chart_of_accounts.id", ondelete="RESTRICT"),
         nullable=False,
+    
+        index=True
     )
     is_active: Mapped[bool] = mapped_column(
         Boolean, default=True, nullable=False
@@ -222,7 +232,7 @@ class RecurringTransaction(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     last_generated: Mapped[date | None] = mapped_column(Date, nullable=True)
 
 
-class Budget(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class Budget(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "budgets"
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -248,7 +258,7 @@ class Budget(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     )
 
 
-class BudgetItem(UUIDPkMixin, TimestampMixin, Base):
+class BudgetItem(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "budget_items"
 
     budget_id: Mapped[uuid.UUID] = mapped_column(
@@ -260,6 +270,8 @@ class BudgetItem(UUIDPkMixin, TimestampMixin, Base):
         PG_UUID(as_uuid=True),
         ForeignKey("chart_of_accounts.id", ondelete="RESTRICT"),
         nullable=False,
+    
+        index=True
     )
     allocated_amount: Mapped[Decimal] = mapped_column(
         Numeric(14, 2), nullable=False

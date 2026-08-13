@@ -11,7 +11,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from pawguard.db.base import Base
-from pawguard.db.mixins import SoftDeleteMixin, TimestampMixin, UUIDPkMixin
+from pawguard.db.mixins import AuditMixin, SoftDeleteMixin, TimestampMixin, UUIDPkMixin
 
 
 class DogStatus(StrEnum):
@@ -86,7 +86,7 @@ class DogActivityEventType(StrEnum):
     BULK_DELETED = "bulk_deleted"
 
 
-class DogProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class DogProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "dog_profiles"
 
     registration_number: Mapped[str] = mapped_column(
@@ -94,6 +94,8 @@ class DogProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     )
     rescue_case_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("rescue_requests.id", ondelete="SET NULL"), nullable=True
+    ,
+        index=True
     )
     microchip_id: Mapped[str | None] = mapped_column(
         String(64), unique=True, nullable=True, index=True
@@ -135,28 +137,36 @@ class DogProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
         PG_UUID(as_uuid=True),
         ForeignKey("shelter_facilities.id", ondelete="SET NULL"),
         nullable=True,
+    
+        index=True
     )
     section_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("shelter_sections.id", ondelete="SET NULL"),
         nullable=True,
+    
+        index=True
     )
     kennel_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("kennels.id", ondelete="SET NULL"),
         nullable=True,
+    
+        index=True
     )
     foster_home_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("foster_profiles.id", ondelete="SET NULL"),
         nullable=True,
+    
+        index=True
     )
 
     is_adoptable: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_quarantine_passed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 
-class DogWeightLog(UUIDPkMixin, TimestampMixin, Base):
+class DogWeightLog(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     """Weight measurement history for a dog (PRR 3.4 Demographics: Weight History).
 
     The profile's ``weight`` column holds the current weight; every measurement
@@ -173,13 +183,15 @@ class DogWeightLog(UUIDPkMixin, TimestampMixin, Base):
     )
     measured_by: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    ,
+        index=True
     )
     weight: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False)  # in kg
     measured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
-class DogActivityLog(UUIDPkMixin, TimestampMixin, Base):
+class DogActivityLog(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     """Immutable chronological activity stream for a dog's master profile.
 
     PRR 3.4: the dog profile "maintains a permanent, audit-ready digital trail

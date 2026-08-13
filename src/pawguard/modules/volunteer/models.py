@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pawguard.db.base import Base
-from pawguard.db.mixins import SoftDeleteMixin, TimestampMixin, UUIDPkMixin
+from pawguard.db.mixins import AuditMixin, SoftDeleteMixin, TimestampMixin, UUIDPkMixin
 
 if TYPE_CHECKING:
     from pawguard.modules.auth.models import User
@@ -23,7 +23,7 @@ class VolunteerStatus(StrEnum):
     INACTIVE = "inactive"
 
 
-class VolunteerProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class VolunteerProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "volunteer_profiles"
 
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -47,20 +47,18 @@ class VolunteerProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Onboarding/skills matrix (PRR 3.9) - previously absent from the model.
-    background_check_completed: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False
-    )
+    background_check_completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     background_check_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     medical_conditions: Mapped[str | None] = mapped_column(Text, nullable=True)
     animal_handling_experience: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    user: Mapped["User"] = relationship("User", lazy="joined")
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id], lazy="joined")
     attendances: Mapped[list["ShiftAttendance"]] = relationship(
         back_populates="volunteer", cascade="all, delete-orphan"
     )
 
 
-class VolunteerShift(UUIDPkMixin, TimestampMixin, Base):
+class VolunteerShift(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "volunteer_shifts"
 
     shelter_facility_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -77,16 +75,20 @@ class VolunteerShift(UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class ShiftAttendance(UUIDPkMixin, TimestampMixin, Base):
+class ShiftAttendance(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "shift_attendances"
 
     shift_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("volunteer_shifts.id", ondelete="CASCADE"), nullable=False
+        PG_UUID(as_uuid=True),
+        ForeignKey("volunteer_shifts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     volunteer_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("volunteer_profiles.id", ondelete="CASCADE"),
         nullable=False,
+        index=True,
     )
 
     check_in_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

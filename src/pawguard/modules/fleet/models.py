@@ -9,7 +9,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from pawguard.db.base import Base
-from pawguard.db.mixins import SoftDeleteMixin, TimestampMixin, UUIDPkMixin
+from pawguard.db.mixins import AuditMixin, SoftDeleteMixin, TimestampMixin, UUIDPkMixin
 
 
 class VehicleStatus(StrEnum):
@@ -26,7 +26,7 @@ class VehicleType(StrEnum):
     OTHER = "other"
 
 
-class Vehicle(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class Vehicle(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "vehicles"
 
     make_model: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -40,6 +40,8 @@ class Vehicle(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     mileage: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     primary_driver_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    ,
+        index=True
     )
 
     insurance_provider: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -48,11 +50,13 @@ class Vehicle(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     insurance_contact_phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
 
-class FleetMaintenance(UUIDPkMixin, TimestampMixin, Base):
+class FleetMaintenance(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "fleet_maintenances"
 
     vehicle_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("vehicles.id", ondelete="CASCADE"), nullable=False
+    ,
+        index=True
     )
     service_date: Mapped[date] = mapped_column(Date, nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
@@ -60,16 +64,20 @@ class FleetMaintenance(UUIDPkMixin, TimestampMixin, Base):
     next_due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
 
-class EquipmentCheckout(UUIDPkMixin, TimestampMixin, Base):
+class EquipmentCheckout(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "equipment_checkouts"
 
     # Net Gun, Trap, Crate, etc.
     equipment_name: Mapped[str] = mapped_column(String(255), nullable=False)
     assigned_to_agent_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    ,
+        index=True
     )
     assigned_to_vehicle_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("vehicles.id", ondelete="SET NULL"), nullable=True
+    ,
+        index=True
     )
     # Populated when the checkout was auto-created for a rescue dispatch
     # (PRR 3.3): links the equipment to the dispatch and lets the fleet module
@@ -91,14 +99,18 @@ class EquipmentCheckout(UUIDPkMixin, TimestampMixin, Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
-class FuelLog(UUIDPkMixin, TimestampMixin, Base):
+class FuelLog(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "fuel_logs"
 
     vehicle_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("vehicles.id", ondelete="CASCADE"), nullable=False
+    ,
+        index=True
     )
     filled_by_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    ,
+        index=True
     )
     fuel_type: Mapped[str] = mapped_column(String(32), nullable=False)
     volume_litres: Mapped[float] = mapped_column(Numeric(8, 2), nullable=False)

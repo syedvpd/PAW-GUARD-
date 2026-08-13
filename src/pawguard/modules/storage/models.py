@@ -9,7 +9,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from pawguard.db.base import Base
-from pawguard.db.mixins import SoftDeleteMixin, TimestampMixin, UUIDPkMixin
+from pawguard.db.mixins import AuditMixin, SoftDeleteMixin, TimestampMixin, UUIDPkMixin
 
 
 class FileFolder(StrEnum):
@@ -29,7 +29,7 @@ class FileFolder(StrEnum):
 
 
 
-class StoredFile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class StoredFile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "stored_files"
 
     user_id: Mapped[uuid.UUID] = mapped_column(

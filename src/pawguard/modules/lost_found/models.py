@@ -11,7 +11,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pawguard.db.base import Base
-from pawguard.db.mixins import SoftDeleteMixin, TimestampMixin, UUIDPkMixin
+from pawguard.db.mixins import AuditMixin, SoftDeleteMixin, TimestampMixin, UUIDPkMixin
 
 if TYPE_CHECKING:
     from pawguard.modules.auth.models import User
@@ -37,11 +37,14 @@ class MatchStatus(StrEnum):
     REJECTED = "rejected"
 
 
-class LostReport(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class LostReport(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "lost_reports"
 
     user_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     species: Mapped[Species] = mapped_column(
         String(32), default=Species.DOG, nullable=False, index=True
@@ -63,19 +66,25 @@ class LostReport(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
         String(32), default=ReportStatus.ACTIVE, nullable=False, index=True
     )
     companion_pet_id: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("companion_pets.id", ondelete="SET NULL"), nullable=True, index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("companion_pets.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     photo_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     broadcasted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    user: Mapped["User"] = relationship("User", lazy="joined")
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id], lazy="joined")
 
 
-class FoundReport(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class FoundReport(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "found_reports"
 
     user_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     species: Mapped[Species] = mapped_column(
         String(32), default=Species.DOG, nullable=False, index=True
@@ -96,17 +105,23 @@ class FoundReport(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     )
     photo_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
-    user: Mapped["User"] = relationship("User", lazy="joined")
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id], lazy="joined")
 
 
-class ReportMatch(UUIDPkMixin, TimestampMixin, Base):
+class ReportMatch(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "report_matches"
 
     lost_report_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("lost_reports.id", ondelete="CASCADE"), nullable=False
+        PG_UUID(as_uuid=True),
+        ForeignKey("lost_reports.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     found_report_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("found_reports.id", ondelete="CASCADE"), nullable=False
+        PG_UUID(as_uuid=True),
+        ForeignKey("found_reports.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
 
     confidence_score: Mapped[float] = mapped_column(Numeric(5, 2), default=0.0, nullable=False)
@@ -130,21 +145,30 @@ class ReportMatch(UUIDPkMixin, TimestampMixin, Base):
         DateTime(timezone=True), nullable=True
     )
     claim_reviewed_by: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
 
     lost_report: Mapped["LostReport"] = relationship("LostReport", lazy="joined")
     found_report: Mapped["FoundReport"] = relationship("FoundReport", lazy="joined")
 
 
-class PetSighting(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class PetSighting(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "pet_sightings"
 
     pet_id: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("companion_pets.id", ondelete="SET NULL"), nullable=True, index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("companion_pets.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     lost_report_id: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("lost_reports.id", ondelete="SET NULL"), nullable=True, index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("lost_reports.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     finder_name: Mapped[str] = mapped_column(String(255), nullable=False)
     finder_phone: Mapped[str] = mapped_column(String(32), nullable=False)

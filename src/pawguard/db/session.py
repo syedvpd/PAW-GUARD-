@@ -18,6 +18,9 @@ from pawguard.core.metrics import (
     set_gauge,
 )
 
+# Registers the before_flush audit-stamp listener as a side effect of import.
+import pawguard.db.audit  # noqa: F401
+
 _settings = get_settings()
 
 engine: AsyncEngine = create_async_engine(

@@ -15,7 +15,6 @@ cross-cutting infrastructure).
 """
 
 from contextvars import ContextVar
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import event
@@ -24,10 +23,10 @@ from sqlalchemy.orm import Session
 from pawguard.db.mixins import AuditMixin
 
 # None => no authenticated actor (system / background work).
-_actor_id: ContextVar[Optional[UUID]] = ContextVar("audit_actor_id", default=None)
+_actor_id: ContextVar[UUID | None] = ContextVar("audit_actor_id", default=None)
 
 
-def set_actor(user_id: Optional[UUID]) -> None:
+def set_actor(user_id: UUID | None) -> None:
     """Record the acting user for the current execution context.
 
     Safe to call within a request task; the value is local to that task's
@@ -37,7 +36,7 @@ def set_actor(user_id: Optional[UUID]) -> None:
     _actor_id.set(user_id)
 
 
-def get_actor() -> Optional[UUID]:
+def get_actor() -> UUID | None:
     return _actor_id.get()
 
 

@@ -12,7 +12,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pawguard.core.constants import DeviceType
 from pawguard.db.base import Base
-from pawguard.db.mixins import SoftDeleteMixin, TimestampMixin, UUIDPkMixin
+from pawguard.db.mixins import AuditMixin, SoftDeleteMixin, TimestampMixin, UUIDPkMixin
 
 
 class AuthAuditEventType(StrEnum):
@@ -158,7 +158,7 @@ class AuthAuditEventType(StrEnum):
     LOST_FOUND_BROADCAST_QUEUED = "lost_found_broadcast_queued"
 
 
-class Role(UUIDPkMixin, TimestampMixin, Base):
+class Role(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "roles"
 
     name: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
@@ -171,7 +171,7 @@ class Role(UUIDPkMixin, TimestampMixin, Base):
     users: Mapped[list["User"]] = relationship(secondary="user_roles", back_populates="roles")
 
 
-class Permission(UUIDPkMixin, TimestampMixin, Base):
+class Permission(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "permissions"
 
     code: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
@@ -204,7 +204,7 @@ class UserRole(Base):
     )
 
 
-class User(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class User(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "users"
 
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
@@ -234,20 +234,15 @@ class User(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     fcm_token: Mapped[str | None] = mapped_column(String(512), nullable=True, index=True)
 
     roles: Mapped[list["Role"]] = relationship(secondary="user_roles", back_populates="users")
-    # passive_deletes: these FKs are ON DELETE CASCADE at the DB level: let
-    # postgres remove the children instead of the ORM issuing per-row
-    # UPDATE ... SET user_id = NULL (which fails - user_id is NOT NULL).
-    sessions: Mapped[list["UserSession"]] = relationship(
-        back_populates="user", passive_deletes=True
-    )
-    oauth_accounts: Mapped[list["OAuthAccount"]] = relationship(
-        back_populates="user", passive_deletes=True
-    )
+    # sessions and oauth_accounts are declared at module scope after the child
+    # classes below so foreign_keys can reference the actual FK columns
+    # (created_by/updated_by also FK to users, making the reverse links
+    # ambiguous without an explicit business FK).
 
     __table_args__ = (Index("ix_users_email_lower", "email"),)
 
 
-class UserSession(UUIDPkMixin, TimestampMixin, Base):
+class UserSession(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "user_sessions"
 
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -272,7 +267,7 @@ class UserSession(UUIDPkMixin, TimestampMixin, Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
-    user: Mapped["User"] = relationship(back_populates="sessions")
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id], back_populates="sessions")
     refresh_tokens: Mapped[list["RefreshToken"]] = relationship(back_populates="session")
 
 
@@ -291,7 +286,10 @@ class RefreshToken(UUIDPkMixin, Base):
     )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     rotated_to_id: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("refresh_tokens.id", ondelete="SET NULL"), nullable=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("refresh_tokens.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -299,7 +297,7 @@ class RefreshToken(UUIDPkMixin, Base):
     session: Mapped["UserSession"] = relationship(back_populates="refresh_tokens")
 
 
-class MFADevice(UUIDPkMixin, TimestampMixin, Base):
+class MFADevice(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "mfa_devices"
 
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -347,7 +345,7 @@ class EmailVerificationToken(UUIDPkMixin, Base):
     )
 
 
-class OAuthAccount(UUIDPkMixin, TimestampMixin, Base):
+class OAuthAccount(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "oauth_accounts"
 
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -362,7 +360,9 @@ class OAuthAccount(UUIDPkMixin, TimestampMixin, Base):
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     picture_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
-    user: Mapped["User"] = relationship(back_populates="oauth_accounts")
+    user: Mapped["User"] = relationship(
+        "User", foreign_keys=[user_id], back_populates="oauth_accounts"
+    )
 
     __table_args__ = (
         Index("ix_oauth_accounts_provider", "provider", "provider_user_id", unique=True),
@@ -392,3 +392,22 @@ class AuthAuditLog(UUIDPkMixin, Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )
+
+
+# passive_deletes: these FKs are ON DELETE CASCADE at the DB level: let
+# postgres remove the children instead of the ORM issuing per-row
+# UPDATE ... SET user_id = NULL (which fails - user_id is NOT NULL).
+# Declared after UserSession/OAuthAccount so foreign_keys can reference the
+# real column objects (created_by/updated_by also FK to users).
+User.sessions = relationship(
+    "UserSession",
+    foreign_keys=[UserSession.user_id],
+    back_populates="user",
+    passive_deletes=True,
+)
+User.oauth_accounts = relationship(
+    "OAuthAccount",
+    foreign_keys=[OAuthAccount.user_id],
+    back_populates="user",
+    passive_deletes=True,
+)

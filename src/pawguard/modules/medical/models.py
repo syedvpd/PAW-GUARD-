@@ -8,17 +8,21 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from pawguard.db.base import Base
-from pawguard.db.mixins import SoftDeleteMixin, TimestampMixin, UUIDPkMixin
+from pawguard.db.mixins import AuditMixin, SoftDeleteMixin, TimestampMixin, UUIDPkMixin
 
 
-class ClinicalExam(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class ClinicalExam(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "clinical_exams"
 
     dog_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("dog_profiles.id", ondelete="CASCADE"), nullable=False
+    ,
+        index=True
     )
     vet_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    ,
+        index=True
     )
     exam_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
@@ -30,14 +34,18 @@ class ClinicalExam(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     triage_diagnosis: Mapped[str] = mapped_column(Text, nullable=False)
 
 
-class MedicalTreatment(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class MedicalTreatment(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "medical_treatments"
 
     dog_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("dog_profiles.id", ondelete="CASCADE"), nullable=False
+    ,
+        index=True
     )
     vet_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    ,
+        index=True
     )
     treatment_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
@@ -48,14 +56,18 @@ class MedicalTreatment(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     post_op_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
-class VaccinationRecord(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class VaccinationRecord(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "vaccination_records"
 
     dog_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("dog_profiles.id", ondelete="CASCADE"), nullable=False
+    ,
+        index=True
     )
     administered_by: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    ,
+        index=True
     )
 
     # DHPP, Rabies, Dewormer, etc.
@@ -65,14 +77,18 @@ class VaccinationRecord(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     lot_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
-class Prescription(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class Prescription(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "prescriptions"
 
     dog_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("dog_profiles.id", ondelete="CASCADE"), nullable=False
+    ,
+        index=True
     )
     vet_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    ,
+        index=True
     )
 
     drug_name: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -83,7 +99,7 @@ class Prescription(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
 
-class MedicationAdministrationLog(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class MedicationAdministrationLog(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     """Daily nurse sign-off register for medication administrations (PRR 3.5).
 
     Every administered dose is signed off against its prescription (when one
@@ -96,9 +112,13 @@ class MedicationAdministrationLog(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, 
         PG_UUID(as_uuid=True),
         ForeignKey("prescriptions.id", ondelete="SET NULL"),
         nullable=True,
+    
+        index=True
     )
     dog_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("dog_profiles.id", ondelete="CASCADE"), nullable=False
+    ,
+        index=True
     )
     medication_name: Mapped[str] = mapped_column(String(128), nullable=False)
     dosage: Mapped[str] = mapped_column(String(128), nullable=False)  # e.g., "5ml" or "1 tablet"
@@ -106,11 +126,13 @@ class MedicationAdministrationLog(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, 
     administered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     administered_by_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    ,
+        index=True
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
-class VaccineProtocol(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class VaccineProtocol(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     """Optional, staff-managed protocol that drives vaccination auto-scheduling.
 
     The table is intentionally optional: lookups are nullable so environments
@@ -124,7 +146,7 @@ class VaccineProtocol(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     is_required: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 
-class MedicalClearance(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class MedicalClearance(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     """Persisted veterinary clearance decisions for adoption / surgery (PRR 3.5).
 
     Replaces the bare ``is_adoptable`` side-effect on the dog profile: the
@@ -136,9 +158,13 @@ class MedicalClearance(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
 
     dog_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("dog_profiles.id", ondelete="CASCADE"), nullable=False
+    ,
+        index=True
     )
     authorized_by_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    ,
+        index=True
     )
     # adoption_surgery, pre_adoption_medical, surgical_review, ...
     clearance_type: Mapped[str] = mapped_column(String(64), nullable=False)

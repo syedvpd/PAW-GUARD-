@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pawguard.db.base import Base
-from pawguard.db.mixins import SoftDeleteMixin, TimestampMixin, UUIDPkMixin
+from pawguard.db.mixins import AuditMixin, SoftDeleteMixin, TimestampMixin, UUIDPkMixin
 
 if TYPE_CHECKING:
     from pawguard.modules.auth.models import User
@@ -24,7 +24,7 @@ class FosterStatus(StrEnum):
     INACTIVE = "inactive"
 
 
-class FosterProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class FosterProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "foster_profiles"
 
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -44,22 +44,26 @@ class FosterProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     is_available: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    user: Mapped["User"] = relationship("User", lazy="joined")
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id], lazy="joined")
     placements: Mapped[list["FosterPlacement"]] = relationship(
         back_populates="foster", cascade="all, delete-orphan"
     )
 
 
-class FosterPlacement(UUIDPkMixin, TimestampMixin, Base):
+class FosterPlacement(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "foster_placements"
 
     foster_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("foster_profiles.id", ondelete="CASCADE"),
         nullable=False,
+        index=True,
     )
     dog_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("dog_profiles.id", ondelete="CASCADE"), nullable=False
+        PG_UUID(as_uuid=True),
+        ForeignKey("dog_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
 
     placed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -86,16 +90,20 @@ class SupplyItemType(StrEnum):
     OTHER = "other"
 
 
-class FosterSupplyDispatch(UUIDPkMixin, TimestampMixin, Base):
+class FosterSupplyDispatch(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "foster_supply_dispatches"
 
     placement_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("foster_placements.id", ondelete="CASCADE"),
         nullable=False,
+        index=True,
     )
     dispatched_by_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=False
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=False,
+        index=True,
     )
     item_type: Mapped[SupplyItemType] = mapped_column(String(32), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -105,16 +113,20 @@ class FosterSupplyDispatch(UUIDPkMixin, TimestampMixin, Base):
     placement: Mapped["FosterPlacement"] = relationship(back_populates="supply_dispatches")
 
 
-class FosterProgressLog(UUIDPkMixin, TimestampMixin, Base):
+class FosterProgressLog(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "foster_progress_logs"
 
     placement_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("foster_placements.id", ondelete="CASCADE"),
         nullable=False,
+        index=True,
     )
     tracked_by_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=False
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=False,
+        index=True,
     )
     weight_kg: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
     behavior_notes: Mapped[str | None] = mapped_column(Text, nullable=True)

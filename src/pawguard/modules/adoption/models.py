@@ -12,7 +12,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pawguard.db.base import Base
-from pawguard.db.mixins import SoftDeleteMixin, TimestampMixin, UUIDPkMixin
+from pawguard.db.mixins import AuditMixin, SoftDeleteMixin, TimestampMixin, UUIDPkMixin
 
 if TYPE_CHECKING:
     from pawguard.modules.auth.models import User
@@ -46,14 +46,20 @@ class FollowUpStatus(StrEnum):
     OVERDUE = "overdue"
 
 
-class AdoptionApplication(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class AdoptionApplication(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "adoption_applications"
 
     dog_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("dog_profiles.id", ondelete="CASCADE"), nullable=False
+        PG_UUID(as_uuid=True),
+        ForeignKey("dog_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     adopter_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
 
     status: Mapped[AdoptionStatus] = mapped_column(
@@ -79,7 +85,7 @@ class AdoptionApplication(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     )
 
     dog: Mapped["DogProfile"] = relationship("DogProfile", lazy="joined")
-    adopter: Mapped["User"] = relationship("User", lazy="joined")
+    adopter: Mapped["User"] = relationship("User", foreign_keys=[adopter_id], lazy="joined")
     scores: Mapped[list["AdoptionScore"]] = relationship(
         "AdoptionScore", back_populates="application", lazy="selectin"
     )
@@ -88,16 +94,20 @@ class AdoptionApplication(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     )
 
 
-class AdoptionScore(UUIDPkMixin, TimestampMixin, Base):
+class AdoptionScore(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "adoption_scores"
 
     application_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("adoption_applications.id", ondelete="CASCADE"),
-        nullable=False, index=True,
+        nullable=False,
+        index=True,
     )
     scored_by_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     home_environment_score: Mapped[int] = mapped_column(Integer, nullable=False)
     pet_care_knowledge_score: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -116,7 +126,7 @@ class AdoptionScore(UUIDPkMixin, TimestampMixin, Base):
         scored_by: Mapped["User"] = relationship("User", lazy="joined")
 
 
-class AdoptionFollowUp(UUIDPkMixin, TimestampMixin, Base):
+class AdoptionFollowUp(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     """A scheduled post-adoption check-in (30/90/180 days after completion).
 
     Created by the background job for completed adoptions; adopters submit
@@ -128,7 +138,8 @@ class AdoptionFollowUp(UUIDPkMixin, TimestampMixin, Base):
     adoption_application_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("adoption_applications.id", ondelete="CASCADE"),
-        nullable=False, index=True,
+        nullable=False,
+        index=True,
     )
     due_day: Mapped[int] = mapped_column(Integer, nullable=False)
     due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pawguard.db.base import Base
-from pawguard.db.mixins import SoftDeleteMixin, TimestampMixin, UUIDPkMixin
+from pawguard.db.mixins import AuditMixin, SoftDeleteMixin, TimestampMixin, UUIDPkMixin
 from pawguard.modules.auth.models import User
 
 
@@ -35,7 +35,7 @@ class AlertSeverity(StrEnum):
     CRITICAL = "critical"
 
 
-class SuccessStory(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class SuccessStory(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "success_stories"
 
     title: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -43,7 +43,10 @@ class SuccessStory(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     body: Mapped[str] = mapped_column(Text, nullable=False)
     hero_image_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     dog_id: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("dog_profiles.id", ondelete="SET NULL"), nullable=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("dog_profiles.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     status: Mapped[ContentStatus] = mapped_column(
         String(32), default=ContentStatus.DRAFT, nullable=False, index=True
@@ -51,7 +54,7 @@ class SuccessStory(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-class BlogPost(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class BlogPost(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "blog_posts"
 
     title: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -68,7 +71,7 @@ class BlogPost(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-class VeterinaryPartner(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class VeterinaryPartner(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "veterinary_partners"
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -82,7 +85,7 @@ class VeterinaryPartner(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
 
 
-class ContactLocation(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class ContactLocation(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "contact_locations"
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -94,22 +97,25 @@ class ContactLocation(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
 
-class ContactMessage(UUIDPkMixin, TimestampMixin, Base):
+class ContactMessage(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     """A contact/support message submitted by an existing PawGuard user."""
 
     __tablename__ = "contact_messages"
 
     user_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     subject: Mapped[str] = mapped_column(String(255), nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="open", nullable=False, index=True)
 
-    user: Mapped["User"] = relationship("User", lazy="joined")
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id], lazy="joined")
 
 
-class NewsletterSubscription(UUIDPkMixin, TimestampMixin, Base):
+class NewsletterSubscription(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     """Newsletter opt-in linked to a real PawGuard account."""
 
     __tablename__ = "newsletter_subscriptions"
@@ -126,10 +132,10 @@ class NewsletterSubscription(UUIDPkMixin, TimestampMixin, Base):
         DateTime(timezone=True), default=datetime.now, nullable=False
     )
 
-    user: Mapped["User"] = relationship("User", lazy="joined")
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id], lazy="joined")
 
 
-class FAQEntry(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class FAQEntry(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "faq_entries"
 
     question: Mapped[str] = mapped_column(String(512), nullable=False)
@@ -141,7 +147,7 @@ class FAQEntry(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     is_published: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
 
 
-class LegalDocument(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class LegalDocument(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     """Legal framework content: terms of service, privacy policy, adoption
     contracts, etc. Published documents are served publicly (no auth); drafts
     are only visible to admins.
@@ -162,7 +168,7 @@ class LegalDocument(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-class UrgentAlert(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class UrgentAlert(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     """Urgent alert banner shown on the public site (PRR §6.1). Only alerts
     that are active and inside their scheduled window are served publicly.
     """
@@ -180,7 +186,7 @@ class UrgentAlert(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
 
-class CmsPage(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+class CmsPage(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "cms_pages"
 
     slug: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
@@ -195,18 +201,27 @@ class CmsPage(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     sections: Mapped[list["CmsSection"]] = relationship(
-        "CmsSection", back_populates="page", cascade="all, delete-orphan", order_by="CmsSection.display_order"
+        "CmsSection",
+        back_populates="page",
+        cascade="all, delete-orphan",
+        order_by="CmsSection.display_order",
     )
     versions: Mapped[list["CmsPageVersion"]] = relationship(
-        "CmsPageVersion", back_populates="page", cascade="all, delete-orphan", order_by="CmsPageVersion.version_number.desc()"
+        "CmsPageVersion",
+        back_populates="page",
+        cascade="all, delete-orphan",
+        order_by="CmsPageVersion.version_number.desc()",
     )
 
 
-class CmsSection(UUIDPkMixin, TimestampMixin, Base):
+class CmsSection(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "cms_sections"
 
     page_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("cms_pages.id", ondelete="CASCADE"), nullable=False, index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("cms_pages.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     section_key: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     section_name: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -219,11 +234,14 @@ class CmsSection(UUIDPkMixin, TimestampMixin, Base):
     )
 
 
-class CmsContentField(UUIDPkMixin, TimestampMixin, Base):
+class CmsContentField(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "cms_content_fields"
 
     section_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("cms_sections.id", ondelete="CASCADE"), nullable=False, index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("cms_sections.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     field_key: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     field_type: Mapped[str] = mapped_column(String(32), default="text", nullable=False)
@@ -237,12 +255,18 @@ class CmsPageVersion(UUIDPkMixin, Base):
     __tablename__ = "cms_page_versions"
 
     page_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("cms_pages.id", ondelete="CASCADE"), nullable=False, index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("cms_pages.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     version_number: Mapped[int] = mapped_column(Integer, nullable=False)
     snapshot: Mapped[dict] = mapped_column(JSONB, nullable=False)
     published_by: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.now, nullable=False

@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.constants import ACCESS_TOKEN_COOKIE_NAME
 from pawguard.core.security import AccessTokenClaims, TokenError, parse_access_token_claims
+from pawguard.db.audit import set_actor
 from pawguard.db.session import get_db
 from pawguard.modules.auth.exceptions import AccountInactiveError, InvalidSessionError
 from pawguard.modules.auth.models import User, UserSession
@@ -72,6 +73,7 @@ async def get_current_user(
         raise AccountInactiveError("Account is inactive or no longer exists.")
 
     request.state.user_id = user.id
+    set_actor(user.id)
     return CurrentUser(user=user, claims=claims, db=db, redis=redis, session=session)
 
 
@@ -112,6 +114,7 @@ async def get_optional_current_user(
         return None
 
     request.state.user_id = user.id
+    set_actor(user.id)
     return CurrentUser(user=user, claims=claims, db=db, redis=redis, session=session)
 
 
