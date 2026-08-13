@@ -1,0 +1,164 @@
+[
+  {
+    "method": "GET",
+    "path": "/health",
+    "status": 200,
+    "needs_auth": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/login",
+    "status": 429,
+    "needs_auth": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/auth/me",
+    "status": 401,
+    "needs_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/companion-pets",
+    "status": 401,
+    "needs_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/companion-pets/clinics",
+    "status": 200,
+    "needs_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/companion-pets/appointments",
+    "status": 401,
+    "needs_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/dashboards/public",
+    "status": 200,
+    "needs_auth": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/dashboards/medical",
+    "status": 401,
+    "needs_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/dashboards/rescue",
+    "status": 401,
+    "needs_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/dashboards/shelter",
+    "status": 401,
+    "needs_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/dashboards/adoption",
+    "status": 401,
+    "needs_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/dashboards/volunteer",
+    "status": 401,
+    "needs_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/dashboards/finance",
+    "status": 401,
+    "needs_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/dashboards/executive",
+    "status": 401,
+    "needs_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/medical/exams",
+    "status": 401,
+    "needs_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/medical/treatments",
+    "status": 401,
+    "needs_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/medical/vaccinations",
+    "status": 401,
+    "needs_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/medical/prescriptions",
+    "status": 401,
+    "needs_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/admin/roles",
+    "status": 401,
+    "needs_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/admin/permissions",
+    "status": 401,
+    "needs_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/admin/users",
+    "status": 401,
+    "needs_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/admin/dashboard/summary",
+    "status": 401,
+    "needs_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/admin/dashboard/metrics",
+    "status": 401,
+    "needs_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/admin/dashboard/kpis",
+    "status": 401,
+    "needs_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/admin/audit-logs",
+    "status": 401,
+    "needs_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/reports/types",
+    "status": 401,
+    "needs_auth": true
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/reports/formats",
+    "status": 401,
+    "needs_auth": true
+  }
+]

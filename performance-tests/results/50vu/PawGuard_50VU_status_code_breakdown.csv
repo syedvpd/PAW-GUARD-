@@ -1,0 +1,5 @@
+Role,Endpoint,200,201,400,401,403,404,409,422,429,500,502/503/504
+Owner,POST /api/v1/auth/login,0,0,0,0,0,0,0,0,30,0,0
+Owner,GET /api/v1/companion-pets,1368,0,0,0,0,0,0,0,0,0,0
+Vet Clinic,GET /api/v1/medical/exams,0,0,0,761,0,0,0,0,0,0,0
+Admin,GET /api/v1/admin/users,0,0,0,761,0,0,0,0,0,0,0

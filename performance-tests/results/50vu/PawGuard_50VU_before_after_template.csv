@@ -1,0 +1,6 @@
+Metric,Before Fix,After Fix,SLA Threshold,Status
+HTTP Failure Rate,35.74%,Pending Retest,< 1.0%,FAIL
+p95 Latency,8892.93 ms,Pending Retest,< 500 ms,FAIL
+p99 Latency,0.00 ms,Pending Retest,< 1000 ms,PASS
+Check Pass Rate,85.63%,Pending Retest,>= 99.0%,FAIL
+Throughput (RPS),8.67,Pending Retest,Informational,Informational

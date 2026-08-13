@@ -1,0 +1,233 @@
+{
+    "root_group": {
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {},
+        "checks": {
+                "owner auth me status": {
+                    "passes": 267,
+                    "fails": 0,
+                    "name": "owner auth me status",
+                    "path": "::owner auth me status",
+                    "id": "8ca4f88145d06707d30bc5991fd687b0"
+                },
+                "owner list pets status": {
+                    "passes": 185,
+                    "fails": 82,
+                    "name": "owner list pets status",
+                    "path": "::owner list pets status",
+                    "id": "1917e7582d0407466a05c381e4e48f9d"
+                },
+                "owner list clinics status": {
+                    "id": "a496dd6237d1b3c2c3b8d28d072b17c5",
+                    "passes": 264,
+                    "fails": 0,
+                    "name": "owner list clinics status",
+                    "path": "::owner list clinics status"
+                },
+                "vet auth me status": {
+                    "id": "70fc81698a272e4fd971c9ab64229c29",
+                    "passes": 100,
+                    "fails": 0,
+                    "name": "vet auth me status",
+                    "path": "::vet auth me status"
+                },
+                "owner create pet status": {
+                    "name": "owner create pet status",
+                    "path": "::owner create pet status",
+                    "id": "51893142301895cd67917df2f6df4585",
+                    "passes": 185,
+                    "fails": 77
+                },
+                "vet list clinics status": {
+                    "fails": 0,
+                    "name": "vet list clinics status",
+                    "path": "::vet list clinics status",
+                    "id": "f8479d6692b4a1244e41236039792a17",
+                    "passes": 100
+                },
+                "public dashboard status": {
+                    "passes": 261,
+                    "fails": 0,
+                    "name": "public dashboard status",
+                    "path": "::public dashboard status",
+                    "id": "cbbaf3fcab88466d7d23da2461bdb55b"
+                },
+                "vet list exams status": {
+                    "name": "vet list exams status",
+                    "path": "::vet list exams status",
+                    "id": "72fc5433620aed6cad4a1316d6a17879",
+                    "passes": 76,
+                    "fails": 23
+                },
+                "admin dashboard metrics status": {
+                    "name": "admin dashboard metrics status",
+                    "path": "::admin dashboard metrics status",
+                    "id": "1b43b7bdaf09ebfc7e9aa713e5b534e9",
+                    "passes": 57,
+                    "fails": 20
+                },
+                "vet list prescriptions status": {
+                    "fails": 17,
+                    "name": "vet list prescriptions status",
+                    "path": "::vet list prescriptions status",
+                    "id": "59f51cd6946556280b1b20c6b4cd7f0f",
+                    "passes": 82
+                },
+                "admin list roles status": {
+                    "path": "::admin list roles status",
+                    "id": "ddbb32950ee1f61b3e22ad2b67770bab",
+                    "passes": 62,
+                    "fails": 15,
+                    "name": "admin list roles status"
+                },
+                "vet medical dashboard status": {
+                    "path": "::vet medical dashboard status",
+                    "id": "1ac8785637391d3f6012440890a2dde5",
+                    "passes": 72,
+                    "fails": 25,
+                    "name": "vet medical dashboard status"
+                },
+                "admin list users status": {
+                    "passes": 56,
+                    "fails": 21,
+                    "name": "admin list users status",
+                    "path": "::admin list users status",
+                    "id": "8db5cd0188d5b10ae386977a73c76176"
+                },
+                "admin executive dashboard status": {
+                    "path": "::admin executive dashboard status",
+                    "id": "9665412c972dee30c11b4efb5ceafcd7",
+                    "passes": 51,
+                    "fails": 25,
+                    "name": "admin executive dashboard status"
+                }
+            }
+    },
+    "metrics": {
+        "http_req_duration": {
+            "max": 12387.4528,
+            "p(90)": 7995.24884,
+            "p(95)": 8892.930699999999,
+            "avg": 4859.8667612024465,
+            "min": 79.9733,
+            "med": 4783.7384,
+            "thresholds": {
+                "p(99)<1000": true,
+                "p(95)<500": true
+            }
+        },
+        "iteration_duration": {
+            "p(90)": 29883.30561,
+            "p(95)": 30894.960339999998,
+            "avg": 24497.878173611112,
+            "min": 2365.2155,
+            "med": 25421.65455,
+            "max": 39083.3544
+        },
+        "http_req_blocked": {
+            "min": 0,
+            "med": 0,
+            "max": 131.4439,
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 1.982713104744011
+        },
+        "http_reqs": {
+            "count": 2129,
+            "rate": 8.669753631334148
+        },
+        "vus_max": {
+            "value": 50,
+            "min": 50,
+            "max": 50
+        },
+        "http_req_duration{expected_response:true}": {
+            "min": 96.8206,
+            "med": 4490.898300000001,
+            "max": 12093.9143,
+            "p(90)": 7898.94617,
+            "p(95)": 8795.69754,
+            "avg": 4544.905007236841
+        },
+        "vus": {
+            "min": 0,
+            "max": 50,
+            "value": 8
+        },
+        "iterations": {
+            "count": 431,
+            "rate": 1.7551262635533198
+        },
+        "http_req_failed": {
+            "passes": 761,
+            "fails": 1368,
+            "thresholds": {
+                "rate<0.01": true
+            },
+            "value": 0.357444809769845
+        },
+        "http_req_receiving": {
+            "med": 0,
+            "max": 48.1351,
+            "p(90)": 4.610660000000002,
+            "p(95)": 7.437779999999983,
+            "avg": 1.4263109441052122,
+            "min": 0
+        },
+        "checks": {
+            "passes": 1818,
+            "fails": 305,
+            "thresholds": {
+                "rate>=0.99": true
+            },
+            "value": 0.8563353744700894
+        },
+        "http_req_tls_handshaking": {
+            "max": 78.008,
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 1.153365288868013,
+            "min": 0,
+            "med": 0
+        },
+        "data_sent": {
+            "count": 193260,
+            "rate": 786.996987689825
+        },
+        "http_req_connecting": {
+            "max": 81.2333,
+            "p(90)": 0,
+            "p(95)": 0,
+            "avg": 0.8085119774542039,
+            "min": 0,
+            "med": 0
+        },
+        "http_req_sending": {
+            "p(95)": 0.72402,
+            "avg": 0.1866268670737437,
+            "min": 0,
+            "med": 0,
+            "max": 15.1219,
+            "p(90)": 0.6080000000000002
+        },
+        "http_req_waiting": {
+            "max": 12387.4528,
+            "p(90)": 7994.6313,
+            "p(95)": 8892.71266,
+            "avg": 4858.253823391259,
+            "min": 79.9733,
+            "med": 4782.916
+        },
+        "data_received": {
+            "count": 4583753,
+            "rate": 18666.044723761763
+        }
+    },
+    "setup_data": {
+        "vetToken": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxNmJhZjZkZi1kNmM0LTQ5YWYtYmQxMC04NzFhODQ3NjhjMjYiLCJzaWQiOiI1Mjg2NWJkYS05YTJlLTQ5MjAtYjg0Yy1hNGE3MGE5NmFlY2QiLCJyb2xlcyI6WyJnZW5lcmFsX3B1YmxpYyJdLCJ0eXBlIjoiYWNjZXNzIiwianRpIjoiNWNhOTIwYzUzOGI1ZmY5ZDcyMDkyMDYwZmZkOTNhY2IiLCJpYXQiOjE3ODY2MDQ3MzksImV4cCI6MTc4NjYwNTYzOX0.IHfUpVVPudzP0nZ9JKIVUD5Nvih_cjH8BEB8gaw91ap3Ymu9P4JuU8ijYEict5CuUVPXYB-1LxK-ipqoeb8CsllKLLE9mEfrkUmDxp9WC-Kw6H7OAWGxG1leI9ua9WR51eTWpiXO-fv8O3w5hmROyTtjLeDj6y4k580Qfz5CW6-r2YYNKUc1TxsJJxYaQUPtY9UAF4pB7oVS8bG0neYYPQCOnQN9VS2E2oEuxRtuwsGuv1emZzW1e6G0C1SfzcVJgxBqV5CEYD_IlkxBmGRqgNAt1rfO4O9zTMTrLHku4KfqGwsIjPhz9u0HQu-04oVsGVu-S2Tyjw9Y2yvJdMmjpQ",
+        "adminToken": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0ZGEzNTE2YS1mMzUwLTQ4NjAtOTZjZC0yMTVjM2FlYzBlYTIiLCJzaWQiOiJhZGNiMjc3Ny03NTBjLTRlMjUtODMwNi1lMmVmOWRlYTc3NDEiLCJyb2xlcyI6WyJnZW5lcmFsX3B1YmxpYyJdLCJ0eXBlIjoiYWNjZXNzIiwianRpIjoiZGFjMmMyMjUxZjlmNjdkNGU2YjE1OWY0NDFiZjM2OTIiLCJpYXQiOjE3ODY2MDQ3NDAsImV4cCI6MTc4NjYwNTY0MH0.LZc6UeAm-PLA6sGFOhEwGprn3dTXsaJaz3D7OiEd_Bzg7SNds0RJiVPbyOkjtD3E6crxw0u6jyOgJfHtX18Fd1QFNRJGXbao5OAleo1p4Nv6v16xQlRTCsSOy6zA5j7EmRF7zhR_tibjBzC2YzRRie-1_Db2pSNfMavnJXIhj7wgzhTAaKfwBl2J7Kj7LFPjmflMhf4cSV7SkfN-Gj3wIV8LRSdouF0uUB52kyYr5kssSNbRPRiqFwaw_mSKngqCl-G7hg4wFdswaxJNQy6gfwxMZL16vRkXP0Scu2GVj5o9ZAv_XTurY2uS57BjeZ1PXKu4Ig9qnQehPAv650ksRg",
+        "ownerToken": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1ZWE4MzU2NC05MzQwLTQ1NzItOTk1OS1hMDExMDI2MGVmZmQiLCJzaWQiOiIwZDBlZWJkOC02ZDgxLTRhZDEtYjgxZC04NjgwODc0NGM5NWQiLCJyb2xlcyI6WyJnZW5lcmFsX3B1YmxpYyJdLCJ0eXBlIjoiYWNjZXNzIiwianRpIjoiNTQwMjczZDExNzgyMGEwZjljN2JkZmRiODEwNWM2NjgiLCJpYXQiOjE3ODY2MDQ3MzgsImV4cCI6MTc4NjYwNTYzOH0.BpOKAt5MS-WvrMsxRZVJ2mGsTuQFHbFaU4_LXQTkKgL0YyeeT8bT-Kcd51ouY5jKF1qIOm6ITLVtiEt75wTBjPQXisDq15Bn1xvSNVipo9FVJRys-1mCM6MWwu30vOw-deMvrETPzzamsXlL_Glz99LA1QeP6wDM1bwfdcaIXMO-bChKO4UHJaUyZIG43MYfx-vf4vLSHNYQM7_NIyzLaXzM8_wD7QWrvPmzHB-s6jGdY0yOCJurjHEhsDxyR5mdcAlKLR_F7u9swPHyF3hDbOg79qbAZZQTkr7w0FxV-fS2nvjVf_XFjo2ytCIfdTv_hGX6YevDF4pbR_H-TgugPA"
+    }
+}

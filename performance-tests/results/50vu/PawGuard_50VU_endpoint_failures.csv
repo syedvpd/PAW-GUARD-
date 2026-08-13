@@ -1,0 +1,4 @@
+Role,Method,Endpoint,Expected,Actual,Failures,Total,FailureRate,P95_Latency_MS
+Owner,POST,/api/v1/auth/login,200,429,30,30,100%,8892.93
+Vet Clinic,GET,/api/v1/medical/exams,200,401,761,2129,35.7%,8892.93
+Admin,GET,/api/v1/admin/users,200,401,761,2129,35.7%,8892.93

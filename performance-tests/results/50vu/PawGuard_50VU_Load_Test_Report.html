@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PawGuard 50-VU Load Test Performance Report</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; color: #333; }
+        .header { background: #1e293b; color: white; padding: 24px; border-radius: 8px; margin-bottom: 20px; }
+        .header h1 { margin: 0 0 10px 0; font-size: 24px; }
+        .badge { display: inline-block; padding: 6px 16px; border-radius: 20px; font-weight: bold; text-transform: uppercase; font-size: 14px; }
+        .badge-fail { background-color: #ef4444; color: white; }
+        .badge-pass { background-color: #10b981; color: white; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 25px; }
+        .card { background: white; padding: 18px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .card .title { font-size: 13px; color: #64748b; font-weight: 600; text-transform: uppercase; margin-bottom: 5px; }
+        .card .value { font-size: 24px; font-weight: 700; color: #0f172a; }
+        table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 25px; }
+        th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        th { background: #f8fafc; font-weight: 600; color: #475569; }
+        .section-title { font-size: 18px; font-weight: 700; color: #1e293b; margin-top: 30px; margin-bottom: 12px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>PawGuard 50-VU Dynamic API Performance Report</h1>
+        <div>Test Run ID: <code>K6_50VU_20260813_122600</code> | Target: <code>https://pawguard-backend-mqri.onrender.com</code></div>
+        <div style="margin-top: 12px;">
+            Overall Status: <span class="badge badge-fail">FAIL</span>
+        </div>
+    </div>
+
+    <div class="grid">
+        <div class="card"><div class="title">Total VUs</div><div class="value">50 (30 Owner / 12 Vet / 8 Admin)</div></div>
+        <div class="card"><div class="title">Total Requests</div><div class="value">2,129</div></div>
+        <div class="card"><div class="title">Throughput (RPS)</div><div class="value">8.67 req/s</div></div>
+        <div class="card"><div class="title">HTTP Failure Rate</div><div class="value">35.74%</div></div>
+        <div class="card"><div class="title">Check Pass Rate</div><div class="value">85.63%</div></div>
+        <div class="card"><div class="title">p95 Latency</div><div class="value">8892.93 ms</div></div>
+        <div class="card"><div class="title">p99 Latency</div><div class="value">0.00 ms</div></div>
+    </div>
+
+    <div class="section-title">50-VU SLA Acceptance Threshold Evaluation</div>
+    <table>
+        <thead>
+            <tr><th>Metric</th><th>Target SLA</th><th>Actual Runtime Result</th><th>Evaluation</th></tr>
+        </thead>
+        <tbody>
+            <tr><td>HTTP Failure Rate</td><td>&lt; 1.0%</td><td>35.74%</td><td><strong style="color: red;">FAIL</strong></td></tr>
+            <tr><td>p95 Latency</td><td>&lt; 500 ms</td><td>8892.93 ms</td><td><strong style="color: red;">FAIL</strong></td></tr>
+            <tr><td>p99 Latency</td><td>&lt; 1000 ms</td><td>0.00 ms</td><td><strong style="color: green;">PASS</strong></td></tr>
+            <tr><td>Check Pass Rate</td><td>&gt;= 99.0%</td><td>85.63%</td><td><strong style="color: red;">FAIL</strong></td></tr>
+        </tbody>
+    </table>
+
+    <div class="section-title">Role Performance Breakdown</div>
+    <table>
+        <thead>
+            <tr><th>Role</th><th>Target VUs</th><th>Key Endpoints Tested</th><th>Status Code Profile</th></tr>
+        </thead>
+        <tbody>
+            <tr><td>Owner</td><td>30</td><td>/auth/me, /companion-pets, /companion-pets/clinics, POST /companion-pets</td><td>200 OK, 201 Created, 429 Rate Limited</td></tr>
+            <tr><td>Vet Clinic</td><td>12</td><td>/companion-pets/clinics, /medical/exams, /medical/prescriptions</td><td>200 OK, 401 Unauthorized</td></tr>
+            <tr><td>Admin</td><td>8</td><td>/admin/dashboard/metrics, /admin/roles, /admin/users</td><td>200 OK, 401 Unauthorized</td></tr>
+        </tbody>
+    </table>
+</body>
+</html>
