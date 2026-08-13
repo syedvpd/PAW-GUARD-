@@ -71,6 +71,15 @@ class MedicalRecordCreate(BaseModel):
     )
 
 
+class MedicalRecordUpdate(BaseModel):
+    record_type: str | None = Field(None, min_length=1, max_length=64)
+    title: str | None = Field(None, min_length=1, max_length=255)
+    notes: str | None = Field(None, max_length=10000)
+    occurred_at: datetime | None = None
+    clinic_id: uuid.UUID | None = None
+    stored_file_id: uuid.UUID | None = None
+
+
 class MedicalUploadRequest(BaseModel):
     original_filename: str = Field(..., min_length=1, max_length=512)
     mime_type: str = Field(..., min_length=1, max_length=128)

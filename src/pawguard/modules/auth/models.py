@@ -145,6 +145,7 @@ class AuthAuditEventType(StrEnum):
     COMPANION_PET_UPDATED = "companion_pet_updated"
     COMPANION_PET_DELETED = "companion_pet_deleted"
     COMPANION_MEDICAL_RECORD_CREATED = "companion_medical_record_created"
+    COMPANION_MEDICAL_RECORD_UPDATED = "companion_medical_record_updated"
     COMPANION_MEDICAL_RECORD_DELETED = "companion_medical_record_deleted"
     SAFETY_TAG_PROVISIONED = "safety_tag_provisioned"
     SAFETY_TAG_SCANNED = "safety_tag_scanned"

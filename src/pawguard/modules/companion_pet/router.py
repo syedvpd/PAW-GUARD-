@@ -23,6 +23,7 @@ from pawguard.modules.companion_pet.schemas import (
     CompanionPetUpdate,
     MedicalRecordCreate,
     MedicalRecordResponse,
+    MedicalRecordUpdate,
     MedicalUploadRequest,
     PetAppointmentCreate,
     PetAppointmentResponse,
@@ -39,7 +40,11 @@ from pawguard.modules.companion_pet.schemas import (
 )
 from pawguard.modules.companion_pet.service import CompanionPetService
 from pawguard.modules.storage.repository import StorageRepository
-from pawguard.modules.storage.schemas import StoredFileResponse, UploadUrlResponse
+from pawguard.modules.storage.schemas import (
+    DownloadUrlResponse,
+    StoredFileResponse,
+    UploadUrlResponse,
+)
 from pawguard.modules.storage.service import StorageService
 from pawguard.services.audit_service import AuditService
 from pawguard.services.storage_service import StorageService as S3StorageService
@@ -280,6 +285,46 @@ async def list_medical_records(
     return ApiResponse(data=[MedicalRecordResponse.model_validate(row) for row in records])
 
 
+@router.get(
+    "/medical-records/{record_id}",
+    response_model=ApiResponse[MedicalRecordResponse],
+    dependencies=[Depends(require_permission("companion_pet:read"))],
+    summary="Get an authorized medical-history record by ID",
+)
+async def get_medical_record(
+    record_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: CompanionPetService = Depends(get_companion_pet_service),
+) -> ApiResponse[MedicalRecordResponse]:
+    record = await service.get_medical_record(record_id, current_user)
+    return ApiResponse(data=MedicalRecordResponse.model_validate(record))
+
+
+@router.put(
+    "/medical-records/{record_id}",
+    response_model=ApiResponse[MedicalRecordResponse],
+    dependencies=[Depends(require_permission("companion_pet:medical_upload"))],
+    summary="Update an authorized medical-history record (full update)",
+)
+@router.patch(
+    "/medical-records/{record_id}",
+    response_model=ApiResponse[MedicalRecordResponse],
+    dependencies=[Depends(require_permission("companion_pet:medical_upload"))],
+    summary="Update an authorized medical-history record (partial update)",
+)
+async def update_medical_record(
+    record_id: uuid.UUID,
+    payload: MedicalRecordUpdate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: CompanionPetService = Depends(get_companion_pet_service),
+) -> ApiResponse[MedicalRecordResponse]:
+    record = await service.update_medical_record(
+        record_id, payload, current_user, resolve_client_ip(request)
+    )
+    return ApiResponse(data=MedicalRecordResponse.model_validate(record))
+
+
 @router.delete(
     "/medical-records/{record_id}",
     response_model=ApiResponse[None],
@@ -294,6 +339,21 @@ async def delete_medical_record(
 ) -> ApiResponse[None]:
     await service.delete_medical_record(record_id, current_user, resolve_client_ip(request))
     return ApiResponse(message="Medical record deleted.")
+
+
+@router.get(
+    "/medical-files/{file_id}/download-url",
+    response_model=ApiResponse[DownloadUrlResponse],
+    dependencies=[Depends(require_permission("companion_pet:read"))],
+    summary="Get presigned download URL for a medical-history file",
+)
+async def get_medical_download_url(
+    file_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: CompanionPetService = Depends(get_companion_pet_service),
+) -> ApiResponse[DownloadUrlResponse]:
+    result = await service.get_medical_download_url(file_id, current_user)
+    return ApiResponse(data=result)
 
 
 @router.post(

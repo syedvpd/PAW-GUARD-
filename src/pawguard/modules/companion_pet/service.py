@@ -34,6 +34,7 @@ from pawguard.modules.companion_pet.schemas import (
     CompanionPetResponse,
     CompanionPetUpdate,
     MedicalRecordCreate,
+    MedicalRecordUpdate,
     PetAppointmentCreate,
     PetAppointmentResponse,
     PetReminderCreate,
@@ -45,7 +46,12 @@ from pawguard.modules.companion_pet.schemas import (
 from pawguard.modules.notifications.schemas import NotificationCreate
 from pawguard.modules.notifications.service import NotificationService
 from pawguard.modules.storage.models import FileFolder, StoredFile
-from pawguard.modules.storage.schemas import StoredFileCreate, StoredFileResponse, UploadUrlResponse
+from pawguard.modules.storage.schemas import (
+    DownloadUrlResponse,
+    StoredFileCreate,
+    StoredFileResponse,
+    UploadUrlResponse,
+)
 from pawguard.modules.storage.service import StorageService
 from pawguard.services.audit_service import AuditService
 
@@ -303,6 +309,61 @@ class CompanionPetService:
             raise ForbiddenError("You are not authorized for this uploaded file.")
         return await self._storage.confirm_upload(file_id)
 
+    async def get_medical_record(
+        self, record_id: uuid.UUID, current_user: CurrentUser
+    ) -> PetMedicalRecord:
+        record = await self._repo.get_medical_record(record_id)
+        if record is None or record.deleted_at is not None:
+            raise NotFoundError("Medical record not found.")
+        pet = await self._get_pet(record.pet_id)
+        await self._authorize_pet(current_user, pet, clinic_id=record.clinic_id)
+        return record
+
+    async def update_medical_record(
+        self,
+        record_id: uuid.UUID,
+        payload: MedicalRecordUpdate,
+        current_user: CurrentUser,
+        ip_address: str | None = None,
+    ) -> PetMedicalRecord:
+        record = await self._repo.get_medical_record(record_id)
+        if record is None or record.deleted_at is not None:
+            raise NotFoundError("Medical record not found.")
+        pet = await self._get_pet(record.pet_id)
+        await self._authorize_pet(current_user, pet, clinic_id=record.clinic_id)
+
+        update_data = payload.model_dump(exclude_unset=True)
+        if "clinic_id" in update_data and update_data["clinic_id"] is not None:
+            clinic_id = update_data["clinic_id"]
+            if await self._repo.get_clinic(clinic_id) is None:
+                raise NotFoundError("Veterinary clinic not found.")
+            if (
+                not self._is_admin(current_user)
+                and pet.owner_id != current_user.id
+                and not await self._repo.has_membership(current_user.id, clinic_id)
+            ):
+                raise ForbiddenError("You are not a member of the selected veterinary clinic.")
+
+        if "stored_file_id" in update_data and update_data["stored_file_id"] is not None:
+            stored_file_id = update_data["stored_file_id"]
+            if self._storage is None:
+                raise ConflictError("Storage service is not configured.")
+            stored = await self._storage.get_file(stored_file_id)
+            if stored.entity_type != "companion_pet" or stored.entity_id != pet.id:
+                raise ForbiddenError("The uploaded file is not owned by this pet record.")
+
+        for key, val in update_data.items():
+            setattr(record, key, val)
+
+        await self._session.flush()
+        await self._audit_event(
+            AuthAuditEventType.COMPANION_MEDICAL_RECORD_UPDATED,
+            current_user.id,
+            ip_address,
+            {"pet_id": pet.id, "record_id": record.id},
+        )
+        return record
+
     async def list_medical_files(
         self, pet_id: uuid.UUID, page: PageParams, sort: SortParams, current_user: CurrentUser
     ) -> PaginatedResponse[StoredFileResponse]:
@@ -313,6 +374,18 @@ class CompanionPetService:
         return await self._storage.list_by_entity(
             "companion_pet", pet.id, page, sort, folder=FileFolder.MEDICAL.value
         )
+
+    async def get_medical_download_url(
+        self, file_id: uuid.UUID, current_user: CurrentUser
+    ) -> DownloadUrlResponse:
+        if self._storage is None:
+            raise ConflictError("Storage service is not configured.")
+        stored = await self._storage.get_file(file_id)
+        if stored.entity_type != "companion_pet":
+            raise ForbiddenError("The file is not a companion pet medical file.")
+        pet = await self._get_pet(stored.entity_id)
+        await self._authorize_pet(current_user, pet)
+        return await self._storage.get_download_url(file_id)
 
     async def provision_safety_tag(
         self, pet_id: uuid.UUID, current_user: CurrentUser, ip_address: str | None = None

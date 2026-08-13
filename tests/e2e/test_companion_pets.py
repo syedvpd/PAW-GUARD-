@@ -272,6 +272,52 @@ class TestCompanionPetEndpoints:
                            f"/api/v1/companion-pets/medical-records/{record_id}",
                            headers=setup.admin_headers, expected=200)
 
+    async def test_get_medical_record(self, client, setup):
+        if TEST.companion_pet_id:
+            pet_id = str(TEST.companion_pet_id)
+        else:
+            create_r = await client.post("/api/v1/companion-pets", json={
+                "name": f"GetMedPet_{uid()}",
+                "species": "dog",
+                "breed": "poodle",
+                "date_of_birth": "2021-02-01",
+                "gender": "female",
+                "weight": 10.0,
+            }, headers=setup.admin_headers)
+            pet_id = create_r.json()["data"]["id"]
+        rec_r = await client.post(f"/api/v1/companion-pets/{pet_id}/medical-records",
+                                  json={"record_type": "vaccination", "title": "Rabies Shot", "notes": "Annual booster"},
+                                  headers=setup.admin_headers)
+        if rec_r.status_code in (200, 201):
+            record_id = rec_r.json()["data"]["id"]
+            r = await call(client, "companion_pets", "GET",
+                           f"/api/v1/companion-pets/medical-records/{record_id}",
+                           headers=setup.admin_headers, expected=200)
+            assert r.json()["data"]["title"] == "Rabies Shot"
+
+    async def test_update_medical_record(self, client, setup):
+        if TEST.companion_pet_id:
+            pet_id = str(TEST.companion_pet_id)
+        else:
+            create_r = await client.post("/api/v1/companion-pets", json={
+                "name": f"UpMedPet_{uid()}",
+                "species": "cat",
+                "breed": "persian",
+                "date_of_birth": "2020-05-01",
+                "gender": "male",
+                "weight": 4.0,
+            }, headers=setup.admin_headers)
+            pet_id = create_r.json()["data"]["id"]
+        rec_r = await client.post(f"/api/v1/companion-pets/{pet_id}/medical-records",
+                                  json={"record_type": "checkup", "title": "General Exam", "notes": "Healthy"},
+                                  headers=setup.admin_headers)
+        if rec_r.status_code in (200, 201):
+            record_id = rec_r.json()["data"]["id"]
+            r = await call(client, "companion_pets", "PATCH",
+                           f"/api/v1/companion-pets/medical-records/{record_id}",
+                           headers=setup.admin_headers, json={"notes": "Updated notes"}, expected=200)
+            assert r.json()["data"]["notes"] == "Updated notes"
+
     # ── Medical Files ────────────────────────────────────────────────────
 
     async def test_list_medical_files(self, client, setup):
