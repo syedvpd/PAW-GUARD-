@@ -10,7 +10,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from pawguard.core.exceptions import ConflictError, ForbiddenError, NotFoundError
+from pawguard.core.exceptions import (
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+    ValidationFailedError,
+)
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
@@ -162,7 +167,10 @@ class CompanionPetService:
     ) -> CompanionPet:
         pet = await self._get_pet(pet_id)
         await self._authorize_pet(current_user, pet)
-        for key, value in payload.model_dump(exclude_unset=True).items():
+        update_data = payload.model_dump(exclude_unset=True)
+        if not update_data:
+            raise ValidationFailedError("At least one field must be provided for update.")
+        for key, value in update_data.items():
             setattr(pet, key, value)
         await self._session.flush()
         await self._session.refresh(pet)

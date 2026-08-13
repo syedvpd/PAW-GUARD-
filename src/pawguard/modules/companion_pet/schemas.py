@@ -34,6 +34,12 @@ class CompanionPetUpdate(BaseModel):
     emergency_notes: str | None = Field(None, max_length=4000)
     is_scan_enabled: bool | None = None
 
+    @model_validator(mode="after")
+    def validate_non_empty(self) -> "CompanionPetUpdate":
+        if not self.model_dump(exclude_unset=True):
+            raise ValueError("At least one field must be provided for update.")
+        return self
+
 
 class CompanionPetResponse(BaseModel):
     id: uuid.UUID

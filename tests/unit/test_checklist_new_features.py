@@ -175,3 +175,13 @@ async def test_record_public_sighting_notifies_owner() -> None:
     assert sighting.finder_name == "John Finder"
     assert repo.create_sighting.call_count == 1
     assert notification_svc.send_notification.call_count == 1
+
+
+def test_empty_patch_body_raises_validation_error() -> None:
+    from pydantic import ValidationError
+    from pawguard.modules.companion_pet.schemas import CompanionPetUpdate
+
+    with pytest.raises(ValidationError) as exc_info:
+        CompanionPetUpdate.model_validate({})
+
+    assert "At least one field must be provided for update." in str(exc_info.value)
