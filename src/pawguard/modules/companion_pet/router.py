@@ -108,6 +108,19 @@ async def list_clinics(
 
 
 @router.get(
+    "/clinics/{clinic_id}",
+    response_model=ApiResponse[VetClinicResponse],
+    summary="Get single veterinary clinic details",
+)
+async def get_clinic(
+    clinic_id: uuid.UUID,
+    service: CompanionPetService = Depends(get_companion_pet_service),
+) -> ApiResponse[VetClinicResponse]:
+    clinic = await service.get_clinic(clinic_id)
+    return ApiResponse(data=VetClinicResponse.model_validate(clinic))
+
+
+@router.get(
     "/clinics/{clinic_id}/veterinarians",
     response_model=ApiResponse[list[VeterinarianResponse]],
     summary="List veterinarians available at a veterinary clinic for appointment booking",
@@ -396,6 +409,44 @@ async def get_safety_tag(
     return ApiResponse(data=SafetyTagResponse.model_validate(tag))
 
 
+@router.delete(
+    "/{pet_id}/safety-tag",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(require_permission("safety_tag:manage"))],
+    summary="Deactivate or revoke a QR safety tag",
+)
+async def deactivate_safety_tag(
+    pet_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: CompanionPetService = Depends(get_companion_pet_service),
+) -> ApiResponse[None]:
+    await service.deactivate_safety_tag(pet_id, current_user, resolve_client_ip(request))
+    return ApiResponse(message="Safety tag deactivated.")
+
+
+@router.post(
+    "/from-adoption/{application_id}",
+    response_model=ApiResponse[CompanionPetResponse],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("companion_pet:create"))],
+    summary="Create a companion pet from an approved adoption application",
+)
+async def create_pet_from_adoption(
+    application_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: CompanionPetService = Depends(get_companion_pet_service),
+) -> ApiResponse[CompanionPetResponse]:
+    pet = await service.create_pet_from_adoption(
+        application_id, current_user, resolve_client_ip(request)
+    )
+    return ApiResponse(
+        data=CompanionPetResponse.model_validate(pet),
+        message="Companion pet created from adoption application.",
+    )
+
+
 @router.post(
     "/safety-tag/scan",
     response_model=ApiResponse[SafetyTagScanResponse],
@@ -407,7 +458,7 @@ async def scan_safety_tag(
     request: Request,
     service: CompanionPetService = Depends(get_companion_pet_service),
 ) -> ApiResponse[SafetyTagScanResponse]:
-    _tag, pet = await service.scan_safety_tag(payload.token, resolve_client_ip(request))
+    _tag, pet, lost_info = await service.scan_safety_tag(payload.token, resolve_client_ip(request))
     photo_url = await service.get_pet_photo_url(pet.id)
     return ApiResponse(
         data=SafetyTagScanResponse(
@@ -418,6 +469,10 @@ async def scan_safety_tag(
             color=pet.color,
             emergency_notes=pet.emergency_notes,
             photo_url=photo_url,
+            status=lost_info["status"],
+            lost_report_id=lost_info["lost_report_id"],
+            lost_location=lost_info["lost_location"],
+            lost_at=lost_info["lost_at"],
         )
     )
 

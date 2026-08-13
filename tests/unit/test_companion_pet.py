@@ -103,7 +103,9 @@ async def test_qr_token_is_random_hashed_and_scan_has_no_owner_data() -> None:
     assert repo.get_tag_by_hash.call_count == 0
     repo.get_tag_by_hash.return_value = provisioned
 
-    _scanned_tag, scanned_pet = await service.scan_safety_tag(raw_token, "203.0.113.5")
+    repo.get_active_lost_report_for_pet.return_value = None
+    _scanned_tag, scanned_pet, lost_info = await service.scan_safety_tag(raw_token, "203.0.113.5")
+    assert lost_info["status"] == "safe"
     looked_up_hash = repo.get_tag_by_hash.call_args.args[0]
     assert looked_up_hash != raw_token
     assert len(looked_up_hash) == 64

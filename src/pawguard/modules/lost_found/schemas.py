@@ -23,6 +23,7 @@ class LostReportCreate(BaseModel):
     longitude: float | None = Field(None, ge=-180.0, le=180.0, examples=[78.4071])
     lost_at: datetime = Field(..., examples=["2026-07-25T14:30:00Z"])
     photo_url: str | None = Field(None, max_length=512, examples=["https://example.com/buddy.jpg"])
+    companion_pet_id: uuid.UUID | None = Field(None, description="Optional companion pet ID")
 
 
 class LostReportResponse(BaseModel):
@@ -41,6 +42,7 @@ class LostReportResponse(BaseModel):
     longitude: float | None
     lost_at: datetime
     status: ReportStatus
+    companion_pet_id: uuid.UUID | None = None
     photo_url: str | None
     created_at: datetime
     user: UserProfile | None = None
@@ -132,3 +134,31 @@ class OwnershipClaimReview(BaseModel):
     verification_notes: str | None = Field(
         None, examples=["Microchip ID matches the owner registration record."]
     )
+
+
+class PetSightingCreate(BaseModel):
+    pet_id: uuid.UUID | None = Field(None, description="Companion pet ID or scan token target")
+    lost_report_id: uuid.UUID | None = Field(None, description="Associated lost report ID if known")
+    finder_name: str = Field(..., min_length=1, max_length=255, examples=["Jane Doe"])
+    finder_phone: str = Field(..., min_length=3, max_length=32, examples=["+15551234567"])
+    finder_address: str | None = Field(None, max_length=1000)
+    latitude: float | None = Field(None, ge=-90.0, le=90.0, examples=[17.4326])
+    longitude: float | None = Field(None, ge=-180.0, le=180.0, examples=[78.4071])
+    location_address: str = Field(..., min_length=1, max_length=1000, examples=["Corner of 5th Ave and Main St"])
+    message: str | None = Field(None, max_length=4000, examples=["Pet is safe with me, call me ASAP!"])
+
+
+class PetSightingResponse(BaseModel):
+    id: uuid.UUID
+    pet_id: uuid.UUID | None
+    lost_report_id: uuid.UUID | None
+    finder_name: str
+    finder_phone: str
+    finder_address: str | None
+    latitude: float | None
+    longitude: float | None
+    location_address: str
+    message: str | None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

@@ -56,6 +56,18 @@ class CompanionPet(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     )
     emergency_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_scan_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    original_dog_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("dogs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    adoption_application_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("adoption_applications.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     __table_args__ = (Index("ix_companion_pets_owner_active", "owner_id", "deleted_at"),)
 

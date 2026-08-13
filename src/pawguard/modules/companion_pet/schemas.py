@@ -19,6 +19,8 @@ class CompanionPetCreate(BaseModel):
     microchip_id: str | None = Field(None, max_length=64)
     emergency_notes: str | None = Field(None, max_length=4000)
     is_scan_enabled: bool = True
+    original_dog_id: uuid.UUID | None = None
+    adoption_application_id: uuid.UUID | None = None
 
 
 class CompanionPetUpdate(BaseModel):
@@ -45,6 +47,8 @@ class CompanionPetResponse(BaseModel):
     microchip_id: str | None
     emergency_notes: str | None
     is_scan_enabled: bool
+    original_dog_id: uuid.UUID | None = None
+    adoption_application_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -133,6 +137,10 @@ class SafetyTagScanResponse(BaseModel):
     color: str | None
     emergency_notes: str | None
     photo_url: str | None = None
+    status: str = Field("safe", description="Current status: safe, lost, found, reunited, or inactive.")
+    lost_report_id: uuid.UUID | None = None
+    lost_location: str | None = None
+    lost_at: datetime | None = None
     message: str = "If this pet needs urgent care, contact a local veterinary clinic."
 
 

@@ -3,6 +3,7 @@
 import uuid
 from collections.abc import Sequence
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -297,3 +298,25 @@ class CompanionPetRepository:
         self._session.add(delivery)
         await self._session.flush()
         return delivery
+
+    async def get_active_lost_report_for_pet(
+        self, pet_id: uuid.UUID, owner_id: uuid.UUID, pet_name: str
+    ) -> Any | None:
+        from pawguard.modules.lost_found.models import LostReport, ReportStatus
+
+        stmt = (
+            select(LostReport)
+            .where(
+                LostReport.deleted_at.is_(None),
+                LostReport.status == ReportStatus.ACTIVE,
+                (
+                    (LostReport.companion_pet_id == pet_id)
+                    | (
+                        (LostReport.user_id == owner_id)
+                        & (func.lower(LostReport.pet_name) == func.lower(pet_name))
+                    )
+                ),
+            )
+            .order_by(LostReport.lost_at.desc())
+        )
+        return (await self._session.execute(stmt)).scalars().first()

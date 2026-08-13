@@ -13,6 +13,7 @@ from pawguard.modules.auth.models import User
 from pawguard.modules.lost_found.models import (
     FoundReport,
     LostReport,
+    PetSighting,
     ReportMatch,
     ReportStatus,
     Species,
@@ -281,3 +282,35 @@ class LostFoundRepository:
             r.deleted_at = now
         await self._session.flush()
         return len(reports)
+
+    async def create_sighting(self, sighting: PetSighting) -> PetSighting:
+        self._session.add(sighting)
+        await self._session.flush()
+        return sighting
+
+    async def get_active_lost_report_by_pet_id(self, pet_id: uuid.UUID) -> LostReport | None:
+        stmt = (
+            select(LostReport)
+            .where(
+                LostReport.companion_pet_id == pet_id,
+                LostReport.status == ReportStatus.ACTIVE,
+                LostReport.deleted_at.is_(None),
+            )
+            .order_by(LostReport.lost_at.desc())
+        )
+        return (await self._session.execute(stmt)).scalars().first()
+
+    async def get_active_lost_report_by_user_and_pet_name(
+        self, user_id: uuid.UUID, pet_name: str
+    ) -> LostReport | None:
+        stmt = (
+            select(LostReport)
+            .where(
+                LostReport.user_id == user_id,
+                func.lower(LostReport.pet_name) == func.lower(pet_name),
+                LostReport.status == ReportStatus.ACTIVE,
+                LostReport.deleted_at.is_(None),
+            )
+            .order_by(LostReport.lost_at.desc())
+        )
+        return (await self._session.execute(stmt)).scalars().first()

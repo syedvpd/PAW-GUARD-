@@ -62,6 +62,9 @@ class LostReport(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
     status: Mapped[ReportStatus] = mapped_column(
         String(32), default=ReportStatus.ACTIVE, nullable=False, index=True
     )
+    companion_pet_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("companion_pets.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     photo_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     broadcasted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -132,3 +135,21 @@ class ReportMatch(UUIDPkMixin, TimestampMixin, Base):
 
     lost_report: Mapped["LostReport"] = relationship("LostReport", lazy="joined")
     found_report: Mapped["FoundReport"] = relationship("FoundReport", lazy="joined")
+
+
+class PetSighting(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, Base):
+    __tablename__ = "pet_sightings"
+
+    pet_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("companion_pets.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    lost_report_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("lost_reports.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    finder_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    finder_phone: Mapped[str] = mapped_column(String(32), nullable=False)
+    finder_address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    latitude: Mapped[float | None] = mapped_column(Numeric(9, 6), nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Numeric(9, 6), nullable=True)
+    location_address: Mapped[str] = mapped_column(Text, nullable=False)
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)

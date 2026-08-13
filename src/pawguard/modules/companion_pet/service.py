@@ -4,9 +4,11 @@ import hashlib
 import secrets
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from pawguard.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from pawguard.core.pagination import PageParams, build_pagination_meta
@@ -416,9 +418,19 @@ class CompanionPetService:
         )
         return tag, raw_token
 
+    async def deactivate_safety_tag(
+        self, pet_id: uuid.UUID, current_user: CurrentUser, ip_address: str | None = None
+    ) -> None:
+        pet = await self._get_pet(pet_id)
+        await self._authorize_pet(current_user, pet, owner_only=True)
+        tag = await self._repo.get_active_tag_for_pet(pet.id)
+        if tag is not None:
+            tag.is_active = False
+            await self._session.flush()
+
     async def scan_safety_tag(
         self, raw_token: str, ip_address: str | None = None
-    ) -> tuple[SafetyTag, CompanionPet]:
+    ) -> tuple[SafetyTag, CompanionPet, dict[str, Any]]:
         tag = await self._repo.get_tag_by_hash(_hash_tag_token(raw_token))
         if tag is None:
             raise NotFoundError("Safety tag not found.")
@@ -428,13 +440,82 @@ class CompanionPetService:
         tag.last_scanned_at = datetime.now(UTC)
         tag.scan_count = (tag.scan_count or 0) + 1
         await self._session.flush()
+
+        lost_report = await self._repo.get_active_lost_report_for_pet(pet.id, pet.owner_id, pet.name)
+
+        lost_info: dict[str, Any] = {
+            "status": "lost" if lost_report is not None else "safe",
+            "lost_report_id": lost_report.id if lost_report else None,
+            "lost_location": lost_report.location_address if lost_report else None,
+            "lost_at": lost_report.lost_at if lost_report else None,
+        }
+
         await self._audit_event(
             AuthAuditEventType.SAFETY_TAG_SCANNED,
             None,
             ip_address,
             {"pet_id": pet.id, "tag_id": tag.id},
         )
-        return tag, pet
+        return tag, pet, lost_info
+
+    async def get_clinic(self, clinic_id: uuid.UUID) -> VetClinic:
+        clinic = await self._repo.get_clinic(clinic_id)
+        if clinic is None:
+            raise NotFoundError("Veterinary clinic not found.")
+        return clinic
+
+    async def create_pet_from_adoption(
+        self, application_id: uuid.UUID, current_user: CurrentUser, ip_address: str | None = None
+    ) -> CompanionPet:
+        from sqlalchemy import select
+        from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
+
+        stmt = (
+            select(AdoptionApplication)
+            .options(selectinload(AdoptionApplication.dog))
+            .where(
+                AdoptionApplication.id == application_id,
+                AdoptionApplication.adopter_id == current_user.id,
+                AdoptionApplication.deleted_at.is_(None),
+            )
+        )
+        app = (await self._session.execute(stmt)).scalar_one_or_none()
+        if app is None:
+            raise NotFoundError("Adoption application not found.")
+        if app.status not in (AdoptionStatus.APPROVED, AdoptionStatus.COMPLETED):
+            raise ForbiddenError("Only approved or completed adoption applications can be converted to a companion pet.")
+
+        stmt_pet = (
+            select(CompanionPet)
+            .where(
+                CompanionPet.adoption_application_id == application_id,
+                CompanionPet.deleted_at.is_(None),
+            )
+        )
+        existing = (await self._session.execute(stmt_pet)).scalar_one_or_none()
+        if existing is not None:
+            return existing
+
+        dog = app.dog
+        pet = CompanionPet(
+            owner_id=current_user.id,
+            name=dog.name if dog else "Adopted Pet",
+            species="dog",
+            breed=dog.breed if dog else None,
+            sex=dog.gender if dog else None,
+            color=dog.color if dog else None,
+            microchip_id=dog.microchip_id if dog else None,
+            original_dog_id=app.dog_id,
+            adoption_application_id=app.id,
+        )
+        pet = await self._repo.create_pet(pet)
+        await self._audit_event(
+            AuthAuditEventType.COMPANION_PET_CREATED,
+            current_user.id,
+            ip_address,
+            {"pet_id": pet.id, "from_adoption": str(application_id)},
+        )
+        return pet
 
     async def get_pet_photo_url(self, pet_id: uuid.UUID) -> str | None:
         """Return the first uploaded photo URL for a companion pet, or None."""

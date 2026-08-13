@@ -31,9 +31,13 @@ from pawguard.modules.lost_found.schemas import (
     LostReportResponse,
     OwnershipClaimReview,
     OwnershipClaimSubmit,
+    PetSightingCreate,
+    PetSightingResponse,
     ReportMatchResponse,
 )
 from pawguard.modules.lost_found.service import LostFoundService
+from pawguard.modules.notifications.router import get_notification_service
+from pawguard.modules.notifications.service import NotificationService
 from pawguard.modules.portal.router import get_portal_service
 from pawguard.modules.portal.schemas import SuccessStoryResponse
 from pawguard.modules.portal.service import PortalService
@@ -77,9 +81,38 @@ def get_lost_found_service(
     db: AsyncSession = Depends(get_db),
     audit: AuditService = Depends(get_audit_service),
     arq_pool: ArqRedis = Depends(get_arq_pool),
+    notification_svc: NotificationService = Depends(get_notification_service),
 ) -> LostFoundService:
     repo = LostFoundRepository(db)
-    return LostFoundService(repo, audit_service=audit, arq_pool=arq_pool)
+    return LostFoundService(
+        repo, audit_service=audit, arq_pool=arq_pool, notification_service=notification_svc
+    )
+
+
+@router.post(
+    "/sighting",
+    response_model=ApiResponse[PetSightingResponse],
+    status_code=status.HTTP_201_CREATED,
+    summary="Public submission of a lost pet sighting by a QR-scanner citizen",
+)
+@router.post(
+    "/found/sighting",
+    response_model=ApiResponse[PetSightingResponse],
+    status_code=status.HTTP_201_CREATED,
+    summary="Public submission of a lost pet sighting by a QR-scanner citizen (alias)",
+)
+async def report_public_sighting(
+    payload: PetSightingCreate,
+    request: Request,
+    _: Annotated[None, Depends(rate_limit("sighting_report", 10, 60))] = None,
+    service: LostFoundService = Depends(get_lost_found_service),
+) -> ApiResponse[PetSightingResponse]:
+    ip = request.client.host if request.client else None
+    sighting = await service.record_public_sighting(payload, ip_address=ip)
+    return ApiResponse(
+        data=PetSightingResponse.model_validate(sighting),
+        message="Sighting report submitted. The pet owner has been notified.",
+    )
 
 
 @router.post(

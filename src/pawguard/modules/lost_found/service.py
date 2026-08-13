@@ -18,6 +18,7 @@ from pawguard.modules.lost_found.models import (
     FoundReport,
     LostReport,
     MatchStatus,
+    PetSighting,
     ReportMatch,
     ReportStatus,
     Species,
@@ -30,8 +31,10 @@ from pawguard.modules.lost_found.schemas import (
     LostReportResponse,
     OwnershipClaimReview,
     OwnershipClaimSubmit,
+    PetSightingCreate,
     ReportMatchResponse,
 )
+from pawguard.modules.notifications.service import NotificationService
 from pawguard.services.audit_service import AuditService
 
 logger = getLogger(__name__)
@@ -43,10 +46,12 @@ class LostFoundService:
         repository: LostFoundRepository,
         audit_service: AuditService | None = None,
         arq_pool: ArqRedis | None = None,
+        notification_service: NotificationService | None = None,
     ) -> None:
         self._repo = repository
         self._audit = audit_service
         self._arq = arq_pool
+        self._notification_svc = notification_service
 
     async def queue_lost_alert_broadcast(
         self,
@@ -100,6 +105,7 @@ class LostFoundService:
             longitude=payload.longitude,
             lost_at=payload.lost_at,
             status=ReportStatus.ACTIVE,
+            companion_pet_id=payload.companion_pet_id,
             photo_url=payload.photo_url,
         )
         await self._repo.create_lost_report(report)
@@ -114,6 +120,60 @@ class LostFoundService:
                 metadata={"report_id": str(report.id), "type": "lost"},
             )
         return report
+
+    async def record_public_sighting(
+        self, payload: PetSightingCreate, ip_address: str | None = None
+    ) -> PetSighting:
+        sighting = PetSighting(
+            pet_id=payload.pet_id,
+            lost_report_id=payload.lost_report_id,
+            finder_name=payload.finder_name,
+            finder_phone=payload.finder_phone,
+            finder_address=payload.finder_address,
+            latitude=payload.latitude,
+            longitude=payload.longitude,
+            location_address=payload.location_address,
+            message=payload.message,
+        )
+        await self._repo.create_sighting(sighting)
+
+        # Notify pet owner if resolved
+        owner_id = None
+        pet_name = "your pet"
+        if payload.pet_id:
+            from sqlalchemy import select
+            from pawguard.modules.companion_pet.models import CompanionPet
+            stmt = select(CompanionPet).where(CompanionPet.id == payload.pet_id)
+            pet = (await self._repo._session.execute(stmt)).scalar_one_or_none()
+            if pet:
+                owner_id = pet.owner_id
+                pet_name = pet.name
+
+        if owner_id is None and payload.lost_report_id:
+            report = await self._repo.get_lost_report_by_id(payload.lost_report_id)
+            if report:
+                owner_id = report.user_id
+                pet_name = report.pet_name
+
+        if owner_id and self._notification_svc:
+            try:
+                from pawguard.modules.notifications.schemas import NotificationSend
+                await self._notification_svc.send_notification(
+                    payload=NotificationSend(
+                        user_id=owner_id,
+                        title=f"QR Safety Tag Sighting Reported for {pet_name}!",
+                        body=(
+                            f"{payload.finder_name} submitted a sighting of {pet_name} at "
+                            f"{payload.location_address}. Contact phone: {payload.finder_phone}."
+                        ),
+                        notification_type="qr_sighting",
+                        send_email=True,
+                    )
+                )
+            except Exception as exc:
+                logger.warning("Failed to send sighting notification: %s", exc)
+
+        return sighting
 
     async def report_found_pet(
         self, user_id: uuid.UUID, payload: FoundReportCreate,
