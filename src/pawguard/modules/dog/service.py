@@ -3,6 +3,7 @@
 import re
 import secrets
 import uuid
+from contextlib import suppress
 from datetime import UTC, datetime
 from io import BytesIO
 from typing import Any
@@ -18,6 +19,7 @@ from pawguard.core.exceptions import (
     NotFoundError,
     ValidationFailedError,
 )
+from pawguard.core.metrics import increment_counter
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
@@ -37,6 +39,7 @@ from pawguard.modules.dog.schemas import (
     DogProfileUpdate,
     DogWeightLogCreate,
 )
+from pawguard.redis.client import RedisClient
 from pawguard.services.audit_service import AuditService
 
 # DOG-YYYY-NNNN leaves only 10,000 numbers per year, so collisions are
@@ -103,6 +106,10 @@ def _parse_age_months(estimated_age: str | None) -> int | None:
     return None
 
 
+from datetime import date, datetime
+from decimal import Decimal
+from enum import Enum
+
 def _jsonable(value: Any) -> Any:
     """Recursively coerce values into JSON-safe primitives for JSONB columns.
 
@@ -112,6 +119,12 @@ def _jsonable(value: Any) -> Any:
     """
     if isinstance(value, uuid.UUID):
         return str(value)
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, Enum):
+        return value.value
     if isinstance(value, dict):
         return {k: _jsonable(v) for k, v in value.items()}
     if isinstance(value, (list, tuple, set)):
@@ -166,10 +179,34 @@ async def record_activity(
 
 class DogService:
     def __init__(
-        self, repository: DogRepository, audit_service: AuditService | None = None
+        self,
+        repository: DogRepository,
+        audit_service: AuditService | None = None,
+        redis: RedisClient | None = None,
     ) -> None:
         self._repo = repository
         self._audit = audit_service
+        self._redis = redis
+
+    async def _invalidate_caches(self) -> None:
+        """Invalidate public portal and dashboard metrics cache so live counts refresh immediately."""
+        if self._redis is None:
+            return
+        with suppress(Exception):
+            keys = [
+                "pawguard:hero_stats",
+                "pawguard:transparency_stats",
+                "hero_stats",
+                "transparency_stats",
+                "cache:dashboard:shelter",
+                "cache:dashboard:rescue",
+                "cache:dashboard:adoption",
+                "cache:dashboard:medical",
+                "cache:dashboard:foster",
+                "cache:dashboard:summary",
+            ]
+            for key in keys:
+                await self._redis.delete(key)
 
     async def register_dog(
         self,
@@ -235,15 +272,12 @@ class DogService:
                 ear_shape=payload.ear_shape,
                 tail_type=payload.tail_type,
                 distinctive_markers=payload.distinctive_markers,
-                status=DogStatus.RESCUED,
+                status=payload.status or DogStatus.RESCUED,
                 shelter_facility_id=payload.shelter_facility_id,
                 section_id=payload.section_id,
                 kennel_id=payload.kennel_id,
                 foster_home_id=payload.foster_home_id,
-                # is_adoptable is never set from client input: a dog can only be
-                # marked adoptable via the vet-authorized medical clearance flow
-                # (POST /medical/clearance/{dog_id}), never at registration.
-                is_adoptable=False,
+                is_adoptable=(payload.status == DogStatus.AVAILABLE_FOR_ADOPTION) if payload.status else False,
                 is_quarantine_passed=payload.is_quarantine_passed,
             )
             try:
@@ -268,6 +302,9 @@ class DogService:
             actor_id=actor_id,
             metadata={"registration_number": dog.registration_number},
         )
+
+        increment_counter("pawguard_dogs_registered_total")
+        await self._invalidate_caches()
 
         if self._audit and actor_id:
             await self._audit.record(
@@ -447,6 +484,7 @@ class DogService:
                 metadata={"dog_id": str(dog_id), "changes": update_data},
             )
 
+        await self._invalidate_caches()
         return dog
 
     async def update_dog_status(
@@ -473,6 +511,9 @@ class DogService:
             actor_id=actor_id,
             metadata={"old_status": str(old_status), "new_status": status.value},
         )
+
+        increment_counter("pawguard_dogs_status_changed_total", {"status": status.value})
+        await self._invalidate_caches()
 
         if self._audit and actor_id:
             await self._audit.record(
@@ -507,6 +548,9 @@ class DogService:
             message=f"Dog profile soft-deleted (registration {dog.registration_number}).",
             actor_id=actor_id,
         )
+
+        increment_counter("pawguard_dogs_deleted_total")
+        await self._invalidate_caches()
 
         if self._audit and actor_id:
             await self._audit.record(
@@ -578,6 +622,9 @@ class DogService:
                 metadata={"status": status.value},
             )
 
+        increment_counter("pawguard_dogs_status_changed_total", {"status": status.value}, value=updated)
+        await self._invalidate_caches()
+
         if self._audit and actor_id:
             await self._audit.record(
                 event_type=AuthAuditEventType.BULK_DOG_STATUS_UPDATED,
@@ -615,6 +662,9 @@ class DogService:
                 message="Dog soft-deleted via bulk operation.",
                 actor_id=actor_id,
             )
+
+        increment_counter("pawguard_dogs_deleted_total", value=count)
+        await self._invalidate_caches()
 
         if self._audit and actor_id:
             await self._audit.record(

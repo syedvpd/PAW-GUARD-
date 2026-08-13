@@ -21,10 +21,14 @@ def upgrade() -> None:
         "ON notifications (user_id, is_read, created_at DESC);"
     )
 
-    # 2. Medical records dog timeline index (dog_id, examination_date DESC)
+    # 2. Clinical exams and pet medical timeline indexes
     op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_medical_records_dog_exam_date "
-        "ON medical_records (dog_id, examination_date DESC);"
+        "CREATE INDEX IF NOT EXISTS ix_clinical_exams_dog_exam_date "
+        "ON clinical_exams (dog_id, exam_date DESC);"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_pet_medical_records_pet_occurred "
+        "ON pet_medical_records (pet_id, occurred_at DESC);"
     )
 
     # 3. Donations donor history and gateway order lookup indexes
@@ -46,13 +50,14 @@ def upgrade() -> None:
     # 5. Sponsorships due charges partial index (status, next_charge_date)
     op.execute(
         "CREATE INDEX IF NOT EXISTS ix_dog_sponsorships_due_charge "
-        "ON dog_sponsorships (status, next_charge_date) WHERE status = 'ACTIVE';"
+        "ON dog_sponsorships (status, next_charge_date) WHERE status = 'active';"
     )
 
 
 def downgrade() -> None:
     op.execute("DROP INDEX IF EXISTS ix_notifications_user_unread;")
-    op.execute("DROP INDEX IF EXISTS ix_medical_records_dog_exam_date;")
+    op.execute("DROP INDEX IF EXISTS ix_clinical_exams_dog_exam_date;")
+    op.execute("DROP INDEX IF EXISTS ix_pet_medical_records_pet_occurred;")
     op.execute("DROP INDEX IF EXISTS ix_donations_donor_created;")
     op.execute("DROP INDEX IF EXISTS ix_donations_gateway_order;")
     op.execute("DROP INDEX IF EXISTS ix_grievance_tickets_status_sla;")

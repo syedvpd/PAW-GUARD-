@@ -8,6 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pawguard.modules.auth.models import AuthAuditEventType, AuthAuditLog
 
 
+from datetime import date, datetime
+from decimal import Decimal
+from enum import Enum
+
 def _jsonable(value: Any) -> Any:
     """Recursively coerce values into JSON-safe primitives for JSONB columns.
 
@@ -17,6 +21,12 @@ def _jsonable(value: Any) -> Any:
     """
     if isinstance(value, uuid.UUID):
         return str(value)
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, Enum):
+        return value.value
     if isinstance(value, dict):
         return {k: _jsonable(v) for k, v in value.items()}
     if isinstance(value, (list, tuple, set)):

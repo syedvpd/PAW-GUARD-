@@ -64,6 +64,10 @@ class TestStartupRoleReconciliation:
                 "scripts.seed_roles_and_permissions.reconcile_roles",
                 new=AsyncMock(return_value=(0, 1)),
             ) as reconcile,
+            patch(
+                "scripts.seed_roles_and_permissions.backfill_default_role",
+                new=AsyncMock(return_value=0),
+            ),
         ):
             await _seed_roles()
 
@@ -88,6 +92,10 @@ class TestStartupRoleReconciliation:
             patch(
                 "scripts.seed_roles_and_permissions.reconcile_roles",
                 new=AsyncMock(return_value=(0, 0)),
+            ),
+            patch(
+                "scripts.seed_roles_and_permissions.backfill_default_role",
+                new=AsyncMock(return_value=0),
             ),
         ):
             await _seed_roles()
@@ -164,6 +172,46 @@ class TestAuditBeforeAfterState:
         assert added.before_state == {"status": "rescued"}
         assert added.after_state == {"status": "shelter"}
         session.flush.assert_awaited_once()
+
+    async def test_record_coerces_complex_types_correctly(self) -> None:
+        from datetime import datetime, date, UTC
+        from decimal import Decimal
+        from enum import Enum
+
+        class DummyEnum(Enum):
+            FOO = "foo"
+
+        session = AsyncMock()
+        service = AuditService(session)
+
+        test_dt = datetime(2026, 8, 13, 10, 30, 0, tzinfo=UTC)
+        test_date = date(2026, 8, 13)
+        test_decimal = Decimal("123.45")
+
+        entry = await service.record(
+            event_type=AuthAuditEventType.ADOPTION_UPDATED,
+            actor_id=uuid.uuid4(),
+            metadata={
+                "scheduled_at": test_dt,
+                "created_date": test_date,
+                "amount": test_decimal,
+                "nested": {
+                    "enum": DummyEnum.FOO,
+                    "list": [test_dt, test_decimal]
+                }
+            }
+        )
+
+        expected_metadata = {
+            "scheduled_at": test_dt.isoformat(),
+            "created_date": test_date.isoformat(),
+            "amount": 123.45,
+            "nested": {
+                "enum": "foo",
+                "list": [test_dt.isoformat(), 123.45]
+            }
+        }
+        assert entry.event_metadata == expected_metadata
 
     async def test_record_without_state_keeps_columns_null(self) -> None:
         """Existing callers must not break - the new params are optional and

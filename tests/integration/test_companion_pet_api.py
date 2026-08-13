@@ -152,3 +152,122 @@ async def test_app_user_role_companion_pets_listing_and_scoping(
     pets2 = list2_res.json()["data"]
     assert not any(p["id"] == pet1_id for p in pets2)
 
+
+@pytest.mark.asyncio
+async def test_veterinarian_dropdown_for_app_user(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """App User can populate the Book Appointment vet dropdown.
+
+    GET /clinics/{clinic_id}/veterinarians must return active veterinarians
+    who are members of the clinic, exposing id/full_name to use as vet_id.
+    """
+    app_headers = await register_and_auth(
+        client, db_session, email="app-vet-dropdown@example.com", role="app_user"
+    )
+    admin_headers = await register_and_auth(
+        client, db_session, email="app-vet-dropdown-admin@example.com", role="super_admin"
+    )
+    await register_and_auth(
+        client, db_session, email="app-vet-dropdown-vet@example.com", role="veterinarian"
+    )
+
+    clinic = await client.post(
+        "/api/v1/companion-pets/clinics",
+        json={
+            "name": "Dropdown Vet Clinic",
+            "address": "99 Dropdown St",
+            "phone": "+1122334455",
+        },
+        headers=admin_headers,
+    )
+    assert clinic.status_code == 201, clinic.text
+    clinic_id = clinic.json()["data"]["id"]
+
+    vet = (
+        await db_session.execute(
+            select(User).where(User.email == "app-vet-dropdown-vet@example.com")
+        )
+    ).scalar_one()
+    vet.full_name = "Dr. Dropdown"
+    vet.phone = "+919000000000"
+    vet.profile_picture_url = "https://cdn.example.com/profile/vet.png"
+    await db_session.commit()
+
+    membership = await client.post(
+        f"/api/v1/companion-pets/clinics/{clinic_id}/memberships",
+        json={"user_id": str(vet.id), "membership_role": "vet"},
+        headers=admin_headers,
+    )
+    assert membership.status_code == 201, membership.text
+
+    # 1. 200 with the active veterinarian (app_user token, required permission appointment:read)
+    resp = await client.get(
+        f"/api/v1/companion-pets/clinics/{clinic_id}/veterinarians",
+        headers=app_headers,
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()["data"]
+    assert len(data) == 1
+    entry = data[0]
+    assert entry["id"] == str(vet.id)
+    assert entry["full_name"] == "Dr. Dropdown"
+    assert entry["email"] == "app-vet-dropdown-vet@example.com"
+    assert entry["phone"] == "+919000000000"
+    assert entry["profile_picture_url"] == "https://cdn.example.com/profile/vet.png"
+
+    # 2. Clinic with no active veterinarians -> 200 empty list
+    empty_clinic = await client.post(
+        "/api/v1/companion-pets/clinics",
+        json={"name": "Empty Vet Clinic", "address": "1 Empty St", "phone": "+12000000000"},
+        headers=admin_headers,
+    )
+    assert empty_clinic.status_code == 201, empty_clinic.text
+    empty_resp = await client.get(
+        f"/api/v1/companion-pets/clinics/{empty_clinic.json()['data']['id']}/veterinarians",
+        headers=app_headers,
+    )
+    assert empty_resp.status_code == 200, empty_resp.text
+    assert empty_resp.json()["data"] == []
+
+    # 3. Unknown clinic -> 404
+    unknown = await client.get(
+        f"/api/v1/companion-pets/clinics/{uuid.uuid4()}/veterinarians",
+        headers=app_headers,
+    )
+    assert unknown.status_code == 404, unknown.text
+
+    # 4. No token -> 401
+    anon = await client.get(
+        f"/api/v1/companion-pets/clinics/{clinic_id}/veterinarians",
+    )
+    assert anon.status_code == 401, anon.text
+
+    # 5. Roles lacking appointment:read -> 403
+    # register_and_auth APPENDS the target role on top of the default
+    # general_public role, so clear all roles first to get a pure rescue_agent.
+    await client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "app-vet-dropdown-agent@example.com",
+            "password": "StrongP@ss99",
+            "full_name": "Field Agent",
+        },
+    )
+    agent = (
+        await db_session.execute(
+            select(User)
+            .options(selectinload(User.roles))
+            .where(User.email == "app-vet-dropdown-agent@example.com")
+        )
+    ).scalar_one()
+    agent.roles.clear()
+    await db_session.commit()
+    restricted_headers = await promote_and_auth(
+        client, db_session, email="app-vet-dropdown-agent@example.com", role="rescue_agent"
+    )
+    forbidden = await client.get(
+        f"/api/v1/companion-pets/clinics/{clinic_id}/veterinarians",
+        headers=restricted_headers,
+    )
+    assert forbidden.status_code == 403, forbidden.text

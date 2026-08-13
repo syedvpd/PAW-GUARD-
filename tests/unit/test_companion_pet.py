@@ -8,7 +8,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from pawguard.core.exceptions import ConflictError, ForbiddenError
+from pawguard.core.exceptions import ConflictError, ForbiddenError, NotFoundError
+from pawguard.modules.auth.models import User
 from pawguard.modules.companion_pet.models import (
     CompanionPet,
     PetAppointment,
@@ -162,3 +163,44 @@ async def test_reminder_delivery_is_idempotent() -> None:
     assert await deliver_reminder_once(repo, notification_service, reminder) is False
     repo.create_delivery.assert_awaited_once()
     notification_service.create_notification.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_list_clinic_veterinarians_returns_schema_and_404s_on_unknown_clinic() -> None:
+    clinic_id = uuid.uuid4()
+    vet = User(
+        id=uuid.uuid4(),
+        email="dr.vet@example.com",
+        phone="+11234567890",
+        full_name="Dr. Feline",
+        hashed_password="x",
+        profile_picture_url="https://cdn.example.com/vet.png",
+    )
+    repo = AsyncMock(spec=CompanionPetRepository)
+    repo.get_clinic.return_value = SimpleNamespace(id=clinic_id)
+    repo.list_clinic_veterinarians.return_value = [vet]
+    service = CompanionPetService(repo, AsyncMock())
+
+    rows = await service.list_clinic_veterinarians(clinic_id)
+    assert len(rows) == 1
+    assert rows[0].id == vet.id
+    assert rows[0].full_name == "Dr. Feline"
+    assert rows[0].email == "dr.vet@example.com"
+    assert rows[0].phone == "+11234567890"
+    assert rows[0].profile_picture_url == "https://cdn.example.com/vet.png"
+
+    repo.get_clinic.return_value = None
+    with pytest.raises(NotFoundError):
+        await service.list_clinic_veterinarians(uuid.uuid4())
+    repo.list_clinic_veterinarians.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_list_clinic_veterinarians_returns_empty_list_for_clinic_without_vets() -> None:
+    repo = AsyncMock(spec=CompanionPetRepository)
+    repo.get_clinic.return_value = SimpleNamespace(id=uuid.uuid4())
+    repo.list_clinic_veterinarians.return_value = []
+    service = CompanionPetService(repo, AsyncMock())
+
+    rows = await service.list_clinic_veterinarians(uuid.uuid4())
+    assert rows == []
