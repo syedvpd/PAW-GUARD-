@@ -69,6 +69,13 @@ class _NullRedis:
         return
         yield  # pragma: no cover — marks this function as an async generator
 
+    async def geoadd(self, name: str, *args: Any, **kwargs: Any) -> int:
+        return 0
+
+    async def geosearch(self, name: str, *args: Any, **kwargs: Any) -> list[Any]:
+        return []
+
+
 
 
 _redis_available: bool | None = None

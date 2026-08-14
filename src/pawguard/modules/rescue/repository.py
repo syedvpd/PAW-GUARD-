@@ -167,11 +167,17 @@ class RescueRepository:
         return agent
 
     async def get_dispatch_by_request_id(self, request_id: uuid.UUID) -> RescueDispatch | None:
-        stmt = select(RescueDispatch).options(selectinload(RescueDispatch.agents)).where(RescueDispatch.rescue_request_id == request_id)
+        stmt = select(RescueDispatch).options(
+            selectinload(RescueDispatch.agents),
+            selectinload(RescueDispatch.rescue_request),
+        ).where(RescueDispatch.rescue_request_id == request_id)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def get_dispatch_by_id(self, dispatch_id: uuid.UUID) -> RescueDispatch | None:
-        stmt = select(RescueDispatch).options(selectinload(RescueDispatch.agents)).where(RescueDispatch.id == dispatch_id)
+        stmt = select(RescueDispatch).options(
+            selectinload(RescueDispatch.agents),
+            selectinload(RescueDispatch.rescue_request),
+        ).where(RescueDispatch.id == dispatch_id)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def list_dispatches_paginated(
@@ -179,7 +185,11 @@ class RescueRepository:
         page: PageParams,
         sort: SortParams,
     ) -> tuple[Sequence[RescueDispatch], int]:
-        stmt = select(RescueDispatch).options(selectinload(RescueDispatch.agents))
+        stmt = select(RescueDispatch).options(
+            selectinload(RescueDispatch.agents),
+            selectinload(RescueDispatch.rescue_request),
+        )
+
 
         valid_fields = {
             "dispatched_at", "located_at", "rescued_at", "admitted_at",

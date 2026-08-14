@@ -10,13 +10,17 @@ from pawguard.db.session import get_db
 from pawguard.modules.admin.dashboard_repository import DashboardRepository
 from pawguard.modules.admin.dashboard_service import DashboardService
 from pawguard.modules.auth.rbac import require_permission
+from pawguard.redis.client import RedisClient, get_redis
 
 admin_dashboard_router = APIRouter(prefix="/admin/dashboard", tags=["admin-dashboard"])
 
 
-def get_dashboard_service(db: AsyncSession = Depends(get_db)) -> DashboardService:
+def get_dashboard_service(
+    db: AsyncSession = Depends(get_db),
+    redis: RedisClient = Depends(get_redis),
+) -> DashboardService:
     repo = DashboardRepository(db)
-    return DashboardService(repo)
+    return DashboardService(repo, redis=redis)
 
 
 @admin_dashboard_router.get(

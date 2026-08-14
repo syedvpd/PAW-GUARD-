@@ -207,6 +207,15 @@ class RescueDispatch(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
         back_populates="dispatch", cascade="all, delete-orphan"
     )
 
+    @property
+    def status(self) -> Any:
+        return self.rescue_request.status
+
+    @property
+    def ticket_number(self) -> str:
+        return self.rescue_request.ticket_number
+
+
 
 class RescueDispatchAgent(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     """Association of a rescue dispatch to one of its assigned field agents.

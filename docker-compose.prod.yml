@@ -4,6 +4,14 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
+    # Run multiple uvicorn workers so a single container can utilise several
+    # CPUs. Each worker opens its own DB pool, so the per-instance pool size is
+    # deliberately small to stay under Supabase' 60-connection ceiling even when
+    # this service is scaled horizontally (4 workers x (8 + 4 overflow) = 48).
+    command: ["uvicorn", "pawguard.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+    environment:
+      DATABASE_POOL_SIZE: "8"
+      DATABASE_MAX_OVERFLOW: "4"
     ports:
       - "8000:8000"
     env_file:

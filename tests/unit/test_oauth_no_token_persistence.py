@@ -31,6 +31,8 @@ _OAUTH_ACCOUNT_COLUMNS = {
     "provider_email",
     "display_name",
     "picture_url",
+    "created_by",
+    "updated_by",
 }
 
 

@@ -11,6 +11,8 @@ from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import selectinload
+
 
 from pawguard.core.exceptions import (
     ConflictError,
@@ -962,3 +964,123 @@ class RescueService:
             )
 
         return count
+
+    async def update_agent_location(
+        self,
+        agent_id: uuid.UUID,
+        latitude: float,
+        longitude: float,
+    ) -> None:
+        """Update an agent's current coordinates in Redis with a heartbeat TTL (PRR 3.2)."""
+        key = "rescue:agent_locations"
+        active_key = f"rescue:agent_active:{agent_id}"
+
+        # 1. Update geolocation set
+        await self._redis.geoadd(key, (longitude, latitude, str(agent_id)))
+        # 2. Set liveness/active status heartbeat (5 minutes TTL)
+        await self._redis.set(active_key, "1", ex=300)
+
+    async def get_nearest_agents(
+        self,
+        latitude: float,
+        longitude: float,
+        radius_km: float = 50.0,
+    ) -> list[dict[str, Any]]:
+        """Suggest nearest active agents within radius_km (PRR 3.2).
+
+        Queries the Redis geo-index, filters for active heartbeats, and retrieves
+        matching user details from the database. Falls back to listing all active
+        rescue agents if Redis is empty/unconfigured.
+        """
+        key = "rescue:agent_locations"
+        nearby_agents = []
+
+        try:
+            # Query Redis for members within radius
+            # redis-py geosearch returns [[member, distance, (lng, lat)], ...]
+            raw_results = await self._redis.geosearch(
+                key,
+                longitude=longitude,
+                latitude=latitude,
+                radius=radius_km,
+                unit="km",
+                withdist=True,
+                withcoord=True,
+            )
+        except Exception as exc:
+            logger.warning("Redis geosearch failed, using DB fallback: %s", exc)
+            raw_results = []
+
+        # Parse geosearch results: [[agent_id, distance_km, (lng, lat)], ...]
+        agent_geo_data = {}
+        for res in raw_results:
+            if isinstance(res, (list, tuple)) and len(res) >= 3:
+                member_id_str, dist, coord = res[0], res[1], res[2]
+            else:
+                continue
+            
+            try:
+                member_uuid = uuid.UUID(member_id_str)
+            except ValueError:
+                continue
+
+            # Check heartbeat liveness
+            active = await self._redis.get(f"rescue:agent_active:{member_id_str}")
+            if active:
+                agent_geo_data[member_uuid] = {
+                    "distance_km": float(dist),
+                    "longitude": float(coord[0]) if coord else None,
+                    "latitude": float(coord[1]) if coord else None,
+                }
+
+        # Query users from the DB
+        if agent_geo_data:
+            stmt = select(User).options(selectinload(User.roles)).where(
+                User.id.in_(agent_geo_data.keys()),
+                User.deleted_at.is_(None),
+                User.is_active.is_(True),
+            )
+            users = (await self._repo._session.execute(stmt)).scalars().all()
+            for user in users:
+                geo = agent_geo_data[user.id]
+                nearby_agents.append({
+                    "agent_id": user.id,
+                    "name": user.full_name,
+                    "email": user.email,
+                    "phone": user.phone,
+                    "distance_km": geo["distance_km"],
+                    "latitude": geo["latitude"],
+                    "longitude": geo["longitude"],
+                })
+            # Sort by distance
+            nearby_agents.sort(key=lambda x: x["distance_km"] or 0.0)
+
+        # Fallback: if no active agents found in Redis, list all active rescue agents from DB
+        if not nearby_agents:
+            from pawguard.modules.auth.models import Role, UserRole
+            stmt = (
+                select(User)
+                .options(selectinload(User.roles))
+                .join(UserRole, UserRole.user_id == User.id)
+                .join(Role, Role.id == UserRole.role_id)
+                .where(
+                    User.is_active.is_(True),
+                    User.deleted_at.is_(None),
+                    Role.name.in_(["rescue_agent", "rescue_coordinator", "super_admin"]),
+                )
+                .distinct()
+            )
+            fallback_users = (await self._repo._session.execute(stmt)).scalars().all()
+            for user in fallback_users:
+                nearby_agents.append({
+                    "agent_id": user.id,
+                    "name": user.full_name,
+                    "email": user.email,
+                    "phone": user.phone,
+                    "distance_km": None,
+                    "latitude": None,
+                    "longitude": None,
+                })
+
+        return nearby_agents
+

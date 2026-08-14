@@ -274,12 +274,31 @@ class RescueDispatchResponse(BaseModel):
     escalation_type: RescueEscalationType | None
     escalation_notes: str | None
     notes: str | None
+    status: RescueStatus | None = None
+    ticket_number: str | None = None
+
 
     _normalise_failure = field_validator("failure_reason", mode="before")(
         lambda v: None if v is None else normalise_failure_reason(v)
     )
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class AgentLocationUpdate(BaseModel):
+    latitude: float = Field(..., ge=-90.0, le=90.0, examples=[17.4482])
+    longitude: float = Field(..., ge=-180.0, le=180.0, examples=[78.3741])
+
+
+class NearbyAgentResponse(BaseModel):
+    agent_id: uuid.UUID
+    name: str
+    email: str | None = None
+    phone: str | None = None
+    distance_km: float | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+
 
 
 class RescueReportCreate(BaseModel):

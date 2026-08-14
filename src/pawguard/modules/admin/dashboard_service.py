@@ -1,126 +1,89 @@
 """DashboardService: aggregates data across all modules for admin dashboard (RULE-003)."""
 
+from contextlib import suppress
 from typing import Any
 
 from pawguard.modules.admin.dashboard_repository import DashboardRepository
+from pawguard.redis.client import RedisClient
+from pawguard.services.cache_service import CacheService
+
+# Admin overview metrics are read-heavy aggregates. A short TTL absorbs the
+# repeated polling typical of dashboard UIs without serving stale data for long.
+ADMIN_DASHBOARD_TTL = 30  # seconds
 
 
 class DashboardService:
-    def __init__(self, repository: DashboardRepository) -> None:
+    def __init__(self, repository: DashboardRepository, redis: RedisClient | None = None) -> None:
         self._repo = repository
+        self._redis = redis
+
+    async def _cached(self, key: str, producer) -> Any:
+        """Return cached aggregate when Redis is available, else compute fresh.
+
+        Caching is best-effort: a missing/unavailable Redis or a failed write
+        must never turn a dashboard read into an error (CACHE CONTRACT).
+        """
+        if self._redis is None:
+            return await producer()
+        cache = CacheService(self._redis, namespace="admin_dashboard")
+        try:
+            cached = await cache.get(key)
+        except Exception:
+            cached = None
+        if cached is not None:
+            return cached
+        data = await producer()
+        with suppress(Exception):
+            await cache.set(key, data, ttl_seconds=ADMIN_DASHBOARD_TTL)
+        return data
 
     async def get_system_metrics(self) -> dict[str, int]:
-        total_users = await self._repo.get_total_users_count()
-        active_users = await self._repo.get_active_users_count()
-        total_roles = await self._repo.get_total_roles_count()
-        active_sessions = await self._repo.get_active_sessions_count()
-        return {
-            "total_users": total_users,
-            "active_users": active_users,
-            "total_roles": total_roles,
-            "active_sessions": active_sessions,
-        }
+        return await self._cached("system_metrics", self._repo.get_system_metrics)
 
     async def get_summary(self) -> dict[str, Any]:
-        users = await self._repo.get_total_users_count()
-        dogs = await self._repo.get_total_dogs_count()
-        adoptable = await self._repo.get_adoptable_dogs_count()
-        pending_adoptions = await self._repo.get_pending_adoptions_count()
-        active_sessions = await self._repo.get_active_sessions_count()
-        open_grievances = await self._repo.get_open_grievances()
-        unread_notifications = await self._repo.get_unread_notifications_count()
-        active_fosters = await self._repo.get_active_fosters()
-        shelter = await self._repo.get_shelter_occupancy()
-        verified_users = await self._repo.get_verified_users_count()
-
-        return {
-            "total_users": users,
-            "verified_users": verified_users,
-            "total_dogs": dogs,
-            "adoptable_dogs": adoptable,
-            "pending_adoptions": pending_adoptions,
-            "active_sessions": active_sessions,
-            "open_grievances": open_grievances,
-            "unread_notifications": unread_notifications,
-            "active_foster_placements": active_fosters,
-            "shelter_occupancy": shelter,
-        }
+        return await self._cached("summary", self._repo.get_summary)
 
     async def get_kpis(self) -> dict[str, Any]:
-        rescue_kpis = await self._repo.get_rescue_kpis()
-        donation_totals = await self._repo.get_donation_totals()
-        adoption_rate = await self._repo.get_adoption_rate()
-        volunteer_hours = await self._repo.get_volunteer_hours()
-        feedback = await self._repo.get_feedback_summary()
-
-        return {
-            "rescue_kpis": rescue_kpis,
-            "donation_totals": donation_totals,
-            "adoption_rate_pct": adoption_rate,
-            "total_volunteer_hours": volunteer_hours,
-            "feedback": feedback,
-        }
+        return await self._cached("kpis", self._repo.get_kpis)
 
     async def get_charts(self) -> dict[str, Any]:
-        adoption_trend = await self._repo.get_monthly_adoption_trend()
-        rescue_trend = await self._repo.get_monthly_rescue_trend()
-        donation_trend = await self._repo.get_monthly_donation_trend()
-        breed_distribution = await self._repo.get_dog_breed_distribution()
-
-        return {
-            "adoption_trend": adoption_trend,
-            "rescue_trend": rescue_trend,
-            "donation_trend": donation_trend,
-            "breed_distribution": breed_distribution,
-        }
+        return await self._cached("charts", self._repo.get_charts)
 
     async def get_recent_activity(self, limit: int = 20) -> list[dict[str, Any]]:
-        return await self._repo.get_recent_activity(limit=limit)
+        return await self._cached(
+            f"recent_activity:{limit}",
+            lambda: self._repo.get_recent_activity(limit=limit),
+        )
 
     async def get_inventory_alerts(self) -> dict[str, Any]:
-        alerts = await self._repo.get_inventory_alerts()
-        expiring = await self._repo.count_expiring_inventory(days=30)
-        return {"low_stock_items": alerts, "expiring_within_30_days": expiring}
+        return await self._cached("inventory_alerts", self._repo.get_inventory_alerts)
 
     async def get_donation_summary(self) -> dict[str, Any]:
-        totals = await self._repo.get_donation_totals()
-        recent = await self._repo.get_recent_donations(days=30)
-        return {"all_time": totals, "last_30_days": recent}
+        return await self._cached("donation_summary", self._repo.get_donation_summary)
 
     async def get_rescue_stats(self) -> dict[str, Any]:
-        kpis = await self._repo.get_rescue_kpis()
-        by_status = await self._repo.count_rescues_by_status()
-        return {"kpis": kpis, "by_status": by_status}
+        return await self._cached("rescue_stats", self._repo.get_rescue_stats)
 
     async def get_medical_stats(self) -> dict[str, Any]:
-        return await self._repo.get_medical_stats()
+        return await self._cached("medical_stats", self._repo.get_medical_stats)
 
     async def get_adoption_stats(self) -> dict[str, Any]:
-        by_status = await self._repo.count_adoptions_by_status()
-        rate = await self._repo.get_adoption_rate()
-        return {"by_status": by_status, "adoption_rate_pct": rate}
+        return await self._cached("adoption_stats", self._repo.get_adoption_stats)
 
     async def get_volunteer_stats(self) -> dict[str, Any]:
-        by_status = await self._repo.count_volunteers_by_status()
-        hours = await self._repo.get_volunteer_hours()
-        return {"by_status": by_status, "total_hours_logged": hours}
+        return await self._cached("volunteer_stats", self._repo.get_volunteer_stats)
 
     async def get_notification_summary(self) -> dict[str, Any]:
-        unread = await self._repo.get_unread_notifications_count()
-        return {"unread_count": unread}
+        return await self._cached("notification_summary", self._repo.get_notification_summary)
 
     async def get_shelter_stats(self) -> dict[str, Any]:
-        occupancy = await self._repo.get_shelter_occupancy()
-        dogs_by_status = await self._repo.count_dogs_by_status()
-        return {"occupancy": occupancy, "dogs_by_status": dogs_by_status}
+        return await self._cached("shelter_stats", self._repo.get_shelter_stats)
 
     async def get_foster_stats(self) -> dict[str, Any]:
-        return await self._repo.get_foster_stats()
+        return await self._cached("foster_stats", self._repo.get_foster_stats)
 
     async def get_lost_found_stats(self) -> dict[str, Any]:
-        return await self._repo.get_active_lost_found()
+        return await self._cached("lost_found_stats", self._repo.get_lost_found_stats)
 
     async def get_grievance_stats(self) -> dict[str, Any]:
-        by_status = await self._repo.count_grievances_by_status()
-        feedback = await self._repo.get_feedback_summary()
-        return {"by_status": by_status, "feedback": feedback}
+        return await self._cached("grievance_stats", self._repo.get_grievance_stats)

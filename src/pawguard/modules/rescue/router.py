@@ -33,6 +33,8 @@ from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.rescue.models import RescueRequest, RescueSeverity, RescueStatus
 from pawguard.modules.rescue.repository import RescueRepository
 from pawguard.modules.rescue.schemas import (
+    AgentLocationUpdate,
+    NearbyAgentResponse,
     PublicRescueStatusResponse,
     RescueAssignCoordinator,
     RescueDispatchCreate,
@@ -650,3 +652,49 @@ async def bulk_delete_rescue_requests(
             deleted_count=deleted,
         ),
     )
+
+
+@router.post(
+    "/agents/location",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(require_permission("rescue:execute"))],
+)
+async def update_agent_location(
+    payload: AgentLocationUpdate,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: RescueService = Depends(get_rescue_service),
+) -> ApiResponse[None]:
+    """Update active agent location heartbeat (PRR 3.2)."""
+    await service.update_agent_location(
+        agent_id=current_user.id,
+        latitude=payload.latitude,
+        longitude=payload.longitude,
+    )
+    return ApiResponse(message="Agent location updated.")
+
+
+@router.get(
+    "/{request_id}/suggest-agents",
+    response_model=ApiResponse[list[NearbyAgentResponse]],
+    dependencies=[Depends(require_permission("rescue:dispatch"))],
+)
+async def suggest_nearest_agents(
+    request_id: uuid.UUID,
+    radius: float = Query(50.0, ge=0.1, le=500.0, description="Search radius in kilometers"),
+    service: RescueService = Depends(get_rescue_service),
+) -> ApiResponse[list[NearbyAgentResponse]]:
+    """Suggest nearest active agents for a rescue request (PRR 3.2)."""
+    # Fetch request coordinates
+    rescue_request = await service.get_request(request_id)
+    if rescue_request.latitude is None or rescue_request.longitude is None:
+        # Graceful fallback: return fallback list from service with no distance sorting
+        agents = await service.get_nearest_agents(0.0, 0.0, radius_km=radius)
+    else:
+        agents = await service.get_nearest_agents(
+            latitude=float(rescue_request.latitude),
+            longitude=float(rescue_request.longitude),
+            radius_km=radius,
+        )
+    data = [NearbyAgentResponse.model_validate(a) for a in agents]
+    return ApiResponse(data=data, message="Nearby agents suggested.")
+
