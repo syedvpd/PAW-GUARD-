@@ -151,6 +151,11 @@ class DogRepository:
             stmt = stmt.where(DogProfile.status == status)
         if is_adoptable is not None:
             stmt = stmt.where(DogProfile.is_adoptable == is_adoptable)
+            if is_adoptable:
+                # An adopted dog is never adoptable. Exclude it defensively so an
+                # inconsistent ``is_adoptable`` flag cannot leak already-adopted
+                # animals into the public adoption directory.
+                stmt = stmt.where(DogProfile.status != DogStatus.ADOPTED)
         if breed is not None:
             stmt = stmt.where(DogProfile.breed.ilike(f"%{breed}%"))
         if breed_classification is not None:

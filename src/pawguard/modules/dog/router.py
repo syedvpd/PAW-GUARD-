@@ -190,6 +190,8 @@ async def get_dog(
 
     if not is_staff and not dog.is_adoptable:
         raise NotFoundError("Dog profile is currently in intake/treatment and not yet available for public adoption.")
+    if not is_staff and dog.status == DogStatus.ADOPTED:
+        raise NotFoundError("This dog has already been adopted and is no longer available.")
 
     data = DogProfileResponse.model_validate(dog)
     if not is_staff:
