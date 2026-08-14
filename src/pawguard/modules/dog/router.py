@@ -32,12 +32,16 @@ from pawguard.modules.dog.models import (
     DogStatus,
     DogTemperament,
 )
+from pawguard.modules.companion_pet.router import get_companion_pet_service
+from pawguard.modules.companion_pet.service import CompanionPetService
 from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.dog.schemas import (
     DogActivityLogResponse,
     DogProfileCreate,
     DogProfileResponse,
     DogProfileUpdate,
+    DogSafetyTagProvisionResponse,
+    DogSafetyTagResponse,
     DogStatusUpdate,
     DogWeightLogCreate,
     DogWeightLogResponse,
@@ -46,6 +50,7 @@ from pawguard.modules.dog.schemas import (
 from pawguard.modules.dog.service import DogService
 from pawguard.redis.client import RedisClient, get_redis
 from pawguard.services.audit_service import AuditService
+
 
 router = APIRouter(prefix="/dogs", tags=["dogs"])
 
@@ -421,14 +426,75 @@ async def bulk_delete_dogs(
     current_user: CurrentUser = Depends(get_current_user),
     service: DogService = Depends(get_dog_service),
 ) -> ApiResponse[BulkDeleteResponse]:
-    deleted = await service.bulk_soft_delete(
-        payload.ids,
-        actor_id=current_user.id,
-        ip_address=resolve_client_ip(request),
-    )
     return ApiResponse(
         data=BulkDeleteResponse(
             message=f"{deleted} dog(s) deleted.",
             deleted_count=deleted,
         ),
     )
+
+
+@router.post(
+    "/{dog_id}/safety-tag",
+    response_model=ApiResponse[DogSafetyTagProvisionResponse],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("safety_tag:manage"))],
+    summary="Provision a permanent Safety Tag for a Dog Master profile",
+)
+async def provision_dog_safety_tag(
+    dog_id: uuid.UUID,
+    request: Request,
+    force_reissue: bool = Query(False, description="If true, revokes existing active tag and provisions a replacement token."),
+    current_user: CurrentUser = Depends(get_current_user),
+    service: CompanionPetService = Depends(get_companion_pet_service),
+) -> ApiResponse[DogSafetyTagProvisionResponse]:
+    tag, raw_token = await service.provision_dog_safety_tag(
+        dog_id, current_user, force_reissue=force_reissue, ip_address=resolve_client_ip(request)
+    )
+    data = DogSafetyTagProvisionResponse(
+        id=tag.id,
+        dog_id=tag.dog_id,
+        pet_id=tag.pet_id,
+        token_prefix=tag.token_prefix,
+        is_active=tag.is_active,
+        last_scanned_at=tag.last_scanned_at,
+        scan_count=tag.scan_count,
+        created_at=tag.created_at,
+        updated_at=tag.updated_at,
+        raw_token=raw_token,
+    )
+    return ApiResponse(data=data, message="Safety Tag provisioned successfully.")
+
+
+@router.get(
+    "/{dog_id}/safety-tag",
+    response_model=ApiResponse[DogSafetyTagResponse],
+    dependencies=[Depends(require_permission("safety_tag:manage"))],
+    summary="Get active Safety Tag metadata for a Dog Master profile",
+)
+async def get_dog_safety_tag(
+    dog_id: uuid.UUID,
+    service: CompanionPetService = Depends(get_companion_pet_service),
+) -> ApiResponse[DogSafetyTagResponse]:
+    tag = await service.get_dog_safety_tag(dog_id)
+    if tag is None:
+        raise NotFoundError("Safety Tag not found for this dog.")
+    data = DogSafetyTagResponse.model_validate(tag)
+    return ApiResponse(data=data)
+
+
+@router.delete(
+    "/{dog_id}/safety-tag",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(require_permission("safety_tag:manage"))],
+    summary="Deactivate/revoke active Safety Tag for tag replacement",
+)
+async def deactivate_dog_safety_tag(
+    dog_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: CompanionPetService = Depends(get_companion_pet_service),
+) -> ApiResponse[None]:
+    await service.deactivate_dog_safety_tag(dog_id, current_user, ip_address=resolve_client_ip(request))
+    return ApiResponse(message="Safety Tag deactivated successfully.")
+

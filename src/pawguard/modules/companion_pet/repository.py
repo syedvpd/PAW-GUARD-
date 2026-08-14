@@ -5,8 +5,10 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 
 from pawguard.core.pagination import PageParams
 from pawguard.core.search import SortParams, apply_sorting, build_search_filter
@@ -87,21 +89,43 @@ class CompanionPetRepository:
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
-    async def get_active_tag_for_pet(self, pet_id: uuid.UUID) -> SafetyTag | None:
+    async def get_active_tag_for_dog(self, dog_id: uuid.UUID) -> SafetyTag | None:
         stmt = select(SafetyTag).where(
-            SafetyTag.pet_id == pet_id,
+            SafetyTag.dog_id == dog_id,
             SafetyTag.is_active.is_(True),
             SafetyTag.deleted_at.is_(None),
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
-    async def get_tag_by_hash(self, token_hash: str) -> SafetyTag | None:
+    async def deactivate_active_tag_for_dog(self, dog_id: uuid.UUID) -> None:
+        tag = await self.get_active_tag_for_dog(dog_id)
+        if tag is not None:
+            tag.is_active = False
+            await self._session.flush()
+
+    async def get_active_tag_for_pet(self, pet_id: uuid.UUID) -> SafetyTag | None:
         stmt = select(SafetyTag).where(
-            SafetyTag.token_hash == token_hash,
+            or_(
+                SafetyTag.pet_id == pet_id,
+                SafetyTag.dog_id == select(CompanionPet.original_dog_id).where(CompanionPet.id == pet_id).scalar_subquery(),
+            ),
             SafetyTag.is_active.is_(True),
             SafetyTag.deleted_at.is_(None),
         )
+        return (await self._session.execute(stmt)).scalars().first()
+
+    async def get_tag_by_hash(self, token_hash: str) -> SafetyTag | None:
+        stmt = (
+            select(SafetyTag)
+            .options(selectinload(SafetyTag.dog), selectinload(SafetyTag.pet))
+            .where(
+                SafetyTag.token_hash == token_hash,
+                SafetyTag.is_active.is_(True),
+                SafetyTag.deleted_at.is_(None),
+            )
+        )
         return (await self._session.execute(stmt)).scalar_one_or_none()
+
 
     async def create_tag(self, tag: SafetyTag) -> SafetyTag:
         self._session.add(tag)

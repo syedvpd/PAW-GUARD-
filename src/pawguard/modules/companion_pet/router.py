@@ -473,23 +473,37 @@ async def scan_safety_tag(
     request: Request,
     service: CompanionPetService = Depends(get_companion_pet_service),
 ) -> ApiResponse[SafetyTagScanResponse]:
-    _tag, pet, lost_info = await service.scan_safety_tag(payload.token, resolve_client_ip(request))
-    photo_url = await service.get_pet_photo_url(pet.id)
-    return ApiResponse(
-        data=SafetyTagScanResponse(
-            pet_id=pet.id,
-            name=pet.name,
-            species=pet.species,
-            breed=pet.breed,
-            color=pet.color,
-            emergency_notes=pet.emergency_notes,
-            photo_url=photo_url,
-            status=lost_info["status"],
-            lost_report_id=lost_info["lost_report_id"],
-            lost_location=lost_info["lost_location"],
-            lost_at=lost_info["lost_at"],
-        )
+    tag, pet, lost_info = await service.scan_safety_tag(payload.token, resolve_client_ip(request))
+    photo_url = await service.get_pet_photo_url(pet.id) if pet else None
+    data = SafetyTagScanResponse(
+        id=tag.id,
+        dog_id=tag.dog_id,
+        pet_id=pet.id if pet else tag.pet_id,
+        token_prefix=tag.token_prefix,
+        is_active=tag.is_active,
+        last_scanned_at=tag.last_scanned_at,
+        scan_count=tag.scan_count,
+        name=lost_info.get("name", "Animal"),
+        species="dog",
+        breed=lost_info.get("breed"),
+        color=lost_info.get("color"),
+        gender=lost_info.get("gender"),
+        microchip_id=lost_info.get("microchip_id"),
+        emergency_notes=pet.emergency_notes if pet else None,
+        photo_url=photo_url,
+        status=lost_info.get("status", "safe"),
+        is_lost=lost_info.get("is_lost", False),
+        lost_report_id=lost_info.get("lost_report_id"),
+        lost_location=lost_info.get("lost_location"),
+        lost_at=lost_info.get("lost_at"),
+        facility_name=lost_info.get("facility_name"),
+        facility_phone=lost_info.get("facility_phone"),
+        foster_name=lost_info.get("foster_name"),
+        foster_phone=lost_info.get("foster_phone"),
+        owner_name=lost_info.get("owner_name"),
+        owner_phone=lost_info.get("owner_phone"),
     )
+    return ApiResponse(data=data)
 
 
 @router.post(

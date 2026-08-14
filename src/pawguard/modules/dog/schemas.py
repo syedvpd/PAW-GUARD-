@@ -215,3 +215,26 @@ class DogActivityLogResponse(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class DogSafetyTagResponse(BaseModel):
+    """Public/Admin view of a Dog Master's Safety Tag."""
+
+    id: uuid.UUID
+    dog_id: uuid.UUID
+    pet_id: uuid.UUID | None = None
+    token_prefix: str
+    is_active: bool
+    last_scanned_at: datetime | None = None
+    scan_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DogSafetyTagProvisionResponse(DogSafetyTagResponse):
+    """Response when a Safety Tag is provisioned; exposes raw_token ONLY once."""
+
+    raw_token: str
+

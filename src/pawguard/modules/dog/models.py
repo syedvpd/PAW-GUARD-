@@ -3,15 +3,19 @@
 import uuid
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pawguard.db.base import Base
 from pawguard.db.mixins import AuditMixin, SoftDeleteMixin, TimestampMixin, UUIDPkMixin
+
+if TYPE_CHECKING:
+    from pawguard.modules.companion_pet.models import SafetyTag
+
 
 
 class DogStatus(StrEnum):
@@ -164,6 +168,9 @@ class DogProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base)
 
     is_adoptable: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_quarantine_passed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    safety_tags: Mapped[list["SafetyTag"]] = relationship("SafetyTag", back_populates="dog", cascade="all, delete-orphan")
+
 
 
 class DogWeightLog(UUIDPkMixin, TimestampMixin, AuditMixin, Base):

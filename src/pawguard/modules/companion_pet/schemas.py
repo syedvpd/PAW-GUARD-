@@ -194,18 +194,43 @@ class SafetyTagScanRequest(BaseModel):
 
 
 class SafetyTagScanResponse(BaseModel):
-    pet_id: uuid.UUID
+    id: uuid.UUID | None = None
+    dog_id: uuid.UUID | None = None
+    pet_id: uuid.UUID | None = None
+    token_prefix: str | None = None
+    is_active: bool = True
+    last_scanned_at: datetime | None = None
+    scan_count: int = 0
+
+    # Resolved Animal Master Attributes
     name: str
-    species: str
-    breed: str | None
-    color: str | None
-    emergency_notes: str | None
+    species: str = "dog"
+    breed: str | None = None
+    color: str | None = None
+    gender: str | None = None
+    microchip_id: str | None = None
+    emergency_notes: str | None = None
     photo_url: str | None = None
-    status: str = Field("safe", description="Current status: safe, lost, found, reunited, or inactive.")
+
+    # Dynamic Lifecycle State ("shelter", "fostered", "clinic", "adopted", "rescued", "safe", "lost", etc.)
+    status: str = Field("safe", description="Current dynamic status of the animal.")
+
+    # Lost & Found Banner
+    is_lost: bool = False
     lost_report_id: uuid.UUID | None = None
     lost_location: str | None = None
     lost_at: datetime | None = None
-    message: str = "If this pet needs urgent care, contact a local veterinary clinic."
+
+    # Public-Safe Contact Details (Masked PII)
+    owner_name: str | None = None
+    owner_phone: str | None = None
+    foster_name: str | None = None
+    foster_phone: str | None = None
+    facility_name: str | None = None
+    facility_phone: str | None = None
+
+    message: str = "If this animal needs urgent care, contact PawGuard emergency rescue or a local veterinary clinic."
+
 
 
 class VetClinicCreate(BaseModel):

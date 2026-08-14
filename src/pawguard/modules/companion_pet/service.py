@@ -6,9 +6,13 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+
+from pawguard.modules.dog.models import DogProfile
+
 
 from pawguard.core.exceptions import (
     ConflictError,
@@ -69,6 +73,24 @@ def _hash_tag_token(raw_token: str) -> str:
 
 def _new_tag_token() -> str:
     return secrets.token_urlsafe(32)
+
+
+def _mask_pii(text: str | None) -> str | None:
+    if not text:
+        return None
+    text = text.strip()
+    if "@" in text:
+        parts = text.split("@")
+        name = parts[0]
+        if len(name) <= 2:
+            masked_name = name[0] + "*"
+        else:
+            masked_name = name[0] + "*" * (len(name) - 2) + name[-1]
+        return f"{masked_name}@{parts[1]}"
+    if len(text) >= 7:
+        return text[:3] + "*****" + text[-4:]
+    return "*****"
+
 
 
 class CompanionPetService:
@@ -397,19 +419,85 @@ class CompanionPetService:
         await self._authorize_pet(current_user, pet)
         return await self._storage.get_download_url(file_id)
 
+    async def provision_dog_safety_tag(
+        self,
+        dog_id: uuid.UUID,
+        current_user: CurrentUser,
+        force_reissue: bool = False,
+        ip_address: str | None = None,
+    ) -> tuple[SafetyTag, str]:
+        stmt = select(DogProfile).where(DogProfile.id == dog_id, DogProfile.deleted_at.is_(None))
+        dog = (await self._session.execute(stmt)).scalar_one_or_none()
+        if dog is None:
+            raise NotFoundError("Dog profile not found.")
+
+        existing_tag = await self._repo.get_active_tag_for_dog(dog.id)
+        if existing_tag is not None and not force_reissue:
+            raise ConflictError(
+                "Active Safety Tag already exists for this dog. Use force_reissue=true or tag replacement flow to generate a new QR token."
+            )
+
+        if existing_tag is not None and force_reissue:
+            existing_tag.is_active = False
+            await self._session.flush()
+
+        raw_token = _new_tag_token()
+        tag = await self._repo.create_tag(
+            SafetyTag(
+                dog_id=dog.id,
+                pet_id=None,
+                token_hash=_hash_tag_token(raw_token),
+                token_prefix=raw_token[:8],
+                is_active=True,
+            )
+        )
+        await self._audit_event(
+            AuthAuditEventType.SAFETY_TAG_PROVISIONED,
+            current_user.id,
+            ip_address,
+            {"dog_id": dog.id, "tag_id": tag.id},
+        )
+        return tag, raw_token
+
+    async def get_dog_safety_tag(self, dog_id: uuid.UUID) -> SafetyTag | None:
+        return await self._repo.get_active_tag_for_dog(dog_id)
+
+    async def deactivate_dog_safety_tag(
+        self, dog_id: uuid.UUID, current_user: CurrentUser, ip_address: str | None = None
+    ) -> None:
+        await self._repo.deactivate_active_tag_for_dog(dog_id)
+        await self._audit_event(
+            AuthAuditEventType.SAFETY_TAG_PROVISIONED,
+            current_user.id,
+            ip_address,
+            {"dog_id": dog_id, "action": "deactivated"},
+        )
+
     async def provision_safety_tag(
         self, pet_id: uuid.UUID, current_user: CurrentUser, ip_address: str | None = None
     ) -> tuple[SafetyTag, str]:
         pet = await self._get_pet(pet_id)
         await self._authorize_pet(current_user, pet, owner_only=True)
+        if pet.original_dog_id:
+            tag = await self._repo.get_active_tag_for_dog(pet.original_dog_id)
+            if tag is not None:
+                if tag.pet_id is None:
+                    tag.pet_id = pet.id
+                    await self._session.flush()
+                raw_token = _new_tag_token()
+                return tag, raw_token
+            return await self.provision_dog_safety_tag(pet.original_dog_id, current_user, force_reissue=True, ip_address=ip_address)
+
         raw_token = _new_tag_token()
         tag = await self._repo.get_active_tag_for_pet(pet.id)
         if tag is None:
             tag = await self._repo.create_tag(
                 SafetyTag(
+                    dog_id=pet.id,
                     pet_id=pet.id,
                     token_hash=_hash_tag_token(raw_token),
                     token_prefix=raw_token[:8],
+                    is_active=True,
                 )
             )
         else:
@@ -431,38 +519,110 @@ class CompanionPetService:
     ) -> None:
         pet = await self._get_pet(pet_id)
         await self._authorize_pet(current_user, pet, owner_only=True)
+        if pet.original_dog_id:
+            await self.deactivate_dog_safety_tag(pet.original_dog_id, current_user, ip_address)
         tag = await self._repo.get_active_tag_for_pet(pet.id)
         if tag is not None:
             tag.is_active = False
             await self._session.flush()
-
     async def scan_safety_tag(
         self, raw_token: str, ip_address: str | None = None
-    ) -> tuple[SafetyTag, CompanionPet, dict[str, Any]]:
+    ) -> tuple[SafetyTag, CompanionPet | None, dict[str, Any]]:
         tag = await self._repo.get_tag_by_hash(_hash_tag_token(raw_token))
-        if tag is None:
+        if tag is None or not getattr(tag, "is_active", True):
             raise NotFoundError("Safety tag not found.")
-        pet = await self._get_pet(tag.pet_id)
-        if not pet.is_scan_enabled:
-            raise NotFoundError("Safety tag not found.")
+
         tag.last_scanned_at = datetime.now(UTC)
-        tag.scan_count = (tag.scan_count or 0) + 1
+        tag.scan_count = (getattr(tag, "scan_count", 0) or 0) + 1
         await self._session.flush()
 
-        lost_report = await self._repo.get_active_lost_report_for_pet(pet.id, pet.owner_id, pet.name)
+        dog = getattr(tag, "dog", None)
+        pet = getattr(tag, "pet", None)
+
+        if pet is None and getattr(tag, "pet_id", None):
+            try:
+                pet = await self._repo.get_pet(tag.pet_id)
+            except Exception:
+                pet = None
+
+        if dog is None and getattr(tag, "dog_id", None):
+            try:
+                dog_stmt = select(DogProfile).where(DogProfile.id == tag.dog_id, DogProfile.deleted_at.is_(None))
+                res = await self._session.execute(dog_stmt)
+                if hasattr(res, "scalar_one_or_none"):
+                    found_dog = res.scalar_one_or_none()
+                    if isinstance(found_dog, DogProfile):
+                        dog = found_dog
+            except Exception:
+                dog = None
+
+        if dog is None and pet is not None and getattr(pet, "original_dog_id", None):
+            try:
+                dog_stmt = select(DogProfile).where(DogProfile.id == pet.original_dog_id, DogProfile.deleted_at.is_(None))
+                res = await self._session.execute(dog_stmt)
+                if hasattr(res, "scalar_one_or_none"):
+                    found_dog = res.scalar_one_or_none()
+                    if isinstance(found_dog, DogProfile):
+                        dog = found_dog
+            except Exception:
+                dog = None
+
+        if pet is not None and getattr(pet, "is_scan_enabled", True) is False:
+            raise NotFoundError("Safety tag not found.")
+
+        search_id = pet.id if pet else (dog.id if dog else None)
+        owner_id = pet.owner_id if pet else None
+        pet_name = pet.name if pet else (dog.name if dog else "Animal")
+
+        lost_report = None
+        if search_id:
+            lost_report = await self._repo.get_active_lost_report_for_pet(search_id, owner_id, pet_name)
+
+        is_lost = lost_report is not None
+        status_str = "lost" if is_lost else (str(dog.status) if dog else "safe")
+
+        owner_name = None
+        owner_phone = None
+        if pet and getattr(pet, "owner", None):
+            owner_name = pet.owner.full_name
+            owner_phone = _mask_pii(pet.owner.phone)
+
+
+        foster_name = None
+        foster_phone = None
+        facility_name = None
+        facility_phone = None
+
+        if dog and getattr(dog, "shelter_facility", None):
+            facility_name = dog.shelter_facility.name
+            facility_phone = _mask_pii(dog.shelter_facility.phone)
 
         lost_info: dict[str, Any] = {
-            "status": "lost" if lost_report is not None else "safe",
+            "status": status_str,
+            "is_lost": is_lost,
             "lost_report_id": lost_report.id if lost_report else None,
             "lost_location": lost_report.location_address if lost_report else None,
             "lost_at": lost_report.lost_at if lost_report else None,
+            "dog_id": dog.id if dog else None,
+            "pet_id": pet.id if pet else None,
+            "name": pet_name,
+            "breed": pet.breed if pet else (dog.breed if dog else None),
+            "color": pet.color if pet else (dog.color if dog else None),
+            "gender": pet.sex if pet else (str(dog.gender) if dog else None),
+            "microchip_id": pet.microchip_id if pet else (dog.microchip_id if dog else None),
+            "facility_name": facility_name,
+            "facility_phone": facility_phone,
+            "foster_name": foster_name,
+            "foster_phone": foster_phone,
+            "owner_name": owner_name,
+            "owner_phone": owner_phone,
         }
 
         await self._audit_event(
             AuthAuditEventType.SAFETY_TAG_SCANNED,
             None,
             ip_address,
-            {"pet_id": pet.id, "tag_id": tag.id},
+            {"tag_id": tag.id, "dog_id": tag.dog_id, "pet_id": tag.pet_id},
         )
         return tag, pet, lost_info
 

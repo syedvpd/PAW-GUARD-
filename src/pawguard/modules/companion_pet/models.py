@@ -17,7 +17,8 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 
 from pawguard.db.base import Base
 from pawguard.db.mixins import AuditMixin, SoftDeleteMixin, TimestampMixin, UUIDPkMixin
@@ -180,13 +181,25 @@ class PetMedicalRecord(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin,
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pawguard.modules.dog.models import DogProfile
+
+
 class SafetyTag(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "pet_safety_tags"
 
-    pet_id: Mapped[uuid.UUID] = mapped_column(
+    dog_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("dog_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    pet_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("companion_pets.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
@@ -195,14 +208,18 @@ class SafetyTag(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     last_scanned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     scan_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
+    dog: Mapped["DogProfile"] = relationship("DogProfile", foreign_keys=[dog_id], lazy="joined")
+    pet: Mapped["CompanionPet | None"] = relationship("CompanionPet", foreign_keys=[pet_id], lazy="joined")
+
     __table_args__ = (
         Index(
-            "uq_pet_safety_tags_active_pet",
-            "pet_id",
+            "uq_pet_safety_tags_active_dog",
+            "dog_id",
             unique=True,
-            postgresql_where=text("deleted_at IS NULL AND is_active IS TRUE"),
+            postgresql_where=text("deleted_at IS NULL AND is_active IS TRUE AND dog_id IS NOT NULL"),
         ),
     )
+
 
 
 class PetReminder(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):

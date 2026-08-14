@@ -94,6 +94,8 @@ class RescueFailureReason(StrEnum):
 
 class RescueRequest(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "rescue_requests"
+    __table_args__ = {"extend_existing": True}
+
 
     ticket_number: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
     reporter_name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -156,6 +158,8 @@ class RescueRequest(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Ba
 
 class RescueDispatch(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "rescue_dispatches"
+    __table_args__ = {"extend_existing": True}
+
 
     rescue_request_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
@@ -231,6 +235,7 @@ class RescueDispatchAgent(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
         UniqueConstraint(
             "dispatch_id", "agent_id", name="uq_rescue_dispatch_agents_dispatch_agent"
         ),
+        {"extend_existing": True},
     )
 
     dispatch_id: Mapped[uuid.UUID] = mapped_column(
@@ -252,6 +257,8 @@ class RescueDispatchAgent(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
 
 class RescueReport(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "rescue_reports"
+    __table_args__ = {"extend_existing": True}
+
 
     rescue_request_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("rescue_requests.id", ondelete="CASCADE"), nullable=False
