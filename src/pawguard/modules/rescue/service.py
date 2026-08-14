@@ -614,7 +614,8 @@ class RescueService:
             # Store the canonical PRR 3.3 outcome code; legacy free text and
             # unknown values normalise to the enum (OTHER catch-all).
             dispatch.failure_reason = normalise_failure_reason(failure_reason).value
-            request.status = RescueStatus.VERIFIED  # Return back to verified queue
+            # A failed rescue is closed, not re-queued for verification.
+            request.status = RescueStatus.REJECTED
 
             # Release equipment checked out for the aborted dispatch (PRR 3.3).
             await self._fleet_service().release_equipment_for_dispatch(
@@ -692,6 +693,21 @@ class RescueService:
                     "auto_created": True,
                 },
             )
+
+        if self._redis is not None:
+            with contextlib.suppress(Exception):
+                keys = [
+                    "pawguard:hero_stats",
+                    "pawguard:transparency_stats",
+                    "hero_stats",
+                    "transparency_stats",
+                    "cache:dashboard:shelter",
+                    "cache:dashboard:rescue",
+                    "cache:dashboard:adoption",
+                    "cache:dashboard:summary",
+                ]
+                for key in keys:
+                    await self._redis.delete(key)
 
     async def get_request(self, request_id: uuid.UUID) -> RescueRequest:
         request = await self._repo.get_request_by_id(request_id)

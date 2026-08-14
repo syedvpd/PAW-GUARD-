@@ -77,7 +77,8 @@ async def promote_and_auth(
     role_row = (
         await db_session.execute(select(Role).where(Role.name == role))
     ).scalar_one()
-    user.roles.append(role_row)
+    if role_row not in user.roles:
+        user.roles.append(role_row)
     await db_session.commit()
 
     login = await client.post(

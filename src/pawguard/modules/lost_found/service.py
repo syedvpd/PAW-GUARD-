@@ -34,6 +34,7 @@ from pawguard.modules.lost_found.schemas import (
     PetSightingCreate,
     ReportMatchResponse,
 )
+from pawguard.modules.notifications.schemas import BroadcastCreate, NotificationSend
 from pawguard.modules.notifications.service import NotificationService
 from pawguard.services.audit_service import AuditService
 
@@ -142,6 +143,7 @@ class LostFoundService:
         pet_name = "your pet"
         if payload.pet_id:
             from sqlalchemy import select
+
             from pawguard.modules.companion_pet.models import CompanionPet
             stmt = select(CompanionPet).where(CompanionPet.id == payload.pet_id)
             pet = (await self._repo._session.execute(stmt)).scalar_one_or_none()
@@ -362,6 +364,10 @@ class LostFoundService:
         if match is None:
             raise NotFoundError("Report match record not found.")
         match.status = status
+        if status == MatchStatus.CONFIRMED:
+            # Workflow 6: release each party's contact to the other when the
+            # match is confirmed directly (non-claim path).
+            await self._release_contacts(match)
         return match
 
     async def get_match(self, match_id: uuid.UUID) -> ReportMatch:
@@ -476,6 +482,9 @@ class LostFoundService:
             await self.resolve_found_report(
                 match.found_report_id, actor_id=actor_id, ip_address=ip_address,
             )
+            # Workflow 6: release each party's contact to the other so the dog
+            # can be returned.
+            await self._release_contacts(match)
 
         if self._audit and actor_id:
             await self._audit.record(
@@ -680,3 +689,87 @@ class LostFoundService:
                 )
         except Exception as exc:
             logger.warning("Failed to notify lost/found match %s: %s", match.id, exc)
+        # Workflow 6: administrators are notified so they can oversee the
+        # reunification from a potential match.
+        try:
+            await self._notify_admins_of_match(match)
+        except Exception as exc:
+            logger.warning("Failed to notify admins of match %s: %s", match.id, exc)
+
+    async def _notify_admins_of_match(self, match: ReportMatch) -> None:
+        if self._notification_svc is None:
+            return
+        pet_name = match.lost_report.pet_name if (
+            match.lost_report and match.lost_report.pet_name
+        ) else "a pet"
+        await self._notification_svc.broadcast(
+            BroadcastCreate(
+                title=f"New lost & found match: {pet_name}",
+                body=(
+                    f"A potential match (confidence {match.confidence_score:.0f}%) was "
+                    f"identified between a lost and a found report. Please review the "
+                    f"reunification claim."
+                ),
+                notification_type="lost_found_match",
+                action_url=f"/lost-found/lost/{match.lost_report_id}/matches",
+                target_roles=["rescue_centre_admin", "system:admin"],
+            ),
+            user_ids=[],
+            actor_id=None,
+        )
+
+    async def _release_contacts(self, match: ReportMatch) -> None:
+        """Workflow 6: once a match is confirmed, release each reporter's contact
+        details to the other party (via in-app notification) so they can arrange
+        the dog's return. API responses keep contact details masked otherwise."""
+        if self._notification_svc is None:
+            return
+        lost = match.lost_report
+        found = match.found_report
+        if lost is None or found is None:
+            return
+        lost_user = lost.user
+        found_user = found.user
+        if lost_user is None or found_user is None:
+            return
+
+        await self._send_contact_release(
+            to_user=lost_user,
+            from_user=found_user,
+            pet_name=lost.pet_name,
+            title="Reunification confirmed - finder contact",
+            body=(
+                f"Your lost report is confirmed. The finder can be reached at: "
+                f"{found_user.full_name} ({found_user.email}, {found_user.phone})."
+            ),
+        )
+        await self._send_contact_release(
+            to_user=found_user,
+            from_user=lost_user,
+            pet_name=lost.pet_name,
+            title="Reunification confirmed - owner contact",
+            body=(
+                f"The owner of the pet you found can be reached at: "
+                f"{lost_user.full_name} ({lost_user.email}, {lost_user.phone})."
+            ),
+        )
+
+    async def _send_contact_release(
+        self, to_user: Any, from_user: Any, pet_name: str | None, title: str, body: str
+    ) -> None:
+        try:
+            await self._notification_svc.send_notification(
+                payload=NotificationSend(
+                    user_id=to_user.id,
+                    title=title,
+                    body=body,
+                    notification_type="lost_found_contact_release",
+                    send_email=False,
+                ),
+                user_email=getattr(to_user, "email", None),
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to release contact to user %s for pet %s: %s",
+                to_user.id, pet_name, exc,
+            )

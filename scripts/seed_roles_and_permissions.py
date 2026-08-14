@@ -185,6 +185,7 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
             pc.GRIEVANCE_UPDATE,
             pc.GRIEVANCE_ASSIGN,
             pc.GRIEVANCE_COMMENT,
+            pc.SYSTEM_ADMIN,
             pc.NOTIFICATION_READ,
             pc.DASHBOARD_RESCUE,
             pc.DASHBOARD_SHELTER,

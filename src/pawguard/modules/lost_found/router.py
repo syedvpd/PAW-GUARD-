@@ -4,7 +4,7 @@ import uuid
 from typing import Annotated
 
 from arq import ArqRedis
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.bulk import BulkDeleteRequest, BulkDeleteResponse
@@ -190,7 +190,11 @@ async def list_lost_reports(
     page: PageParams = Depends(page_params),
     sort: SortParams = Depends(sort_params),
     search: str | None = None,
-    status: ReportStatus | None = None,
+    status: ReportStatus | None = Query(
+        ReportStatus.ACTIVE,
+        description="Filter by status. Defaults to ACTIVE so resolved/reunited "
+        "and expired reports stay off the public lost-pet board.",
+    ),
     species: Species | None = None,
     current_user: CurrentUser | None = Depends(get_optional_current_user),
     service: LostFoundService = Depends(get_lost_found_service),
@@ -212,7 +216,11 @@ async def list_found_reports(
     page: PageParams = Depends(page_params),
     sort: SortParams = Depends(sort_params),
     search: str | None = None,
-    status: ReportStatus | None = None,
+    status: ReportStatus | None = Query(
+        ReportStatus.ACTIVE,
+        description="Filter by status. Defaults to ACTIVE so resolved/reunited "
+        "and expired reports stay off the public found-pet board.",
+    ),
     species: Species | None = None,
     current_user: CurrentUser | None = Depends(get_optional_current_user),
     service: LostFoundService = Depends(get_lost_found_service),

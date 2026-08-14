@@ -315,7 +315,7 @@ class TestRescueService:
             request_id, status=RescueStatus.REJECTED, agent_id=uuid.uuid4(),
             failure_reason="Animal fled", actor_id=uuid.uuid4(),
         )
-        assert result.status == RescueStatus.VERIFIED
+        assert result.status == RescueStatus.REJECTED
         mock_fleet.release_equipment_for_dispatch.assert_awaited_once()
         assert (
             mock_fleet.release_equipment_for_dispatch.call_args.kwargs["rescue_dispatch_id"]
@@ -414,7 +414,7 @@ class TestRescueService:
             request_id, status=RescueStatus.REJECTED, agent_id=uuid.uuid4(),
             failure_reason="Animal fled", actor_id=uuid.uuid4(),
         )
-        assert result.status == RescueStatus.VERIFIED
+        assert result.status == RescueStatus.REJECTED
         assert dispatch.failed_at is not None
         # Canonical PRR 3.3 outcome code stored, not free text.
         assert dispatch.failure_reason == RescueFailureReason.ANIMAL_FLED.value

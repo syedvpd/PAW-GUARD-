@@ -15,6 +15,7 @@ from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
 from pawguard.modules.auth.models import AuthAuditEventType
+from pawguard.modules.dog.models import DogStatus
 from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.inventory.models import MovementType
 from pawguard.modules.inventory.schemas import InventoryConsumptionItem, InventoryMovementCreate
@@ -131,6 +132,9 @@ class MedicalService:
             actor_id=actor_id,
             ip_address=ip_address,
         )
+        # Workflow 2: while under veterinary treatment the dog is in the clinic.
+        dog.status = DogStatus.CLINIC
+        await self._repo._session.flush()
         return treatment
 
     async def administer_vaccine(
@@ -265,6 +269,9 @@ class MedicalService:
         if clearance_payload.status == "approved":
             dog.is_adoptable = True
             dog.is_quarantine_passed = True
+            # Cleared for adoption: the dog returns to the shelter (available
+            # for adoption), leaving the clinic state.
+            dog.status = DogStatus.SHELTER
 
         clearance = MedicalClearance(
             dog_id=dog_id,

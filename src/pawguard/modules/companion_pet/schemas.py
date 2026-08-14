@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 from pawguard.modules.companion_pet.models import AppointmentStatus, ReminderKind
 
@@ -63,7 +63,7 @@ class CompanionPetResponse(BaseModel):
 
 class MedicalRecordCreate(BaseModel):
     record_type: str = Field(..., min_length=1, max_length=64)
-    title: str = Field(..., min_length=1, max_length=255)
+    title: str | None = Field(None, max_length=255)
     notes: str | None = Field(None, max_length=10000)
     occurred_at: datetime | None = None
     clinic_id: uuid.UUID | None = None
@@ -79,6 +79,39 @@ class MedicalRecordCreate(BaseModel):
         None,
         description="Reminder type (vaccination or medication). Defaults to 'vaccination'.",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def map_legacy_fields(cls, data: any) -> any:
+        if isinstance(data, dict):
+            if "description" in data and data["description"]:
+                if "title" not in data or not data["title"]:
+                    data["title"] = data["description"]
+                if "notes" not in data or not data["notes"]:
+                    data["notes"] = data["description"]
+            if "date" in data and data["date"]:
+                if "occurred_at" not in data or not data["occurred_at"]:
+                    from datetime import datetime
+                    val = data["date"]
+                    if isinstance(val, str):
+                        try:
+                            if len(val) == 10:
+                                dt = datetime.fromisoformat(f"{val}T00:00:00+00:00")
+                            else:
+                                dt = datetime.fromisoformat(val.replace("Z", "+00:00"))
+                        except ValueError:
+                            dt = None
+                    else:
+                        dt = val
+                    if dt:
+                        data["occurred_at"] = dt
+        return data
+
+    @model_validator(mode="after")
+    def validate_required_title(self) -> "MedicalRecordCreate":
+        if not self.title:
+            raise ValueError("title (or description) is required")
+        return self
 
 
 class MedicalRecordUpdate(BaseModel):
@@ -111,6 +144,16 @@ class MedicalRecordResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+    @computed_field
+    @property
+    def description(self) -> str:
+        return self.title
+
+    @computed_field
+    @property
+    def date(self) -> datetime:
+        return self.occurred_at
+
 
 class SafetyTagResponse(BaseModel):
     id: uuid.UUID
@@ -132,7 +175,22 @@ class SafetyTagProvisionResponse(SafetyTagResponse):
 
 
 class SafetyTagScanRequest(BaseModel):
-    token: str = Field(..., min_length=20, max_length=256)
+    token: str | None = Field(None, max_length=256)
+
+    @model_validator(mode="before")
+    @classmethod
+    def map_legacy_fields(cls, data: any) -> any:
+        if isinstance(data, dict):
+            if "tag_code" in data and data["tag_code"]:
+                if "token" not in data or not data["token"]:
+                    data["token"] = data["tag_code"]
+        return data
+
+    @model_validator(mode="after")
+    def validate_required_token(self) -> "SafetyTagScanRequest":
+        if not self.token:
+            raise ValueError("token (or tag_code) is required")
+        return self
 
 
 class SafetyTagScanResponse(BaseModel):
@@ -211,13 +269,43 @@ class PetAppointmentCreate(BaseModel):
     pet_id: uuid.UUID
     clinic_id: uuid.UUID
     vet_id: uuid.UUID | None = None
-    starts_at: datetime
-    ends_at: datetime
-    reason: str = Field(..., min_length=1, max_length=255)
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    reason: str | None = Field(None, max_length=255)
     notes: str | None = Field(None, max_length=4000)
+
+    @model_validator(mode="before")
+    @classmethod
+    def map_legacy_fields(cls, data: any) -> any:
+        if isinstance(data, dict):
+            if "scheduled_at" in data and data["scheduled_at"]:
+                from datetime import datetime, timedelta
+                val = data["scheduled_at"]
+                if isinstance(val, str):
+                    try:
+                        dt = datetime.fromisoformat(val.replace("Z", "+00:00"))
+                    except ValueError:
+                        dt = None
+                else:
+                    dt = val
+                if dt:
+                    if "starts_at" not in data or not data["starts_at"]:
+                        data["starts_at"] = dt
+                    if "ends_at" not in data or not data["ends_at"]:
+                        data["ends_at"] = dt + timedelta(minutes=30)
+            if "appointment_type" in data and data["appointment_type"]:
+                if "reason" not in data or not data["reason"]:
+                    data["reason"] = data["appointment_type"]
+        return data
 
     @model_validator(mode="after")
     def validate_time_range(self) -> "PetAppointmentCreate":
+        if self.starts_at is None:
+            raise ValueError("starts_at (or scheduled_at) is required")
+        if self.ends_at is None:
+            raise ValueError("ends_at is required")
+        if not self.reason:
+            raise ValueError("reason (or appointment_type) is required")
         if self.ends_at <= self.starts_at:
             raise ValueError("Appointment end must be after appointment start.")
         return self
@@ -240,6 +328,16 @@ class PetAppointmentResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+    @computed_field
+    @property
+    def appointment_type(self) -> str:
+        return self.reason
+
+    @computed_field
+    @property
+    def scheduled_at(self) -> datetime:
+        return self.starts_at
+
 
 class AppointmentCancelRequest(BaseModel):
     reason: str | None = Field(None, max_length=255)
@@ -250,11 +348,53 @@ class AppointmentStatusRequest(BaseModel):
 
 
 class PetReminderCreate(BaseModel):
-    kind: ReminderKind
-    title: str = Field(..., min_length=1, max_length=255)
+    kind: ReminderKind | None = None
+    title: str | None = Field(None, max_length=255)
     details: str | None = Field(None, max_length=4000)
-    due_at: datetime
-    source_key: str = Field(..., min_length=1, max_length=255)
+    due_at: datetime | None = None
+    source_key: str | None = Field(None, max_length=255)
+
+    @model_validator(mode="before")
+    @classmethod
+    def map_legacy_fields(cls, data: any) -> any:
+        if isinstance(data, dict):
+            if "reminder_type" in data and data["reminder_type"]:
+                if "kind" not in data or not data["kind"]:
+                    data["kind"] = data["reminder_type"]
+            if "remind_at" in data and data["remind_at"]:
+                if "due_at" not in data or not data["due_at"]:
+                    from datetime import datetime
+                    val = data["remind_at"]
+                    if isinstance(val, str):
+                        try:
+                            dt = datetime.fromisoformat(val.replace("Z", "+00:00"))
+                        except ValueError:
+                            dt = None
+                    else:
+                        dt = val
+                    if dt:
+                        data["due_at"] = dt
+            if "message" in data and data["message"]:
+                if "title" not in data or not data["title"]:
+                    data["title"] = data["message"]
+                if "details" not in data or not data["details"]:
+                    data["details"] = data["message"]
+            if "source_key" not in data or not data["source_key"]:
+                import uuid
+                data["source_key"] = f"manual:{uuid.uuid4()}"
+        return data
+
+    @model_validator(mode="after")
+    def validate_required_fields(self) -> "PetReminderCreate":
+        if self.kind is None:
+            raise ValueError("kind (or reminder_type) is required")
+        if not self.title:
+            raise ValueError("title (or message) is required")
+        if self.due_at is None:
+            raise ValueError("due_at (or remind_at) is required")
+        if not self.source_key:
+            raise ValueError("source_key is required")
+        return self
 
 
 class PetReminderResponse(BaseModel):
@@ -271,3 +411,27 @@ class PetReminderResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    @computed_field
+    @property
+    def reminder_type(self) -> str:
+        return self.kind
+
+    @computed_field
+    @property
+    def remind_at(self) -> datetime:
+        return self.due_at
+
+    @computed_field
+    @property
+    def message(self) -> str:
+        return self.title
+
+
+class MedicalRecordUpdate(BaseModel):
+    record_type: str | None = Field(None, min_length=1, max_length=64)
+    title: str | None = Field(None, min_length=1, max_length=255)
+    notes: str | None = Field(None, max_length=10000)
+    occurred_at: datetime | None = None
+    clinic_id: uuid.UUID | None = None
+    stored_file_id: uuid.UUID | None = None

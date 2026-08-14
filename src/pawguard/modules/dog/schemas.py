@@ -33,6 +33,7 @@ class DogProfileCreate(BaseModel):
     breed_classification: DogBreedClassification | None = Field(
         None, description="Pure/Mix/Unknown; inferred from breed when omitted."
     )
+    status: DogStatus | None = None
     gender: DogGender = DogGender.UNKNOWN
     is_spayed_neutered: bool = False
     estimated_age: str | None = Field(None, max_length=64, examples=["2 years"])

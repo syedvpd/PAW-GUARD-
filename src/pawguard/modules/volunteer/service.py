@@ -152,6 +152,12 @@ class VolunteerService:
         # volunteer access - the "volunteer" role is granted here, not at
         # application time, so an unvetted applicant can't self-escalate.
         if profile.status == VolunteerStatus.ACTIVE and not was_active:
+            # Workflow 5: a volunteer may only be activated after the
+            # background verification step is complete.
+            if not profile.background_check_completed:
+                raise ValidationFailedError(
+                    "Volunteer cannot be activated until the background check is completed."
+                )
             role = await self._roles.get_by_name("volunteer")
             if role is not None:
                 await self._user_roles.grant_role(profile.user_id, role.id)

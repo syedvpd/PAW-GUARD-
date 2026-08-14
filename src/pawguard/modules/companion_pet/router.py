@@ -2,7 +2,7 @@
 
 import uuid
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Body, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.pagination import PageParams, page_params
@@ -263,6 +263,21 @@ async def list_medical_files(
     return await service.list_medical_files(pet_id, page, sort, current_user)
 
 
+@router.get(
+    "/medical-files/{file_id}/download-url",
+    response_model=ApiResponse[DownloadUrlResponse],
+    dependencies=[Depends(require_permission("companion_pet:read"))],
+    summary="Get presigned download URL for a medical-history file",
+)
+async def get_medical_file_download_url(
+    file_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: CompanionPetService = Depends(get_companion_pet_service),
+) -> ApiResponse[DownloadUrlResponse]:
+    result = await service.get_medical_file_download_url(file_id, current_user)
+    return ApiResponse(data=result)
+
+
 @router.post(
     "/{pet_id}/medical-records",
     response_model=ApiResponse[MedicalRecordResponse],
@@ -365,7 +380,7 @@ async def get_medical_download_url(
     current_user: CurrentUser = Depends(get_current_user),
     service: CompanionPetService = Depends(get_companion_pet_service),
 ) -> ApiResponse[DownloadUrlResponse]:
-    result = await service.get_medical_download_url(file_id, current_user)
+    result = await service.get_medical_file_download_url(file_id, current_user)
     return ApiResponse(data=result)
 
 
@@ -586,17 +601,53 @@ async def get_appointment(
     dependencies=[Depends(require_permission("appointment:cancel"))],
     summary="Cancel an appointment",
 )
+@router.patch(
+    "/appointments/{appointment_id}/cancel",
+    response_model=ApiResponse[PetAppointmentResponse],
+    dependencies=[Depends(require_permission("appointment:cancel"))],
+    summary="Cancel an appointment (PATCH alias)",
+)
+@router.put(
+    "/appointments/{appointment_id}/cancel",
+    response_model=ApiResponse[PetAppointmentResponse],
+    dependencies=[Depends(require_permission("appointment:cancel"))],
+    summary="Cancel an appointment (PUT alias)",
+)
 async def cancel_appointment(
     appointment_id: uuid.UUID,
-    payload: AppointmentCancelRequest,
     request: Request,
+    payload: AppointmentCancelRequest = Body(default_factory=AppointmentCancelRequest),
     current_user: CurrentUser = Depends(get_current_user),
     service: CompanionPetService = Depends(get_companion_pet_service),
 ) -> ApiResponse[PetAppointmentResponse]:
     appointment = await service.cancel_appointment(
         appointment_id, payload.reason, current_user, resolve_client_ip(request)
     )
-    return ApiResponse(data=PetAppointmentResponse.model_validate(appointment))
+    return ApiResponse(
+        data=PetAppointmentResponse.model_validate(appointment),
+        message="Appointment cancelled successfully.",
+    )
+
+
+@router.delete(
+    "/appointments/{appointment_id}",
+    response_model=ApiResponse[PetAppointmentResponse],
+    dependencies=[Depends(require_permission("appointment:cancel"))],
+    summary="Cancel an appointment via DELETE",
+)
+async def delete_appointment(
+    appointment_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: CompanionPetService = Depends(get_companion_pet_service),
+) -> ApiResponse[PetAppointmentResponse]:
+    appointment = await service.cancel_appointment(
+        appointment_id, None, current_user, resolve_client_ip(request)
+    )
+    return ApiResponse(
+        data=PetAppointmentResponse.model_validate(appointment),
+        message="Appointment cancelled successfully.",
+    )
 
 
 @router.post(

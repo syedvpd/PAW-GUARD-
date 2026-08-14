@@ -7,6 +7,7 @@ import uuid
 from collections.abc import Sequence
 
 from pawguard.core.exceptions import ConflictError, NotFoundError
+from pawguard.core.logging import get_logger
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
@@ -28,7 +29,11 @@ from pawguard.modules.inventory.schemas import (
     RequisitionOrderCreate,
     RequisitionOrderResponse,
 )
+from pawguard.modules.notifications.schemas import BroadcastCreate
+from pawguard.modules.notifications.service import NotificationService
 from pawguard.services.audit_service import AuditService
+
+logger = get_logger(__name__)
 
 
 class InventoryService:
@@ -36,9 +41,11 @@ class InventoryService:
         self,
         repository: InventoryRepository,
         audit_service: AuditService | None = None,
+        notification_service: NotificationService | None = None,
     ) -> None:
         self._repo = repository
         self._audit = audit_service
+        self._notification_svc = notification_service
 
     async def create_item(
         self,
@@ -128,7 +135,36 @@ class InventoryService:
                     "movement_type": payload.movement_type.value,
                 },
             )
+        # Workflow 8: when stock falls to/below the reorder threshold, alert
+        # inventory staff and administrators so a purchase requisition can be
+        # raised (avoids silent stock-outs of medicine/food).
+        if item.quantity <= item.reorder_threshold:
+            await self._alert_low_stock(item)
         return movement
+
+    async def _alert_low_stock(self, item: InventoryItem) -> None:
+        if self._notification_svc is None:
+            return
+        try:
+            await self._notification_svc.broadcast(
+                payload=BroadcastCreate(
+                    title=f"Low stock alert: {item.name}",
+                    body=(
+                        f"Stock for '{item.name}' is at {item.quantity} {item.unit} "
+                        f"(reorder threshold {item.reorder_threshold} {item.unit}). "
+                        "Please raise a purchase requisition."
+                    ),
+                    notification_type="inventory_low_stock",
+                    action_url="/inventory/requisitions",
+                    target_roles=["inventory_manager", "rescue_centre_admin"],
+                ),
+                user_ids=[],
+                actor_id=None,
+            )
+        except Exception:  # pragma: no cover - alerting must never break stock ops
+            logger.warning(
+                "Failed to send low-stock alert for item %s", item.id, exc_info=True
+            )
 
     async def create_requisition(
         self,

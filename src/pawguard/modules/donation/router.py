@@ -261,9 +261,8 @@ async def verify_donation_checkout(
     service: DonationService = Depends(get_donation_service),
 ) -> ApiResponse[DonationResponse]:
     donation = await service.get_donation(payload.donation_id)
-    is_owner = donation.donor is not None and donation.donor.user_id == current_user.user.id
-    if not is_owner and not has_permission(current_user.user, "donation:read"):
-        raise ForbiddenError("You do not have permission to verify this donation.")
+    if not has_permission(current_user.user, "finance:reconcile"):
+        raise ForbiddenError("Only finance staff may verify donation payments.")
     donation = await service.verify_donation_payment(
         donation_id=payload.donation_id,
         gateway_order_id=payload.gateway_order_id,

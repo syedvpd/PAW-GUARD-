@@ -233,7 +233,6 @@ async def bulk_delete_profiles(
     "/placements/{placement_id}/progress",
     response_model=ApiResponse[FosterProgressLogResponse],
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_permission("foster:approve"))],
 )
 async def log_progress(
     placement_id: uuid.UUID,
@@ -242,6 +241,12 @@ async def log_progress(
     current_user: CurrentUser = Depends(get_current_user),
     service: FosterService = Depends(get_foster_service),
 ) -> ApiResponse[FosterProgressLogResponse]:
+    # The foster family that owns the placement logs daily updates; foster
+    # coordinators (foster:approve) may also log on their behalf.
+    placement = await service.get_placement(placement_id)
+    is_owner = placement.foster.user_id == current_user.user.id
+    if not is_owner and not has_permission(current_user.user, "foster:approve"):
+        raise ForbiddenError("You do not have permission to log progress for this placement.")
     ip = request.client.host if request.client else None
     log = await service.log_daily_progress(
         placement_id,

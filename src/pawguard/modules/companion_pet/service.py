@@ -385,14 +385,14 @@ class CompanionPetService:
             "companion_pet", pet.id, page, sort, folder=FileFolder.MEDICAL.value
         )
 
-    async def get_medical_download_url(
+    async def get_medical_file_download_url(
         self, file_id: uuid.UUID, current_user: CurrentUser
     ) -> DownloadUrlResponse:
         if self._storage is None:
             raise ConflictError("Storage service is not configured.")
         stored = await self._storage.get_file(file_id)
-        if stored.entity_type != "companion_pet":
-            raise ForbiddenError("The file is not a companion pet medical file.")
+        if stored.entity_type != "companion_pet" or stored.entity_id is None:
+            raise ForbiddenError("You are not authorized for this uploaded file.")
         pet = await self._get_pet(stored.entity_id)
         await self._authorize_pet(current_user, pet)
         return await self._storage.get_download_url(file_id)
@@ -476,6 +476,7 @@ class CompanionPetService:
         self, application_id: uuid.UUID, current_user: CurrentUser, ip_address: str | None = None
     ) -> CompanionPet:
         from sqlalchemy import select
+
         from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
 
         stmt = (
@@ -755,6 +756,7 @@ class CompanionPetService:
         appointment.status = AppointmentStatus.CANCELLED
         appointment.cancellation_reason = reason
         await self._session.flush()
+        await self._session.refresh(appointment)
         await self._audit_event(
             AuthAuditEventType.PET_APPOINTMENT_CANCELLED,
             current_user.id,
@@ -779,6 +781,7 @@ class CompanionPetService:
             raise ConflictError("A cancelled appointment cannot be confirmed.")
         appointment.status = status
         await self._session.flush()
+        await self._session.refresh(appointment)
         await self._audit_event(
             AuthAuditEventType.PET_APPOINTMENT_STATUS_CHANGED,
             current_user.id,

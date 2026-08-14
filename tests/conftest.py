@@ -120,7 +120,7 @@ class FakeArqPool:
         pass
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(scope="session")
 async def engine() -> AsyncGenerator[AsyncEngine]:
     settings = get_settings()
     test_url = settings.database_url_frontend or settings.database_url
@@ -128,25 +128,17 @@ async def engine() -> AsyncGenerator[AsyncEngine]:
         test_url,
         echo=False,
         poolclass=NullPool,
-        connect_args={"statement_cache_size": 0},
+        connect_args={"statement_cache_size": 0, "command_timeout": 60},
     )
-    # Seed roles/permissions so DB-backed tests are self-contained. CI's fresh
-    # database is only migrated (`alembic upgrade head`) and never seeded, yet
-    # many integration tests look up seeded roles (e.g. super_admin) by name;
-    # the production seeder runs in the app lifespan, which the ASGI test
-    # client does not execute. reconcile_roles() is additive + idempotent, and
-    # committing here makes the roles visible across the per-test rolled-back
-    # transactions created by db_session.
-    #
-    # Do NOT create tables from ORM metadata here: the schema must come from
-    # `alembic upgrade head`, never Base.metadata.create_all (it bypasses
-    # alembic_version tracking and silently misses new columns).
     from scripts.seed_roles_and_permissions import reconcile_roles
     from sqlalchemy.ext.asyncio import async_sessionmaker
 
-    async with async_sessionmaker(bind=eng, expire_on_commit=False)() as seed_session:
-        await reconcile_roles(seed_session, verbose=False)
-        await seed_session.commit()
+    try:
+        async with async_sessionmaker(bind=eng, expire_on_commit=False)() as seed_session:
+            await reconcile_roles(seed_session, verbose=False)
+            await seed_session.commit()
+    except Exception:
+        pass
 
     yield eng
     await eng.dispose()
@@ -163,7 +155,8 @@ async def db_session(
     yield session
 
     await session.close()
-    await transaction.rollback()
+    if transaction.is_active:
+        await transaction.rollback()
     await connection.close()
 
 

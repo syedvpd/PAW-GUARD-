@@ -24,7 +24,8 @@ from pawguard.modules.auth.dependencies import (
     get_current_user,
     get_optional_current_user,
 )
-from pawguard.modules.auth.rbac import require_permission
+from pawguard.modules.auth.permission_codes import SHELTER_READ
+from pawguard.modules.auth.rbac import has_permission, is_admin_role, require_permission
 from pawguard.modules.dog.models import (
     DogBreedClassification,
     DogGender,
@@ -43,6 +44,7 @@ from pawguard.modules.dog.schemas import (
     PublicDogScanResponse,
 )
 from pawguard.modules.dog.service import DogService
+from pawguard.redis.client import RedisClient, get_redis
 from pawguard.services.audit_service import AuditService
 
 router = APIRouter(prefix="/dogs", tags=["dogs"])
@@ -51,8 +53,9 @@ router = APIRouter(prefix="/dogs", tags=["dogs"])
 def get_dog_service(
     db: AsyncSession = Depends(get_db),
     audit: AuditService = Depends(get_audit_service),
+    redis: RedisClient = Depends(get_redis),
 ) -> DogService:
-    return DogService(DogRepository(db), audit_service=audit)
+    return DogService(DogRepository(db), audit_service=audit, redis=redis)
 
 
 def _public_dog_view(dog: DogProfileResponse) -> DogProfileResponse:
@@ -129,10 +132,15 @@ async def list_dogs(
     current_user: CurrentUser | None = Depends(get_optional_current_user),
     service: DogService = Depends(get_dog_service),
 ) -> PaginatedResponse[DogProfileResponse]:
-    # Public adoption directory: anonymous and non-staff callers may only see
-    # adoptable dogs. Authenticated staff/admin retain the full filter set.
-    is_staff_or_admin = current_user is not None
-    public_view = not is_staff_or_admin
+    # Public adoption directory: only shelter staff (holders of ``shelter:read``)
+    # and admins may browse the full dog catalogue. Every other caller - anonymous
+    # visitors AND authenticated adopters/app users - sees only adoptable dogs so
+    # already-adopted animals never leak into the public adoption page.
+    is_staff = current_user is not None and (
+        has_permission(current_user.user, SHELTER_READ)
+        or is_admin_role(current_user.claims)
+    )
+    public_view = not is_staff
     if public_view:
         is_adoptable = True
     result = await service.list_dogs_paginated(
@@ -172,15 +180,19 @@ async def get_dog(
 ) -> ApiResponse[DogProfileResponse]:
     dog = await service.get_dog(dog_id)
 
-    # Check caller permissions - authenticated users can view any dog profile,
-    # public unauthenticated callers can view public details for adoptable dogs.
-    is_staff_or_admin = current_user is not None
+    # Check caller permissions - shelter staff/admin may view any dog profile,
+    # everyone else (including authenticated adopters) may only view public
+    # details for adoptable dogs.
+    is_staff = current_user is not None and (
+        has_permission(current_user.user, SHELTER_READ)
+        or is_admin_role(current_user.claims)
+    )
 
-    if not is_staff_or_admin and not dog.is_adoptable:
+    if not is_staff and not dog.is_adoptable:
         raise NotFoundError("Dog profile is currently in intake/treatment and not yet available for public adoption.")
 
     data = DogProfileResponse.model_validate(dog)
-    if not is_staff_or_admin:
+    if not is_staff:
         data = _public_dog_view(data)
     return ApiResponse(data=data)
 

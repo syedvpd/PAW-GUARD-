@@ -1,6 +1,7 @@
 """API router for the Inventory module. Routers only validate and call services (RULE-004)."""
 
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,14 +12,14 @@ from pawguard.core.bulk import (
     BulkStatusUpdateRequest,
     BulkStatusUpdateResponse,
 )
-from pawguard.core.exceptions import parse_enum
+from pawguard.core.exceptions import ForbiddenError, parse_enum
 from pawguard.core.pagination import PageParams, page_params
 from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.core.search import SortParams, sort_params
 from pawguard.db.session import get_db
 from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
-from pawguard.modules.auth.rbac import require_permission
+from pawguard.modules.auth.rbac import has_permission, require_permission
 from pawguard.modules.inventory.models import ItemCategory, MovementType, RequisitionStatus
 from pawguard.modules.inventory.repository import InventoryRepository
 from pawguard.modules.inventory.schemas import (
@@ -31,7 +32,10 @@ from pawguard.modules.inventory.schemas import (
     RequisitionStatusUpdate,
 )
 from pawguard.modules.inventory.service import InventoryService
+from pawguard.modules.notifications.repository import NotificationRepository
+from pawguard.modules.notifications.service import NotificationService
 from pawguard.services.audit_service import AuditService
+from pawguard.workers.pool import get_arq_pool
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
@@ -39,8 +43,12 @@ router = APIRouter(prefix="/inventory", tags=["inventory"])
 def get_inventory_service(
     db: AsyncSession = Depends(get_db),
     audit: AuditService = Depends(get_audit_service),
+    arq_pool: Any = Depends(get_arq_pool),
 ) -> InventoryService:
-    return InventoryService(InventoryRepository(db), audit_service=audit)
+    repo = InventoryRepository(db)
+    notification_repo = NotificationRepository(db)
+    notification_svc = NotificationService(repository=notification_repo, arq_pool=arq_pool)
+    return InventoryService(repo, audit_service=audit, notification_service=notification_svc)
 
 
 @router.post(
@@ -54,7 +62,14 @@ async def create_item(
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: InventoryService = Depends(get_inventory_service),
-) -> ApiResponse[InventoryItemResponse]:
+) -> ApiResponse[RequisitionOrderResponse]:
+    # Workflow 8: the requisition APPROVAL step requires administrator
+    # authority; the requesting Inventory Manager cannot self-approve. Other
+    # transitions (reject, mark received) remain with inventory:update.
+    if payload.status == RequisitionStatus.APPROVED and not has_permission(
+        current_user.user, "system:admin"
+    ):
+        raise ForbiddenError("Requisition approval requires administrator privileges.")
     ip = request.client.host if request.client else None
     item = await service.create_item(
         payload, actor_id=current_user.id, ip_address=ip,

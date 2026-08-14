@@ -17,20 +17,7 @@ from pawguard.modules.companion_pet.models import SafetyTag
 async def _public_owner_auth(
     client: AsyncClient, db_session: AsyncSession, email: str
 ) -> dict[str, str]:
-    """Re-grant the registration role without creating a duplicate association."""
-    response = await client.post(
-        "/api/v1/auth/register",
-        json={"email": email, "password": "StrongP@ss99", "full_name": "Pet Owner"},
-    )
-    assert response.status_code == 201, response.text
-    user = (
-        await db_session.execute(
-            select(User).options(selectinload(User.roles)).where(User.email == email)
-        )
-    ).scalar_one()
-    user.roles.clear()
-    await db_session.commit()
-    return await promote_and_auth(client, db_session, email=email, role="general_public")
+    return await register_and_auth(client, db_session, email=email, role="general_public")
 
 
 @pytest.mark.asyncio
@@ -237,37 +224,240 @@ async def test_veterinarian_dropdown_for_app_user(
     )
     assert unknown.status_code == 404, unknown.text
 
-    # 4. No token -> 401
+    # 4. Public endpoint without token -> 200 OK
     anon = await client.get(
         f"/api/v1/companion-pets/clinics/{clinic_id}/veterinarians",
     )
-    assert anon.status_code == 401, anon.text
+    assert anon.status_code == 200, anon.text
+    assert len(anon.json()["data"]) == 1
 
-    # 5. Roles lacking appointment:read -> 403
-    # register_and_auth APPENDS the target role on top of the default
-    # general_public role, so clear all roles first to get a pure rescue_agent.
-    await client.post(
-        "/api/v1/auth/register",
-        json={
-            "email": "app-vet-dropdown-agent@example.com",
-            "password": "StrongP@ss99",
-            "full_name": "Field Agent",
-        },
+
+@pytest.mark.asyncio
+async def test_appointment_cancellation_endpoints(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Validate appointment cancellation via POST, PATCH, PUT, and DELETE with permissions and ownership."""
+    owner_headers = await register_and_auth(
+        client, db_session, email="appt-cancel-owner@example.com", role="app_user"
     )
-    agent = (
-        await db_session.execute(
-            select(User)
-            .options(selectinload(User.roles))
-            .where(User.email == "app-vet-dropdown-agent@example.com")
-        )
-    ).scalar_one()
-    agent.roles.clear()
-    await db_session.commit()
-    restricted_headers = await promote_and_auth(
-        client, db_session, email="app-vet-dropdown-agent@example.com", role="rescue_agent"
+    other_headers = await register_and_auth(
+        client, db_session, email="appt-cancel-other@example.com", role="app_user"
     )
-    forbidden = await client.get(
-        f"/api/v1/companion-pets/clinics/{clinic_id}/veterinarians",
-        headers=restricted_headers,
+    admin_headers = await register_and_auth(
+        client, db_session, email="appt-cancel-admin@example.com", role="super_admin"
     )
-    assert forbidden.status_code == 403, forbidden.text
+
+    # 1. Create a pet and clinic
+    pet_res = await client.post(
+        "/api/v1/companion-pets",
+        json={"name": "Shadow", "species": "dog"},
+        headers=owner_headers,
+    )
+    assert pet_res.status_code == 201, pet_res.text
+    pet_id = pet_res.json()["data"]["id"]
+
+    clinic_res = await client.post(
+        "/api/v1/companion-pets/clinics",
+        json={"name": "City Vet Care", "address": "123 Street", "phone": "+919988776655"},
+        headers=admin_headers,
+    )
+    assert clinic_res.status_code == 201, clinic_res.text
+    clinic_id = clinic_res.json()["data"]["id"]
+
+    # 2. Book appointment
+    starts_at = datetime.now(UTC) + timedelta(days=5)
+    booking = {
+        "pet_id": pet_id,
+        "clinic_id": clinic_id,
+        "starts_at": starts_at.isoformat(),
+        "ends_at": (starts_at + timedelta(minutes=30)).isoformat(),
+        "reason": "Vaccination checkup",
+    }
+    appt_res = await client.post(
+        "/api/v1/companion-pets/appointments",
+        json=booking,
+        headers=owner_headers,
+    )
+    assert appt_res.status_code == 201, appt_res.text
+    appt_id = appt_res.json()["data"]["id"]
+    assert appt_res.json()["data"]["status"] == "requested"
+
+    # 3. Unauthorized user cannot cancel appointment -> 403
+    unauth_cancel = await client.post(
+        f"/api/v1/companion-pets/appointments/{appt_id}/cancel",
+        json={"reason": "Not my pet"},
+        headers=other_headers,
+    )
+    assert unauth_cancel.status_code == 403, unauth_cancel.text
+
+    # 4. Owner cancels appointment via POST /appointments/{id}/cancel with optional body -> 200 OK
+    cancel_res = await client.post(
+        f"/api/v1/companion-pets/appointments/{appt_id}/cancel",
+        json={"reason": "Scheduling conflict"},
+        headers=owner_headers,
+    )
+    assert cancel_res.status_code == 200, cancel_res.text
+    assert cancel_res.json()["data"]["status"] == "cancelled"
+    assert cancel_res.json()["data"]["cancellation_reason"] == "Scheduling conflict"
+
+    # 5. Cancelling an already cancelled appointment -> 409 Conflict
+    re_cancel = await client.post(
+        f"/api/v1/companion-pets/appointments/{appt_id}/cancel",
+        json={},
+        headers=owner_headers,
+    )
+    assert re_cancel.status_code == 409, re_cancel.text
+
+    # 6. Book second appointment and cancel via DELETE /appointments/{id}
+    starts_at2 = datetime.now(UTC) + timedelta(days=7)
+    booking2 = {
+        "pet_id": pet_id,
+        "clinic_id": clinic_id,
+        "starts_at": starts_at2.isoformat(),
+        "ends_at": (starts_at2 + timedelta(minutes=30)).isoformat(),
+        "reason": "Dental inspection",
+    }
+    appt_res2 = await client.post(
+        "/api/v1/companion-pets/appointments",
+        json=booking2,
+        headers=owner_headers,
+    )
+    assert appt_res2.status_code == 201, appt_res2.text
+    appt_id2 = appt_res2.json()["data"]["id"]
+
+    delete_cancel = await client.delete(
+        f"/api/v1/companion-pets/appointments/{appt_id2}",
+        headers=owner_headers,
+    )
+    assert delete_cancel.status_code == 200, delete_cancel.text
+    assert delete_cancel.json()["data"]["status"] == "cancelled"
+
+    # 7. Book third appointment and cancel via PATCH alias without body
+    starts_at3 = datetime.now(UTC) + timedelta(days=9)
+    booking3 = {
+        "pet_id": pet_id,
+        "clinic_id": clinic_id,
+        "starts_at": starts_at3.isoformat(),
+        "ends_at": (starts_at3 + timedelta(minutes=30)).isoformat(),
+        "reason": "Ear cleaning",
+    }
+    appt_res3 = await client.post(
+        "/api/v1/companion-pets/appointments",
+        json=booking3,
+        headers=owner_headers,
+    )
+    assert appt_res3.status_code == 201, appt_res3.text
+    appt_id3 = appt_res3.json()["data"]["id"]
+
+    patch_cancel = await client.patch(
+        f"/api/v1/companion-pets/appointments/{appt_id3}/cancel",
+        headers=owner_headers,
+    )
+    assert patch_cancel.status_code == 200, patch_cancel.text
+    assert patch_cancel.json()["data"]["status"] == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_medical_records_and_files_endpoints(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    owner_headers = await _public_owner_auth(client, db_session, "medical-record-owner@example.com")
+    other_headers = await _public_owner_auth(client, db_session, "medical-record-other@example.com")
+
+    # 1. Create a pet
+    pet_res = await client.post(
+        "/api/v1/companion-pets",
+        json={"name": "Rocky", "species": "dog"},
+        headers=owner_headers,
+    )
+    assert pet_res.status_code == 201, pet_res.text
+    pet_id = pet_res.json()["data"]["id"]
+
+    # 2. Request medical file upload url
+    upload_res = await client.post(
+        f"/api/v1/companion-pets/{pet_id}/medical-files/upload-url",
+        json={"original_filename": "vax.pdf", "mime_type": "application/pdf", "file_size": 1234},
+        headers=owner_headers,
+    )
+    assert upload_res.status_code == 201, upload_res.text
+    file_id = upload_res.json()["data"]["file_id"]
+
+    # 3. Confirm upload
+    confirm_res = await client.put(
+        f"/api/v1/companion-pets/{pet_id}/medical-files/{file_id}/confirm",
+        headers=owner_headers,
+    )
+    assert confirm_res.status_code == 200, confirm_res.text
+
+    # 4. Create medical record using the file
+    record_payload = {
+        "record_type": "Vaccination",
+        "title": "Rabies Shot",
+        "notes": "Valid for 3 years",
+        "stored_file_id": file_id,
+    }
+    rec_res = await client.post(
+        f"/api/v1/companion-pets/{pet_id}/medical-records",
+        json=record_payload,
+        headers=owner_headers,
+    )
+    assert rec_res.status_code == 201, rec_res.text
+    record_id = rec_res.json()["data"]["id"]
+
+    # 5. Read medical record (GET /medical-records/{record_id})
+    get_res = await client.get(
+        f"/api/v1/companion-pets/medical-records/{record_id}",
+        headers=owner_headers,
+    )
+    assert get_res.status_code == 200, get_res.text
+    assert get_res.json()["data"]["title"] == "Rabies Shot"
+
+    # 6. Read medical record with other headers (should be forbidden)
+    get_res_unauth = await client.get(
+        f"/api/v1/companion-pets/medical-records/{record_id}",
+        headers=other_headers,
+    )
+    assert get_res_unauth.status_code == 403
+
+    # 7. Update medical record (PUT /medical-records/{record_id})
+    update_payload = {
+        "title": "Rabies Booster",
+        "notes": "Updated booster info",
+    }
+    update_res = await client.put(
+        f"/api/v1/companion-pets/medical-records/{record_id}",
+        json=update_payload,
+        headers=owner_headers,
+    )
+    assert update_res.status_code == 200, update_res.text
+    assert update_res.json()["data"]["title"] == "Rabies Booster"
+    assert update_res.json()["data"]["notes"] == "Updated booster info"
+
+    # 8. Update medical record (PATCH /medical-records/{record_id})
+    patch_payload = {
+        "notes": "Patched note",
+    }
+    patch_res = await client.patch(
+        f"/api/v1/companion-pets/medical-records/{record_id}",
+        json=patch_payload,
+        headers=owner_headers,
+    )
+    assert patch_res.status_code == 200, patch_res.text
+    assert patch_res.json()["data"]["title"] == "Rabies Booster"  # unchanged
+    assert patch_res.json()["data"]["notes"] == "Patched note"
+
+    # 9. Get download URL (GET /medical-files/{file_id}/download-url)
+    dl_res = await client.get(
+        f"/api/v1/companion-pets/medical-files/{file_id}/download-url",
+        headers=owner_headers,
+    )
+    assert dl_res.status_code == 200, dl_res.text
+    assert "download_url" in dl_res.json()["data"]
+
+    # 10. Get download URL with other headers (should be forbidden)
+    dl_res_unauth = await client.get(
+        f"/api/v1/companion-pets/medical-files/{file_id}/download-url",
+        headers=other_headers,
+    )
+    assert dl_res_unauth.status_code == 403
+

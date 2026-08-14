@@ -123,6 +123,7 @@ class TestVolunteerService:
         profile = VolunteerProfile(
             id=profile_id, user_id=user_id, status=VolunteerStatus.APPLIED,
             emergency_contact_name="A", emergency_contact_phone="+1",
+            background_check_completed=True,
         )
         mock_repo.get_profile_by_id.side_effect = [profile, profile]
 
