@@ -609,6 +609,14 @@
   },
   {
     "id": 77,
+    "method": "DELETE",
+    "path": "/api/v1/companion-pets/appointments/{appointment_id}",
+    "module": "companion-pets",
+    "operation_id": "delete_appointment_api_v1_companion_pets_appointments__appointment_id__delete",
+    "summary": "Cancel an appointment via DELETE"
+  },
+  {
+    "id": 78,
     "method": "POST",
     "path": "/api/v1/companion-pets/appointments/{appointment_id}/cancel",
     "module": "companion-pets",
@@ -616,7 +624,23 @@
     "summary": "Cancel an appointment"
   },
   {
-    "id": 78,
+    "id": 79,
+    "method": "PUT",
+    "path": "/api/v1/companion-pets/appointments/{appointment_id}/cancel",
+    "module": "companion-pets",
+    "operation_id": "cancel_appointment_api_v1_companion_pets_appointments__appointment_id__cancel_put",
+    "summary": "Cancel an appointment (PUT alias)"
+  },
+  {
+    "id": 80,
+    "method": "PATCH",
+    "path": "/api/v1/companion-pets/appointments/{appointment_id}/cancel",
+    "module": "companion-pets",
+    "operation_id": "cancel_appointment_api_v1_companion_pets_appointments__appointment_id__cancel_patch",
+    "summary": "Cancel an appointment (PATCH alias)"
+  },
+  {
+    "id": 81,
     "method": "POST",
     "path": "/api/v1/companion-pets/appointments/{appointment_id}/confirm",
     "module": "companion-pets",
@@ -624,7 +648,7 @@
     "summary": "Confirm an appointment as clinic staff"
   },
   {
-    "id": 79,
+    "id": 82,
     "method": "GET",
     "path": "/api/v1/companion-pets/clinics",
     "module": "companion-pets",
@@ -632,7 +656,7 @@
     "summary": "List active veterinary clinics"
   },
   {
-    "id": 80,
+    "id": 83,
     "method": "POST",
     "path": "/api/v1/companion-pets/clinics",
     "module": "companion-pets",
@@ -640,7 +664,15 @@
     "summary": "Create a veterinary clinic directory entry"
   },
   {
-    "id": 81,
+    "id": 84,
+    "method": "GET",
+    "path": "/api/v1/companion-pets/clinics/{clinic_id}",
+    "module": "companion-pets",
+    "operation_id": "get_clinic_api_v1_companion_pets_clinics__clinic_id__get",
+    "summary": "Get single veterinary clinic details"
+  },
+  {
+    "id": 85,
     "method": "PATCH",
     "path": "/api/v1/companion-pets/clinics/{clinic_id}",
     "module": "companion-pets",
@@ -648,7 +680,7 @@
     "summary": "Update a veterinary clinic directory entry"
   },
   {
-    "id": 82,
+    "id": 86,
     "method": "DELETE",
     "path": "/api/v1/companion-pets/clinics/{clinic_id}",
     "module": "companion-pets",
@@ -656,7 +688,7 @@
     "summary": "Soft-delete a veterinary clinic directory entry"
   },
   {
-    "id": 83,
+    "id": 87,
     "method": "POST",
     "path": "/api/v1/companion-pets/clinics/{clinic_id}/memberships",
     "module": "companion-pets",
@@ -664,7 +696,55 @@
     "summary": "Authorize a user for a veterinary clinic"
   },
   {
-    "id": 84,
+    "id": 88,
+    "method": "GET",
+    "path": "/api/v1/companion-pets/clinics/{clinic_id}/veterinarians",
+    "module": "companion-pets",
+    "operation_id": "list_clinic_veterinarians_api_v1_companion_pets_clinics__clinic_id__veterinarians_get",
+    "summary": "List veterinarians available at a veterinary clinic for appointment booking"
+  },
+  {
+    "id": 89,
+    "method": "POST",
+    "path": "/api/v1/companion-pets/from-adoption/{application_id}",
+    "module": "companion-pets",
+    "operation_id": "create_pet_from_adoption_api_v1_companion_pets_from_adoption__application_id__post",
+    "summary": "Create a companion pet from an approved adoption application"
+  },
+  {
+    "id": 90,
+    "method": "GET",
+    "path": "/api/v1/companion-pets/medical-files/{file_id}/download-url",
+    "module": "companion-pets",
+    "operation_id": "get_medical_download_url_api_v1_companion_pets_medical_files__file_id__download_url_get",
+    "summary": "Get presigned download URL for a medical-history file"
+  },
+  {
+    "id": 91,
+    "method": "GET",
+    "path": "/api/v1/companion-pets/medical-records/{record_id}",
+    "module": "companion-pets",
+    "operation_id": "get_medical_record_api_v1_companion_pets_medical_records__record_id__get",
+    "summary": "Get an authorized medical-history record by ID"
+  },
+  {
+    "id": 92,
+    "method": "PUT",
+    "path": "/api/v1/companion-pets/medical-records/{record_id}",
+    "module": "companion-pets",
+    "operation_id": "update_medical_record_api_v1_companion_pets_medical_records__record_id__put",
+    "summary": "Update an authorized medical-history record (full update)"
+  },
+  {
+    "id": 93,
+    "method": "PATCH",
+    "path": "/api/v1/companion-pets/medical-records/{record_id}",
+    "module": "companion-pets",
+    "operation_id": "update_medical_record_api_v1_companion_pets_medical_records__record_id__patch",
+    "summary": "Update an authorized medical-history record (partial update)"
+  },
+  {
+    "id": 94,
     "method": "DELETE",
     "path": "/api/v1/companion-pets/medical-records/{record_id}",
     "module": "companion-pets",
@@ -672,7 +752,7 @@
     "summary": "Soft-delete an authorized medical-history record"
   },
   {
-    "id": 85,
+    "id": 95,
     "method": "POST",
     "path": "/api/v1/companion-pets/safety-tag/scan",
     "module": "companion-pets",
@@ -680,7 +760,7 @@
     "summary": "Privacy-safe public QR safety-tag scan"
   },
   {
-    "id": 86,
+    "id": 96,
     "method": "GET",
     "path": "/api/v1/companion-pets/{pet_id}",
     "module": "companion-pets",
@@ -688,7 +768,7 @@
     "summary": "Get an authorized companion pet profile"
   },
   {
-    "id": 87,
+    "id": 97,
     "method": "PATCH",
     "path": "/api/v1/companion-pets/{pet_id}",
     "module": "companion-pets",
@@ -696,7 +776,7 @@
     "summary": "Update an authorized companion pet profile"
   },
   {
-    "id": 88,
+    "id": 98,
     "method": "DELETE",
     "path": "/api/v1/companion-pets/{pet_id}",
     "module": "companion-pets",
@@ -704,7 +784,7 @@
     "summary": "Soft-delete an owned companion pet"
   },
   {
-    "id": 89,
+    "id": 99,
     "method": "GET",
     "path": "/api/v1/companion-pets/{pet_id}/medical-files",
     "module": "companion-pets",
@@ -712,7 +792,7 @@
     "summary": "List authorized medical-history files"
   },
   {
-    "id": 90,
+    "id": 100,
     "method": "POST",
     "path": "/api/v1/companion-pets/{pet_id}/medical-files/upload-url",
     "module": "companion-pets",
@@ -720,7 +800,7 @@
     "summary": "Request a presigned medical-history upload"
   },
   {
-    "id": 91,
+    "id": 101,
     "method": "PUT",
     "path": "/api/v1/companion-pets/{pet_id}/medical-files/{file_id}/confirm",
     "module": "companion-pets",
@@ -728,7 +808,7 @@
     "summary": "Confirm a medical-history upload"
   },
   {
-    "id": 92,
+    "id": 102,
     "method": "GET",
     "path": "/api/v1/companion-pets/{pet_id}/medical-records",
     "module": "companion-pets",
@@ -736,7 +816,7 @@
     "summary": "List a pet's authorized medical history"
   },
   {
-    "id": 93,
+    "id": 103,
     "method": "POST",
     "path": "/api/v1/companion-pets/{pet_id}/medical-records",
     "module": "companion-pets",
@@ -744,7 +824,7 @@
     "summary": "Create a medical-history record"
   },
   {
-    "id": 94,
+    "id": 104,
     "method": "GET",
     "path": "/api/v1/companion-pets/{pet_id}/reminders",
     "module": "companion-pets",
@@ -752,7 +832,7 @@
     "summary": "List vaccination and medication reminders"
   },
   {
-    "id": 95,
+    "id": 105,
     "method": "POST",
     "path": "/api/v1/companion-pets/{pet_id}/reminders",
     "module": "companion-pets",
@@ -760,7 +840,7 @@
     "summary": "Create a vaccination or medication reminder"
   },
   {
-    "id": 96,
+    "id": 106,
     "method": "DELETE",
     "path": "/api/v1/companion-pets/{pet_id}/reminders/{reminder_id}",
     "module": "companion-pets",
@@ -768,7 +848,7 @@
     "summary": "Soft-delete a vaccination or medication reminder"
   },
   {
-    "id": 97,
+    "id": 107,
     "method": "GET",
     "path": "/api/v1/companion-pets/{pet_id}/safety-tag",
     "module": "companion-pets",
@@ -776,7 +856,7 @@
     "summary": "Read safety-tag metadata without revealing its token"
   },
   {
-    "id": 98,
+    "id": 108,
     "method": "POST",
     "path": "/api/v1/companion-pets/{pet_id}/safety-tag",
     "module": "companion-pets",
@@ -784,7 +864,15 @@
     "summary": "Provision or rotate a QR safety tag"
   },
   {
-    "id": 99,
+    "id": 109,
+    "method": "DELETE",
+    "path": "/api/v1/companion-pets/{pet_id}/safety-tag",
+    "module": "companion-pets",
+    "operation_id": "deactivate_safety_tag_api_v1_companion_pets__pet_id__safety_tag_delete",
+    "summary": "Deactivate or revoke a QR safety tag"
+  },
+  {
+    "id": 110,
     "method": "GET",
     "path": "/api/v1/dashboards/adoption",
     "module": "dashboards",
@@ -792,7 +880,7 @@
     "summary": "Get Adoption Dashboard"
   },
   {
-    "id": 100,
+    "id": 111,
     "method": "GET",
     "path": "/api/v1/dashboards/donor",
     "module": "dashboards",
@@ -800,7 +888,7 @@
     "summary": "Get Donor Dashboard"
   },
   {
-    "id": 101,
+    "id": 112,
     "method": "GET",
     "path": "/api/v1/dashboards/executive",
     "module": "dashboards",
@@ -808,7 +896,7 @@
     "summary": "Get Executive Dashboard"
   },
   {
-    "id": 102,
+    "id": 113,
     "method": "GET",
     "path": "/api/v1/dashboards/finance",
     "module": "dashboards",
@@ -816,7 +904,7 @@
     "summary": "Get Finance Dashboard"
   },
   {
-    "id": 103,
+    "id": 114,
     "method": "GET",
     "path": "/api/v1/dashboards/foster",
     "module": "dashboards",
@@ -824,7 +912,7 @@
     "summary": "Get Foster Dashboard"
   },
   {
-    "id": 104,
+    "id": 115,
     "method": "GET",
     "path": "/api/v1/dashboards/inventory",
     "module": "dashboards",
@@ -832,7 +920,7 @@
     "summary": "Get Inventory Dashboard"
   },
   {
-    "id": 105,
+    "id": 116,
     "method": "GET",
     "path": "/api/v1/dashboards/medical",
     "module": "dashboards",
@@ -840,7 +928,7 @@
     "summary": "Get Medical Dashboard"
   },
   {
-    "id": 106,
+    "id": 117,
     "method": "GET",
     "path": "/api/v1/dashboards/operations",
     "module": "dashboards",
@@ -848,7 +936,7 @@
     "summary": "Get Operations Dashboard"
   },
   {
-    "id": 107,
+    "id": 118,
     "method": "GET",
     "path": "/api/v1/dashboards/public",
     "module": "dashboards",
@@ -856,7 +944,7 @@
     "summary": "Get Public Dashboard"
   },
   {
-    "id": 108,
+    "id": 119,
     "method": "GET",
     "path": "/api/v1/dashboards/rescue",
     "module": "dashboards",
@@ -864,7 +952,7 @@
     "summary": "Get Rescue Dashboard"
   },
   {
-    "id": 109,
+    "id": 120,
     "method": "GET",
     "path": "/api/v1/dashboards/rescue/stream",
     "module": "dashboards",
@@ -872,7 +960,7 @@
     "summary": "Stream Rescue Dashboard"
   },
   {
-    "id": 110,
+    "id": 121,
     "method": "GET",
     "path": "/api/v1/dashboards/shelter",
     "module": "dashboards",
@@ -880,7 +968,7 @@
     "summary": "Get Shelter Dashboard"
   },
   {
-    "id": 111,
+    "id": 122,
     "method": "GET",
     "path": "/api/v1/dashboards/staff",
     "module": "dashboards",
@@ -888,7 +976,7 @@
     "summary": "Get Staff Dashboard"
   },
   {
-    "id": 112,
+    "id": 123,
     "method": "GET",
     "path": "/api/v1/dashboards/volunteer",
     "module": "dashboards",
@@ -896,7 +984,7 @@
     "summary": "Get Volunteer Dashboard"
   },
   {
-    "id": 113,
+    "id": 124,
     "method": "GET",
     "path": "/api/v1/dogs",
     "module": "dogs",
@@ -904,7 +992,7 @@
     "summary": "List Dogs"
   },
   {
-    "id": 114,
+    "id": 125,
     "method": "POST",
     "path": "/api/v1/dogs",
     "module": "dogs",
@@ -912,7 +1000,7 @@
     "summary": "Register Dog"
   },
   {
-    "id": 115,
+    "id": 126,
     "method": "GET",
     "path": "/api/v1/dogs/admin/dogs/{dog_id}",
     "module": "dogs",
@@ -920,7 +1008,7 @@
     "summary": "Get Dog"
   },
   {
-    "id": 116,
+    "id": 127,
     "method": "PATCH",
     "path": "/api/v1/dogs/admin/dogs/{dog_id}/status",
     "module": "dogs",
@@ -928,7 +1016,7 @@
     "summary": "Update Dog Status"
   },
   {
-    "id": 117,
+    "id": 128,
     "method": "POST",
     "path": "/api/v1/dogs/bulk/delete",
     "module": "dogs",
@@ -936,7 +1024,7 @@
     "summary": "Bulk Delete Dogs"
   },
   {
-    "id": 118,
+    "id": 129,
     "method": "POST",
     "path": "/api/v1/dogs/bulk/status-update",
     "module": "dogs",
@@ -944,7 +1032,7 @@
     "summary": "Bulk Update Dog Status"
   },
   {
-    "id": 119,
+    "id": 130,
     "method": "GET",
     "path": "/api/v1/dogs/{dog_id}",
     "module": "dogs",
@@ -952,7 +1040,7 @@
     "summary": "Get Dog"
   },
   {
-    "id": 120,
+    "id": 131,
     "method": "PUT",
     "path": "/api/v1/dogs/{dog_id}",
     "module": "dogs",
@@ -960,7 +1048,7 @@
     "summary": "Update Dog"
   },
   {
-    "id": 121,
+    "id": 132,
     "method": "DELETE",
     "path": "/api/v1/dogs/{dog_id}",
     "module": "dogs",
@@ -968,7 +1056,47 @@
     "summary": "Soft Delete Dog"
   },
   {
-    "id": 122,
+    "id": 133,
+    "method": "GET",
+    "path": "/api/v1/dogs/{dog_id}/public-scan",
+    "module": "dogs",
+    "operation_id": "public_scan_dog_api_v1_dogs__dog_id__public_scan_get",
+    "summary": "Privacy-safe public dog QR scan"
+  },
+  {
+    "id": 134,
+    "method": "GET",
+    "path": "/api/v1/dogs/{dog_id}/qr-image",
+    "module": "dogs",
+    "operation_id": "dog_qr_image_api_v1_dogs__dog_id__qr_image_get",
+    "summary": "Generate a staff-only dog profile QR image"
+  },
+  {
+    "id": 135,
+    "method": "GET",
+    "path": "/api/v1/dogs/{dog_id}/safety-tag",
+    "module": "dogs",
+    "operation_id": "get_dog_safety_tag_api_v1_dogs__dog_id__safety_tag_get",
+    "summary": "Get active Safety Tag metadata for a Dog Master profile"
+  },
+  {
+    "id": 136,
+    "method": "POST",
+    "path": "/api/v1/dogs/{dog_id}/safety-tag",
+    "module": "dogs",
+    "operation_id": "provision_dog_safety_tag_api_v1_dogs__dog_id__safety_tag_post",
+    "summary": "Provision a permanent Safety Tag for a Dog Master profile"
+  },
+  {
+    "id": 137,
+    "method": "DELETE",
+    "path": "/api/v1/dogs/{dog_id}/safety-tag",
+    "module": "dogs",
+    "operation_id": "deactivate_dog_safety_tag_api_v1_dogs__dog_id__safety_tag_delete",
+    "summary": "Deactivate/revoke active Safety Tag for tag replacement"
+  },
+  {
+    "id": 138,
     "method": "PATCH",
     "path": "/api/v1/dogs/{dog_id}/status",
     "module": "dogs",
@@ -976,7 +1104,7 @@
     "summary": "Update Dog Status"
   },
   {
-    "id": 123,
+    "id": 139,
     "method": "GET",
     "path": "/api/v1/dogs/{dog_id}/timeline",
     "module": "dogs",
@@ -984,7 +1112,7 @@
     "summary": "Get Dog Timeline"
   },
   {
-    "id": 124,
+    "id": 140,
     "method": "POST",
     "path": "/api/v1/dogs/{dog_id}/weight",
     "module": "dogs",
@@ -992,7 +1120,7 @@
     "summary": "Record Dog Weight"
   },
   {
-    "id": 125,
+    "id": 141,
     "method": "GET",
     "path": "/api/v1/dogs/{dog_id}/weights",
     "module": "dogs",
@@ -1000,7 +1128,7 @@
     "summary": "Get Dog Weight History"
   },
   {
-    "id": 126,
+    "id": 142,
     "method": "GET",
     "path": "/api/v1/donations",
     "module": "donations",
@@ -1008,7 +1136,7 @@
     "summary": "List All Donations"
   },
   {
-    "id": 127,
+    "id": 143,
     "method": "POST",
     "path": "/api/v1/donations",
     "module": "donations",
@@ -1016,7 +1144,7 @@
     "summary": "Record Manual Donation"
   },
   {
-    "id": 128,
+    "id": 144,
     "method": "POST",
     "path": "/api/v1/donations/bulk/status-update",
     "module": "donations",
@@ -1024,7 +1152,7 @@
     "summary": "Bulk Update Donation Status"
   },
   {
-    "id": 129,
+    "id": 145,
     "method": "GET",
     "path": "/api/v1/donations/campaigns",
     "module": "donations",
@@ -1032,7 +1160,7 @@
     "summary": "List Public Campaigns"
   },
   {
-    "id": 130,
+    "id": 146,
     "method": "POST",
     "path": "/api/v1/donations/campaigns",
     "module": "donations",
@@ -1040,7 +1168,7 @@
     "summary": "Create Campaign"
   },
   {
-    "id": 131,
+    "id": 147,
     "method": "GET",
     "path": "/api/v1/donations/campaigns/manage",
     "module": "donations",
@@ -1048,7 +1176,7 @@
     "summary": "List All Campaigns"
   },
   {
-    "id": 132,
+    "id": 148,
     "method": "GET",
     "path": "/api/v1/donations/campaigns/{campaign_id}",
     "module": "donations",
@@ -1056,7 +1184,7 @@
     "summary": "Get Campaign"
   },
   {
-    "id": 133,
+    "id": 149,
     "method": "PATCH",
     "path": "/api/v1/donations/campaigns/{campaign_id}",
     "module": "donations",
@@ -1064,7 +1192,7 @@
     "summary": "Update Campaign"
   },
   {
-    "id": 134,
+    "id": 150,
     "method": "DELETE",
     "path": "/api/v1/donations/campaigns/{campaign_id}",
     "module": "donations",
@@ -1072,7 +1200,7 @@
     "summary": "Delete Campaign"
   },
   {
-    "id": 135,
+    "id": 151,
     "method": "POST",
     "path": "/api/v1/donations/checkout",
     "module": "donations",
@@ -1080,7 +1208,7 @@
     "summary": "Initiate Donation Checkout"
   },
   {
-    "id": 136,
+    "id": 152,
     "method": "GET",
     "path": "/api/v1/donations/donors",
     "module": "donations",
@@ -1088,7 +1216,7 @@
     "summary": "List Donors"
   },
   {
-    "id": 137,
+    "id": 153,
     "method": "POST",
     "path": "/api/v1/donations/donors/bulk/delete",
     "module": "donations",
@@ -1096,7 +1224,7 @@
     "summary": "Bulk Delete Donors"
   },
   {
-    "id": 138,
+    "id": 154,
     "method": "GET",
     "path": "/api/v1/donations/donors/me",
     "module": "donations",
@@ -1104,7 +1232,7 @@
     "summary": "Get My Donor Profile"
   },
   {
-    "id": 139,
+    "id": 155,
     "method": "PUT",
     "path": "/api/v1/donations/donors/{donor_id}",
     "module": "donations",
@@ -1112,7 +1240,7 @@
     "summary": "Update Donor"
   },
   {
-    "id": 140,
+    "id": 156,
     "method": "DELETE",
     "path": "/api/v1/donations/donors/{donor_id}",
     "module": "donations",
@@ -1120,7 +1248,7 @@
     "summary": "Soft Delete Donor"
   },
   {
-    "id": 141,
+    "id": 157,
     "method": "GET",
     "path": "/api/v1/donations/history",
     "module": "donations",
@@ -1128,7 +1256,7 @@
     "summary": "Get Donation History"
   },
   {
-    "id": 142,
+    "id": 158,
     "method": "GET",
     "path": "/api/v1/donations/recurring",
     "module": "donations",
@@ -1136,7 +1264,7 @@
     "summary": "List My Recurring Subscriptions"
   },
   {
-    "id": 143,
+    "id": 159,
     "method": "POST",
     "path": "/api/v1/donations/recurring",
     "module": "donations",
@@ -1144,7 +1272,7 @@
     "summary": "Create Recurring Subscription"
   },
   {
-    "id": 144,
+    "id": 160,
     "method": "DELETE",
     "path": "/api/v1/donations/recurring/{subscription_id}",
     "module": "donations",
@@ -1152,7 +1280,7 @@
     "summary": "Cancel Recurring Subscription"
   },
   {
-    "id": 145,
+    "id": 161,
     "method": "POST",
     "path": "/api/v1/donations/register",
     "module": "donations",
@@ -1160,7 +1288,7 @@
     "summary": "Register Donor"
   },
   {
-    "id": 146,
+    "id": 162,
     "method": "GET",
     "path": "/api/v1/donations/sponsorships",
     "module": "donations",
@@ -1168,7 +1296,7 @@
     "summary": "List All Sponsorships"
   },
   {
-    "id": 147,
+    "id": 163,
     "method": "POST",
     "path": "/api/v1/donations/sponsorships",
     "module": "donations",
@@ -1176,7 +1304,7 @@
     "summary": "Create Sponsorship"
   },
   {
-    "id": 148,
+    "id": 164,
     "method": "GET",
     "path": "/api/v1/donations/sponsorships/my",
     "module": "donations",
@@ -1184,7 +1312,7 @@
     "summary": "List My Sponsorships"
   },
   {
-    "id": 149,
+    "id": 165,
     "method": "GET",
     "path": "/api/v1/donations/sponsorships/{sponsorship_id}",
     "module": "donations",
@@ -1192,7 +1320,7 @@
     "summary": "Get Sponsorship"
   },
   {
-    "id": 150,
+    "id": 166,
     "method": "PATCH",
     "path": "/api/v1/donations/sponsorships/{sponsorship_id}/status",
     "module": "donations",
@@ -1200,7 +1328,7 @@
     "summary": "Update Sponsorship Status"
   },
   {
-    "id": 151,
+    "id": 167,
     "method": "POST",
     "path": "/api/v1/donations/verify",
     "module": "donations",
@@ -1208,7 +1336,7 @@
     "summary": "Verify Donation Checkout"
   },
   {
-    "id": 152,
+    "id": 168,
     "method": "GET",
     "path": "/api/v1/donations/{donation_id}/receipt",
     "module": "donations",
@@ -1216,7 +1344,7 @@
     "summary": "Get Donation Receipt"
   },
   {
-    "id": 153,
+    "id": 169,
     "method": "POST",
     "path": "/api/v1/donations/{donation_id}/reconcile",
     "module": "donations",
@@ -1224,7 +1352,7 @@
     "summary": "Reconcile Donation"
   },
   {
-    "id": 154,
+    "id": 170,
     "method": "PATCH",
     "path": "/api/v1/donations/{donation_id}/status",
     "module": "donations",
@@ -1232,7 +1360,7 @@
     "summary": "Update Donation Status"
   },
   {
-    "id": 155,
+    "id": 171,
     "method": "GET",
     "path": "/api/v1/finance/account-balances",
     "module": "finance",
@@ -1240,7 +1368,7 @@
     "summary": "Get Account Balances"
   },
   {
-    "id": 156,
+    "id": 172,
     "method": "GET",
     "path": "/api/v1/finance/accounts",
     "module": "finance",
@@ -1248,7 +1376,7 @@
     "summary": "List Accounts"
   },
   {
-    "id": 157,
+    "id": 173,
     "method": "POST",
     "path": "/api/v1/finance/accounts",
     "module": "finance",
@@ -1256,7 +1384,7 @@
     "summary": "Create Account"
   },
   {
-    "id": 158,
+    "id": 174,
     "method": "POST",
     "path": "/api/v1/finance/accounts/bulk/delete",
     "module": "finance",
@@ -1264,7 +1392,7 @@
     "summary": "Bulk Delete Accounts"
   },
   {
-    "id": 159,
+    "id": 175,
     "method": "GET",
     "path": "/api/v1/finance/accounts/{account_id}",
     "module": "finance",
@@ -1272,7 +1400,7 @@
     "summary": "Get Account"
   },
   {
-    "id": 160,
+    "id": 176,
     "method": "PUT",
     "path": "/api/v1/finance/accounts/{account_id}",
     "module": "finance",
@@ -1280,7 +1408,7 @@
     "summary": "Update Account"
   },
   {
-    "id": 161,
+    "id": 177,
     "method": "DELETE",
     "path": "/api/v1/finance/accounts/{account_id}",
     "module": "finance",
@@ -1288,7 +1416,7 @@
     "summary": "Delete Account"
   },
   {
-    "id": 162,
+    "id": 178,
     "method": "GET",
     "path": "/api/v1/finance/budgets",
     "module": "finance",
@@ -1296,7 +1424,7 @@
     "summary": "List Budgets"
   },
   {
-    "id": 163,
+    "id": 179,
     "method": "POST",
     "path": "/api/v1/finance/budgets",
     "module": "finance",
@@ -1304,7 +1432,7 @@
     "summary": "Create Budget"
   },
   {
-    "id": 164,
+    "id": 180,
     "method": "GET",
     "path": "/api/v1/finance/budgets/{budget_id}",
     "module": "finance",
@@ -1312,7 +1440,7 @@
     "summary": "Get Budget"
   },
   {
-    "id": 165,
+    "id": 181,
     "method": "DELETE",
     "path": "/api/v1/finance/budgets/{budget_id}",
     "module": "finance",
@@ -1320,7 +1448,7 @@
     "summary": "Delete Budget"
   },
   {
-    "id": 166,
+    "id": 182,
     "method": "POST",
     "path": "/api/v1/finance/budgets/{budget_id}/items",
     "module": "finance",
@@ -1328,7 +1456,7 @@
     "summary": "Add Budget Item"
   },
   {
-    "id": 167,
+    "id": 183,
     "method": "GET",
     "path": "/api/v1/finance/pnl",
     "module": "finance",
@@ -1336,7 +1464,7 @@
     "summary": "Get Pnl"
   },
   {
-    "id": 168,
+    "id": 184,
     "method": "POST",
     "path": "/api/v1/finance/reconcile/donations",
     "module": "finance",
@@ -1344,7 +1472,7 @@
     "summary": "Reconcile Donations"
   },
   {
-    "id": 169,
+    "id": 185,
     "method": "GET",
     "path": "/api/v1/finance/reconcile/summary",
     "module": "finance",
@@ -1352,7 +1480,7 @@
     "summary": "Get Reconciliation Summary"
   },
   {
-    "id": 170,
+    "id": 186,
     "method": "GET",
     "path": "/api/v1/finance/recurring",
     "module": "finance",
@@ -1360,7 +1488,7 @@
     "summary": "List Recurring"
   },
   {
-    "id": 171,
+    "id": 187,
     "method": "POST",
     "path": "/api/v1/finance/recurring",
     "module": "finance",
@@ -1368,7 +1496,7 @@
     "summary": "Create Recurring"
   },
   {
-    "id": 172,
+    "id": 188,
     "method": "DELETE",
     "path": "/api/v1/finance/recurring/{rtx_id}",
     "module": "finance",
@@ -1376,7 +1504,7 @@
     "summary": "Delete Recurring"
   },
   {
-    "id": 173,
+    "id": 189,
     "method": "GET",
     "path": "/api/v1/finance/summary",
     "module": "finance",
@@ -1384,7 +1512,7 @@
     "summary": "Get Finance Summary"
   },
   {
-    "id": 174,
+    "id": 190,
     "method": "GET",
     "path": "/api/v1/finance/transactions",
     "module": "finance",
@@ -1392,7 +1520,7 @@
     "summary": "List Transactions"
   },
   {
-    "id": 175,
+    "id": 191,
     "method": "POST",
     "path": "/api/v1/finance/transactions",
     "module": "finance",
@@ -1400,7 +1528,7 @@
     "summary": "Create Transaction"
   },
   {
-    "id": 176,
+    "id": 192,
     "method": "POST",
     "path": "/api/v1/finance/transactions/bulk/delete",
     "module": "finance",
@@ -1408,7 +1536,7 @@
     "summary": "Bulk Delete Transactions"
   },
   {
-    "id": 177,
+    "id": 193,
     "method": "GET",
     "path": "/api/v1/finance/transactions/{tx_id}",
     "module": "finance",
@@ -1416,7 +1544,7 @@
     "summary": "Get Transaction"
   },
   {
-    "id": 178,
+    "id": 194,
     "method": "DELETE",
     "path": "/api/v1/finance/transactions/{tx_id}",
     "module": "finance",
@@ -1424,7 +1552,7 @@
     "summary": "Delete Transaction"
   },
   {
-    "id": 179,
+    "id": 195,
     "method": "PATCH",
     "path": "/api/v1/finance/transactions/{tx_id}/status",
     "module": "finance",
@@ -1432,7 +1560,7 @@
     "summary": "Update Transaction Status"
   },
   {
-    "id": 180,
+    "id": 196,
     "method": "POST",
     "path": "/api/v1/fleet/bulk/delete",
     "module": "fleet",
@@ -1440,7 +1568,7 @@
     "summary": "Bulk Delete Vehicles"
   },
   {
-    "id": 181,
+    "id": 197,
     "method": "POST",
     "path": "/api/v1/fleet/bulk/status-update",
     "module": "fleet",
@@ -1448,7 +1576,7 @@
     "summary": "Bulk Update Vehicle Status"
   },
   {
-    "id": 182,
+    "id": 198,
     "method": "GET",
     "path": "/api/v1/fleet/equipment",
     "module": "fleet",
@@ -1456,7 +1584,7 @@
     "summary": "List Equipment Checkouts"
   },
   {
-    "id": 183,
+    "id": 199,
     "method": "POST",
     "path": "/api/v1/fleet/equipment",
     "module": "fleet",
@@ -1464,7 +1592,7 @@
     "summary": "Checkout Equipment"
   },
   {
-    "id": 184,
+    "id": 200,
     "method": "GET",
     "path": "/api/v1/fleet/equipment/{checkout_id}",
     "module": "fleet",
@@ -1472,7 +1600,7 @@
     "summary": "Get Equipment Checkout"
   },
   {
-    "id": 185,
+    "id": 201,
     "method": "POST",
     "path": "/api/v1/fleet/equipment/{checkout_id}/return",
     "module": "fleet",
@@ -1480,7 +1608,7 @@
     "summary": "Return Equipment"
   },
   {
-    "id": 186,
+    "id": 202,
     "method": "GET",
     "path": "/api/v1/fleet/fuel/{log_id}",
     "module": "fleet",
@@ -1488,7 +1616,7 @@
     "summary": "Get Fuel Log"
   },
   {
-    "id": 187,
+    "id": 203,
     "method": "POST",
     "path": "/api/v1/fleet/maintenance",
     "module": "fleet",
@@ -1496,7 +1624,7 @@
     "summary": "Log Maintenance"
   },
   {
-    "id": 188,
+    "id": 204,
     "method": "GET",
     "path": "/api/v1/fleet/vehicles",
     "module": "fleet",
@@ -1504,7 +1632,7 @@
     "summary": "List Vehicles"
   },
   {
-    "id": 189,
+    "id": 205,
     "method": "POST",
     "path": "/api/v1/fleet/vehicles",
     "module": "fleet",
@@ -1512,7 +1640,7 @@
     "summary": "Create Vehicle"
   },
   {
-    "id": 190,
+    "id": 206,
     "method": "GET",
     "path": "/api/v1/fleet/vehicles/{vehicle_id}",
     "module": "fleet",
@@ -1520,7 +1648,7 @@
     "summary": "Get Vehicle"
   },
   {
-    "id": 191,
+    "id": 207,
     "method": "PUT",
     "path": "/api/v1/fleet/vehicles/{vehicle_id}",
     "module": "fleet",
@@ -1528,7 +1656,7 @@
     "summary": "Update Vehicle"
   },
   {
-    "id": 192,
+    "id": 208,
     "method": "DELETE",
     "path": "/api/v1/fleet/vehicles/{vehicle_id}",
     "module": "fleet",
@@ -1536,7 +1664,7 @@
     "summary": "Soft Delete Vehicle"
   },
   {
-    "id": 193,
+    "id": 209,
     "method": "GET",
     "path": "/api/v1/fleet/vehicles/{vehicle_id}/fuel",
     "module": "fleet",
@@ -1544,7 +1672,7 @@
     "summary": "List Fuel Logs"
   },
   {
-    "id": 194,
+    "id": 210,
     "method": "POST",
     "path": "/api/v1/fleet/vehicles/{vehicle_id}/fuel",
     "module": "fleet",
@@ -1552,7 +1680,7 @@
     "summary": "Log Fuel"
   },
   {
-    "id": 195,
+    "id": 211,
     "method": "GET",
     "path": "/api/v1/fleet/vehicles/{vehicle_id}/maintenance",
     "module": "fleet",
@@ -1560,7 +1688,7 @@
     "summary": "List Maintenance"
   },
   {
-    "id": 196,
+    "id": 212,
     "method": "PATCH",
     "path": "/api/v1/fleet/vehicles/{vehicle_id}/status",
     "module": "fleet",
@@ -1568,7 +1696,7 @@
     "summary": "Update Vehicle Status"
   },
   {
-    "id": 197,
+    "id": 213,
     "method": "GET",
     "path": "/api/v1/fosters",
     "module": "fosters",
@@ -1576,7 +1704,7 @@
     "summary": "List Profiles"
   },
   {
-    "id": 198,
+    "id": 214,
     "method": "DELETE",
     "path": "/api/v1/fosters/admin/fosters/{profile_id}",
     "module": "fosters",
@@ -1584,7 +1712,7 @@
     "summary": "Soft Delete Profile"
   },
   {
-    "id": 199,
+    "id": 215,
     "method": "POST",
     "path": "/api/v1/fosters/apply",
     "module": "fosters",
@@ -1592,7 +1720,7 @@
     "summary": "Apply To Foster"
   },
   {
-    "id": 200,
+    "id": 216,
     "method": "POST",
     "path": "/api/v1/fosters/bulk/delete",
     "module": "fosters",
@@ -1600,7 +1728,7 @@
     "summary": "Bulk Delete Profiles"
   },
   {
-    "id": 201,
+    "id": 217,
     "method": "POST",
     "path": "/api/v1/fosters/placements/{placement_id}/convert-to-adopt",
     "module": "fosters",
@@ -1608,7 +1736,7 @@
     "summary": "Convert To Adopt"
   },
   {
-    "id": 202,
+    "id": 218,
     "method": "GET",
     "path": "/api/v1/fosters/placements/{placement_id}/progress",
     "module": "fosters",
@@ -1616,7 +1744,7 @@
     "summary": "Get Progress Logs"
   },
   {
-    "id": 203,
+    "id": 219,
     "method": "POST",
     "path": "/api/v1/fosters/placements/{placement_id}/progress",
     "module": "fosters",
@@ -1624,7 +1752,7 @@
     "summary": "Log Progress"
   },
   {
-    "id": 204,
+    "id": 220,
     "method": "POST",
     "path": "/api/v1/fosters/placements/{placement_id}/return",
     "module": "fosters",
@@ -1632,7 +1760,7 @@
     "summary": "Return Dog"
   },
   {
-    "id": 205,
+    "id": 221,
     "method": "GET",
     "path": "/api/v1/fosters/placements/{placement_id}/supplies",
     "module": "fosters",
@@ -1640,7 +1768,7 @@
     "summary": "List Supply Dispatches"
   },
   {
-    "id": 206,
+    "id": 222,
     "method": "POST",
     "path": "/api/v1/fosters/placements/{placement_id}/supplies",
     "module": "fosters",
@@ -1648,7 +1776,7 @@
     "summary": "Log Supply Dispatch"
   },
   {
-    "id": 207,
+    "id": 223,
     "method": "PUT",
     "path": "/api/v1/fosters/{profile_id}",
     "module": "fosters",
@@ -1656,7 +1784,7 @@
     "summary": "Update Profile"
   },
   {
-    "id": 208,
+    "id": 224,
     "method": "DELETE",
     "path": "/api/v1/fosters/{profile_id}",
     "module": "fosters",
@@ -1664,7 +1792,7 @@
     "summary": "Soft Delete Profile"
   },
   {
-    "id": 209,
+    "id": 225,
     "method": "POST",
     "path": "/api/v1/fosters/{profile_id}/placements",
     "module": "fosters",
@@ -1672,7 +1800,7 @@
     "summary": "Place Dog"
   },
   {
-    "id": 210,
+    "id": 226,
     "method": "GET",
     "path": "/api/v1/grievance",
     "module": "grievance",
@@ -1680,7 +1808,7 @@
     "summary": "List Tickets"
   },
   {
-    "id": 211,
+    "id": 227,
     "method": "POST",
     "path": "/api/v1/grievance",
     "module": "grievance",
@@ -1688,7 +1816,7 @@
     "summary": "Submit Complaint"
   },
   {
-    "id": 212,
+    "id": 228,
     "method": "POST",
     "path": "/api/v1/grievance/bulk/delete",
     "module": "grievance",
@@ -1696,7 +1824,7 @@
     "summary": "Bulk Delete Tickets"
   },
   {
-    "id": 213,
+    "id": 229,
     "method": "POST",
     "path": "/api/v1/grievance/bulk/status",
     "module": "grievance",
@@ -1704,7 +1832,7 @@
     "summary": "Bulk Update Ticket Status"
   },
   {
-    "id": 214,
+    "id": 230,
     "method": "GET",
     "path": "/api/v1/grievance/feedback",
     "module": "grievance",
@@ -1712,7 +1840,7 @@
     "summary": "List Feedback"
   },
   {
-    "id": 215,
+    "id": 231,
     "method": "POST",
     "path": "/api/v1/grievance/feedback",
     "module": "grievance",
@@ -1720,7 +1848,7 @@
     "summary": "Submit Feedback"
   },
   {
-    "id": 216,
+    "id": 232,
     "method": "POST",
     "path": "/api/v1/grievance/feedback/bulk/delete",
     "module": "grievance",
@@ -1728,7 +1856,7 @@
     "summary": "Bulk Delete Feedback"
   },
   {
-    "id": 217,
+    "id": 233,
     "method": "DELETE",
     "path": "/api/v1/grievance/feedback/{feedback_id}",
     "module": "grievance",
@@ -1736,7 +1864,7 @@
     "summary": "Soft Delete Feedback"
   },
   {
-    "id": 218,
+    "id": 234,
     "method": "GET",
     "path": "/api/v1/grievance/{ticket_id}",
     "module": "grievance",
@@ -1744,7 +1872,7 @@
     "summary": "Get Ticket"
   },
   {
-    "id": 219,
+    "id": 235,
     "method": "PUT",
     "path": "/api/v1/grievance/{ticket_id}",
     "module": "grievance",
@@ -1752,7 +1880,7 @@
     "summary": "Update Ticket"
   },
   {
-    "id": 220,
+    "id": 236,
     "method": "DELETE",
     "path": "/api/v1/grievance/{ticket_id}",
     "module": "grievance",
@@ -1760,7 +1888,7 @@
     "summary": "Soft Delete Ticket"
   },
   {
-    "id": 221,
+    "id": 237,
     "method": "POST",
     "path": "/api/v1/grievance/{ticket_id}/assign",
     "module": "grievance",
@@ -1768,7 +1896,7 @@
     "summary": "Assign Ticket"
   },
   {
-    "id": 222,
+    "id": 238,
     "method": "GET",
     "path": "/api/v1/grievance/{ticket_id}/comments",
     "module": "grievance",
@@ -1776,7 +1904,7 @@
     "summary": "List Comments"
   },
   {
-    "id": 223,
+    "id": 239,
     "method": "POST",
     "path": "/api/v1/grievance/{ticket_id}/comments",
     "module": "grievance",
@@ -1784,7 +1912,7 @@
     "summary": "Add Comment"
   },
   {
-    "id": 224,
+    "id": 240,
     "method": "POST",
     "path": "/api/v1/grievance/{ticket_id}/escalate",
     "module": "grievance",
@@ -1792,7 +1920,7 @@
     "summary": "Escalate Ticket"
   },
   {
-    "id": 225,
+    "id": 241,
     "method": "PATCH",
     "path": "/api/v1/grievance/{ticket_id}/status",
     "module": "grievance",
@@ -1800,15 +1928,7 @@
     "summary": "Update Ticket Status"
   },
   {
-    "id": 226,
-    "method": "DELETE",
-    "path": "/api/v1/inventory/admin/inventory/items/{item_id}",
-    "module": "inventory",
-    "operation_id": "delete_item_api_v1_inventory_admin_inventory_items__item_id__delete",
-    "summary": "Delete Item"
-  },
-  {
-    "id": 227,
+    "id": 242,
     "method": "GET",
     "path": "/api/v1/inventory/items",
     "module": "inventory",
@@ -1816,7 +1936,7 @@
     "summary": "List Items"
   },
   {
-    "id": 228,
+    "id": 243,
     "method": "POST",
     "path": "/api/v1/inventory/items",
     "module": "inventory",
@@ -1824,7 +1944,7 @@
     "summary": "Create Item"
   },
   {
-    "id": 229,
+    "id": 244,
     "method": "POST",
     "path": "/api/v1/inventory/items/bulk/delete",
     "module": "inventory",
@@ -1832,7 +1952,7 @@
     "summary": "Bulk Delete Items"
   },
   {
-    "id": 230,
+    "id": 245,
     "method": "GET",
     "path": "/api/v1/inventory/items/{item_id}",
     "module": "inventory",
@@ -1840,7 +1960,7 @@
     "summary": "Get Item"
   },
   {
-    "id": 231,
+    "id": 246,
     "method": "DELETE",
     "path": "/api/v1/inventory/items/{item_id}",
     "module": "inventory",
@@ -1848,7 +1968,7 @@
     "summary": "Delete Item"
   },
   {
-    "id": 232,
+    "id": 247,
     "method": "GET",
     "path": "/api/v1/inventory/items/{item_id}/movements",
     "module": "inventory",
@@ -1856,7 +1976,7 @@
     "summary": "List Movements"
   },
   {
-    "id": 233,
+    "id": 248,
     "method": "POST",
     "path": "/api/v1/inventory/movements",
     "module": "inventory",
@@ -1864,7 +1984,7 @@
     "summary": "Record Movement"
   },
   {
-    "id": 234,
+    "id": 249,
     "method": "GET",
     "path": "/api/v1/inventory/requisitions",
     "module": "inventory",
@@ -1872,7 +1992,7 @@
     "summary": "List Requisitions"
   },
   {
-    "id": 235,
+    "id": 250,
     "method": "POST",
     "path": "/api/v1/inventory/requisitions",
     "module": "inventory",
@@ -1880,7 +2000,7 @@
     "summary": "Create Requisition"
   },
   {
-    "id": 236,
+    "id": 251,
     "method": "POST",
     "path": "/api/v1/inventory/requisitions/bulk/status",
     "module": "inventory",
@@ -1888,7 +2008,7 @@
     "summary": "Bulk Update Requisition Status"
   },
   {
-    "id": 237,
+    "id": 252,
     "method": "PUT",
     "path": "/api/v1/inventory/requisitions/{req_id}/status",
     "module": "inventory",
@@ -1896,7 +2016,7 @@
     "summary": "Update Requisition Status"
   },
   {
-    "id": 238,
+    "id": 253,
     "method": "GET",
     "path": "/api/v1/lost-found/found",
     "module": "lost-found",
@@ -1904,7 +2024,7 @@
     "summary": "List Found Reports"
   },
   {
-    "id": 239,
+    "id": 254,
     "method": "POST",
     "path": "/api/v1/lost-found/found",
     "module": "lost-found",
@@ -1912,7 +2032,7 @@
     "summary": "Report Found Pet"
   },
   {
-    "id": 240,
+    "id": 255,
     "method": "POST",
     "path": "/api/v1/lost-found/found/bulk/delete",
     "module": "lost-found",
@@ -1920,7 +2040,15 @@
     "summary": "Bulk Delete Found Reports"
   },
   {
-    "id": 241,
+    "id": 256,
+    "method": "POST",
+    "path": "/api/v1/lost-found/found/sighting",
+    "module": "lost-found",
+    "operation_id": "report_public_sighting_api_v1_lost_found_found_sighting_post",
+    "summary": "Public submission of a lost pet sighting by a QR-scanner citizen (alias)"
+  },
+  {
+    "id": 257,
     "method": "GET",
     "path": "/api/v1/lost-found/found/{report_id}",
     "module": "lost-found",
@@ -1928,7 +2056,7 @@
     "summary": "Get Found Report"
   },
   {
-    "id": 242,
+    "id": 258,
     "method": "DELETE",
     "path": "/api/v1/lost-found/found/{report_id}",
     "module": "lost-found",
@@ -1936,7 +2064,7 @@
     "summary": "Delete Found Report"
   },
   {
-    "id": 243,
+    "id": 259,
     "method": "GET",
     "path": "/api/v1/lost-found/found/{report_id}/matches",
     "module": "lost-found",
@@ -1944,7 +2072,7 @@
     "summary": "Get Matches For Found"
   },
   {
-    "id": 244,
+    "id": 260,
     "method": "GET",
     "path": "/api/v1/lost-found/lost",
     "module": "lost-found",
@@ -1952,7 +2080,7 @@
     "summary": "List Lost Reports"
   },
   {
-    "id": 245,
+    "id": 261,
     "method": "POST",
     "path": "/api/v1/lost-found/lost",
     "module": "lost-found",
@@ -1960,7 +2088,7 @@
     "summary": "Report Lost Pet"
   },
   {
-    "id": 246,
+    "id": 262,
     "method": "POST",
     "path": "/api/v1/lost-found/lost/bulk/delete",
     "module": "lost-found",
@@ -1968,7 +2096,7 @@
     "summary": "Bulk Delete Lost Reports"
   },
   {
-    "id": 247,
+    "id": 263,
     "method": "GET",
     "path": "/api/v1/lost-found/lost/{report_id}",
     "module": "lost-found",
@@ -1976,7 +2104,7 @@
     "summary": "Get Lost Report"
   },
   {
-    "id": 248,
+    "id": 264,
     "method": "DELETE",
     "path": "/api/v1/lost-found/lost/{report_id}",
     "module": "lost-found",
@@ -1984,7 +2112,7 @@
     "summary": "Delete Lost Report"
   },
   {
-    "id": 249,
+    "id": 265,
     "method": "POST",
     "path": "/api/v1/lost-found/lost/{report_id}/broadcast",
     "module": "lost-found",
@@ -1992,7 +2120,7 @@
     "summary": "Broadcast Lost Pet Alert"
   },
   {
-    "id": 250,
+    "id": 266,
     "method": "GET",
     "path": "/api/v1/lost-found/lost/{report_id}/matches",
     "module": "lost-found",
@@ -2000,7 +2128,7 @@
     "summary": "Get Matches For Lost"
   },
   {
-    "id": 251,
+    "id": 267,
     "method": "POST",
     "path": "/api/v1/lost-found/matches/{match_id}/claim",
     "module": "lost-found",
@@ -2008,7 +2136,7 @@
     "summary": "Submit Ownership Claim"
   },
   {
-    "id": 252,
+    "id": 268,
     "method": "POST",
     "path": "/api/v1/lost-found/matches/{match_id}/claim/review",
     "module": "lost-found",
@@ -2016,7 +2144,7 @@
     "summary": "Review Ownership Claim"
   },
   {
-    "id": 253,
+    "id": 269,
     "method": "POST",
     "path": "/api/v1/lost-found/matches/{match_id}/resolve",
     "module": "lost-found",
@@ -2024,7 +2152,7 @@
     "summary": "Resolve Match"
   },
   {
-    "id": 254,
+    "id": 270,
     "method": "GET",
     "path": "/api/v1/lost-found/reunion-stories",
     "module": "lost-found",
@@ -2032,7 +2160,15 @@
     "summary": "Get Reunion Stories"
   },
   {
-    "id": 255,
+    "id": 271,
+    "method": "POST",
+    "path": "/api/v1/lost-found/sighting",
+    "module": "lost-found",
+    "operation_id": "report_public_sighting_api_v1_lost_found_sighting_post",
+    "summary": "Public submission of a lost pet sighting by a QR-scanner citizen"
+  },
+  {
+    "id": 272,
     "method": "GET",
     "path": "/api/v1/lost-found/stories",
     "module": "lost-found",
@@ -2040,7 +2176,7 @@
     "summary": "Get Reunion Stories"
   },
   {
-    "id": 256,
+    "id": 273,
     "method": "POST",
     "path": "/api/v1/medical/administrations",
     "module": "medical",
@@ -2048,7 +2184,7 @@
     "summary": "Log Medication Administration"
   },
   {
-    "id": 257,
+    "id": 274,
     "method": "POST",
     "path": "/api/v1/medical/bulk/delete",
     "module": "medical",
@@ -2056,7 +2192,7 @@
     "summary": "Bulk Delete Entities"
   },
   {
-    "id": 258,
+    "id": 275,
     "method": "POST",
     "path": "/api/v1/medical/bulk/prescriptions/status",
     "module": "medical",
@@ -2064,7 +2200,7 @@
     "summary": "Bulk Update Prescription Status"
   },
   {
-    "id": 259,
+    "id": 276,
     "method": "POST",
     "path": "/api/v1/medical/clearance/{dog_id}",
     "module": "medical",
@@ -2072,7 +2208,7 @@
     "summary": "Authorize Adoption Clearance"
   },
   {
-    "id": 260,
+    "id": 277,
     "method": "GET",
     "path": "/api/v1/medical/clearances/dogs/{dog_id}",
     "module": "medical",
@@ -2080,7 +2216,7 @@
     "summary": "Get Dog Clearances"
   },
   {
-    "id": 261,
+    "id": 278,
     "method": "GET",
     "path": "/api/v1/medical/dogs/{dog_id}/administrations",
     "module": "medical",
@@ -2088,7 +2224,7 @@
     "summary": "Get Dog Administrations"
   },
   {
-    "id": 262,
+    "id": 279,
     "method": "GET",
     "path": "/api/v1/medical/dogs/{dog_id}/history",
     "module": "medical",
@@ -2096,7 +2232,7 @@
     "summary": "Get Medical History"
   },
   {
-    "id": 263,
+    "id": 280,
     "method": "GET",
     "path": "/api/v1/medical/exams",
     "module": "medical",
@@ -2104,7 +2240,7 @@
     "summary": "List Exams"
   },
   {
-    "id": 264,
+    "id": 281,
     "method": "POST",
     "path": "/api/v1/medical/exams",
     "module": "medical",
@@ -2112,7 +2248,7 @@
     "summary": "Perform Clinical Exam"
   },
   {
-    "id": 265,
+    "id": 282,
     "method": "GET",
     "path": "/api/v1/medical/prescriptions",
     "module": "medical",
@@ -2120,7 +2256,7 @@
     "summary": "List Prescriptions"
   },
   {
-    "id": 266,
+    "id": 283,
     "method": "POST",
     "path": "/api/v1/medical/prescriptions",
     "module": "medical",
@@ -2128,7 +2264,7 @@
     "summary": "Prescribe Medication"
   },
   {
-    "id": 267,
+    "id": 284,
     "method": "PUT",
     "path": "/api/v1/medical/prescriptions/{prescription_id}",
     "module": "medical",
@@ -2136,7 +2272,7 @@
     "summary": "Update Prescription"
   },
   {
-    "id": 268,
+    "id": 285,
     "method": "GET",
     "path": "/api/v1/medical/prescriptions/{prescription_id}/administrations",
     "module": "medical",
@@ -2144,7 +2280,7 @@
     "summary": "Get Prescription Administrations"
   },
   {
-    "id": 269,
+    "id": 286,
     "method": "PATCH",
     "path": "/api/v1/medical/prescriptions/{prescription_id}/status",
     "module": "medical",
@@ -2152,7 +2288,7 @@
     "summary": "Update Prescription Status"
   },
   {
-    "id": 270,
+    "id": 287,
     "method": "GET",
     "path": "/api/v1/medical/treatments",
     "module": "medical",
@@ -2160,7 +2296,7 @@
     "summary": "List Treatments"
   },
   {
-    "id": 271,
+    "id": 288,
     "method": "POST",
     "path": "/api/v1/medical/treatments",
     "module": "medical",
@@ -2168,7 +2304,7 @@
     "summary": "Record Treatment"
   },
   {
-    "id": 272,
+    "id": 289,
     "method": "GET",
     "path": "/api/v1/medical/vaccinations",
     "module": "medical",
@@ -2176,7 +2312,7 @@
     "summary": "List Vaccinations"
   },
   {
-    "id": 273,
+    "id": 290,
     "method": "POST",
     "path": "/api/v1/medical/vaccinations",
     "module": "medical",
@@ -2184,7 +2320,7 @@
     "summary": "Administer Vaccine"
   },
   {
-    "id": 274,
+    "id": 291,
     "method": "GET",
     "path": "/api/v1/medical/vaccine-protocols",
     "module": "medical",
@@ -2192,7 +2328,7 @@
     "summary": "List Vaccine Protocols"
   },
   {
-    "id": 275,
+    "id": 292,
     "method": "POST",
     "path": "/api/v1/medical/vaccine-protocols",
     "module": "medical",
@@ -2200,7 +2336,7 @@
     "summary": "Create Vaccine Protocol"
   },
   {
-    "id": 276,
+    "id": 293,
     "method": "DELETE",
     "path": "/api/v1/medical/{entity_type}/{entity_id}",
     "module": "medical",
@@ -2208,7 +2344,7 @@
     "summary": "Soft Delete Entity"
   },
   {
-    "id": 277,
+    "id": 294,
     "method": "GET",
     "path": "/api/v1/notifications",
     "module": "notifications",
@@ -2216,7 +2352,7 @@
     "summary": "List Notifications"
   },
   {
-    "id": 278,
+    "id": 295,
     "method": "POST",
     "path": "/api/v1/notifications/broadcast",
     "module": "notifications",
@@ -2224,7 +2360,7 @@
     "summary": "Broadcast Notification"
   },
   {
-    "id": 279,
+    "id": 296,
     "method": "POST",
     "path": "/api/v1/notifications/bulk/delete",
     "module": "notifications",
@@ -2232,7 +2368,7 @@
     "summary": "Bulk Delete Notifications"
   },
   {
-    "id": 280,
+    "id": 297,
     "method": "GET",
     "path": "/api/v1/notifications/preferences",
     "module": "notifications",
@@ -2240,7 +2376,7 @@
     "summary": "Get Preferences"
   },
   {
-    "id": 281,
+    "id": 298,
     "method": "PUT",
     "path": "/api/v1/notifications/preferences",
     "module": "notifications",
@@ -2248,7 +2384,7 @@
     "summary": "Update Preferences"
   },
   {
-    "id": 282,
+    "id": 299,
     "method": "PUT",
     "path": "/api/v1/notifications/read-all",
     "module": "notifications",
@@ -2256,7 +2392,7 @@
     "summary": "Mark All Read"
   },
   {
-    "id": 283,
+    "id": 300,
     "method": "POST",
     "path": "/api/v1/notifications/send",
     "module": "notifications",
@@ -2264,7 +2400,7 @@
     "summary": "Send Notification"
   },
   {
-    "id": 284,
+    "id": 301,
     "method": "GET",
     "path": "/api/v1/notifications/unread-count",
     "module": "notifications",
@@ -2272,7 +2408,7 @@
     "summary": "Unread Count"
   },
   {
-    "id": 285,
+    "id": 302,
     "method": "DELETE",
     "path": "/api/v1/notifications/{notification_id}",
     "module": "notifications",
@@ -2280,7 +2416,7 @@
     "summary": "Delete Notification"
   },
   {
-    "id": 286,
+    "id": 303,
     "method": "PUT",
     "path": "/api/v1/notifications/{notification_id}/read",
     "module": "notifications",
@@ -2288,7 +2424,7 @@
     "summary": "Mark Read"
   },
   {
-    "id": 287,
+    "id": 304,
     "method": "GET",
     "path": "/api/v1/portal/admin/blog",
     "module": "portal",
@@ -2296,7 +2432,7 @@
     "summary": "Admin List Blogs"
   },
   {
-    "id": 288,
+    "id": 305,
     "method": "POST",
     "path": "/api/v1/portal/admin/blog",
     "module": "portal",
@@ -2304,7 +2440,7 @@
     "summary": "Create Blog"
   },
   {
-    "id": 289,
+    "id": 306,
     "method": "POST",
     "path": "/api/v1/portal/admin/blog/bulk/delete",
     "module": "portal",
@@ -2312,7 +2448,7 @@
     "summary": "Bulk Delete Blogs"
   },
   {
-    "id": 290,
+    "id": 307,
     "method": "POST",
     "path": "/api/v1/portal/admin/blog/bulk/status",
     "module": "portal",
@@ -2320,7 +2456,7 @@
     "summary": "Bulk Update Blog Status"
   },
   {
-    "id": 291,
+    "id": 308,
     "method": "PUT",
     "path": "/api/v1/portal/admin/blog/{post_id}",
     "module": "portal",
@@ -2328,7 +2464,7 @@
     "summary": "Update Blog"
   },
   {
-    "id": 292,
+    "id": 309,
     "method": "DELETE",
     "path": "/api/v1/portal/admin/blog/{post_id}",
     "module": "portal",
@@ -2336,7 +2472,7 @@
     "summary": "Soft Delete Blog"
   },
   {
-    "id": 293,
+    "id": 310,
     "method": "GET",
     "path": "/api/v1/portal/admin/cms/pages",
     "module": "portal",
@@ -2344,7 +2480,7 @@
     "summary": "List Admin Cms Pages"
   },
   {
-    "id": 294,
+    "id": 311,
     "method": "GET",
     "path": "/api/v1/portal/admin/cms/pages/{slug}",
     "module": "portal",
@@ -2352,7 +2488,7 @@
     "summary": "Get Admin Cms Page"
   },
   {
-    "id": 295,
+    "id": 312,
     "method": "PUT",
     "path": "/api/v1/portal/admin/cms/pages/{slug}",
     "module": "portal",
@@ -2360,7 +2496,7 @@
     "summary": "Update Admin Cms Page"
   },
   {
-    "id": 296,
+    "id": 313,
     "method": "POST",
     "path": "/api/v1/portal/admin/cms/pages/{slug}/discard",
     "module": "portal",
@@ -2368,7 +2504,7 @@
     "summary": "Discard Admin Cms Page"
   },
   {
-    "id": 297,
+    "id": 314,
     "method": "POST",
     "path": "/api/v1/portal/admin/cms/pages/{slug}/publish",
     "module": "portal",
@@ -2376,7 +2512,7 @@
     "summary": "Publish Admin Cms Page"
   },
   {
-    "id": 298,
+    "id": 315,
     "method": "POST",
     "path": "/api/v1/portal/admin/contact",
     "module": "portal",
@@ -2384,7 +2520,7 @@
     "summary": "Create Contact"
   },
   {
-    "id": 299,
+    "id": 316,
     "method": "PUT",
     "path": "/api/v1/portal/admin/contact/{location_id}",
     "module": "portal",
@@ -2392,7 +2528,7 @@
     "summary": "Update Contact"
   },
   {
-    "id": 300,
+    "id": 317,
     "method": "GET",
     "path": "/api/v1/portal/admin/faq",
     "module": "portal",
@@ -2400,7 +2536,7 @@
     "summary": "Admin List Faqs"
   },
   {
-    "id": 301,
+    "id": 318,
     "method": "POST",
     "path": "/api/v1/portal/admin/faq",
     "module": "portal",
@@ -2408,7 +2544,7 @@
     "summary": "Create Faq"
   },
   {
-    "id": 302,
+    "id": 319,
     "method": "POST",
     "path": "/api/v1/portal/admin/faq/bulk/delete",
     "module": "portal",
@@ -2416,7 +2552,7 @@
     "summary": "Bulk Delete Faqs"
   },
   {
-    "id": 303,
+    "id": 320,
     "method": "POST",
     "path": "/api/v1/portal/admin/faq/bulk/status",
     "module": "portal",
@@ -2424,7 +2560,7 @@
     "summary": "Bulk Update Faq Status"
   },
   {
-    "id": 304,
+    "id": 321,
     "method": "PUT",
     "path": "/api/v1/portal/admin/faq/{entry_id}",
     "module": "portal",
@@ -2432,7 +2568,7 @@
     "summary": "Update Faq"
   },
   {
-    "id": 305,
+    "id": 322,
     "method": "DELETE",
     "path": "/api/v1/portal/admin/faq/{entry_id}",
     "module": "portal",
@@ -2440,7 +2576,7 @@
     "summary": "Soft Delete Faq"
   },
   {
-    "id": 306,
+    "id": 323,
     "method": "GET",
     "path": "/api/v1/portal/admin/legal",
     "module": "portal",
@@ -2448,7 +2584,7 @@
     "summary": "Admin List Legal Docs"
   },
   {
-    "id": 307,
+    "id": 324,
     "method": "POST",
     "path": "/api/v1/portal/admin/legal",
     "module": "portal",
@@ -2456,7 +2592,7 @@
     "summary": "Create Legal Doc"
   },
   {
-    "id": 308,
+    "id": 325,
     "method": "PUT",
     "path": "/api/v1/portal/admin/legal/{doc_id}",
     "module": "portal",
@@ -2464,7 +2600,7 @@
     "summary": "Update Legal Doc"
   },
   {
-    "id": 309,
+    "id": 326,
     "method": "DELETE",
     "path": "/api/v1/portal/admin/legal/{doc_id}",
     "module": "portal",
@@ -2472,7 +2608,7 @@
     "summary": "Soft Delete Legal Doc"
   },
   {
-    "id": 310,
+    "id": 327,
     "method": "GET",
     "path": "/api/v1/portal/admin/settings",
     "module": "portal",
@@ -2480,7 +2616,7 @@
     "summary": "List Settings"
   },
   {
-    "id": 311,
+    "id": 328,
     "method": "PUT",
     "path": "/api/v1/portal/admin/settings/{key}",
     "module": "portal",
@@ -2488,7 +2624,7 @@
     "summary": "Upsert Setting"
   },
   {
-    "id": 312,
+    "id": 329,
     "method": "GET",
     "path": "/api/v1/portal/admin/success-stories",
     "module": "portal",
@@ -2496,7 +2632,7 @@
     "summary": "Admin List Stories"
   },
   {
-    "id": 313,
+    "id": 330,
     "method": "POST",
     "path": "/api/v1/portal/admin/success-stories",
     "module": "portal",
@@ -2504,7 +2640,7 @@
     "summary": "Create Story"
   },
   {
-    "id": 314,
+    "id": 331,
     "method": "POST",
     "path": "/api/v1/portal/admin/success-stories/bulk/delete",
     "module": "portal",
@@ -2512,7 +2648,7 @@
     "summary": "Bulk Delete Stories"
   },
   {
-    "id": 315,
+    "id": 332,
     "method": "POST",
     "path": "/api/v1/portal/admin/success-stories/bulk/status",
     "module": "portal",
@@ -2520,7 +2656,7 @@
     "summary": "Bulk Update Story Status"
   },
   {
-    "id": 316,
+    "id": 333,
     "method": "PUT",
     "path": "/api/v1/portal/admin/success-stories/{story_id}",
     "module": "portal",
@@ -2528,7 +2664,7 @@
     "summary": "Update Story"
   },
   {
-    "id": 317,
+    "id": 334,
     "method": "DELETE",
     "path": "/api/v1/portal/admin/success-stories/{story_id}",
     "module": "portal",
@@ -2536,7 +2672,7 @@
     "summary": "Soft Delete Story"
   },
   {
-    "id": 318,
+    "id": 335,
     "method": "GET",
     "path": "/api/v1/portal/admin/urgent-alerts",
     "module": "portal",
@@ -2544,7 +2680,7 @@
     "summary": "Admin List Urgent Alerts"
   },
   {
-    "id": 319,
+    "id": 336,
     "method": "POST",
     "path": "/api/v1/portal/admin/urgent-alerts",
     "module": "portal",
@@ -2552,7 +2688,7 @@
     "summary": "Create Urgent Alert"
   },
   {
-    "id": 320,
+    "id": 337,
     "method": "PUT",
     "path": "/api/v1/portal/admin/urgent-alerts/{alert_id}",
     "module": "portal",
@@ -2560,7 +2696,7 @@
     "summary": "Update Urgent Alert"
   },
   {
-    "id": 321,
+    "id": 338,
     "method": "DELETE",
     "path": "/api/v1/portal/admin/urgent-alerts/{alert_id}",
     "module": "portal",
@@ -2568,7 +2704,7 @@
     "summary": "Soft Delete Urgent Alert"
   },
   {
-    "id": 322,
+    "id": 339,
     "method": "POST",
     "path": "/api/v1/portal/admin/veterinary-network",
     "module": "portal",
@@ -2576,7 +2712,7 @@
     "summary": "Create Vet"
   },
   {
-    "id": 323,
+    "id": 340,
     "method": "PUT",
     "path": "/api/v1/portal/admin/veterinary-network/{partner_id}",
     "module": "portal",
@@ -2584,7 +2720,7 @@
     "summary": "Update Vet"
   },
   {
-    "id": 324,
+    "id": 341,
     "method": "GET",
     "path": "/api/v1/portal/blog",
     "module": "portal",
@@ -2592,7 +2728,7 @@
     "summary": "List Published Blog"
   },
   {
-    "id": 325,
+    "id": 342,
     "method": "GET",
     "path": "/api/v1/portal/blog/slug/{slug}",
     "module": "portal",
@@ -2600,7 +2736,7 @@
     "summary": "Get Blog By Slug"
   },
   {
-    "id": 326,
+    "id": 343,
     "method": "GET",
     "path": "/api/v1/portal/cms/pages/{slug}",
     "module": "portal",
@@ -2608,7 +2744,7 @@
     "summary": "Get Public Cms Page"
   },
   {
-    "id": 327,
+    "id": 344,
     "method": "GET",
     "path": "/api/v1/portal/contact",
     "module": "portal",
@@ -2616,7 +2752,15 @@
     "summary": "List Contact Locations"
   },
   {
-    "id": 328,
+    "id": 345,
+    "method": "POST",
+    "path": "/api/v1/portal/contact",
+    "module": "portal",
+    "operation_id": "submit_contact_message_api_v1_portal_contact_post",
+    "summary": "Submit Contact Message"
+  },
+  {
+    "id": 346,
     "method": "GET",
     "path": "/api/v1/portal/faq",
     "module": "portal",
@@ -2624,7 +2768,7 @@
     "summary": "List Faq"
   },
   {
-    "id": 329,
+    "id": 347,
     "method": "GET",
     "path": "/api/v1/portal/legal",
     "module": "portal",
@@ -2632,7 +2776,7 @@
     "summary": "List Published Legal Docs"
   },
   {
-    "id": 330,
+    "id": 348,
     "method": "GET",
     "path": "/api/v1/portal/legal/{slug}",
     "module": "portal",
@@ -2640,7 +2784,7 @@
     "summary": "Get Published Legal Doc"
   },
   {
-    "id": 331,
+    "id": 349,
     "method": "GET",
     "path": "/api/v1/portal/me/dashboard",
     "module": "portal",
@@ -2648,7 +2792,15 @@
     "summary": "Get User Dashboard"
   },
   {
-    "id": 332,
+    "id": 350,
+    "method": "POST",
+    "path": "/api/v1/portal/newsletter/subscribe",
+    "module": "portal",
+    "operation_id": "subscribe_newsletter_api_v1_portal_newsletter_subscribe_post",
+    "summary": "Subscribe Newsletter"
+  },
+  {
+    "id": 351,
     "method": "GET",
     "path": "/api/v1/portal/stats",
     "module": "portal",
@@ -2656,7 +2808,7 @@
     "summary": "Get Hero Stats"
   },
   {
-    "id": 333,
+    "id": 352,
     "method": "GET",
     "path": "/api/v1/portal/success-stories",
     "module": "portal",
@@ -2664,7 +2816,7 @@
     "summary": "List Published Stories"
   },
   {
-    "id": 334,
+    "id": 353,
     "method": "GET",
     "path": "/api/v1/portal/success-stories/{story_id}",
     "module": "portal",
@@ -2672,7 +2824,7 @@
     "summary": "Get Published Story"
   },
   {
-    "id": 335,
+    "id": 354,
     "method": "GET",
     "path": "/api/v1/portal/transparency",
     "module": "portal",
@@ -2680,7 +2832,7 @@
     "summary": "Get Transparency Stats"
   },
   {
-    "id": 336,
+    "id": 355,
     "method": "GET",
     "path": "/api/v1/portal/urgent-alerts",
     "module": "portal",
@@ -2688,7 +2840,7 @@
     "summary": "List Active Urgent Alerts"
   },
   {
-    "id": 337,
+    "id": 356,
     "method": "GET",
     "path": "/api/v1/portal/veterinary-network",
     "module": "portal",
@@ -2696,7 +2848,15 @@
     "summary": "List Veterinary Partners"
   },
   {
-    "id": 338,
+    "id": 357,
+    "method": "POST",
+    "path": "/api/v1/public/rescue/media-upload-url",
+    "module": "public-rescue",
+    "operation_id": "request_rescue_media_upload_url_api_v1_public_rescue_media_upload_url_post",
+    "summary": "Request Rescue Media Upload Url"
+  },
+  {
+    "id": 358,
     "method": "POST",
     "path": "/api/v1/public/rescue/report",
     "module": "public-rescue",
@@ -2704,7 +2864,7 @@
     "summary": "Public Report Incident"
   },
   {
-    "id": 339,
+    "id": 359,
     "method": "GET",
     "path": "/api/v1/reports/download/{filename}",
     "module": "reports",
@@ -2712,7 +2872,7 @@
     "summary": "Download Report"
   },
   {
-    "id": 340,
+    "id": 360,
     "method": "GET",
     "path": "/api/v1/reports/formats",
     "module": "reports",
@@ -2720,7 +2880,7 @@
     "summary": "List Report Formats"
   },
   {
-    "id": 341,
+    "id": 361,
     "method": "POST",
     "path": "/api/v1/reports/generate",
     "module": "reports",
@@ -2728,7 +2888,7 @@
     "summary": "Generate Report"
   },
   {
-    "id": 342,
+    "id": 362,
     "method": "GET",
     "path": "/api/v1/reports/types",
     "module": "reports",
@@ -2736,7 +2896,7 @@
     "summary": "List Report Types"
   },
   {
-    "id": 343,
+    "id": 363,
     "method": "GET",
     "path": "/api/v1/rescue",
     "module": "rescue",
@@ -2744,7 +2904,7 @@
     "summary": "List Requests"
   },
   {
-    "id": 344,
+    "id": 364,
     "method": "GET",
     "path": "/api/v1/rescue-centres",
     "module": "rescue-centres",
@@ -2752,7 +2912,7 @@
     "summary": "List Rescue Centres"
   },
   {
-    "id": 345,
+    "id": 365,
     "method": "POST",
     "path": "/api/v1/rescue-centres",
     "module": "rescue-centres",
@@ -2760,7 +2920,7 @@
     "summary": "Create Rescue Centre"
   },
   {
-    "id": 346,
+    "id": 366,
     "method": "POST",
     "path": "/api/v1/rescue-centres/bulk/delete",
     "module": "rescue-centres",
@@ -2768,7 +2928,7 @@
     "summary": "Bulk Delete Rescue Centres"
   },
   {
-    "id": 347,
+    "id": 367,
     "method": "POST",
     "path": "/api/v1/rescue-centres/bulk/status",
     "module": "rescue-centres",
@@ -2776,7 +2936,7 @@
     "summary": "Bulk Update Rescue Centre Status"
   },
   {
-    "id": 348,
+    "id": 368,
     "method": "GET",
     "path": "/api/v1/rescue-centres/{facility_id}",
     "module": "rescue-centres",
@@ -2784,7 +2944,7 @@
     "summary": "Get Rescue Centre"
   },
   {
-    "id": 349,
+    "id": 369,
     "method": "PUT",
     "path": "/api/v1/rescue-centres/{facility_id}",
     "module": "rescue-centres",
@@ -2792,7 +2952,7 @@
     "summary": "Update Rescue Centre"
   },
   {
-    "id": 350,
+    "id": 370,
     "method": "DELETE",
     "path": "/api/v1/rescue-centres/{facility_id}",
     "module": "rescue-centres",
@@ -2800,7 +2960,7 @@
     "summary": "Delete Rescue Centre"
   },
   {
-    "id": 351,
+    "id": 371,
     "method": "PUT",
     "path": "/api/v1/rescue-centres/{facility_id}/status",
     "module": "rescue-centres",
@@ -2808,7 +2968,15 @@
     "summary": "Update Rescue Centre Status"
   },
   {
-    "id": 352,
+    "id": 372,
+    "method": "POST",
+    "path": "/api/v1/rescue/agents/location",
+    "module": "rescue",
+    "operation_id": "update_agent_location_api_v1_rescue_agents_location_post",
+    "summary": "Update Agent Location"
+  },
+  {
+    "id": 373,
     "method": "POST",
     "path": "/api/v1/rescue/bulk/delete",
     "module": "rescue",
@@ -2816,7 +2984,7 @@
     "summary": "Bulk Delete Rescue Requests"
   },
   {
-    "id": 353,
+    "id": 374,
     "method": "POST",
     "path": "/api/v1/rescue/bulk/status-update",
     "module": "rescue",
@@ -2824,7 +2992,7 @@
     "summary": "Bulk Update Rescue Status"
   },
   {
-    "id": 354,
+    "id": 375,
     "method": "PATCH",
     "path": "/api/v1/rescue/dispatch/{dispatch_id}",
     "module": "rescue",
@@ -2832,7 +3000,7 @@
     "summary": "Update Dispatch"
   },
   {
-    "id": 355,
+    "id": 376,
     "method": "DELETE",
     "path": "/api/v1/rescue/dispatch/{dispatch_id}",
     "module": "rescue",
@@ -2840,7 +3008,7 @@
     "summary": "Delete Dispatch"
   },
   {
-    "id": 356,
+    "id": 377,
     "method": "GET",
     "path": "/api/v1/rescue/dispatches",
     "module": "rescue",
@@ -2848,7 +3016,7 @@
     "summary": "List Dispatches"
   },
   {
-    "id": 357,
+    "id": 378,
     "method": "PATCH",
     "path": "/api/v1/rescue/dispatches/{dispatch_id}",
     "module": "rescue",
@@ -2856,7 +3024,7 @@
     "summary": "Update Dispatch"
   },
   {
-    "id": 358,
+    "id": 379,
     "method": "DELETE",
     "path": "/api/v1/rescue/dispatches/{dispatch_id}",
     "module": "rescue",
@@ -2864,7 +3032,7 @@
     "summary": "Delete Dispatch"
   },
   {
-    "id": 359,
+    "id": 380,
     "method": "POST",
     "path": "/api/v1/rescue/media-upload-url",
     "module": "rescue",
@@ -2872,7 +3040,7 @@
     "summary": "Request Rescue Media Upload Url"
   },
   {
-    "id": 360,
+    "id": 381,
     "method": "POST",
     "path": "/api/v1/rescue/report",
     "module": "rescue",
@@ -2880,7 +3048,7 @@
     "summary": "Report Incident"
   },
   {
-    "id": 361,
+    "id": 382,
     "method": "GET",
     "path": "/api/v1/rescue/status",
     "module": "rescue",
@@ -2888,7 +3056,7 @@
     "summary": "Get Public Status"
   },
   {
-    "id": 362,
+    "id": 383,
     "method": "GET",
     "path": "/api/v1/rescue/{request_id}",
     "module": "rescue",
@@ -2896,7 +3064,7 @@
     "summary": "Get Request"
   },
   {
-    "id": 363,
+    "id": 384,
     "method": "DELETE",
     "path": "/api/v1/rescue/{request_id}",
     "module": "rescue",
@@ -2904,7 +3072,7 @@
     "summary": "Soft Delete Request"
   },
   {
-    "id": 364,
+    "id": 385,
     "method": "POST",
     "path": "/api/v1/rescue/{request_id}/admitted",
     "module": "rescue",
@@ -2912,7 +3080,15 @@
     "summary": "Mark Admitted"
   },
   {
-    "id": 365,
+    "id": 386,
+    "method": "POST",
+    "path": "/api/v1/rescue/{request_id}/assign-coordinator",
+    "module": "rescue",
+    "operation_id": "assign_coordinator_api_v1_rescue__request_id__assign_coordinator_post",
+    "summary": "Assign Coordinator"
+  },
+  {
+    "id": 387,
     "method": "POST",
     "path": "/api/v1/rescue/{request_id}/dispatch",
     "module": "rescue",
@@ -2920,7 +3096,7 @@
     "summary": "Dispatch Team"
   },
   {
-    "id": 366,
+    "id": 388,
     "method": "POST",
     "path": "/api/v1/rescue/{request_id}/escalate",
     "module": "rescue",
@@ -2928,7 +3104,7 @@
     "summary": "Escalate Rescue"
   },
   {
-    "id": 367,
+    "id": 389,
     "method": "POST",
     "path": "/api/v1/rescue/{request_id}/fail",
     "module": "rescue",
@@ -2936,7 +3112,7 @@
     "summary": "Fail Rescue"
   },
   {
-    "id": 368,
+    "id": 390,
     "method": "POST",
     "path": "/api/v1/rescue/{request_id}/located",
     "module": "rescue",
@@ -2944,7 +3120,7 @@
     "summary": "Mark Located"
   },
   {
-    "id": 369,
+    "id": 391,
     "method": "POST",
     "path": "/api/v1/rescue/{request_id}/secured",
     "module": "rescue",
@@ -2952,7 +3128,15 @@
     "summary": "Mark Rescued"
   },
   {
-    "id": 370,
+    "id": 392,
+    "method": "GET",
+    "path": "/api/v1/rescue/{request_id}/suggest-agents",
+    "module": "rescue",
+    "operation_id": "suggest_nearest_agents_api_v1_rescue__request_id__suggest_agents_get",
+    "summary": "Suggest Nearest Agents"
+  },
+  {
+    "id": 393,
     "method": "POST",
     "path": "/api/v1/rescue/{request_id}/verify",
     "module": "rescue",
@@ -2960,7 +3144,7 @@
     "summary": "Verify Request"
   },
   {
-    "id": 371,
+    "id": 394,
     "method": "GET",
     "path": "/api/v1/settings/business-rules",
     "module": "settings",
@@ -2968,7 +3152,7 @@
     "summary": "List Business Rules"
   },
   {
-    "id": 372,
+    "id": 395,
     "method": "POST",
     "path": "/api/v1/settings/business-rules",
     "module": "settings",
@@ -2976,7 +3160,7 @@
     "summary": "Create Business Rule"
   },
   {
-    "id": 373,
+    "id": 396,
     "method": "DELETE",
     "path": "/api/v1/settings/business-rules/{rule_id}",
     "module": "settings",
@@ -2984,7 +3168,7 @@
     "summary": "Delete Business Rule"
   },
   {
-    "id": 374,
+    "id": 397,
     "method": "GET",
     "path": "/api/v1/settings/business-rules/{rule_key}",
     "module": "settings",
@@ -2992,7 +3176,7 @@
     "summary": "Get Business Rule"
   },
   {
-    "id": 375,
+    "id": 398,
     "method": "PUT",
     "path": "/api/v1/settings/business-rules/{rule_key}",
     "module": "settings",
@@ -3000,7 +3184,7 @@
     "summary": "Update Business Rule"
   },
   {
-    "id": 376,
+    "id": 399,
     "method": "GET",
     "path": "/api/v1/settings/email",
     "module": "settings",
@@ -3008,7 +3192,7 @@
     "summary": "Get Email Settings"
   },
   {
-    "id": 377,
+    "id": 400,
     "method": "GET",
     "path": "/api/v1/settings/general",
     "module": "settings",
@@ -3016,7 +3200,7 @@
     "summary": "Get General Settings"
   },
   {
-    "id": 378,
+    "id": 401,
     "method": "GET",
     "path": "/api/v1/settings/password-policy",
     "module": "settings",
@@ -3024,7 +3208,7 @@
     "summary": "Get Password Policy"
   },
   {
-    "id": 379,
+    "id": 402,
     "method": "PUT",
     "path": "/api/v1/settings/password-policy",
     "module": "settings",
@@ -3032,7 +3216,7 @@
     "summary": "Update Password Policy"
   },
   {
-    "id": 380,
+    "id": 403,
     "method": "GET",
     "path": "/api/v1/settings/public-content",
     "module": "settings",
@@ -3040,7 +3224,7 @@
     "summary": "Get Public Content"
   },
   {
-    "id": 381,
+    "id": 404,
     "method": "PUT",
     "path": "/api/v1/settings/public-content",
     "module": "settings",
@@ -3048,7 +3232,7 @@
     "summary": "Update Public Content"
   },
   {
-    "id": 382,
+    "id": 405,
     "method": "GET",
     "path": "/api/v1/settings/storage",
     "module": "settings",
@@ -3056,7 +3240,7 @@
     "summary": "Get Storage Settings"
   },
   {
-    "id": 383,
+    "id": 406,
     "method": "GET",
     "path": "/api/v1/settings/system",
     "module": "settings",
@@ -3064,7 +3248,7 @@
     "summary": "List Settings"
   },
   {
-    "id": 384,
+    "id": 407,
     "method": "POST",
     "path": "/api/v1/settings/system",
     "module": "settings",
@@ -3072,7 +3256,7 @@
     "summary": "Create Setting"
   },
   {
-    "id": 385,
+    "id": 408,
     "method": "GET",
     "path": "/api/v1/settings/system/{key}",
     "module": "settings",
@@ -3080,7 +3264,7 @@
     "summary": "Get Setting"
   },
   {
-    "id": 386,
+    "id": 409,
     "method": "PUT",
     "path": "/api/v1/settings/system/{key}",
     "module": "settings",
@@ -3088,7 +3272,7 @@
     "summary": "Update Setting"
   },
   {
-    "id": 387,
+    "id": 410,
     "method": "DELETE",
     "path": "/api/v1/settings/system/{setting_id}",
     "module": "settings",
@@ -3096,7 +3280,7 @@
     "summary": "Delete Setting"
   },
   {
-    "id": 388,
+    "id": 411,
     "method": "POST",
     "path": "/api/v1/shelter/care-logs",
     "module": "shelter",
@@ -3104,7 +3288,7 @@
     "summary": "Submit Daily Care Log"
   },
   {
-    "id": 389,
+    "id": 412,
     "method": "GET",
     "path": "/api/v1/shelter/dogs/{dog_id}/care-logs",
     "module": "shelter",
@@ -3112,7 +3296,7 @@
     "summary": "List Care Logs"
   },
   {
-    "id": 390,
+    "id": 413,
     "method": "GET",
     "path": "/api/v1/shelter/facilities",
     "module": "shelter",
@@ -3120,7 +3304,7 @@
     "summary": "List Facilities"
   },
   {
-    "id": 391,
+    "id": 414,
     "method": "POST",
     "path": "/api/v1/shelter/facilities",
     "module": "shelter",
@@ -3128,7 +3312,7 @@
     "summary": "Create Facility"
   },
   {
-    "id": 392,
+    "id": 415,
     "method": "POST",
     "path": "/api/v1/shelter/facilities/bulk/delete",
     "module": "shelter",
@@ -3136,7 +3320,7 @@
     "summary": "Bulk Delete Facilities"
   },
   {
-    "id": 393,
+    "id": 416,
     "method": "POST",
     "path": "/api/v1/shelter/facilities/bulk/status",
     "module": "shelter",
@@ -3144,7 +3328,7 @@
     "summary": "Bulk Update Facility Status"
   },
   {
-    "id": 394,
+    "id": 417,
     "method": "GET",
     "path": "/api/v1/shelter/facilities/{facility_id}",
     "module": "shelter",
@@ -3152,7 +3336,7 @@
     "summary": "Get Facility"
   },
   {
-    "id": 395,
+    "id": 418,
     "method": "PUT",
     "path": "/api/v1/shelter/facilities/{facility_id}",
     "module": "shelter",
@@ -3160,7 +3344,7 @@
     "summary": "Update Facility"
   },
   {
-    "id": 396,
+    "id": 419,
     "method": "DELETE",
     "path": "/api/v1/shelter/facilities/{facility_id}",
     "module": "shelter",
@@ -3168,7 +3352,7 @@
     "summary": "Delete Facility"
   },
   {
-    "id": 397,
+    "id": 420,
     "method": "GET",
     "path": "/api/v1/shelter/facilities/{facility_id}/sections",
     "module": "shelter",
@@ -3176,7 +3360,7 @@
     "summary": "List Sections"
   },
   {
-    "id": 398,
+    "id": 421,
     "method": "POST",
     "path": "/api/v1/shelter/facilities/{facility_id}/sections",
     "module": "shelter",
@@ -3184,7 +3368,7 @@
     "summary": "Create Section"
   },
   {
-    "id": 399,
+    "id": 422,
     "method": "PUT",
     "path": "/api/v1/shelter/facilities/{facility_id}/status",
     "module": "shelter",
@@ -3192,7 +3376,7 @@
     "summary": "Update Facility Status"
   },
   {
-    "id": 400,
+    "id": 423,
     "method": "POST",
     "path": "/api/v1/shelter/kennels/{kennel_id}/assign/{dog_id}",
     "module": "shelter",
@@ -3200,7 +3384,7 @@
     "summary": "Assign Dog To Kennel"
   },
   {
-    "id": 401,
+    "id": 424,
     "method": "PATCH",
     "path": "/api/v1/shelter/kennels/{kennel_id}/assign/{dog_id}",
     "module": "shelter",
@@ -3208,7 +3392,7 @@
     "summary": "Assign Dog To Kennel"
   },
   {
-    "id": 402,
+    "id": 425,
     "method": "GET",
     "path": "/api/v1/shelter/kennels/{kennel_id}/cleaning-logs",
     "module": "shelter",
@@ -3216,7 +3400,7 @@
     "summary": "List Kennel Cleaning Logs"
   },
   {
-    "id": 403,
+    "id": 426,
     "method": "POST",
     "path": "/api/v1/shelter/kennels/{kennel_id}/cleaning-logs",
     "module": "shelter",
@@ -3224,7 +3408,7 @@
     "summary": "Log Kennel Cleaning"
   },
   {
-    "id": 404,
+    "id": 427,
     "method": "PUT",
     "path": "/api/v1/shelter/kennels/{kennel_id}/sanitation",
     "module": "shelter",
@@ -3232,7 +3416,7 @@
     "summary": "Update Kennel Sanitation"
   },
   {
-    "id": 405,
+    "id": 428,
     "method": "GET",
     "path": "/api/v1/shelter/sections/{section_id}/kennels",
     "module": "shelter",
@@ -3240,7 +3424,7 @@
     "summary": "List Kennels"
   },
   {
-    "id": 406,
+    "id": 429,
     "method": "POST",
     "path": "/api/v1/shelter/sections/{section_id}/kennels",
     "module": "shelter",
@@ -3248,7 +3432,7 @@
     "summary": "Create Kennel"
   },
   {
-    "id": 407,
+    "id": 430,
     "method": "GET",
     "path": "/api/v1/shelter/transfers",
     "module": "shelter",
@@ -3256,7 +3440,7 @@
     "summary": "List Transfers"
   },
   {
-    "id": 408,
+    "id": 431,
     "method": "POST",
     "path": "/api/v1/shelter/transfers",
     "module": "shelter",
@@ -3264,7 +3448,7 @@
     "summary": "Request Transfer"
   },
   {
-    "id": 409,
+    "id": 432,
     "method": "GET",
     "path": "/api/v1/shelter/transfers/{transfer_id}",
     "module": "shelter",
@@ -3272,7 +3456,7 @@
     "summary": "Get Transfer"
   },
   {
-    "id": 410,
+    "id": 433,
     "method": "POST",
     "path": "/api/v1/shelter/transfers/{transfer_id}/confirm-receiver",
     "module": "shelter",
@@ -3280,7 +3464,7 @@
     "summary": "Confirm Transfer Receiver"
   },
   {
-    "id": 411,
+    "id": 434,
     "method": "POST",
     "path": "/api/v1/shelter/transfers/{transfer_id}/confirm-sender",
     "module": "shelter",
@@ -3288,7 +3472,7 @@
     "summary": "Confirm Transfer Sender"
   },
   {
-    "id": 412,
+    "id": 435,
     "method": "GET",
     "path": "/api/v1/storage",
     "module": "storage",
@@ -3296,7 +3480,7 @@
     "summary": "List Files"
   },
   {
-    "id": 413,
+    "id": 436,
     "method": "POST",
     "path": "/api/v1/storage/bulk/delete",
     "module": "storage",
@@ -3304,7 +3488,7 @@
     "summary": "Bulk Delete Files"
   },
   {
-    "id": 414,
+    "id": 437,
     "method": "GET",
     "path": "/api/v1/storage/entity/{entity_type}/{entity_id}",
     "module": "storage",
@@ -3312,7 +3496,7 @@
     "summary": "List Files By Entity"
   },
   {
-    "id": 415,
+    "id": 438,
     "method": "POST",
     "path": "/api/v1/storage/upload-url",
     "module": "storage",
@@ -3320,7 +3504,7 @@
     "summary": "Request Upload Url"
   },
   {
-    "id": 416,
+    "id": 439,
     "method": "GET",
     "path": "/api/v1/storage/{file_id}",
     "module": "storage",
@@ -3328,7 +3512,7 @@
     "summary": "Get File"
   },
   {
-    "id": 417,
+    "id": 440,
     "method": "DELETE",
     "path": "/api/v1/storage/{file_id}",
     "module": "storage",
@@ -3336,7 +3520,7 @@
     "summary": "Delete File"
   },
   {
-    "id": 418,
+    "id": 441,
     "method": "PUT",
     "path": "/api/v1/storage/{file_id}/confirm",
     "module": "storage",
@@ -3344,7 +3528,7 @@
     "summary": "Confirm Upload"
   },
   {
-    "id": 419,
+    "id": 442,
     "method": "GET",
     "path": "/api/v1/storage/{file_id}/download-url",
     "module": "storage",
@@ -3352,7 +3536,311 @@
     "summary": "Get Download Url"
   },
   {
-    "id": 420,
+    "id": 443,
+    "method": "GET",
+    "path": "/api/v1/veterinary/companion-pets",
+    "module": "veterinary",
+    "operation_id": "list_pets_api_v1_veterinary_companion_pets_get",
+    "summary": "List companion pets visible to the caller"
+  },
+  {
+    "id": 444,
+    "method": "POST",
+    "path": "/api/v1/veterinary/companion-pets",
+    "module": "veterinary",
+    "operation_id": "create_pet_api_v1_veterinary_companion_pets_post",
+    "summary": "Create an owner companion pet"
+  },
+  {
+    "id": 445,
+    "method": "GET",
+    "path": "/api/v1/veterinary/companion-pets/appointments",
+    "module": "veterinary",
+    "operation_id": "list_appointments_api_v1_veterinary_companion_pets_appointments_get",
+    "summary": "List authorized veterinary appointments"
+  },
+  {
+    "id": 446,
+    "method": "POST",
+    "path": "/api/v1/veterinary/companion-pets/appointments",
+    "module": "veterinary",
+    "operation_id": "create_appointment_api_v1_veterinary_companion_pets_appointments_post",
+    "summary": "Book a veterinary appointment"
+  },
+  {
+    "id": 447,
+    "method": "GET",
+    "path": "/api/v1/veterinary/companion-pets/appointments/{appointment_id}",
+    "module": "veterinary",
+    "operation_id": "get_appointment_api_v1_veterinary_companion_pets_appointments__appointment_id__get",
+    "summary": "Get an authorized appointment"
+  },
+  {
+    "id": 448,
+    "method": "DELETE",
+    "path": "/api/v1/veterinary/companion-pets/appointments/{appointment_id}",
+    "module": "veterinary",
+    "operation_id": "delete_appointment_api_v1_veterinary_companion_pets_appointments__appointment_id__delete",
+    "summary": "Cancel an appointment via DELETE"
+  },
+  {
+    "id": 449,
+    "method": "POST",
+    "path": "/api/v1/veterinary/companion-pets/appointments/{appointment_id}/cancel",
+    "module": "veterinary",
+    "operation_id": "cancel_appointment_api_v1_veterinary_companion_pets_appointments__appointment_id__cancel_post",
+    "summary": "Cancel an appointment"
+  },
+  {
+    "id": 450,
+    "method": "PUT",
+    "path": "/api/v1/veterinary/companion-pets/appointments/{appointment_id}/cancel",
+    "module": "veterinary",
+    "operation_id": "cancel_appointment_api_v1_veterinary_companion_pets_appointments__appointment_id__cancel_put",
+    "summary": "Cancel an appointment (PUT alias)"
+  },
+  {
+    "id": 451,
+    "method": "PATCH",
+    "path": "/api/v1/veterinary/companion-pets/appointments/{appointment_id}/cancel",
+    "module": "veterinary",
+    "operation_id": "cancel_appointment_api_v1_veterinary_companion_pets_appointments__appointment_id__cancel_patch",
+    "summary": "Cancel an appointment (PATCH alias)"
+  },
+  {
+    "id": 452,
+    "method": "POST",
+    "path": "/api/v1/veterinary/companion-pets/appointments/{appointment_id}/confirm",
+    "module": "veterinary",
+    "operation_id": "confirm_appointment_api_v1_veterinary_companion_pets_appointments__appointment_id__confirm_post",
+    "summary": "Confirm an appointment as clinic staff"
+  },
+  {
+    "id": 453,
+    "method": "GET",
+    "path": "/api/v1/veterinary/companion-pets/clinics",
+    "module": "veterinary",
+    "operation_id": "list_clinics_api_v1_veterinary_companion_pets_clinics_get",
+    "summary": "List active veterinary clinics"
+  },
+  {
+    "id": 454,
+    "method": "POST",
+    "path": "/api/v1/veterinary/companion-pets/clinics",
+    "module": "veterinary",
+    "operation_id": "create_clinic_api_v1_veterinary_companion_pets_clinics_post",
+    "summary": "Create a veterinary clinic directory entry"
+  },
+  {
+    "id": 455,
+    "method": "GET",
+    "path": "/api/v1/veterinary/companion-pets/clinics/{clinic_id}",
+    "module": "veterinary",
+    "operation_id": "get_clinic_api_v1_veterinary_companion_pets_clinics__clinic_id__get",
+    "summary": "Get single veterinary clinic details"
+  },
+  {
+    "id": 456,
+    "method": "PATCH",
+    "path": "/api/v1/veterinary/companion-pets/clinics/{clinic_id}",
+    "module": "veterinary",
+    "operation_id": "update_clinic_api_v1_veterinary_companion_pets_clinics__clinic_id__patch",
+    "summary": "Update a veterinary clinic directory entry"
+  },
+  {
+    "id": 457,
+    "method": "DELETE",
+    "path": "/api/v1/veterinary/companion-pets/clinics/{clinic_id}",
+    "module": "veterinary",
+    "operation_id": "delete_clinic_api_v1_veterinary_companion_pets_clinics__clinic_id__delete",
+    "summary": "Soft-delete a veterinary clinic directory entry"
+  },
+  {
+    "id": 458,
+    "method": "POST",
+    "path": "/api/v1/veterinary/companion-pets/clinics/{clinic_id}/memberships",
+    "module": "veterinary",
+    "operation_id": "add_clinic_membership_api_v1_veterinary_companion_pets_clinics__clinic_id__memberships_post",
+    "summary": "Authorize a user for a veterinary clinic"
+  },
+  {
+    "id": 459,
+    "method": "GET",
+    "path": "/api/v1/veterinary/companion-pets/clinics/{clinic_id}/veterinarians",
+    "module": "veterinary",
+    "operation_id": "list_clinic_veterinarians_api_v1_veterinary_companion_pets_clinics__clinic_id__veterinarians_get",
+    "summary": "List veterinarians available at a veterinary clinic for appointment booking"
+  },
+  {
+    "id": 460,
+    "method": "POST",
+    "path": "/api/v1/veterinary/companion-pets/from-adoption/{application_id}",
+    "module": "veterinary",
+    "operation_id": "create_pet_from_adoption_api_v1_veterinary_companion_pets_from_adoption__application_id__post",
+    "summary": "Create a companion pet from an approved adoption application"
+  },
+  {
+    "id": 461,
+    "method": "GET",
+    "path": "/api/v1/veterinary/companion-pets/medical-files/{file_id}/download-url",
+    "module": "veterinary",
+    "operation_id": "get_medical_download_url_api_v1_veterinary_companion_pets_medical_files__file_id__download_url_get",
+    "summary": "Get presigned download URL for a medical-history file"
+  },
+  {
+    "id": 462,
+    "method": "GET",
+    "path": "/api/v1/veterinary/companion-pets/medical-records/{record_id}",
+    "module": "veterinary",
+    "operation_id": "get_medical_record_api_v1_veterinary_companion_pets_medical_records__record_id__get",
+    "summary": "Get an authorized medical-history record by ID"
+  },
+  {
+    "id": 463,
+    "method": "PUT",
+    "path": "/api/v1/veterinary/companion-pets/medical-records/{record_id}",
+    "module": "veterinary",
+    "operation_id": "update_medical_record_api_v1_veterinary_companion_pets_medical_records__record_id__put",
+    "summary": "Update an authorized medical-history record (full update)"
+  },
+  {
+    "id": 464,
+    "method": "PATCH",
+    "path": "/api/v1/veterinary/companion-pets/medical-records/{record_id}",
+    "module": "veterinary",
+    "operation_id": "update_medical_record_api_v1_veterinary_companion_pets_medical_records__record_id__patch",
+    "summary": "Update an authorized medical-history record (partial update)"
+  },
+  {
+    "id": 465,
+    "method": "DELETE",
+    "path": "/api/v1/veterinary/companion-pets/medical-records/{record_id}",
+    "module": "veterinary",
+    "operation_id": "delete_medical_record_api_v1_veterinary_companion_pets_medical_records__record_id__delete",
+    "summary": "Soft-delete an authorized medical-history record"
+  },
+  {
+    "id": 466,
+    "method": "POST",
+    "path": "/api/v1/veterinary/companion-pets/safety-tag/scan",
+    "module": "veterinary",
+    "operation_id": "scan_safety_tag_api_v1_veterinary_companion_pets_safety_tag_scan_post",
+    "summary": "Privacy-safe public QR safety-tag scan"
+  },
+  {
+    "id": 467,
+    "method": "GET",
+    "path": "/api/v1/veterinary/companion-pets/{pet_id}",
+    "module": "veterinary",
+    "operation_id": "get_pet_api_v1_veterinary_companion_pets__pet_id__get",
+    "summary": "Get an authorized companion pet profile"
+  },
+  {
+    "id": 468,
+    "method": "PATCH",
+    "path": "/api/v1/veterinary/companion-pets/{pet_id}",
+    "module": "veterinary",
+    "operation_id": "update_pet_api_v1_veterinary_companion_pets__pet_id__patch",
+    "summary": "Update an authorized companion pet profile"
+  },
+  {
+    "id": 469,
+    "method": "DELETE",
+    "path": "/api/v1/veterinary/companion-pets/{pet_id}",
+    "module": "veterinary",
+    "operation_id": "delete_pet_api_v1_veterinary_companion_pets__pet_id__delete",
+    "summary": "Soft-delete an owned companion pet"
+  },
+  {
+    "id": 470,
+    "method": "GET",
+    "path": "/api/v1/veterinary/companion-pets/{pet_id}/medical-files",
+    "module": "veterinary",
+    "operation_id": "list_medical_files_api_v1_veterinary_companion_pets__pet_id__medical_files_get",
+    "summary": "List authorized medical-history files"
+  },
+  {
+    "id": 471,
+    "method": "POST",
+    "path": "/api/v1/veterinary/companion-pets/{pet_id}/medical-files/upload-url",
+    "module": "veterinary",
+    "operation_id": "request_medical_upload_api_v1_veterinary_companion_pets__pet_id__medical_files_upload_url_post",
+    "summary": "Request a presigned medical-history upload"
+  },
+  {
+    "id": 472,
+    "method": "PUT",
+    "path": "/api/v1/veterinary/companion-pets/{pet_id}/medical-files/{file_id}/confirm",
+    "module": "veterinary",
+    "operation_id": "confirm_medical_upload_api_v1_veterinary_companion_pets__pet_id__medical_files__file_id__confirm_put",
+    "summary": "Confirm a medical-history upload"
+  },
+  {
+    "id": 473,
+    "method": "GET",
+    "path": "/api/v1/veterinary/companion-pets/{pet_id}/medical-records",
+    "module": "veterinary",
+    "operation_id": "list_medical_records_api_v1_veterinary_companion_pets__pet_id__medical_records_get",
+    "summary": "List a pet's authorized medical history"
+  },
+  {
+    "id": 474,
+    "method": "POST",
+    "path": "/api/v1/veterinary/companion-pets/{pet_id}/medical-records",
+    "module": "veterinary",
+    "operation_id": "create_medical_record_api_v1_veterinary_companion_pets__pet_id__medical_records_post",
+    "summary": "Create a medical-history record"
+  },
+  {
+    "id": 475,
+    "method": "GET",
+    "path": "/api/v1/veterinary/companion-pets/{pet_id}/reminders",
+    "module": "veterinary",
+    "operation_id": "list_reminders_api_v1_veterinary_companion_pets__pet_id__reminders_get",
+    "summary": "List vaccination and medication reminders"
+  },
+  {
+    "id": 476,
+    "method": "POST",
+    "path": "/api/v1/veterinary/companion-pets/{pet_id}/reminders",
+    "module": "veterinary",
+    "operation_id": "create_reminder_api_v1_veterinary_companion_pets__pet_id__reminders_post",
+    "summary": "Create a vaccination or medication reminder"
+  },
+  {
+    "id": 477,
+    "method": "DELETE",
+    "path": "/api/v1/veterinary/companion-pets/{pet_id}/reminders/{reminder_id}",
+    "module": "veterinary",
+    "operation_id": "delete_reminder_api_v1_veterinary_companion_pets__pet_id__reminders__reminder_id__delete",
+    "summary": "Soft-delete a vaccination or medication reminder"
+  },
+  {
+    "id": 478,
+    "method": "GET",
+    "path": "/api/v1/veterinary/companion-pets/{pet_id}/safety-tag",
+    "module": "veterinary",
+    "operation_id": "get_safety_tag_api_v1_veterinary_companion_pets__pet_id__safety_tag_get",
+    "summary": "Read safety-tag metadata without revealing its token"
+  },
+  {
+    "id": 479,
+    "method": "POST",
+    "path": "/api/v1/veterinary/companion-pets/{pet_id}/safety-tag",
+    "module": "veterinary",
+    "operation_id": "provision_safety_tag_api_v1_veterinary_companion_pets__pet_id__safety_tag_post",
+    "summary": "Provision or rotate a QR safety tag"
+  },
+  {
+    "id": 480,
+    "method": "DELETE",
+    "path": "/api/v1/veterinary/companion-pets/{pet_id}/safety-tag",
+    "module": "veterinary",
+    "operation_id": "deactivate_safety_tag_api_v1_veterinary_companion_pets__pet_id__safety_tag_delete",
+    "summary": "Deactivate or revoke a QR safety tag"
+  },
+  {
+    "id": 481,
     "method": "GET",
     "path": "/api/v1/volunteers",
     "module": "volunteers",
@@ -3360,7 +3848,7 @@
     "summary": "List Profiles"
   },
   {
-    "id": 421,
+    "id": 482,
     "method": "POST",
     "path": "/api/v1/volunteers/apply",
     "module": "volunteers",
@@ -3368,7 +3856,7 @@
     "summary": "Apply To Volunteer"
   },
   {
-    "id": 422,
+    "id": 483,
     "method": "POST",
     "path": "/api/v1/volunteers/attendance/{attendance_id}/check-in",
     "module": "volunteers",
@@ -3376,7 +3864,7 @@
     "summary": "Check In"
   },
   {
-    "id": 423,
+    "id": 484,
     "method": "POST",
     "path": "/api/v1/volunteers/attendance/{attendance_id}/check-out",
     "module": "volunteers",
@@ -3384,7 +3872,7 @@
     "summary": "Check Out"
   },
   {
-    "id": 424,
+    "id": 485,
     "method": "POST",
     "path": "/api/v1/volunteers/bulk/delete",
     "module": "volunteers",
@@ -3392,7 +3880,7 @@
     "summary": "Bulk Delete Profiles"
   },
   {
-    "id": 425,
+    "id": 486,
     "method": "POST",
     "path": "/api/v1/volunteers/bulk/status",
     "module": "volunteers",
@@ -3400,7 +3888,7 @@
     "summary": "Bulk Update Profile Status"
   },
   {
-    "id": 426,
+    "id": 487,
     "method": "GET",
     "path": "/api/v1/volunteers/shifts",
     "module": "volunteers",
@@ -3408,7 +3896,7 @@
     "summary": "List Shifts"
   },
   {
-    "id": 427,
+    "id": 488,
     "method": "POST",
     "path": "/api/v1/volunteers/shifts",
     "module": "volunteers",
@@ -3416,7 +3904,7 @@
     "summary": "Create Shift"
   },
   {
-    "id": 428,
+    "id": 489,
     "method": "GET",
     "path": "/api/v1/volunteers/shifts/{shift_id}/attendance",
     "module": "volunteers",
@@ -3424,7 +3912,7 @@
     "summary": "List Shift Attendance"
   },
   {
-    "id": 429,
+    "id": 490,
     "method": "POST",
     "path": "/api/v1/volunteers/shifts/{shift_id}/join",
     "module": "volunteers",
@@ -3432,7 +3920,7 @@
     "summary": "Join Shift"
   },
   {
-    "id": 430,
+    "id": 491,
     "method": "GET",
     "path": "/api/v1/volunteers/{profile_id}",
     "module": "volunteers",
@@ -3440,7 +3928,7 @@
     "summary": "Get Profile"
   },
   {
-    "id": 431,
+    "id": 492,
     "method": "PUT",
     "path": "/api/v1/volunteers/{profile_id}",
     "module": "volunteers",
@@ -3448,7 +3936,7 @@
     "summary": "Update Profile"
   },
   {
-    "id": 432,
+    "id": 493,
     "method": "DELETE",
     "path": "/api/v1/volunteers/{profile_id}",
     "module": "volunteers",
@@ -3456,7 +3944,7 @@
     "summary": "Soft Delete Profile"
   },
   {
-    "id": 433,
+    "id": 494,
     "method": "GET",
     "path": "/api/v1/volunteers/{profile_id}/certificate",
     "module": "volunteers",
@@ -3464,7 +3952,7 @@
     "summary": "Issue Service Certificate"
   },
   {
-    "id": 434,
+    "id": 495,
     "method": "GET",
     "path": "/api/v1/volunteers/{profile_id}/service-summary",
     "module": "volunteers",
@@ -3472,7 +3960,7 @@
     "summary": "Get Service Summary"
   },
   {
-    "id": 435,
+    "id": 496,
     "method": "GET",
     "path": "/health",
     "module": "unknown",
@@ -3480,7 +3968,7 @@
     "summary": "Health"
   },
   {
-    "id": 436,
+    "id": 497,
     "method": "GET",
     "path": "/live",
     "module": "unknown",
@@ -3488,7 +3976,15 @@
     "summary": "Live"
   },
   {
-    "id": 437,
+    "id": 498,
+    "method": "GET",
+    "path": "/metrics",
+    "module": "unknown",
+    "operation_id": "metrics_endpoint_metrics_get",
+    "summary": "Prometheus Metrics Exposition"
+  },
+  {
+    "id": 499,
     "method": "GET",
     "path": "/ready",
     "module": "unknown",

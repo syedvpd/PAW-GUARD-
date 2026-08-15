@@ -24,7 +24,9 @@ def _validate_password_strength(value: str) -> str:
     return value
 
 
-PHONE_REGEX = re.compile(r"^\+?[0-9\s\-()]{7,20}$")
+NAME_REGEX = re.compile(r"^[a-zA-Z\s\.\'\-]+$")
+PHONE_REGEX = re.compile(r"^\+?[1-9]\d{6,14}$")
+INDIAN_PHONE_REGEX = re.compile(r"^\+91[6-9]\d{9}$")
 
 
 class DeviceContext(BaseModel):
@@ -36,8 +38,33 @@ class DeviceContext(BaseModel):
 class RegisterRequest(BaseModel):
     email: EmailStr = Field(..., examples=["jane.doe@example.com"])
     password: str = Field(..., examples=["StrongP@ssw0rd"])
-    full_name: str = Field(min_length=1, max_length=255, examples=["Jane Doe"])
-    phone: str | None = Field(None, examples=["+1-555-0100"])
+    first_name: str | None = Field(None, examples=["Jane"])
+    last_name: str | None = Field(None, examples=["Doe"])
+    full_name: str = Field(default="", min_length=0, max_length=255, examples=["Jane Doe"])
+    phone: str | None = Field(None, examples=["+919876543210"])
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_names(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            fn = data.get("first_name")
+            ln = data.get("last_name")
+            full = data.get("full_name")
+            if not full and fn:
+                data["full_name"] = f"{fn} {ln}".strip() if ln else fn.strip()
+        return data
+
+    @field_validator("full_name")
+    @classmethod
+    def validate_full_name(cls, value: str) -> str:
+        val = value.strip()
+        if not val:
+            raise ValueError("Full name cannot be empty.")
+        if any(char.isdigit() for char in val):
+            raise ValueError("Full name must contain only alphabetic characters, not numbers.")
+        if not NAME_REGEX.match(val):
+            raise ValueError("Full name contains invalid characters.")
+        return val
 
     @field_validator("password")
     @classmethod
@@ -50,9 +77,11 @@ class RegisterRequest(BaseModel):
         if v is None:
             return None
         if isinstance(v, str):
-            val = v.strip()
+            val = re.sub(r"[\s\-()]", "", v.strip())
             if not val:
                 return None
+            if val.startswith("+91") and not INDIAN_PHONE_REGEX.match(val):
+                raise ValueError("Indian mobile number (+91) must have exactly 10 digits without special characters.")
             if not PHONE_REGEX.match(val):
                 raise ValueError("Invalid phone number format.")
             return val
