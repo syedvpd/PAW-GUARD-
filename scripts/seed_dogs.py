@@ -1,4 +1,13 @@
-"""Seed script for default adoptable dogs in the adoption catalog."""
+"""Seed script for default adoptable dogs in the adoption catalog.
+
+Populates the dog_profiles table with adoptable dogs that have external
+gallery image URLs so the public adoption directory listing renders
+images out-of-the-box. Re-running this script is idempotent: existing
+dogs (matched by registration_number) are skipped.
+
+Usage:
+    .venv\\Scripts\\python.exe scripts/seed_dogs.py
+"""
 
 import asyncio
 import sys
@@ -35,6 +44,11 @@ TEST_DOGS = [
         "is_adoptable": True,
         "is_spayed_neutered": True,
         "is_quarantine_passed": True,
+        "image_urls": [
+            "https://images.dog.ceo/breeds/retriever-indian/n02110185_10369.jpg",
+            "https://images.dog.ceo/breeds/retriever-indian/n02110185_11716.jpg",
+            "https://images.dog.ceo/breeds/retriever-indian/n02110185_13978.jpg",
+        ],
     },
     {
         "registration_number": "DOG-2026-0002",
@@ -51,6 +65,10 @@ TEST_DOGS = [
         "is_adoptable": True,
         "is_spayed_neutered": True,
         "is_quarantine_passed": True,
+        "image_urls": [
+            "https://images.dog.ceo/breeds/labrador/n02099712_4497.jpg",
+            "https://images.dog.ceo/breeds/labrador/n02099712_5633.jpg",
+        ],
     },
     {
         "registration_number": "DOG-2026-0003",
@@ -67,6 +85,10 @@ TEST_DOGS = [
         "is_adoptable": True,
         "is_spayed_neutered": True,
         "is_quarantine_passed": True,
+        "image_urls": [
+            "https://images.dog.ceo/breeds/germanshepherd/n02106625_22496.jpg",
+            "https://images.dog.ceo/breeds/germanshepherd/n02106625_25931.jpg",
+        ],
     },
     {
         "registration_number": "DOG-2026-0004",
@@ -83,13 +105,139 @@ TEST_DOGS = [
         "is_adoptable": True,
         "is_spayed_neutered": True,
         "is_quarantine_passed": True,
+        "image_urls": [
+            "https://images.dog.ceo/breeds/beagle/n02088364_12628.jpg",
+            "https://images.dog.ceo/breeds/beagle/n02088364_15940.jpg",
+        ],
+    },
+    {
+        "registration_number": "DOG-2026-0005",
+        "name": "Max",
+        "breed": "Golden Retriever",
+        "breed_classification": DogBreedClassification.PURE,
+        "gender": DogGender.MALE,
+        "estimated_age": "4 years",
+        "age_months": 48,
+        "weight": 30.0,
+        "color": "Golden",
+        "temperament": DogTemperament.FRIENDLY,
+        "status": DogStatus.SHELTER,
+        "is_adoptable": True,
+        "is_spayed_neutered": True,
+        "is_quarantine_passed": True,
+        "image_urls": [
+            "https://images.dog.ceo/breeds/retriever-golden/n02099601_3787.jpg",
+            "https://images.dog.ceo/breeds/retriever-golden/n02099601_4922.jpg",
+        ],
+    },
+    {
+        "registration_number": "DOG-2026-0006",
+        "name": "Daisy",
+        "breed": "Indie Mix",
+        "breed_classification": DogBreedClassification.MIX,
+        "gender": DogGender.FEMALE,
+        "estimated_age": "6 months",
+        "age_months": 6,
+        "weight": 8.5,
+        "color": "Brown and White",
+        "temperament": DogTemperament.CAT_CHILD_SAFE,
+        "status": DogStatus.SHELTER,
+        "is_adoptable": True,
+        "is_spayed_neutered": False,
+        "is_quarantine_passed": True,
+        "image_urls": [
+            "https://images.dog.ceo/breeds/cavalier-king-charles-spaniel/n02085711_3676.jpg",
+            "https://images.dog.ceo/breeds/cavalier-king-charles-spaniel/n02085711_4051.jpg",
+        ],
+    },
+    {
+        "registration_number": "DOG-2026-0007",
+        "name": "Shadow",
+        "breed": "Indie Mix",
+        "breed_classification": DogBreedClassification.MIX,
+        "gender": DogGender.MALE,
+        "estimated_age": "5 years",
+        "age_months": 60,
+        "weight": 22.0,
+        "color": "Black",
+        "temperament": DogTemperament.PACK_COMPATIBLE,
+        "status": DogStatus.SHELTER,
+        "is_adoptable": True,
+        "is_spayed_neutered": True,
+        "is_quarantine_passed": True,
+        "image_urls": [
+            "https://images.dog.ceo/breeds/labrador/n02099712_7229.jpg",
+            "https://images.dog.ceo/breeds/labrador/n02099712_7414.jpg",
+        ],
+    },
+    {
+        "registration_number": "DOG-2026-0008",
+        "name": "Maya",
+        "breed": "Indie Pariah",
+        "breed_classification": DogBreedClassification.MIX,
+        "gender": DogGender.FEMALE,
+        "estimated_age": "1.5 years",
+        "age_months": 18,
+        "weight": 15.0,
+        "color": "White and Brown",
+        "temperament": DogTemperament.FRIENDLY,
+        "status": DogStatus.SHELTER,
+        "is_adoptable": True,
+        "is_spayed_neutered": True,
+        "is_quarantine_passed": True,
+        "image_urls": [
+            "https://images.dog.ceo/breeds/poodle-standard/n02113799_4693.jpg",
+            "https://images.dog.ceo/breeds/poodle-standard/n02113799_4854.jpg",
+        ],
+    },
+    {
+        "registration_number": "DOG-2026-0009",
+        "name": "Tiger",
+        "breed": "Indie Mix",
+        "breed_classification": DogBreedClassification.MIX,
+        "gender": DogGender.MALE,
+        "estimated_age": "2 years",
+        "age_months": 24,
+        "weight": 20.0,
+        "color": "Brindle",
+        "temperament": DogTemperament.GUARD_DOG,
+        "status": DogStatus.SHELTER,
+        "is_adoptable": True,
+        "is_spayed_neutered": True,
+        "is_quarantine_passed": True,
+        "image_urls": [
+            "https://images.dog.ceo/breeds/boxer/n02108089_6165.jpg",
+            "https://images.dog.ceo/breeds/boxer/n02108089_6724.jpg",
+        ],
+    },
+    {
+        "registration_number": "DOG-2026-0010",
+        "name": "Coco",
+        "breed": "Pomeranian",
+        "breed_classification": DogBreedClassification.PURE,
+        "gender": DogGender.FEMALE,
+        "estimated_age": "3 years",
+        "age_months": 36,
+        "weight": 4.5,
+        "color": "Cream",
+        "temperament": DogTemperament.FRIENDLY,
+        "status": DogStatus.FOSTERED,
+        "is_adoptable": True,
+        "is_spayed_neutered": True,
+        "is_quarantine_passed": True,
+        "image_urls": [
+            "https://images.dog.ceo/breeds/pomeranian/n02112018_6584.jpg",
+            "https://images.dog.ceo/breeds/pomeranian/n02112018_7113.jpg",
+        ],
     },
 ]
 
 
 async def seed_dogs() -> None:
     settings = get_settings()
-    engine = create_async_engine(settings.database_url, connect_args={"statement_cache_size": 0})
+    engine = create_async_engine(
+        settings.database_url, connect_args={"statement_cache_size": 0}
+    )
     session_factory = async_sessionmaker(bind=engine, expire_on_commit=False)
 
     async with session_factory() as session:
@@ -101,15 +249,19 @@ async def seed_dogs() -> None:
                     )
                 )
             ).scalars().first()
-            if not existing:
-                dog = DogProfile(
-                    id=uuid.uuid4(),
-                    **dog_data,
-                )
-                session.add(dog)
+            if existing:
+                # Update image_urls on existing dogs so re-running the seed
+                # populates the new image_urls column for already-seeded dogs.
+                existing.image_urls = dog_data.get("image_urls")
+                continue
+            dog = DogProfile(
+                id=uuid.uuid4(),
+                **dog_data,
+            )
+            session.add(dog)
         await session.commit()
     await engine.dispose()
-    print("Seed adoptable dogs completed.")
+    print(f"Seed adoptable dogs completed ({len(TEST_DOGS)} dogs).")
 
 
 if __name__ == "__main__":

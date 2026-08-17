@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from pawguard.modules.dog.models import (
     DogActivityEventType,
@@ -138,8 +138,19 @@ class DogProfileResponse(BaseModel):
     foster_home_id: uuid.UUID | None
     is_adoptable: bool
     is_quarantine_passed: bool
+    image_urls: list[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
+
+    @field_validator("image_urls", mode="before")
+    @classmethod
+    def _coerce_image_urls(cls, v: Any) -> list[str]:
+        """ORM column may be NULL; coerce to empty list for the response."""
+        if v is None:
+            return []
+        if isinstance(v, list):
+            return [str(u) for u in v if u]
+        return []
 
     model_config = ConfigDict(from_attributes=True)
 

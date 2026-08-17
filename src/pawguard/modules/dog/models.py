@@ -5,7 +5,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -93,6 +93,11 @@ class DogActivityEventType(StrEnum):
 class DogProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "dog_profiles"
 
+    __table_args__ = (
+        Index("ix_dog_profiles_status_shelter_facility_id", "status", "shelter_facility_id"),
+        Index("ix_dog_profiles_status_is_adoptable", "status", "is_adoptable"),
+    )
+
     registration_number: Mapped[str] = mapped_column(
         String(64), unique=True, nullable=False, index=True
     )
@@ -133,6 +138,11 @@ class DogProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base)
     distinctive_markers: Mapped[str | None] = mapped_column(
         Text, nullable=True
     )  # e.g., "white patch on chest, notched left ear"
+
+    # Public gallery URLs for the adoption directory. Seeded directly with
+    # external CDN URLs so the listing endpoint can render images without
+    # requiring every dog to also have a StoredFile row in the storage module.
+    image_urls: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
 
     status: Mapped[DogStatus] = mapped_column(
         String(32), default=DogStatus.RESCUED, nullable=False, index=True
