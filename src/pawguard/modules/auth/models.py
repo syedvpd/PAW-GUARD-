@@ -372,6 +372,10 @@ class OAuthAccount(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
 class AuthAuditLog(UUIDPkMixin, Base):
     __tablename__ = "auth_audit_logs"
 
+    __table_args__ = (
+        Index("ix_auth_audit_logs_user_id_created_at", "user_id", "created_at"),
+    )
+
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),

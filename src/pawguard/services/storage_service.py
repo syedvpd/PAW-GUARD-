@@ -125,3 +125,12 @@ class StorageService:
 
     def delete_object(self, *, object_key: str) -> None:
         self._client.delete_object(Bucket=self._bucket, Key=object_key)
+
+
+_storage_service_instance: StorageService | None = None
+
+def get_storage_service() -> StorageService:
+    global _storage_service_instance
+    if _storage_service_instance is None:
+        _storage_service_instance = StorageService()
+    return _storage_service_instance

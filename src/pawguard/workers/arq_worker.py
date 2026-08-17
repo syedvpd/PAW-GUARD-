@@ -1,3 +1,4 @@
+import asyncio
 import time
 from collections.abc import Awaitable, Callable
 from functools import wraps
@@ -11,6 +12,8 @@ from pawguard.api.v1.router import api_v1_router  # noqa: F401  (side effects)
 from pawguard.core.config import get_settings
 from pawguard.core.logging import configure_logging, get_logger
 from pawguard.core.metrics import increment_counter, observe_histogram
+from pawguard.db.session import AsyncSessionLocal
+from pawguard.modules.outbox.service import OutboxService
 from pawguard.workers.jobs.companion_pet_jobs import send_companion_pet_reminders
 from pawguard.workers.jobs.email_jobs import (
     send_email_verification_email_job,
@@ -73,9 +76,42 @@ def _track_failures(fn: Callable[..., Awaitable[Any]]) -> Any:
     return wrapper
 
 
+async def outbox_poller_loop(ctx: dict[str, Any]) -> None:
+    logger.info("outbox_poller_loop_started")
+    from pawguard.workers.pool import _ensure_pool
+    pool = await _ensure_pool()
+
+    while True:
+        try:
+            async with AsyncSessionLocal() as session:
+                async with session.begin():
+                    processed = await OutboxService.process_pending_events(session, pool)
+                    if processed > 0:
+                        logger.debug(f"Outbox processed {processed} events.")
+        except Exception as e:
+            logger.error("outbox_poller_loop_error", error=str(e))
+        
+        try:
+            await asyncio.sleep(2)
+        except asyncio.CancelledError:
+            break
+
+
 async def startup(ctx: dict[str, object]) -> None:
     configure_logging()
     logger.info("arq_worker_startup", max_tries=WorkerSettings.max_tries)
+    ctx["outbox_task"] = asyncio.create_task(outbox_poller_loop(ctx))
+
+
+async def shutdown(ctx: dict[str, object]) -> None:
+    logger.info("arq_worker_shutdown")
+    task = ctx.get("outbox_task")
+    if task:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 _send_password_reset_email_job = _track_failures(send_password_reset_email_job)
@@ -117,4 +153,5 @@ class WorkerSettings:
         cron(_send_companion_pet_reminders, hour={9}, minute={45}, max_tries=2),
     ]
     on_startup = startup
+    on_shutdown = shutdown
     redis_settings = RedisSettings.from_dsn(settings.redis_url)

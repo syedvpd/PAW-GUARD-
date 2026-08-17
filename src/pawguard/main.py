@@ -13,6 +13,7 @@ from pawguard.api.v1.router import api_v1_router
 from pawguard.core.config import get_settings
 from pawguard.core.exceptions import register_exception_handlers
 from pawguard.core.logging import configure_logging, get_logger
+from pawguard.core.idempotency import IdempotencyMiddleware
 from pawguard.core.middleware import (
     RequestBodySizeMiddleware,
     RequestIDMiddleware,
@@ -156,6 +157,7 @@ def create_app() -> FastAPI:
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts_list)
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(RequestBodySizeMiddleware)
+    app.add_middleware(IdempotencyMiddleware)
     app.add_middleware(RequestLoggingMiddleware)
     app.add_middleware(RequestIDMiddleware)
 

@@ -2,6 +2,8 @@ import time
 from collections.abc import AsyncGenerator
 from typing import Any
 
+from fastapi import Request
+
 from sqlalchemy import event
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.ext.asyncio import (
@@ -36,6 +38,26 @@ engine: AsyncEngine = create_async_engine(
 
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autoflush=False,
+)
+
+replica_url = _settings.database_replica_url or _settings.database_url
+
+replica_engine: AsyncEngine = create_async_engine(
+    replica_url,
+    echo=_settings.database_echo,
+    pool_size=_settings.database_pool_size,
+    max_overflow=_settings.database_max_overflow,
+    pool_pre_ping=True,
+    pool_recycle=1800,
+    pool_timeout=30,
+    connect_args={"statement_cache_size": 0},
+)
+
+AsyncReplicaSessionLocal = async_sessionmaker(
+    bind=replica_engine,
     class_=AsyncSession,
     expire_on_commit=False,
     autoflush=False,
@@ -96,13 +118,24 @@ def collect_db_pool_metrics() -> dict[str, int]:
     }
 
 
-async def get_db() -> AsyncGenerator[AsyncSession]:
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
-            if session.in_transaction():
-                await session.commit()
-        except Exception:
-            if session.in_transaction():
-                await session.rollback()
-            raise
+async def get_db(request: Request = None) -> AsyncGenerator[AsyncSession]:
+    if request is not None and request.method == "GET":
+        async with AsyncReplicaSessionLocal() as session:
+            try:
+                yield session
+                if session.in_transaction():
+                    await session.commit()
+            except Exception:
+                if session.in_transaction():
+                    await session.rollback()
+                raise
+    else:
+        async with AsyncSessionLocal() as session:
+            try:
+                yield session
+                if session.in_transaction():
+                    await session.commit()
+            except Exception:
+                if session.in_transaction():
+                    await session.rollback()
+                raise

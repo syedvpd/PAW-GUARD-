@@ -10,6 +10,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
@@ -110,6 +111,10 @@ class ChartOfAccounts(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, 
 
 class GeneralLedgerEntry(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "general_ledger_entries"
+
+    __table_args__ = (
+        Index("ix_general_ledger_entries_account_id_entry_date", "account_id", "entry_date"),
+    )
 
     account_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),

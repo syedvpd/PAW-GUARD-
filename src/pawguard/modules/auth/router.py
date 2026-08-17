@@ -56,6 +56,7 @@ from pawguard.modules.auth.schemas import (
     UserProfileUpdate,
 )
 from pawguard.modules.auth.service import AuthenticatedTokens, AuthService, RequestContext
+from pawguard.modules.outbox.service import OutboxService
 from pawguard.services.audit_service import AuditService
 from pawguard.workers.pool import get_arq_pool
 
@@ -166,7 +167,7 @@ async def register(
     payload: RegisterRequest,
     request: Request,
     auth_service: AuthService = Depends(get_auth_service),
-    arq_pool: ArqRedis = Depends(get_arq_pool),
+    db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[UserProfile]:
     user = await auth_service.register(
         email=payload.email,
@@ -180,8 +181,8 @@ async def register(
     )
     verify_url = f"{get_settings().web_app_url}/verify-email?token={raw_token}"
     try:
-        await arq_pool.enqueue_job(
-            "send_email_verification_email_job", to=user.email, verify_url=verify_url
+        await OutboxService.enqueue_job(
+            db, "send_email_verification_email_job", to=user.email, verify_url=verify_url
         )
     except Exception as exc:
         logger.warning("email_verification_job_enqueue_failed", error=str(exc))
@@ -408,7 +409,7 @@ async def request_password_reset(
     payload: PasswordResetRequest,
     request: Request,
     auth_service: AuthService = Depends(get_auth_service),
-    arq_pool: ArqRedis = Depends(get_arq_pool),
+    db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[None]:
     raw_token = await auth_service.request_password_reset(
         email=payload.email, ctx=_build_request_context(request)
@@ -416,8 +417,8 @@ async def request_password_reset(
     if raw_token is not None:
         reset_url = f"{get_settings().web_app_url}/reset-password?token={raw_token}"
         try:
-            await arq_pool.enqueue_job(
-                "send_password_reset_email_job", to=payload.email, reset_url=reset_url
+            await OutboxService.enqueue_job(
+                db, "send_password_reset_email_job", to=payload.email, reset_url=reset_url
             )
         except Exception as exc:
             logger.warning("password_reset_job_enqueue_failed", error=str(exc))

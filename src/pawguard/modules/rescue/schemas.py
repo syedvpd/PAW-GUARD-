@@ -322,9 +322,12 @@ class RescueReportResponse(BaseModel):
             photos = getattr(data, "photos", None) or []
             urls = []
             if photos:
-                from pawguard.services.storage_service import StorageService
-                storage = StorageService()
-                urls = [storage.generate_presigned_download_url(object_key=k) for k in photos if k]
+                from pawguard.services.storage_service import get_storage_service
+                storage = get_storage_service()
+                try:
+                    urls = [storage.generate_presigned_download_url(object_key=k) for k in photos if k]
+                except Exception:
+                    urls = []
             return {
                 "id": data.id,
                 "rescue_request_id": data.rescue_request_id,
@@ -376,9 +379,20 @@ class RescueRequestResponse(BaseModel):
             keys = getattr(data, "media_evidence", None) or []
             urls = []
             if keys:
-                from pawguard.services.storage_service import StorageService
-                storage = StorageService()
-                urls = [storage.generate_presigned_download_url(object_key=k) for k in keys if k]
+                from pawguard.services.storage_service import get_storage_service
+                storage = get_storage_service()
+                try:
+                    urls = [storage.generate_presigned_download_url(object_key=k) for k in keys if k]
+                except Exception:
+                    urls = []
+
+            # Safe relationship inspection to prevent MissingGreenlet errors in async SQLAlchemy
+            obj_dict = getattr(data, "__dict__", {})
+            dispatch_val = obj_dict.get("dispatch", None)
+            reports_val = obj_dict.get("reports", [])
+            dog_prof = obj_dict.get("dog_profile", None)
+            dog_profile_id = getattr(dog_prof, "id", None) if dog_prof else None
+
             return {
                 "id": data.id,
                 "ticket_number": data.ticket_number,
@@ -405,9 +419,9 @@ class RescueRequestResponse(BaseModel):
                 "coordinator_id": getattr(data, "coordinator_id", None),
                 "created_at": data.created_at,
                 "updated_at": data.updated_at,
-                "dispatch": getattr(data, "dispatch", None),
-                "reports": getattr(data, "reports", []),
-                "dog_profile_id": getattr(data.dog_profile, "id", None) if getattr(data, "dog_profile", None) else None,
+                "dispatch": dispatch_val,
+                "reports": reports_val,
+                "dog_profile_id": dog_profile_id,
             }
         return data
 
