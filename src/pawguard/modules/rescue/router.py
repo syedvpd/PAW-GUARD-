@@ -82,6 +82,29 @@ def get_rescue_service(
 _UNMASKED_RESCUE_PII_PERMISSIONS = {"rescue:verify", "rescue:dispatch", "system:admin"}
 
 
+def _enforce_agent_assignment(
+    request_obj: RescueRequest, current_user: CurrentUser | None
+) -> None:
+    """Enforce that Rescue Agents can only view/act on cases they are assigned to (DS-12)."""
+    if current_user is None:
+        return
+    user_permissions = {p.code for r in current_user.user.roles for p in r.permissions}
+    is_coordinator_or_admin = bool(_UNMASKED_RESCUE_PII_PERMISSIONS & user_permissions)
+    if not is_coordinator_or_admin and "rescue:execute" in user_permissions:
+        is_assigned = False
+        if request_obj.dispatch is not None:
+            if request_obj.dispatch.assigned_driver_id == current_user.id:
+                is_assigned = True
+            elif any(agent.agent_id == current_user.id for agent in request_obj.dispatch.agents):
+                is_assigned = True
+        if not is_assigned:
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access to this rescue case is restricted to assigned agents."
+            )
+
+
 def _mask_reporter_pii(
     item: RescueRequestResponse, current_user: CurrentUser | None
 ) -> RescueRequestResponse:
@@ -389,6 +412,8 @@ async def escalate_rescue(
     current_user: CurrentUser = Depends(get_current_user),
     service: RescueService = Depends(get_rescue_service),
 ) -> ApiResponse[RescueRequestResponse]:
+    rescue_req = await service.get_request(request_id)
+    _enforce_agent_assignment(rescue_req, current_user)
     rescue = await service.escalate(
         request_id,
         escalation_type=payload.escalation_type,
@@ -414,6 +439,8 @@ async def mark_located(
     current_user: CurrentUser = Depends(get_current_user),
     service: RescueService = Depends(get_rescue_service),
 ) -> ApiResponse[RescueRequestResponse]:
+    rescue_req = await service.get_request(request_id)
+    _enforce_agent_assignment(rescue_req, current_user)
     rescue = await service.update_dispatch_status(
         request_id,
         status=RescueStatus.LOCATED,
@@ -439,6 +466,8 @@ async def mark_rescued(
     current_user: CurrentUser = Depends(get_current_user),
     service: RescueService = Depends(get_rescue_service),
 ) -> ApiResponse[RescueRequestResponse]:
+    rescue_req = await service.get_request(request_id)
+    _enforce_agent_assignment(rescue_req, current_user)
     rescue = await service.update_dispatch_status(
         request_id,
         status=RescueStatus.RESCUED,
@@ -493,6 +522,8 @@ async def fail_rescue(
     current_user: CurrentUser = Depends(get_current_user),
     service: RescueService = Depends(get_rescue_service),
 ) -> ApiResponse[RescueRequestResponse]:
+    rescue_req = await service.get_request(request_id)
+    _enforce_agent_assignment(rescue_req, current_user)
     rescue = await service.update_dispatch_status(
         request_id,
         status=RescueStatus.REJECTED,
@@ -519,6 +550,8 @@ async def accept_dispatch(
     current_user: CurrentUser = Depends(get_current_user),
     service: RescueService = Depends(get_rescue_service),
 ) -> ApiResponse[RescueRequestResponse]:
+    rescue_req = await service.get_request(request_id)
+    _enforce_agent_assignment(rescue_req, current_user)
     rescue = await service.accept_dispatch(
         request_id,
         agent_id=current_user.id,
@@ -543,6 +576,8 @@ async def add_observation_report(
     current_user: CurrentUser = Depends(get_current_user),
     service: RescueService = Depends(get_rescue_service),
 ) -> ApiResponse[RescueRequestResponse]:
+    rescue_req = await service.get_request(request_id)
+    _enforce_agent_assignment(rescue_req, current_user)
     rescue = await service.add_observation_report(
         request_id,
         agent_id=current_user.id,
@@ -597,6 +632,7 @@ async def get_request(
     service: RescueService = Depends(get_rescue_service),
 ) -> ApiResponse[RescueRequestResponse]:
     request = await service.get_request(request_id)
+    _enforce_agent_assignment(request, current_user)
     data = _mask_reporter_pii(
         RescueRequestResponse.model_validate(request), current_user
     )
