@@ -154,10 +154,9 @@ class DogProfileResponse(BaseModel):
         return []
 
     @model_validator(mode="after")
-    def _sync_photo_gallery_urls(self) -> "DogProfileResponse":
-        """Expose image_urls under the photo_gallery_urls key too so both
-        the admin Flutter app (image_urls) and the public web app
-        (photo_gallery_urls) can render dog images without changes."""
+    def _sync_photo_fields(self) -> "DogProfileResponse":
+        """Expose image_urls under photo_gallery_urls too so both field
+        names are available for different Flutter app consumers."""
         if not self.photo_gallery_urls and self.image_urls:
             self.photo_gallery_urls = self.image_urls
         return self
