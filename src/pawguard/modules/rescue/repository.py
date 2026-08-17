@@ -36,6 +36,7 @@ class RescueRepository:
             .options(
                 selectinload(RescueRequest.dispatch).selectinload(RescueDispatch.agents),
                 selectinload(RescueRequest.reports),
+                selectinload(RescueRequest.dog_profile),
             )
             .where(RescueRequest.deleted_at.is_(None))
         )
