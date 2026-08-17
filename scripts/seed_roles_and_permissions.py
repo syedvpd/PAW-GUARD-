@@ -223,6 +223,7 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
             pc.RESCUE_UPDATE,
             pc.RESCUE_VERIFY,
             pc.RESCUE_DISPATCH,
+            pc.RESCUE_EXECUTE,
             pc.VEHICLE_READ,
             pc.VEHICLE_ASSIGN,
             pc.PUBLIC_READ,

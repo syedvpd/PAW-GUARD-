@@ -13,7 +13,6 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
-
 from pawguard.core.exceptions import (
     ConflictError,
     NotFoundError,
@@ -648,13 +647,13 @@ class RescueService:
 
         if status == RescueStatus.LOCATED:
             if request.status != RescueStatus.DISPATCHED:
-                raise ConflictError("Animal must be in DISPATCHED status to mark LOCATED.")
+                raise ValidationFailedError("Animal must be in DISPATCHED status to mark LOCATED.")
             dispatch.located_at = now
             request.status = RescueStatus.LOCATED
 
         elif status == RescueStatus.RESCUED:
             if request.status not in (RescueStatus.DISPATCHED, RescueStatus.LOCATED):
-                raise ConflictError(
+                raise ValidationFailedError(
                     "Animal must be in DISPATCHED or LOCATED status to mark RESCUED."
                 )
             dispatch.rescued_at = now
@@ -662,7 +661,7 @@ class RescueService:
 
         elif status == RescueStatus.ADMITTED:
             if request.status != RescueStatus.RESCUED:
-                raise ConflictError("Animal must be in RESCUED status to mark ADMITTED.")
+                raise ValidationFailedError("Animal must be in RESCUED status to mark ADMITTED.")
             dispatch.admitted_at = now
             request.status = RescueStatus.ADMITTED
 
@@ -847,18 +846,22 @@ class RescueService:
 
     async def lookup_public_status(
         self, ticket_number: str, phone: str
-    ) -> PublicRescueStatusResponse:
+    ) -> PublicRescueStatusResponse | None:
         """Public "my submitted case" lookup (PRR 3.2).
 
         Ownership is verified with the ticket number AND the phone the
         reporter submitted with, so guessing a ticket number alone returns
         the same NotFoundError as an invalid one - no case data leaks.
+
+        Returns None when no match is found (instead of raising 404), so the
+        router can return HTTP 200 with an empty payload — matching the
+        documented contract.
         """
         request = await self._repo.get_request_by_ticket_and_phone(
             ticket_number, phone
         )
         if request is None:
-            raise NotFoundError("Rescue request not found.")
+            return None
         return PublicRescueStatusResponse(
             ticket_number=request.ticket_number,
             status=request.status,
@@ -1114,12 +1117,22 @@ class RescueService:
                     "latitude": float(coord[1]) if coord else None,
                 }
 
-        # Query users from the DB
+        # Query users from the DB — filter by rescue roles to avoid
+        # surfacing non-rescue users (finance, vets, etc.) in suggestions.
         if agent_geo_data:
-            stmt = select(User).options(selectinload(User.roles)).where(
-                User.id.in_(agent_geo_data.keys()),
-                User.deleted_at.is_(None),
-                User.is_active.is_(True),
+            from pawguard.modules.auth.models import Role, UserRole
+            stmt = (
+                select(User)
+                .options(selectinload(User.roles))
+                .join(UserRole, UserRole.user_id == User.id)
+                .join(Role, Role.id == UserRole.role_id)
+                .where(
+                    User.id.in_(agent_geo_data.keys()),
+                    User.deleted_at.is_(None),
+                    User.is_active.is_(True),
+                    Role.name.in_(["rescue_agent", "rescue_coordinator"]),
+                )
+                .distinct()
             )
             users = (await self._repo._session.execute(stmt)).scalars().all()
             for user in users:

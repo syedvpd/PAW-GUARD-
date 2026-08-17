@@ -519,19 +519,20 @@ class TestRescueService:
 
     @pytest.mark.asyncio
     async def test_lookup_public_status_not_found(self, service, mock_repo):
-        """Wrong ticket or wrong phone yields the same NotFoundError - no
-        case data leaks to someone guessing a ticket number (M-E)."""
+        """Wrong ticket or wrong phone yields None (HTTP 200, not 404) — the
+        anti-enumeration property still holds since the response body is
+        indistinguishable from an unknown ticket (M-E)."""
         mock_repo.get_request_by_ticket_and_phone.return_value = None
-        with pytest.raises(NotFoundError, match="Rescue request not found"):
-            await service.lookup_public_status("RES-00000000-0000", "+9999999999")
+        result = await service.lookup_public_status("RES-00000000-0000", "+9999999999")
+        assert result is None
 
     @pytest.mark.asyncio
     async def test_lookup_public_status_requires_matching_phone(self, service, mock_repo):
         """The repo lookup is keyed on ticket AND phone so a mismatched phone
-        never resolves the case - and a non-matching phone surfaces the same
-        NotFoundError as an unknown ticket (M-E)."""
-        with pytest.raises(NotFoundError, match="Rescue request not found"):
-            await service.lookup_public_status("RES-20260730-1234", "+9999999999")
+        never resolves the case — returns None with a 200, matching the
+        documented contract (M-E)."""
+        result = await service.lookup_public_status("RES-20260730-1234", "+9999999999")
+        assert result is None
         mock_repo.get_request_by_ticket_and_phone.assert_awaited_once_with(
             "RES-20260730-1234", "+9999999999"
         )

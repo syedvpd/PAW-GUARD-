@@ -93,9 +93,7 @@ def _enforce_agent_assignment(
     if not is_coordinator_or_admin and "rescue:execute" in user_permissions:
         is_assigned = False
         if request_obj.dispatch is not None:
-            if request_obj.dispatch.assigned_driver_id == current_user.id:
-                is_assigned = True
-            elif any(agent.agent_id == current_user.id for agent in request_obj.dispatch.agents):
+            if request_obj.dispatch.assigned_driver_id == current_user.id or any(agent.agent_id == current_user.id for agent in request_obj.dispatch.agents):
                 is_assigned = True
         if not is_assigned:
             from fastapi import HTTPException
@@ -594,7 +592,7 @@ async def add_observation_report(
 
 @router.get(
     "/status",
-    response_model=ApiResponse[PublicRescueStatusResponse],
+    response_model=ApiResponse[PublicRescueStatusResponse | None],
     # Public "my submitted case" lookup (PRR 3.2) - no auth, rate-limited.
     # Declared BEFORE /{request_id} so the UUID path converter cannot shadow it.
     dependencies=[Depends(rate_limit("rescue_status_lookup", 10, 60))],
@@ -603,8 +601,10 @@ async def get_public_status(
     ticket_number: str = Query(..., min_length=1, max_length=64),
     phone: str = Query(..., min_length=1, max_length=32),
     service: RescueService = Depends(get_rescue_service),
-) -> ApiResponse[PublicRescueStatusResponse]:
+) -> ApiResponse[PublicRescueStatusResponse | None]:
     status = await service.lookup_public_status(ticket_number, phone)
+    if status is None:
+        return ApiResponse(data=None, message="No rescue case found matching the provided ticket and phone.")
     return ApiResponse(data=status, message="Rescue case status retrieved.")
 
 
