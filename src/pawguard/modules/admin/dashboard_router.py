@@ -86,7 +86,7 @@ async def get_recent_activity(
 
 @admin_dashboard_router.get(
     "/inventory-alerts",
-    response_model=ApiResponse[dict[str, Any]],
+    response_model=ApiResponse[list[dict[str, Any]]],
     dependencies=[Depends(require_permission("system:admin"))],
 )
 async def get_inventory_alerts(

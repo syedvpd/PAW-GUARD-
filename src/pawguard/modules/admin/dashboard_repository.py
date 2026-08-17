@@ -361,3 +361,215 @@ class DashboardRepository:
             AdoptionApplication.status == AdoptionStatus.SUBMITTED,
         )
         return (await self._session.execute(stmt)).scalar_one()
+
+    async def get_total_rescues_count(self) -> int:
+        stmt = select(func.count(RescueRequest.id)).where(RescueRequest.deleted_at.is_(None))
+        return (await self._session.execute(stmt)).scalar_one()
+
+    async def get_total_notifications_count(self) -> int:
+        stmt = select(func.count(Notification.id))
+        return (await self._session.execute(stmt)).scalar_one()
+
+    async def get_total_volunteers_count(self) -> int:
+        stmt = select(func.count(VolunteerProfile.id)).where(
+            VolunteerProfile.deleted_at.is_(None)
+        )
+        return (await self._session.execute(stmt)).scalar_one()
+
+    async def get_total_facilities_count(self) -> int:
+        stmt = select(func.count(ShelterFacility.id))
+        return (await self._session.execute(stmt)).scalar_one()
+
+    async def get_total_lost_count(self) -> int:
+        stmt = select(func.count(LostReport.id)).where(LostReport.deleted_at.is_(None))
+        return (await self._session.execute(stmt)).scalar_one()
+
+    async def get_total_found_count(self) -> int:
+        stmt = select(func.count(FoundReport.id)).where(FoundReport.deleted_at.is_(None))
+        return (await self._session.execute(stmt)).scalar_one()
+
+    async def get_system_metrics(self) -> dict[str, int]:
+        total_users = await self.get_total_users_count()
+        active_users = await self.get_active_users_count()
+        verified_users = await self.get_verified_users_count()
+        total_roles = await self.get_total_roles_count()
+        active_sessions = await self.get_active_sessions_count()
+        total_dogs = await self.get_total_dogs_count()
+        adoptable_dogs = await self.get_adoptable_dogs_count()
+        pending_adoptions = await self.get_pending_adoptions_count()
+        total_rescues = await self.get_total_rescues_count()
+        return {
+            "total_users": total_users,
+            "active_users": active_users,
+            "verified_users": verified_users,
+            "total_roles": total_roles,
+            "active_sessions": active_sessions,
+            "total_dogs": total_dogs,
+            "adoptable_dogs": adoptable_dogs,
+            "pending_adoptions": pending_adoptions,
+            "total_rescues": total_rescues,
+        }
+
+    async def get_summary(self) -> dict[str, Any]:
+        users = {
+            "total_users": await self.get_total_users_count(),
+            "active_users": await self.get_active_users_count(),
+            "verified_users": await self.get_verified_users_count(),
+        }
+        dogs = {
+            "total_dogs": await self.get_total_dogs_count(),
+            "adoptable_dogs": await self.get_adoptable_dogs_count(),
+            "by_status": await self.count_dogs_by_status(),
+        }
+        rescues = {
+            "total": await self.get_total_rescues_count(),
+            "by_status": await self.count_rescues_by_status(),
+        }
+        adoptions = {
+            "by_status": await self.count_adoptions_by_status(),
+            "adoption_rate_pct": await self.get_adoption_rate(),
+            "pending": await self.get_pending_adoptions_count(),
+        }
+        donations = await self.get_donation_totals()
+        shelters = await self.get_shelter_occupancy()
+        volunteers = {
+            "total": await self.get_total_volunteers_count(),
+            "by_status": await self.count_volunteers_by_status(),
+            "hours_logged": await self.get_volunteer_hours(),
+        }
+        grievances = {
+            "open": await self.get_open_grievances(),
+            "by_status": await self.count_grievances_by_status(),
+        }
+        lost_found = await self.get_active_lost_found()
+        notifications = {
+            "unread": await self.get_unread_notifications_count(),
+            "total": await self.get_total_notifications_count(),
+        }
+        fosters = await self.get_foster_stats()
+        return {
+            "users": users,
+            "dogs": dogs,
+            "rescues": rescues,
+            "adoptions": adoptions,
+            "donations": donations,
+            "shelters": shelters,
+            "volunteers": volunteers,
+            "grievances": grievances,
+            "lost_found": lost_found,
+            "notifications": notifications,
+            "fosters": fosters,
+        }
+
+    async def get_kpis(self) -> dict[str, Any]:
+        adoption_rate = await self.get_adoption_rate()
+        shelter = await self.get_shelter_occupancy()
+        rescue = await self.get_rescue_kpis()
+        donations = await self.get_donation_totals()
+        open_grievances = await self.get_open_grievances()
+        unread = await self.get_unread_notifications_count()
+        active_fosters = await self.get_active_fosters()
+        volunteer_hours = await self.get_volunteer_hours()
+        return {
+            "adoption_rate_pct": adoption_rate,
+            "shelter_occupancy_pct": shelter["occupancy_pct"],
+            "rescue_rejection_rate_pct": rescue["rejection_rate_pct"],
+            "avg_rescue_response_minutes": rescue["avg_response_time_minutes"],
+            "total_raised": donations["total_raised"],
+            "open_grievances": open_grievances,
+            "unread_notifications": unread,
+            "active_fosters": active_fosters,
+            "volunteer_hours": volunteer_hours,
+        }
+
+    async def get_charts(self) -> dict[str, Any]:
+        return {
+            "adoption_trend": await self.get_monthly_adoption_trend(),
+            "rescue_trend": await self.get_monthly_rescue_trend(),
+            "donation_trend": await self.get_monthly_donation_trend(),
+            "breed_distribution": await self.get_dog_breed_distribution(),
+        }
+
+    async def get_donation_summary(self) -> dict[str, Any]:
+        totals = await self.get_donation_totals()
+        recent = await self.get_recent_donations(days=30)
+        trend = await self.get_monthly_donation_trend(months=6)
+        return {
+            "total_donations": totals["total_donations"],
+            "total_raised": totals["total_raised"],
+            "recent_30d": recent,
+            "monthly_trend": trend,
+        }
+
+    async def get_rescue_stats(self) -> dict[str, Any]:
+        kpis = await self.get_rescue_kpis()
+        by_status = await self.count_rescues_by_status()
+        return {
+            "total_rescues": kpis["total_rescues"],
+            "admitted": kpis["admitted"],
+            "rejection_rate_pct": kpis["rejection_rate_pct"],
+            "avg_response_time_minutes": kpis["avg_response_time_minutes"],
+            "by_status": by_status,
+        }
+
+    async def get_adoption_stats(self) -> dict[str, Any]:
+        by_status = await self.count_adoptions_by_status()
+        rate = await self.get_adoption_rate()
+        pending = await self.get_pending_adoptions_count()
+        trend = await self.get_monthly_adoption_trend()
+        return {
+            "by_status": by_status,
+            "adoption_rate_pct": rate,
+            "pending": pending,
+            "monthly_trend": trend,
+        }
+
+    async def get_volunteer_stats(self) -> dict[str, Any]:
+        total = await self.get_total_volunteers_count()
+        by_status = await self.count_volunteers_by_status()
+        hours = await self.get_volunteer_hours()
+        return {
+            "total_volunteers": total,
+            "by_status": by_status,
+            "hours_logged": hours,
+        }
+
+    async def get_notification_summary(self) -> dict[str, Any]:
+        unread = await self.get_unread_notifications_count()
+        total = await self.get_total_notifications_count()
+        return {
+            "total": total,
+            "unread": unread,
+            "read": total - unread,
+        }
+
+    async def get_shelter_stats(self) -> dict[str, Any]:
+        occupancy = await self.get_shelter_occupancy()
+        total_facilities = await self.get_total_facilities_count()
+        return {
+            "total_facilities": total_facilities,
+            "capacity": occupancy["capacity"],
+            "occupied": occupancy["occupied"],
+            "occupancy_pct": occupancy["occupancy_pct"],
+        }
+
+    async def get_lost_found_stats(self) -> dict[str, Any]:
+        active = await self.get_active_lost_found()
+        total_lost = await self.get_total_lost_count()
+        total_found = await self.get_total_found_count()
+        return {
+            "active_lost": active["active_lost"],
+            "active_found": active["active_found"],
+            "total_lost": total_lost,
+            "total_found": total_found,
+        }
+
+    async def get_grievance_stats(self) -> dict[str, Any]:
+        open_g = await self.get_open_grievances()
+        by_status = await self.count_grievances_by_status()
+        feedback = await self.get_feedback_summary()
+        return {
+            "open": open_g,
+            "by_status": by_status,
+            "feedback": feedback,
+        }
