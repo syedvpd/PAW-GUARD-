@@ -20,6 +20,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from pawguard.core.config import get_settings
+from pawguard.modules.auth import models as auth_models  # noqa: F401  registers User for AuditMixin FKs
+from pawguard.modules.companion_pet import models as companion_pet_models  # noqa: F401  registers SafetyTag
+from pawguard.modules.foster import models as foster_models  # noqa: F401  registers foster_profiles
+from pawguard.modules.rescue import models as rescue_models  # noqa: F401  registers rescue_requests
+from pawguard.modules.shelter import models as shelter_models  # noqa: F401  registers shelter_sections
 from pawguard.modules.dog.models import (
     DogBreedClassification,
     DogGender,
@@ -200,7 +205,7 @@ TEST_DOGS = [
         "age_months": 24,
         "weight": 20.0,
         "color": "Brindle",
-        "temperament": DogTemperament.GUARD_DOG,
+        "temperament": DogTemperament.AGGRESSIVE,
         "status": DogStatus.SHELTER,
         "is_adoptable": True,
         "is_spayed_neutered": True,

@@ -1,6 +1,6 @@
 """add_dog_profile_image_urls
 
-Revision ID: a1b2c3d4e5f7
+Revision ID: b9c0d1e2f3a4
 Revises: 84a0660c2de3
 Create Date: 2026-08-17 11:00:00.000000
 
@@ -10,15 +10,17 @@ without requiring a StoredFile row in the storage module. Seed scripts
 populate this column with CDN image URLs for adoptable dogs.
 """
 from collections.abc import Sequence
+from typing import Union
 
-import sqlalchemy as sa
 from alembic import op
+import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
 
-revision: str = 'a1b2c3d4e5f7'
-down_revision: str | None = '84a0660c2de3'
-branch_labels: str | Sequence[str, None] | None = None
-depends_on: str | Sequence[str, None] | None = None
+
+revision: str = 'b9c0d1e2f3a4'
+down_revision: Union[str, None] = '84a0660c2de3'
+branch_labels: Union[str, Sequence[str, None], None] = None
+depends_on: Union[str, Sequence[str, None], None] = None
 
 
 def upgrade() -> None:
