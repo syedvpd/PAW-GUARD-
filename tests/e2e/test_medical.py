@@ -169,11 +169,11 @@ class TestMedicalEndpoints:
     async def test_create_clearance(self, client, setup):
         dog_id = str(TEST.dog_ids[0]) if TEST.dog_ids else str(uuid.uuid4())
         r = await call(client, "medical", "POST",
-                       f"/api/v1/medical/clearance/{dog_id}",
-                       headers=setup.admin_headers, json={
-                           "clearance_type": "quarantine",
-                           "notes": "Cleared for adoption",
-                       }, expected=200)
+                        f"/api/v1/medical/clearance/{dog_id}",
+                        headers=setup.vet_headers, json={
+                            "clearance_type": "quarantine",
+                            "notes": "Cleared for adoption",
+                        }, expected=200)
 
     async def test_list_clearances(self, client, setup):
         dog_id = str(TEST.dog_ids[0]) if TEST.dog_ids else str(uuid.uuid4())

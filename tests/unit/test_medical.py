@@ -562,7 +562,7 @@ class TestMedicalPrr35:
         mock_dog_repo.get_by_id.return_value = dog
 
         result = await service.authorize_adoption_clearance(
-            dog_id, roles={"super_admin"}, actor_id=uuid.uuid4(),
+            dog_id, roles={"veterinarian"}, actor_id=uuid.uuid4(),
             payload=MedicalClearanceCreate(status="denied", decision_notes="Not ready."),
         )
 

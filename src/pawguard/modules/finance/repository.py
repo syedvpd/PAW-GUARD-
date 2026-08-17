@@ -152,9 +152,9 @@ class FinanceRepository:
         date_from: date | None = None,
         date_to: date | None = None,
     ) -> tuple[Sequence[FinancialTransaction], int]:
-        stmt = select(FinancialTransaction).options(
-            selectinload(FinancialTransaction.account)
-        ).where(FinancialTransaction.deleted_at.is_(None))
+        stmt = select(FinancialTransaction).where(
+            FinancialTransaction.deleted_at.is_(None)
+        )
         search_filter = build_search_filter(
             FinancialTransaction, search_term,
             self.SEARCH_FIELDS_TRANSACTIONS,

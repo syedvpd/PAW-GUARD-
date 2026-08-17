@@ -22,6 +22,8 @@ class TestData:
         self.staff_user_id: uuid.UUID | None = None
         self.user_headers: dict = {}
         self.user_id: uuid.UUID | None = None
+        self.vet_headers: dict = {}
+        self.vet_user_id: uuid.UUID | None = None
         self.dog_ids: list[uuid.UUID] = []
         self.facility_id: uuid.UUID | None = None
         self.section_id: uuid.UUID | None = None
@@ -92,6 +94,16 @@ async def setup_regular_user(client: AsyncClient, db: AsyncSession) -> dict:
         client, db, email=email, role="volunteer"
     )
     TEST.user_headers = headers
+    return headers
+
+
+async def setup_vet_user(client: AsyncClient, db: AsyncSession) -> dict:
+    """Register + promote user to veterinarian (required for medical clearance)."""
+    email = f"vet_{uuid.uuid4().hex[:8]}@test.com"
+    headers = await register_and_auth(
+        client, db, email=email, role="veterinarian"
+    )
+    TEST.vet_headers = headers
     return headers
 
 
@@ -467,6 +479,7 @@ async def setup_all_prerequisites(client: AsyncClient, db: AsyncSession) -> None
     await setup_admin_user(client, db)
     await setup_staff_user(client, db)
     await setup_regular_user(client, db)
+    await setup_vet_user(client, db)
 
     # 2. Facility + Section + Kennel
     fac = await create_facility(client, TEST.admin_headers)

@@ -31,18 +31,23 @@ class TestAdoptionAPI:
             client, db_session, email=unique_email
         )
 
-    async def _create_dog(self, client: AsyncClient, headers: dict) -> str:
+    async def _create_dog(self, client: AsyncClient, headers: dict, db_session: AsyncSession) -> str:
         payload = {"name": f"AdoptDog_{uuid.uuid4().hex[:6]}", "breed": "Lab", "gender": "male", "estimated_age": "2y", "weight": 20, "color": "black", "temperament": "friendly", "is_adoptable": True, "is_quarantine_passed": True}
         resp = await client.post("/api/v1/dogs", json=payload, headers=headers)
         dog_id = resp.json()["data"]["id"]
         # is_adoptable is forced False at registration; grant vet clearance
-        # so downstream adoption-flow tests can apply for this dog.
-        await client.post(f"/api/v1/medical/clearance/{dog_id}", headers=headers)
+        # so downstream adoption-flow tests can apply for this dog. Clearance
+        # requires a veterinarian role.
+        vet_email = f"vet_{uuid.uuid4().hex[:8]}@example.com"
+        vet_headers = await register_and_auth(
+            client, db_session, email=vet_email, role="veterinarian"
+        )
+        await client.post(f"/api/v1/medical/clearance/{dog_id}", headers=vet_headers)
         return dog_id
 
     async def test_apply_for_adoption(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
-        dog_id = await self._create_dog(client, headers)
+        dog_id = await self._create_dog(client, headers, db_session)
         payload = {
             "dog_id": dog_id,
             "residential_status": "owned",
@@ -59,7 +64,7 @@ class TestAdoptionAPI:
 
     async def test_apply_duplicate_adoption(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
-        dog_id = await self._create_dog(client, headers)
+        dog_id = await self._create_dog(client, headers, db_session)
         payload = {
             "dog_id": dog_id,
             "residential_status": "owned",
@@ -74,7 +79,7 @@ class TestAdoptionAPI:
 
     async def test_list_adoptions(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
-        dog_id = await self._create_dog(client, headers)
+        dog_id = await self._create_dog(client, headers, db_session)
         payload = {
             "dog_id": dog_id,
             "residential_status": "owned",
@@ -97,7 +102,7 @@ class TestAdoptionAPI:
 
     async def test_update_adoption(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
-        dog_id = await self._create_dog(client, headers)
+        dog_id = await self._create_dog(client, headers, db_session)
         payload = {"dog_id": dog_id, "residential_status": "rented", "has_landlord_approval": True, "has_yard_fence": False, "household_members_count": 1}
         create_resp = await client.post("/api/v1/adoptions", json=payload, headers=headers)
         app_id = create_resp.json()["data"]["id"]
@@ -117,7 +122,7 @@ class TestAdoptionAPI:
 
     async def test_patch_adoption_status(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
-        dog_id = await self._create_dog(client, headers)
+        dog_id = await self._create_dog(client, headers, db_session)
         payload = {"dog_id": dog_id, "residential_status": "owned", "has_landlord_approval": True, "has_yard_fence": True, "household_members_count": 4}
         create_resp = await client.post("/api/v1/adoptions", json=payload, headers=headers)
         app_id = create_resp.json()["data"]["id"]
@@ -127,7 +132,7 @@ class TestAdoptionAPI:
 
     async def test_soft_delete_adoption(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
-        dog_id = await self._create_dog(client, headers)
+        dog_id = await self._create_dog(client, headers, db_session)
         payload = {"dog_id": dog_id, "residential_status": "owned", "has_landlord_approval": False, "has_yard_fence": False, "household_members_count": 2}
         create_resp = await client.post("/api/v1/adoptions", json=payload, headers=headers)
         app_id = create_resp.json()["data"]["id"]
@@ -138,8 +143,8 @@ class TestAdoptionAPI:
 
     async def test_bulk_status_update(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
-        dog1_id = await self._create_dog(client, headers)
-        dog2_id = await self._create_dog(client, headers)
+        dog1_id = await self._create_dog(client, headers, db_session)
+        dog2_id = await self._create_dog(client, headers, db_session)
         payload = {"dog_id": dog1_id, "residential_status": "owned", "has_landlord_approval": True, "has_yard_fence": True, "household_members_count": 2}
         a1 = (await client.post("/api/v1/adoptions", json=payload, headers=headers)).json()["data"]
         payload["dog_id"] = dog2_id

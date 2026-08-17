@@ -8,7 +8,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response, JSONResponse
 
-from pawguard.redis.client import _ensure_client, _NullRedis
+from pawguard.redis.client import RedisClient, _ensure_client, _NullRedis
 from pawguard.services.cache_service import CacheService
 from pawguard.core.security import parse_access_token_claims
 from pawguard.core.constants import ACCESS_TOKEN_COOKIE_NAME

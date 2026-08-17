@@ -1,5 +1,7 @@
 """Integration tests for end-to-end flows of all core modules."""
 
+import uuid
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
@@ -132,9 +134,14 @@ class TestEndToEndModuleFlows:
         # payload; it can only be granted via vet-authorized medical clearance.
         assert dog_data["is_adoptable"] is False
 
-        # 4b. Medical clearance (required before a dog can be adopted)
+        # 4b. Medical clearance (required before a dog can be adopted).
+        # Clearance requires a veterinarian role.
+        vet_headers = await promote_and_auth(
+            client, db_session,
+            email=f"vet_{uuid.uuid4().hex[:8]}@example.com", role="veterinarian",
+        )
         clearance_resp = await client.post(
-            f"/api/v1/medical/clearance/{dog_id}", headers=headers
+            f"/api/v1/medical/clearance/{dog_id}", headers=vet_headers
         )
         assert clearance_resp.status_code == 200
 

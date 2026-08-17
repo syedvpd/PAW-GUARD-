@@ -2281,9 +2281,9 @@ class TestMedical:
     async def test_create_clearance(self, client, db_session):
         if S.dog_id:
             await call(client, "medical", "POST",
-                       f"/api/v1/medical/clearance/{S.dog_id}",
-                       headers=S.admin_headers,
-                       json={"clearance_type": "quarantine", "notes": "Cleared"}, expected=200)
+                        f"/api/v1/medical/clearance/{S.dog_id}",
+                        headers=S.vet_headers,
+                        json={"clearance_type": "quarantine", "notes": "Cleared"}, expected=200)
 
     async def test_list_clearances(self, client, db_session):
         if S.dog_id:

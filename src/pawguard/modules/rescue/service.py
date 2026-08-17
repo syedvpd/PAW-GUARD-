@@ -762,6 +762,11 @@ class RescueService:
             is_adoptable=False,
         )
         await self._dog_repo.create(dog)
+        # Attach the newly created profile to the in-session request so the
+        # admit response can surface its id. The `dog_profile` relationship is
+        # viewonly, and the subsequent re-fetch returns the same identity-mapped
+        # instance, so we set it explicitly here.
+        request.dog_profile = dog
         if self._audit and actor_id:
             await self._audit.record(
                 event_type=AuthAuditEventType.DOG_REGISTERED,

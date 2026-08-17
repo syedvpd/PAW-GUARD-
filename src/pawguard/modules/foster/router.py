@@ -185,7 +185,7 @@ async def return_dog(
 @router.get(
     "",
     response_model=PaginatedResponse[FosterProfileResponse],
-    dependencies=[Depends(require_permission("foster:update"))],
+    dependencies=[Depends(require_permission("foster:read"))],
 )
 async def list_profiles(
     page: PageParams = Depends(page_params),

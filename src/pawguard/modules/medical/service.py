@@ -255,8 +255,10 @@ class MedicalService:
         ip_address: str | None = None,
         payload: MedicalClearanceCreate | None = None,
     ) -> bool:
-        if not ("super_admin" in roles or "veterinarian" in roles):
-            raise ForbiddenError("Adoption medical clearances require a veterinarian's authority.")
+        if "veterinarian" not in roles:
+            raise ForbiddenError(
+                "Adoption medical clearances require a veterinarian's authority."
+            )
 
         dog = await self._dog_repo.get_by_id(dog_id)
         if dog is None:
