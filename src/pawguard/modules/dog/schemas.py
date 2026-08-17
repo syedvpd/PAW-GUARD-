@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from pawguard.modules.dog.models import (
     DogActivityEventType,
@@ -139,6 +139,7 @@ class DogProfileResponse(BaseModel):
     is_adoptable: bool
     is_quarantine_passed: bool
     image_urls: list[str] = Field(default_factory=list)
+    photo_gallery_urls: list[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
@@ -151,6 +152,15 @@ class DogProfileResponse(BaseModel):
         if isinstance(v, list):
             return [str(u) for u in v if u]
         return []
+
+    @model_validator(mode="after")
+    def _sync_photo_gallery_urls(self) -> "DogProfileResponse":
+        """Expose image_urls under the photo_gallery_urls key too so both
+        the admin Flutter app (image_urls) and the public web app
+        (photo_gallery_urls) can render dog images without changes."""
+        if not self.photo_gallery_urls and self.image_urls:
+            self.photo_gallery_urls = self.image_urls
+        return self
 
     model_config = ConfigDict(from_attributes=True)
 
