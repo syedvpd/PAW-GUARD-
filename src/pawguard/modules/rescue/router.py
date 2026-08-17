@@ -456,7 +456,7 @@ async def mark_rescued(
 @router.post(
     "/{request_id}/admitted",
     response_model=ApiResponse[RescueRequestResponse],
-    dependencies=[Depends(require_permission("rescue:execute"))],
+    dependencies=[Depends(require_permission("rescue:dispatch"))],
 )
 async def mark_admitted(
     request_id: uuid.UUID,
@@ -505,6 +505,55 @@ async def fail_rescue(
         rescue,
         current_user,
         message="Rescue operation marked failed.",
+    )
+
+
+@router.post(
+    "/{request_id}/accept",
+    response_model=ApiResponse[RescueRequestResponse],
+    dependencies=[Depends(require_permission("rescue:execute"))],
+)
+async def accept_dispatch(
+    request_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: RescueService = Depends(get_rescue_service),
+) -> ApiResponse[RescueRequestResponse]:
+    rescue = await service.accept_dispatch(
+        request_id,
+        agent_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return _masked_rescue_response(
+        rescue,
+        current_user,
+        message="Dispatch accepted by agent.",
+    )
+
+
+@router.post(
+    "/{request_id}/reports",
+    response_model=ApiResponse[RescueRequestResponse],
+    dependencies=[Depends(require_permission("rescue:execute"))],
+)
+async def add_observation_report(
+    request_id: uuid.UUID,
+    payload: RescueReportCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: RescueService = Depends(get_rescue_service),
+) -> ApiResponse[RescueRequestResponse]:
+    rescue = await service.add_observation_report(
+        request_id,
+        agent_id=current_user.id,
+        notes=payload.notes,
+        photos=payload.photos,
+        ip_address=request.client.host if request.client else None,
+    )
+    return _masked_rescue_response(
+        rescue,
+        current_user,
+        message="Observation report added successfully.",
     )
 
 

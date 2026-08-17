@@ -5,6 +5,7 @@ from datetime import datetime
 from enum import StrEnum
 
 from sqlalchemy import (
+    Any,
     Boolean,
     DateTime,
     ForeignKey,
@@ -153,6 +154,12 @@ class RescueRequest(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Ba
     )
     reports: Mapped[list["RescueReport"]] = relationship(
         back_populates="rescue_request", cascade="all, delete-orphan"
+    )
+    dog_profile: Mapped[Any] = relationship(
+        "DogProfile",
+        primaryjoin="RescueRequest.id == foreign(DogProfile.rescue_case_id)",
+        uselist=False,
+        viewonly=True,
     )
 
 

@@ -367,6 +367,7 @@ class RescueRequestResponse(BaseModel):
     updated_at: datetime
     dispatch: RescueDispatchResponse | None = None
     reports: list[RescueReportResponse] = []
+    dog_profile_id: uuid.UUID | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -406,6 +407,7 @@ class RescueRequestResponse(BaseModel):
                 "updated_at": data.updated_at,
                 "dispatch": getattr(data, "dispatch", None),
                 "reports": getattr(data, "reports", []),
+                "dog_profile_id": getattr(data.dog_profile, "id", None) if getattr(data, "dog_profile", None) else None,
             }
         return data
 

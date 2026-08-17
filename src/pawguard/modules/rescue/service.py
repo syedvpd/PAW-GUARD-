@@ -542,6 +542,87 @@ class RescueService:
             raise NotFoundError("Rescue request not found after escalation.")
         return res
 
+    async def accept_dispatch(
+        self,
+        request_id: uuid.UUID,
+        *,
+        agent_id: uuid.UUID,
+        ip_address: str | None = None,
+    ) -> RescueRequest:
+        request = await self._repo.get_request_by_id(request_id)
+        if request is None:
+            raise NotFoundError("Rescue request not found.")
+
+        dispatch = await self._repo.get_dispatch_by_request_id(request_id)
+        if dispatch is None:
+            raise NotFoundError("Dispatch record not found for this request.")
+
+        # Ensure the agent is assigned to this dispatch
+        is_assigned = False
+        if dispatch.assigned_driver_id == agent_id:
+            is_assigned = True
+        else:
+            for agent in dispatch.agents:
+                if agent.agent_id == agent_id:
+                    is_assigned = True
+                    break
+        
+        if not is_assigned:
+            raise ConflictError("Agent is not assigned to this dispatch.")
+
+        if self._audit:
+            await self._audit.record(
+                event_type=AuthAuditEventType.RESCUE_STATUS_UPDATED,
+                actor_id=agent_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "rescue_id": str(request_id),
+                    "action": "dispatch_accepted",
+                },
+            )
+
+        return request
+
+    async def add_observation_report(
+        self,
+        request_id: uuid.UUID,
+        *,
+        agent_id: uuid.UUID,
+        notes: str | None = None,
+        photos: list[str] | None = None,
+        ip_address: str | None = None,
+    ) -> RescueRequest:
+        request = await self._repo.get_request_by_id(request_id)
+        if request is None:
+            raise NotFoundError("Rescue request not found.")
+
+        report = RescueReport(
+            rescue_request_id=request_id,
+            agent_id=agent_id,
+            notes=notes,
+            photos=photos,
+        )
+        await self._repo.create_report(report)
+        request.reports.append(report)
+
+        await self._repo._session.flush()
+
+        if self._audit:
+            await self._audit.record(
+                event_type=AuthAuditEventType.RESCUE_STATUS_UPDATED,
+                actor_id=agent_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "rescue_id": str(request_id),
+                    "action": "observation_report_added",
+                    "media_count": len(photos) if photos else 0,
+                },
+            )
+
+        return request
+
     async def update_dispatch_status(
         self,
         request_id: uuid.UUID,
