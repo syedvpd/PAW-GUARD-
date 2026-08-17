@@ -94,11 +94,17 @@ class AdminUserCreateRequest(BaseModel):
     role_names: list[str] = Field(default=[], examples=[["shelter_manager"]])
 
 
+class AdminRestorePasswordRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=10, examples=["PawGuard@2026"])
+
+
 class AdminUserUpdateRequest(BaseModel):
     full_name: str | None = Field(None, examples=["Alex Rivera"])
     phone: str | None = Field(None, examples=["+1-555-0100"])
     is_active: bool | None = Field(None, examples=[True])
     role_names: list[str] | None = Field(None, examples=[["shelter_manager"]])
+    password: str | None = Field(None, min_length=10, examples=["StrongP@ssw0rd"])
 
 
 class AdminUserResponse(BaseModel):

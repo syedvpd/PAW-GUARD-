@@ -28,6 +28,9 @@ class _RateLimitDependency:
         self._window_seconds = window_seconds
 
     async def __call__(self, request: Request, redis: RedisClient = Depends(get_redis)) -> None:
+        from pawguard.core.config import get_settings
+        if not get_settings().rate_limiting_enabled:
+            return
         user_key = _resolve_user_key(request)
         bucket = f"rate_limit:{self._prefix}:{user_key}:{int(time.time()) // self._window_seconds}"
         count = await redis.incr(bucket)

@@ -1151,6 +1151,7 @@ class AdminService:
         phone: str | None = None,
         is_active: bool | None = None,
         role_names: list[str] | None = None,
+        password: str | None = None,
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
         user_agent: str | None = None,
@@ -1173,6 +1174,9 @@ class AdminService:
                 if role is not None:
                     role_ids.append(role.id)
             await self._user_roles.set_roles(user_id, role_ids)
+
+        if password is not None:
+            user.hashed_password = await asyncio.to_thread(hash_password, password)
 
         await self._users._session.flush()
         await self._users._session.refresh(user)
@@ -1205,3 +1209,30 @@ class AdminService:
             user_agent=user_agent,
             metadata={"user_id": str(user_id), "email": user.email},
         )
+
+    async def restore_and_reset_password(
+        self,
+        *,
+        email: str,
+        password: str,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+    ) -> User:
+        """Restore a soft-deleted user and reset their password (admin dev tool)."""
+        user = await self._users.get_by_email_any(email.lower())
+        if user is None:
+            raise NotFoundError(f"No user with email {email} found.")
+        user.deleted_at = None
+        user.is_active = True
+        user.hashed_password = await asyncio.to_thread(hash_password, password)
+        await self._users._session.flush()
+        await self._users._session.refresh(user)
+        await self._audit.record(
+            event_type=AuthAuditEventType.ADMIN_USER_UPDATED,
+            actor_id=actor_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            metadata={"user_id": str(user.id), "email": email, "action": "restore_and_reset_password"},
+        )
+        return user

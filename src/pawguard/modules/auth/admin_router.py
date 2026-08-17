@@ -13,6 +13,7 @@ from pawguard.core.rate_limiter import resolve_client_ip
 from pawguard.core.responses import ApiResponse
 from pawguard.db.session import get_db
 from pawguard.modules.auth.admin_schemas import (
+    AdminRestorePasswordRequest,
     AdminUserCreateRequest,
     AdminUserResponse,
     AdminUserUpdateRequest,
@@ -227,6 +228,7 @@ async def update_user(
         phone=payload.phone,
         is_active=payload.is_active,
         role_names=payload.role_names,
+        password=payload.password,
         actor_id=current_user.id,
         ip_address=resolve_client_ip(request),
         user_agent=request.headers.get("user-agent"),
@@ -252,3 +254,24 @@ async def delete_user(
         user_agent=request.headers.get("user-agent"),
     )
     return ApiResponse(message="User soft-deleted.")
+
+
+@admin_router.post(
+    "/users/restore-and-reset",
+    response_model=ApiResponse[AdminUserResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def restore_and_reset_password(
+    payload: AdminRestorePasswordRequest,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: AdminService = Depends(_get_admin_service),
+) -> ApiResponse[AdminUserResponse]:
+    user = await service.restore_and_reset_password(
+        email=payload.email,
+        password=payload.password,
+        actor_id=current_user.id,
+        ip_address=resolve_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    return ApiResponse(data=user)

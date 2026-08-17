@@ -35,7 +35,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    @field_validator("database_url", "database_url_frontend", mode="before")
+    @field_validator("database_url", "database_url_frontend", "database_replica_url", mode="before")
     @classmethod
     def normalize_database_url(cls, v: Any) -> Any:
         if not isinstance(v, str) or not v.strip():
@@ -60,10 +60,10 @@ class Settings(BaseSettings):
                 path_part = rest[slash_idx:]
                 db_name_part = path_part.split("?")[0]
                 if db_name_part == "/" or db_name_part == "":
-                    query = ""
-                    if "?" in path_part:
-                        query = "?" + path_part.split("?", 1)[1]
-                    v = proto + "://" + rest[:slash_idx] + "/postgres" + query
+                     query = ""
+                     if "?" in path_part:
+                         query = "?" + path_part.split("?", 1)[1]
+                     v = proto + "://" + rest[:slash_idx] + "/postgres" + query
         return v
 
     # --- App ---
@@ -80,6 +80,7 @@ class Settings(BaseSettings):
     # Application startup MUST fail closed if absent (see pawguard/main.py).
     database_url: str = ""
     database_url_frontend: str = ""
+    database_replica_url: str = ""
     database_pool_size: int = 20
     database_max_overflow: int = 10
     database_echo: bool = False
@@ -162,6 +163,7 @@ class Settings(BaseSettings):
     frontend_base_url: str = ""
 
     # --- Rate limiting ---
+    rate_limiting_enabled: bool = True
     login_rate_limit_per_minute: int = 10
     refresh_rate_limit_per_minute: int = 30
     password_reset_rate_limit_per_hour: int = 5
