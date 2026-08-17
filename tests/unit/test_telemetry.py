@@ -59,14 +59,14 @@ def test_metrics_endpoint_and_tracing_headers():
     client = TestClient(app)
 
     # 1. Hit health endpoint to trigger middleware and trace IDs
-    res = client.get("/health", headers={"X-Trace-ID": "custom-trace-12345"})
+    res = client.get("/health", headers={"Host": "localhost", "X-Trace-ID": "custom-trace-12345"})
     assert res.status_code == 200
     assert "X-Request-ID" in res.headers
     assert res.headers["X-Trace-ID"] == "custom-trace-12345"
     assert "X-Span-ID" in res.headers
 
     # 2. Hit Prometheus /metrics endpoint
-    metrics_res = client.get("/metrics")
+    metrics_res = client.get("/metrics", headers={"Host": "localhost"})
     assert metrics_res.status_code == 200
     assert "text/plain" in metrics_res.headers["content-type"]
     assert "# TYPE http_requests_total counter" in metrics_res.text
