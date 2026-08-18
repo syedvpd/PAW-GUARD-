@@ -1,6 +1,7 @@
 """RescueService: owns all rescue business behavior (RULE-003)."""
 
 import contextlib
+import json
 import re
 import secrets
 import uuid
@@ -22,7 +23,7 @@ from pawguard.core.exceptions import (
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
-from pawguard.modules.auth.models import AuthAuditEventType, User
+from pawguard.modules.auth.models import AuthAuditEventType, AuthAuditLog, Role, User, UserRole
 from pawguard.modules.dog.models import (
     DogBreedClassification,
     DogGender,
@@ -49,6 +50,7 @@ from pawguard.modules.rescue.schemas import (
     PublicRescueStatusResponse,
     RescueDispatchResponse,
     RescueDispatchUpdate,
+    RescueEventResponse,
     RescueRequestResponse,
     normalise_failure_reason,
 )
@@ -1145,6 +1147,11 @@ class RescueService:
         await self._redis.geoadd(key, (longitude, latitude, str(agent_id)))
         # 2. Set liveness/active status heartbeat (5 minutes TTL)
         await self._redis.set(active_key, "1", ex=300)
+        # 3. Store timestamp for location retrieval endpoints
+        with contextlib.suppress(Exception):
+            await self._redis.set(
+                f"rescue:agent_ts:{agent_id}", datetime.now(UTC).isoformat()
+            )
 
     async def get_nearest_agents(
         self,
@@ -1259,4 +1266,270 @@ class RescueService:
                 })
 
         return nearby_agents
+
+    # ── Availability (PRR 3.2 coordinator resource selection) ──────────────
+
+    async def get_agent_availability(self) -> list[dict[str, Any]]:
+        """List rescue agents with dynamic availability derived from active dispatches."""
+        session = self._repo._session
+        active_statuses = [
+            RescueStatus.DISPATCHED, RescueStatus.LOCATED, RescueStatus.RESCUED,
+        ]
+        # Agents currently on an in-progress dispatch are "busy".
+        busy_stmt = (
+            select(RescueDispatchAgent.agent_id, RescueDispatch.id.label("dispatch_id"))
+            .join(RescueDispatch, RescueDispatch.id == RescueDispatchAgent.dispatch_id)
+            .join(RescueRequest, RescueRequest.id == RescueDispatch.rescue_request_id)
+            .where(
+                RescueRequest.status.in_(active_statuses),
+                RescueRequest.deleted_at.is_(None),
+            )
+        )
+        busy_map: dict[uuid.UUID, uuid.UUID] = {}
+        for row in (await session.execute(busy_stmt)).all():
+            busy_map[row[0]] = row[1]
+
+        # All active rescue agents.
+        agents_stmt = (
+            select(User)
+            .options(selectinload(User.roles))
+            .join(UserRole, UserRole.user_id == User.id)
+            .join(Role, Role.id == UserRole.role_id)
+            .where(
+                User.deleted_at.is_(None),
+                User.is_active.is_(True),
+                Role.name == "rescue_agent",
+            )
+        )
+        agents = (await session.execute(agents_stmt)).scalars().all()
+
+        result = []
+        for agent in agents:
+            is_busy = agent.id in busy_map
+            lat = lng = heartbeat = None
+            if self._redis is not None:
+                with contextlib.suppress(Exception):
+                    geo = await self._redis.geopos("rescue:agent_locations", str(agent.id))
+                    if geo and geo[0]:
+                        lng, lat = float(geo[0][0]), float(geo[0][1])
+                    hb = await self._redis.get(f"rescue:agent_active:{agent.id}")
+                    heartbeat = "active" if hb else None
+            result.append({
+                "agent_id": agent.id,
+                "name": agent.full_name,
+                "status": "busy" if is_busy else "available",
+                "active_dispatch_id": busy_map.get(agent.id),
+                "last_heartbeat": heartbeat,
+                "latitude": lat,
+                "longitude": lng,
+            })
+        return result
+
+    async def get_vehicle_availability(self) -> list[dict[str, Any]]:
+        """List fleet vehicles with availability derived from active dispatches."""
+        session = self._repo._session
+        active_statuses = [
+            RescueStatus.DISPATCHED, RescueStatus.LOCATED, RescueStatus.RESCUED,
+        ]
+        # Vehicles currently assigned to an in-progress dispatch.
+        assigned_stmt = (
+            select(
+                RescueDispatch.assigned_vehicle_id,
+                RescueDispatch.id.label("dispatch_id"),
+            )
+            .join(RescueRequest, RescueRequest.id == RescueDispatch.rescue_request_id)
+            .where(
+                RescueDispatch.assigned_vehicle_id.isnot(None),
+                RescueRequest.status.in_(active_statuses),
+                RescueRequest.deleted_at.is_(None),
+            )
+        )
+        assigned_map: dict[uuid.UUID, uuid.UUID] = {}
+        for row in (await session.execute(assigned_stmt)).all():
+            assigned_map[row[0]] = row[1]
+
+        fleet_repo = FleetRepository(session)
+        vehicles = await fleet_repo.list_all_vehicles()
+
+        result = []
+        for v in vehicles:
+            if v.status == VehicleStatus.OUT_OF_SERVICE:
+                availability = "out_of_service"
+            elif v.status == VehicleStatus.IN_MAINTENANCE:
+                availability = "maintenance"
+            elif v.id in assigned_map:
+                availability = "assigned"
+            else:
+                availability = "available"
+            result.append({
+                "vehicle_id": v.id,
+                "license_plate": v.license_plate,
+                "vehicle_type": v.vehicle_type.value if v.vehicle_type else None,
+                "operational_status": v.status.value,
+                "availability": availability,
+                "active_dispatch_id": assigned_map.get(v.id),
+            })
+        return result
+
+    # ── GPS Tracking Lifecycle (PRR 3.2) ──────────────────────────────────
+
+    async def _get_tracking_state(self, request_id: uuid.UUID) -> dict[str, Any]:
+        default: dict[str, Any] = {"active": False, "started_at": None, "stopped_at": None}
+        if self._redis is None:
+            return default
+        with contextlib.suppress(Exception):
+            raw = await self._redis.get(f"rescue:tracking:{request_id}")
+            if raw:
+                data = json.loads(raw)
+                data.setdefault("active", False)
+                return data
+        return default
+
+    async def _set_tracking_state(
+        self, request_id: uuid.UUID, state: dict[str, Any]
+    ) -> None:
+        if self._redis is None:
+            return
+        with contextlib.suppress(Exception):
+            await self._redis.set(
+                f"rescue:tracking:{request_id}", json.dumps(state)
+            )
+
+    async def start_tracking(
+        self,
+        request_id: uuid.UUID,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> dict[str, Any]:
+        dispatch = await self._repo.get_dispatch_by_request_id(request_id)
+        if dispatch is None:
+            raise NotFoundError("No dispatch exists for this rescue request.")
+        state = await self._get_tracking_state(request_id)
+        state["active"] = True
+        state["started_at"] = datetime.now(UTC).isoformat()
+        await self._set_tracking_state(request_id, state)
+        if self._audit:
+            await self._audit.record(
+                event_type=AuthAuditEventType.RESCUE_STATUS_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "rescue_id": str(request_id),
+                    "action": "tracking_started",
+                },
+            )
+        return state
+
+    async def stop_tracking(
+        self,
+        request_id: uuid.UUID,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> dict[str, Any]:
+        dispatch = await self._repo.get_dispatch_by_request_id(request_id)
+        if dispatch is None:
+            raise NotFoundError("No dispatch exists for this rescue request.")
+        state = await self._get_tracking_state(request_id)
+        state["active"] = False
+        state["stopped_at"] = datetime.now(UTC).isoformat()
+        await self._set_tracking_state(request_id, state)
+        if self._audit:
+            await self._audit.record(
+                event_type=AuthAuditEventType.RESCUE_STATUS_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "rescue_id": str(request_id),
+                    "action": "tracking_stopped",
+                },
+            )
+        return state
+
+    async def get_tracking_status(
+        self, request_id: uuid.UUID
+    ) -> dict[str, Any]:
+        return await self._get_tracking_state(request_id)
+
+    async def get_rescue_location(
+        self, request_id: uuid.UUID
+    ) -> dict[str, Any]:
+        """Return latest GPS positions for all agents assigned to a rescue dispatch."""
+        dispatch = await self._repo.get_dispatch_by_request_id(request_id)
+        if dispatch is None:
+            raise NotFoundError("No dispatch exists for this rescue request.")
+
+        agent_ids: list[uuid.UUID] = [a.agent_id for a in dispatch.agents]
+        if dispatch.assigned_driver_id is not None:
+            agent_ids.append(dispatch.assigned_driver_id)
+
+        agents_out: list[dict[str, Any]] = []
+        updated_at: str | None = None
+        for aid in agent_ids:
+            lat = lng = heartbeat = ts = None
+            if self._redis is not None:
+                with contextlib.suppress(Exception):
+                    geo = await self._redis.geopos("rescue:agent_locations", str(aid))
+                    if geo and geo[0]:
+                        lng, lat = float(geo[0][0]), float(geo[0][1])
+                    hb = await self._redis.get(f"rescue:agent_active:{aid}")
+                    heartbeat = "active" if hb else None
+                    ts_raw = await self._redis.get(f"rescue:agent_ts:{aid}")
+                    ts = ts_raw if isinstance(ts_raw, str) else None
+            agents_out.append({
+                "agent_id": aid,
+                "latitude": lat,
+                "longitude": lng,
+                "last_heartbeat": heartbeat,
+                "updated_at": ts,
+            })
+            if ts and (updated_at is None or ts > updated_at):
+                updated_at = ts
+
+        return {
+            "request_id": str(request_id),
+            "agents": agents_out,
+            "vehicle": None,
+            "updated_at": updated_at,
+        }
+
+    # ── Rescue Event Feed (PRR 3.2 audit trail) ────────────────────────────
+
+    async def get_rescue_events(
+        self,
+        request_id: uuid.UUID,
+        page: PageParams,
+    ) -> PaginatedResponse[RescueEventResponse]:
+        """Return rescue-related audit events for a specific case."""
+        session = self._repo._session
+        stmt = (
+            select(AuthAuditLog)
+            .where(
+                AuthAuditLog.event_metadata["rescue_id"].astext == str(request_id),
+                AuthAuditLog.event_type.like("rescue_%"),
+            )
+            .order_by(AuthAuditLog.created_at.desc())
+        )
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = (await session.execute(count_stmt)).scalar_one()
+
+        stmt = stmt.offset(page.offset).limit(page.limit)
+        rows = (await session.execute(stmt)).scalars().all()
+
+        data = [
+            RescueEventResponse(
+                event_type=r.event_type,
+                actor_id=r.user_id,
+                created_at=r.created_at.isoformat(),
+                metadata=r.event_metadata,
+            )
+            for r in rows
+        ]
+        return PaginatedResponse(
+            data=data,
+            meta=build_pagination_meta(total=total, params=page),
+        )
 

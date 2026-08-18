@@ -229,3 +229,29 @@ Paw Guard Docs
 
 # Temporary agent scratch directory
 scratch/
+# Generated docs and test reports
+docs/00_*.pdf
+docs/01_*.pdf
+docs/02_*.pdf
+docs/03_*.pdf
+docs/04_*.pdf
+docs/05_*.pdf
+docs/06_*.pdf
+docs/07_*.pdf
+docs/08_*.pdf
+docs/09_*.pdf
+docs/1*.pdf
+docs/*_module_architecture.pdf
+docs/Backend_Review_Prep_Guide.pdf
+docs/api_*.json
+docs/api_test_report_*
+docs/auth_test_*
+docs/batch3_*
+docs/benchmark_*
+docs/performance/
+docs/qa/
+docs/modules/
+docs/PAWGUARD-*.pdf
+scripts/test_*.py
+scripts/_check_*.py
+

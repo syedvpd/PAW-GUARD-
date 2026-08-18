@@ -33,6 +33,7 @@ from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.rescue.models import RescueRequest, RescueSeverity, RescueStatus
 from pawguard.modules.rescue.repository import RescueRepository
 from pawguard.modules.rescue.schemas import (
+    AgentAvailabilityResponse,
     AgentLocationUpdate,
     NearbyAgentResponse,
     PublicRescueStatusResponse,
@@ -41,12 +42,16 @@ from pawguard.modules.rescue.schemas import (
     RescueDispatchResponse,
     RescueDispatchUpdate,
     RescueEscalateCreate,
+    RescueEventResponse,
+    RescueLocationResponse,
     RescueMediaUploadUrlRequest,
     RescueMediaUploadUrlResponse,
     RescueReportCreate,
     RescueRequestCreate,
     RescueRequestResponse,
     RescueRequestUpdate,
+    RescueTrackingResponse,
+    VehicleAvailabilityResponse,
 )
 from pawguard.modules.rescue.service import RescueService
 from pawguard.redis.client import RedisClient, get_redis
@@ -782,4 +787,129 @@ async def suggest_nearest_agents(
         )
     data = [NearbyAgentResponse.model_validate(a) for a in agents]
     return ApiResponse(data=data, message="Nearby agents suggested.")
+
+
+@router.get(
+    "/agents/availability",
+    response_model=ApiResponse[list[AgentAvailabilityResponse]],
+    dependencies=[Depends(require_permission("rescue:dispatch"))],
+)
+async def list_agent_availability(
+    service: RescueService = Depends(get_rescue_service),
+) -> ApiResponse[list[AgentAvailabilityResponse]]:
+    """List rescue agents with dynamic availability (busy/free) from active dispatches."""
+    agents = await service.get_agent_availability()
+    data = [AgentAvailabilityResponse(**a) for a in agents]
+    return ApiResponse(data=data, message="Agent availability retrieved.")
+
+
+@router.get(
+    "/vehicles/availability",
+    response_model=ApiResponse[list[VehicleAvailabilityResponse]],
+    dependencies=[Depends(require_permission("rescue:dispatch"))],
+)
+async def list_vehicle_availability(
+    service: RescueService = Depends(get_rescue_service),
+) -> ApiResponse[list[VehicleAvailabilityResponse]]:
+    """List fleet vehicles with availability derived from active dispatches and maintenance status."""
+    vehicles = await service.get_vehicle_availability()
+    data = [VehicleAvailabilityResponse(**v) for v in vehicles]
+    return ApiResponse(data=data, message="Vehicle availability retrieved.")
+
+
+@router.post(
+    "/{request_id}/tracking/start",
+    response_model=ApiResponse[RescueTrackingResponse],
+    dependencies=[Depends(require_permission("rescue:execute"))],
+)
+async def start_rescue_tracking(
+    request_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: RescueService = Depends(get_rescue_service),
+) -> ApiResponse[RescueTrackingResponse]:
+    """Begin GPS tracking for a dispatched rescue operation."""
+    rescue_req = await service.get_request(request_id)
+    _enforce_agent_assignment(rescue_req, current_user)
+    state = await service.start_tracking(
+        request_id,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(
+        data=RescueTrackingResponse(
+            request_id=request_id,
+            tracking_active=bool(state["active"]),
+            started_at=state.get("started_at"),
+            stopped_at=state.get("stopped_at"),
+        ),
+        message="GPS tracking started.",
+    )
+
+
+@router.post(
+    "/{request_id}/tracking/stop",
+    response_model=ApiResponse[RescueTrackingResponse],
+    dependencies=[Depends(require_permission("rescue:execute"))],
+)
+async def stop_rescue_tracking(
+    request_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: RescueService = Depends(get_rescue_service),
+) -> ApiResponse[RescueTrackingResponse]:
+    """Stop GPS tracking for a rescue operation (typically on shelter arrival)."""
+    rescue_req = await service.get_request(request_id)
+    _enforce_agent_assignment(rescue_req, current_user)
+    state = await service.stop_tracking(
+        request_id,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(
+        data=RescueTrackingResponse(
+            request_id=request_id,
+            tracking_active=bool(state["active"]),
+            started_at=state.get("started_at"),
+            stopped_at=state.get("stopped_at"),
+        ),
+        message="GPS tracking stopped.",
+    )
+
+
+@router.get(
+    "/{request_id}/location",
+    response_model=ApiResponse[RescueLocationResponse],
+    dependencies=[Depends(require_permission("rescue:read"))],
+)
+async def get_rescue_location(
+    request_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: RescueService = Depends(get_rescue_service),
+) -> ApiResponse[RescueLocationResponse]:
+    """Retrieve latest GPS positions for the assigned agents on a rescue operation."""
+    rescue_req = await service.get_request(request_id)
+    _enforce_agent_assignment(rescue_req, current_user)
+    loc = await service.get_rescue_location(request_id)
+    return ApiResponse(
+        data=RescueLocationResponse(**loc),
+        message="Rescue location retrieved.",
+    )
+
+
+@router.get(
+    "/{request_id}/events",
+    response_model=PaginatedResponse[RescueEventResponse],
+    dependencies=[Depends(require_permission("rescue:read"))],
+)
+async def list_rescue_events(
+    request_id: uuid.UUID,
+    page: PageParams = Depends(page_params),
+    current_user: CurrentUser = Depends(get_current_user),
+    service: RescueService = Depends(get_rescue_service),
+) -> PaginatedResponse[RescueEventResponse]:
+    """Retrieve the audit event trail for a specific rescue case."""
+    rescue_req = await service.get_request(request_id)
+    _enforce_agent_assignment(rescue_req, current_user)
+    return await service.get_rescue_events(request_id, page=page)
 

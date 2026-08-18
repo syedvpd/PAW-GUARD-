@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
-from pawguard.modules.auth.models import User
+from pawguard.modules.auth.models import Role, User, UserRole
 from pawguard.modules.dog.models import DogProfile, DogStatus
 from pawguard.modules.donation.models import Donation, DonationStatus
 from pawguard.modules.finance.models import (
@@ -15,11 +15,17 @@ from pawguard.modules.finance.models import (
     TransactionStatus,
     TransactionType,
 )
+from pawguard.modules.fleet.models import Vehicle
 from pawguard.modules.foster.models import FosterPlacement
 from pawguard.modules.grievance.models import GrievanceStatus, GrievanceTicket
 from pawguard.modules.inventory.models import InventoryItem
 from pawguard.modules.medical.models import ClinicalExam, MedicalTreatment
-from pawguard.modules.rescue.models import RescueRequest, RescueStatus
+from pawguard.modules.rescue.models import (
+    RescueDispatch,
+    RescueDispatchAgent,
+    RescueRequest,
+    RescueStatus,
+)
 from pawguard.modules.shelter.models import (
     FacilityTransfer,
     Kennel,
@@ -104,6 +110,116 @@ async def rescue_dashboard(
         "dispatched": dispatched.scalar_one(),
         "rescued": rescued.scalar_one(),
         "recent_calls": recent_list,
+    }
+    await _set_cache(redis, cache_key, result)
+    return result
+
+
+async def rescue_operations_dashboard(
+    session: AsyncSession, redis: Any | None = None
+) -> dict[str, Any]:
+    """Richer rescue operations dashboard for the Rescue Admin portal."""
+    cache_key = "cache:dashboard:rescue:operations"
+    cached = await _get_cached(redis, cache_key)
+    if cached is not None:
+        return cached
+
+    # Status counts
+    status_rows = (
+        await session.execute(
+            select(RescueRequest.status, func.count())
+            .where(RescueRequest.deleted_at.is_(None))
+            .group_by(RescueRequest.status)
+        )
+    ).all()
+    by_status: dict[str, int] = {str(row[0]): row[1] for row in status_rows}
+
+    # Severity counts
+    severity_rows = (
+        await session.execute(
+            select(RescueRequest.severity, func.count())
+            .where(RescueRequest.deleted_at.is_(None))
+            .group_by(RescueRequest.severity)
+        )
+    ).all()
+    by_severity: dict[str, int] = {str(row[0]): row[1] for row in severity_rows}
+
+    active_statuses = [
+        RescueStatus.DISPATCHED, RescueStatus.LOCATED, RescueStatus.RESCUED,
+    ]
+
+    # Active dispatches
+    active_dispatches = (
+        await session.execute(
+            select(func.count(RescueDispatch.id))
+            .join(RescueRequest, RescueRequest.id == RescueDispatch.rescue_request_id)
+            .where(
+                RescueRequest.status.in_(active_statuses),
+                RescueRequest.deleted_at.is_(None),
+            )
+        )
+    ).scalar_one()
+
+    # Agent availability
+    agents_busy = (
+        await session.execute(
+            select(func.count(func.distinct(RescueDispatchAgent.agent_id)))
+            .join(RescueDispatch, RescueDispatch.id == RescueDispatchAgent.dispatch_id)
+            .join(RescueRequest, RescueRequest.id == RescueDispatch.rescue_request_id)
+            .where(
+                RescueRequest.status.in_(active_statuses),
+                RescueRequest.deleted_at.is_(None),
+            )
+        )
+    ).scalar_one()
+    agents_total = (
+        await session.execute(
+            select(func.count(func.distinct(User.id)))
+            .join(UserRole, UserRole.user_id == User.id)
+            .join(Role, Role.id == UserRole.role_id)
+            .where(
+                User.deleted_at.is_(None),
+                User.is_active.is_(True),
+                Role.name == "rescue_agent",
+            )
+        )
+    ).scalar_one()
+    agents_available = max(agents_total - agents_busy, 0)
+
+    # Vehicle availability
+    vehicles_assigned = (
+        await session.execute(
+            select(func.count(func.distinct(RescueDispatch.assigned_vehicle_id)))
+            .join(RescueRequest, RescueRequest.id == RescueDispatch.rescue_request_id)
+            .where(
+                RescueDispatch.assigned_vehicle_id.isnot(None),
+                RescueRequest.status.in_(active_statuses),
+                RescueRequest.deleted_at.is_(None),
+            )
+        )
+    ).scalar_one()
+    vehicles_total = (
+        await session.execute(
+            select(func.count(Vehicle.id)).where(Vehicle.deleted_at.is_(None))
+        )
+    ).scalar_one()
+    vehicles_available = max(vehicles_total - vehicles_assigned, 0)
+
+    result = {
+        "total_calls": sum(by_status.values()),
+        "pending": by_status.get("reported", 0),
+        "verified": by_status.get("verified", 0),
+        "dispatched": by_status.get("dispatched", 0),
+        "in_progress": by_status.get("located", 0) + by_status.get("rescued", 0),
+        "admitted": by_status.get("admitted", 0),
+        "rejected": by_status.get("rejected", 0),
+        "by_status": by_status,
+        "by_severity": by_severity,
+        "active_dispatches": active_dispatches,
+        "agents_available": agents_available,
+        "agents_busy": agents_busy,
+        "vehicles_available": vehicles_available,
+        "vehicles_assigned": vehicles_assigned,
     }
     await _set_cache(redis, cache_key, result)
     return result

@@ -33,6 +33,20 @@ async def get_rescue_dashboard(
 
 
 @router.get(
+    "/rescue/operations",
+    response_model=ApiResponse[dict[str, Any]],
+    dependencies=[Depends(require_permission("dashboard:rescue"))],
+)
+async def get_rescue_operations_dashboard(
+    db: AsyncSession = Depends(get_db),
+    redis: RedisClient = Depends(get_redis),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> ApiResponse[dict[str, Any]]:
+    data = await dasvc.rescue_operations_dashboard(db, redis=redis)
+    return ApiResponse(data=data)
+
+
+@router.get(
     "/rescue/stream",
     responses={
         200: {

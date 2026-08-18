@@ -445,3 +445,57 @@ class RescueAssignCoordinator(BaseModel):
         examples=["Please prioritise this case — animal is in critical condition."],
         description="Optional notes for the coordinator.",
     )
+
+
+class AgentAvailabilityResponse(BaseModel):
+    """Dynamic availability of a rescue agent (PRR 3.2 coordinator selection)."""
+
+    agent_id: uuid.UUID
+    name: str
+    status: str  # "available" | "busy"
+    active_dispatch_id: uuid.UUID | None = None
+    last_heartbeat: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+
+
+class VehicleAvailabilityResponse(BaseModel):
+    """Dynamic availability of a fleet vehicle (PRR 3.2 coordinator selection)."""
+
+    vehicle_id: uuid.UUID
+    license_plate: str
+    vehicle_type: str | None = None
+    operational_status: str
+    availability: str  # "available" | "assigned" | "maintenance" | "out_of_service"
+    active_dispatch_id: uuid.UUID | None = None
+
+
+class RescueTrackingResponse(BaseModel):
+    """GPS tracking session state for a rescue dispatch."""
+
+    request_id: uuid.UUID
+    tracking_active: bool
+    started_at: str | None = None
+    stopped_at: str | None = None
+
+
+class RescueAgentLocation(BaseModel):
+    agent_id: uuid.UUID
+    latitude: float | None = None
+    longitude: float | None = None
+    last_heartbeat: str | None = None
+    updated_at: str | None = None
+
+
+class RescueLocationResponse(BaseModel):
+    request_id: uuid.UUID
+    agents: list[RescueAgentLocation] = Field(default_factory=list)
+    vehicle: None = None
+    updated_at: str | None = None
+
+
+class RescueEventResponse(BaseModel):
+    event_type: str
+    actor_id: uuid.UUID | None = None
+    created_at: str
+    metadata: dict[str, Any] | None = None

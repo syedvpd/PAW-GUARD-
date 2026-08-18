@@ -38,6 +38,15 @@ class FleetRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def list_all_vehicles(self) -> Sequence[Vehicle]:
+        """Return all non-deleted vehicles (for availability queries)."""
+        stmt = (
+            select(Vehicle)
+            .where(Vehicle.deleted_at.is_(None))
+            .order_by(Vehicle.license_plate)
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
     async def create_vehicle(self, vehicle: Vehicle) -> Vehicle:
         self._session.add(vehicle)
         await self._session.flush()
