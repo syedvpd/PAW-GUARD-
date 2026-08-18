@@ -179,6 +179,8 @@ class PublicDogScanResponse(BaseModel):
     current_status: DogStatus
     is_adoptable: bool
     registration_number: str
+    adopter_name: str | None = None
+    adopter_phone: str | None = None
 
 
 class DogListQueryParams(BaseModel):

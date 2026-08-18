@@ -13,6 +13,7 @@ from pawguard.core.bulk import (
     BulkStatusUpdateResponse,
 )
 from pawguard.core.exceptions import NotFoundError, parse_enum
+from pawguard.core.logging import get_logger
 from pawguard.core.pagination import PageParams, page_params
 from pawguard.core.rate_limiter import rate_limit, resolve_client_ip
 from pawguard.core.responses import ApiResponse, PaginatedResponse
@@ -26,14 +27,14 @@ from pawguard.modules.auth.dependencies import (
 )
 from pawguard.modules.auth.permission_codes import SHELTER_READ
 from pawguard.modules.auth.rbac import has_permission, is_admin_role, require_permission
+from pawguard.modules.companion_pet.router import get_companion_pet_service
+from pawguard.modules.companion_pet.service import CompanionPetService
 from pawguard.modules.dog.models import (
     DogBreedClassification,
     DogGender,
     DogStatus,
     DogTemperament,
 )
-from pawguard.modules.companion_pet.router import get_companion_pet_service
-from pawguard.modules.companion_pet.service import CompanionPetService
 from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.dog.schemas import (
     DogActivityLogResponse,
@@ -51,6 +52,7 @@ from pawguard.modules.dog.service import DogService
 from pawguard.redis.client import RedisClient, get_redis
 from pawguard.services.audit_service import AuditService
 
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/dogs", tags=["dogs"])
 
@@ -232,12 +234,41 @@ async def public_scan_dog(
     request: Request,
     current_user: CurrentUser | None = Depends(get_optional_current_user),
     service: DogService = Depends(get_dog_service),
+    db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[PublicDogScanResponse]:
     """Return live public-safe status for any non-deleted dog, regardless of status."""
     resolve_client_ip(request)
     dog = await service.get_dog(dog_id)
     public = _public_dog_view(DogProfileResponse.model_validate(dog))
     photo_urls = await service.get_dog_photo_urls(dog_id)
+
+    adopter_name: str | None = None
+    adopter_phone: str | None = None
+    if dog.status == DogStatus.ADOPTED:
+        try:
+            from sqlalchemy import select
+
+            from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
+            from pawguard.modules.auth.models import User
+
+            stmt = (
+                select(AdoptionApplication, User.full_name, User.phone)
+                .join(User, AdoptionApplication.adopter_id == User.id)
+                .where(
+                    AdoptionApplication.dog_id == dog_id,
+                    AdoptionApplication.status == AdoptionStatus.COMPLETED,
+                    AdoptionApplication.deleted_at.is_(None),
+                )
+                .order_by(AdoptionApplication.completed_at.desc())
+                .limit(1)
+            )
+            row = (await db.execute(stmt)).first()
+            if row:
+                adopter_name = row[1]
+                adopter_phone = row[2]
+        except Exception:
+            logger.debug("public_scan_adopter_lookup_failed", dog_id=str(dog_id))
+
     return ApiResponse(
         data=PublicDogScanResponse(
             name=public.name,
@@ -252,6 +283,8 @@ async def public_scan_dog(
             current_status=public.status,
             is_adoptable=public.is_adoptable,
             registration_number=public.registration_number,
+            adopter_name=adopter_name,
+            adopter_phone=adopter_phone,
         )
     )
 
