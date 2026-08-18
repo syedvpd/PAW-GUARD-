@@ -14,6 +14,7 @@ import pyotp
 from pawguard.core.config import get_settings
 from pawguard.core.constants import DeviceType
 from pawguard.core.exceptions import ForbiddenError, NotFoundError
+from pawguard.core.logging import get_logger
 from pawguard.core.security import (
     TokenError,
     TokenType,
@@ -72,6 +73,8 @@ from pawguard.modules.auth.schemas import DeviceContext, MFADisableRequest
 from pawguard.redis.client import RedisClient
 from pawguard.services.audit_service import AuditService
 from pawguard.services.cache_service import CacheService
+
+logger = get_logger(__name__)
 
 MAX_FAILED_LOGIN_ATTEMPTS = 5
 ACCOUNT_LOCKOUT_MINUTES = 15
@@ -424,6 +427,20 @@ class AuthService:
             ip_address=ctx.ip_address,
             user_agent=ctx.user_agent,
         )
+        # Push notification for password reset request
+        try:
+            from pawguard.modules.notifications.repository import NotificationRepository
+            from pawguard.modules.notifications.service import NotificationService
+            session = self._sessions._session
+            notification_svc = NotificationService(repository=NotificationRepository(session))
+            await notification_svc._send_push_to_users(
+                [user.id],
+                "Password Reset Requested",
+                "A password reset was requested for your account. If you didn't request this, contact support.",
+                "/auth/login",
+            )
+        except Exception:
+            logger.debug("push_notification_skipped", event="password_reset_request")
         return raw_token
 
     async def confirm_password_reset(
@@ -525,6 +542,20 @@ class AuthService:
             ip_address=ctx.ip_address,
             user_agent=ctx.user_agent,
         )
+        # Push notification for MFA enrollment
+        try:
+            from pawguard.modules.notifications.repository import NotificationRepository
+            from pawguard.modules.notifications.service import NotificationService
+            session = self._sessions._session
+            notification_svc = NotificationService(repository=NotificationRepository(session))
+            await notification_svc._send_push_to_users(
+                [user.id],
+                "MFA Enabled",
+                "Multi-factor authentication has been enabled on your account.",
+                "/auth/settings",
+            )
+        except Exception:
+            logger.debug("push_notification_skipped", event="mfa_enrolled")
 
     # --- Sessions ---
 
@@ -657,6 +688,20 @@ class AuthService:
             user_agent=ctx.user_agent,
             metadata={"confirmed_via": confirmed_via},
         )
+        # Push notification for MFA disable (security alert)
+        try:
+            from pawguard.modules.notifications.repository import NotificationRepository
+            from pawguard.modules.notifications.service import NotificationService
+            session = self._sessions._session
+            notification_svc = NotificationService(repository=NotificationRepository(session))
+            await notification_svc._send_push_to_users(
+                [user.id],
+                "MFA Disabled",
+                "Multi-factor authentication has been disabled on your account. If you didn't do this, secure your account immediately.",
+                "/auth/settings",
+            )
+        except Exception:
+            logger.debug("push_notification_skipped", event="mfa_disabled")
 
     # --- OAuth / Social Login ---
 

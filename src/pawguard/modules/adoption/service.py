@@ -92,7 +92,7 @@ class AdoptionService:
         notification_type: str,
         action_url: str | None = None,
     ) -> None:
-        """Send the adopter an in-app notification and email about their application."""
+        """Send the adopter an in-app notification, email, and push about their application."""
         if self._notification_svc is None or application.adopter is None:
             return
         try:
@@ -105,6 +105,7 @@ class AdoptionService:
                     notification_type=notification_type,
                     action_url=action_url,
                     send_email=True,
+                    send_push=True,
                 ),
                 user_email=application.adopter.email,
             )

@@ -151,6 +151,7 @@ class DonationService:
                             notification_type="tax_receipt",
                             action_url=f"/api/v1/donations/{donation.id}/receipt",
                             send_email=True,
+                            send_push=True,
                         ),
                         user_email=(
                             donation.donor.user.email if donation.donor.user else None
@@ -779,6 +780,7 @@ class DonationService:
                         notification_type="sponsorship_created",
                         action_url=f"/api/v1/donations/sponsorships/{sponsorship.id}",
                         send_email=True,
+                        send_push=True,
                     ),
                     user_email=donor.user.email,
                 )

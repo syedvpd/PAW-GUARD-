@@ -11,15 +11,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from pawguard.modules.dog.models import DogProfile
-
-
 from pawguard.core.exceptions import (
     ConflictError,
     ForbiddenError,
     NotFoundError,
     ValidationFailedError,
 )
+from pawguard.core.logging import get_logger
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
@@ -54,6 +52,7 @@ from pawguard.modules.companion_pet.schemas import (
     VetClinicUpdate,
     VeterinarianResponse,
 )
+from pawguard.modules.dog.models import DogProfile
 from pawguard.modules.notifications.schemas import NotificationCreate
 from pawguard.modules.notifications.service import NotificationService
 from pawguard.modules.storage.models import FileFolder, StoredFile
@@ -65,6 +64,8 @@ from pawguard.modules.storage.schemas import (
 )
 from pawguard.modules.storage.service import StorageService
 from pawguard.services.audit_service import AuditService
+
+logger = get_logger(__name__)
 
 
 def _hash_tag_token(raw_token: str) -> str:
@@ -624,6 +625,22 @@ class CompanionPetService:
             ip_address,
             {"tag_id": tag.id, "dog_id": tag.dog_id, "pet_id": tag.pet_id},
         )
+
+        # Push notification to pet owner when their safety tag is scanned
+        if owner_id:
+            try:
+                from pawguard.modules.notifications.repository import NotificationRepository
+                from pawguard.modules.notifications.service import NotificationService
+                notification_svc = NotificationService(repository=NotificationRepository(self._session))
+                await notification_svc._send_push_to_users(
+                    [owner_id],
+                    "Your pet's safety tag was scanned!",
+                    f"Someone scanned {pet_name}'s safety tag. Check the app for details.",
+                    f"/companion-pets/{pet.id if pet else tag.pet_id}",
+                )
+            except Exception:
+                logger.debug("push_notification_skipped", event="safety_tag_scan")
+
         return tag, pet, lost_info
 
     async def get_clinic(self, clinic_id: uuid.UUID) -> VetClinic:

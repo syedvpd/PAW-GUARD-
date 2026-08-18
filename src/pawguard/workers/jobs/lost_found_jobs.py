@@ -20,6 +20,7 @@ async def broadcast_lost_pet_alert(ctx: dict[str, Any], *, report_id: str, **_: 
 
     The row lock and ``broadcasted_at`` marker make ARQ retries and concurrent
     worker executions safe. Notifications are written in bounded batches.
+    Also sends push notifications via FCM.
     """
     del ctx
     async with AsyncSessionLocal() as session:
@@ -53,6 +54,20 @@ async def broadcast_lost_pet_alert(ctx: dict[str, Any], *, report_id: str, **_: 
             batch = user_ids[offset : offset + 500]
             await notification_service.broadcast(payload, batch)
             sent += len(batch)
+
+        # Send push notifications to all recipients
+        push_title = f"Lost pet alert: {report.pet_name}"
+        push_body = (
+            f"{report.pet_name} was reported lost near {report.location_address}. "
+            "Please check the alert and report a sighting if you can help."
+        )
+        for offset in range(0, len(user_ids), 500):
+            batch = user_ids[offset : offset + 500]
+            await notification_service._send_push_to_users(
+                batch, push_title, push_body,
+                f"/api/v1/lost-found/lost/{report.id}",
+            )
+
         report.broadcasted_at = datetime.now(UTC)
         await session.commit()
         return sent

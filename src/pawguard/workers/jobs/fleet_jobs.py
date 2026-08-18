@@ -55,6 +55,14 @@ async def check_fleet_maintenance_due(ctx: dict[str, object]) -> None:
                         notification_type="fleet_alert",
                     )
                 )
+        # Push notifications for maintenance due
+        for record in due_records:
+            await notification_svc._send_push_to_users(
+                staff_user_ids,
+                "Fleet Maintenance Due",
+                f"Vehicle {record.vehicle_id} has maintenance due on {record.next_due_date}.",
+                "/fleet",
+            )
         await session.commit()
 
 
@@ -95,6 +103,14 @@ async def check_vehicle_insurance_expiry(ctx: dict[str, object]) -> None:
                         notification_type="expiry_alert",
                     )
                 )
+        # Push notifications for insurance expiry
+        for vehicle in expiring_vehicles:
+            await notification_svc._send_push_to_users(
+                staff_user_ids,
+                "Vehicle Insurance Expiring",
+                f"Insurance for '{vehicle.license_plate}' expires on {vehicle.insurance_expiry_date}.",
+                "/fleet",
+            )
         await session.commit()
 
 
@@ -140,4 +156,17 @@ async def check_equipment_checkout_expiry(ctx: dict[str, object]) -> None:
                         notification_type="fleet_alert",
                     )
                 )
+        # Push notifications for overdue equipment
+        for checkout in overdue_checkouts:
+            due_date = (
+                checkout.expected_return_at.isoformat()
+                if checkout.expected_return_at
+                else "unknown"
+            )
+            await notification_svc._send_push_to_users(
+                staff_user_ids,
+                "Equipment Overdue",
+                f"Equipment '{checkout.equipment_name}' was due back on {due_date}.",
+                "/fleet",
+            )
         await session.commit()

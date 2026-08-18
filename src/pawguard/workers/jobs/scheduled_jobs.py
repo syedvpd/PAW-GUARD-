@@ -106,6 +106,14 @@ async def check_inventory_low_stock(ctx: dict[str, object]) -> None:
                     notification_type="inventory_alert",
                 )
                 await notification_svc.create_notification(payload=payload)
+        # Push notifications for low stock
+        for item in low_stock_items:
+            await notification_svc._send_push_to_users(
+                recipients,
+                "Inventory Low Stock",
+                f"{item.name} is low on stock: {item.quantity} {item.unit} remaining.",
+                "/inventory",
+            )
         await session.commit()
 
 
@@ -148,6 +156,17 @@ async def check_inventory_expiry(ctx: dict[str, object]) -> None:
                     notification_type="expiry_alert",
                 )
                 await notification_svc.create_notification(payload=payload)
+        # Push notifications for expiring items
+        for item in expiring_items:
+            if item.expiry_date is None:
+                continue
+            days_left = (item.expiry_date - date.today()).days
+            await notification_svc._send_push_to_users(
+                recipients,
+                "Inventory Expiring Soon",
+                f"{item.name} expires in {days_left} day(s).",
+                "/inventory",
+            )
         await session.commit()
 
 
@@ -189,6 +208,16 @@ async def check_vaccination_renewals(ctx: dict[str, object]) -> None:
                     notification_type="medical_reminder",
                 )
                 await notification_svc.create_notification(payload=payload)
+        # Push notifications for vaccination renewals
+        for vax in due_vaccinations:
+            if vax.next_due_at is None:
+                continue
+            await notification_svc._send_push_to_users(
+                recipients,
+                "Vaccination Due",
+                f"Vaccination '{vax.vaccine_name}' for dog {vax.dog_id} is due on {vax.next_due_at.date()}.",
+                "/medical",
+            )
         await session.commit()
 
 
@@ -228,6 +257,7 @@ async def post_adoption_followups(ctx: dict[str, object]) -> None:
                     ),
                     notification_type="follow_up",
                     send_email=True,
+                    send_push=True,
                 )
                 await notification_svc.send_notification(
                     payload=payload,
@@ -339,6 +369,7 @@ async def _process_single_sponsorship(sp: Any, ctx: dict[str, object]) -> None:
                 ),
                 notification_type="sponsorship_charge",
                 send_email=True,
+                send_push=True,
             )
             try:
                 await notification_svc.send_notification(
@@ -396,6 +427,13 @@ async def check_grievance_sla_escalation(ctx: dict[str, object]) -> None:
                     action_url=f"/api/v1/grievance/tickets/{ticket.id}",
                 )
                 await notification_svc.create_notification(payload=n_payload)
+                # Push notification for SLA breach
+                await notification_svc._send_push_to_users(
+                    [ticket.assigned_to_admin_id],
+                    "Grievance SLA Breach",
+                    f"Ticket {ticket.id} has exceeded its SLA and was escalated.",
+                    f"/api/v1/grievance/tickets/{ticket.id}",
+                )
 
         await session.commit()
 

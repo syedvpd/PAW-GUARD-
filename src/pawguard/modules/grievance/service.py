@@ -152,6 +152,26 @@ class GrievanceService:
         await self._repo._session.flush()
         await self._repo._session.refresh(ticket)
 
+        # Push notification to assigned admin
+        try:
+            from pawguard.modules.notifications.repository import NotificationRepository
+            from pawguard.modules.notifications.service import NotificationService
+
+            notification_svc = NotificationService(
+                repository=NotificationRepository(self._repo._session)
+            )
+            await notification_svc._send_push_to_users(
+                [admin_id],
+                "Grievance Ticket Assigned",
+                f"Grievance ticket {ticket.id} has been assigned to you.",
+                f"/api/v1/grievance/{ticket.id}",
+            )
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Failed to send assignment push for ticket %s: %s", ticket_id, exc
+            )
+
         if self._audit and actor_id:
             await self._audit.record(
                 event_type=AuthAuditEventType.GRIEVANCE_ASSIGNED,
@@ -204,6 +224,13 @@ class GrievanceService:
                     notification_type="grievance_escalation",
                     action_url=f"/api/v1/grievance/{ticket.id}",
                 )
+            )
+            # Push notification for escalation
+            await notification_svc._send_push_to_users(
+                [payload.escalated_to_admin_id],
+                "Grievance Ticket Escalated",
+                f"Grievance ticket {ticket.id} has been escalated to you.",
+                f"/api/v1/grievance/{ticket.id}",
             )
         except Exception as notif_exc:
             import logging

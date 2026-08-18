@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 from pawguard.core.config import get_settings
 from pawguard.core.exceptions import ConflictError, NotFoundError, ValidationFailedError
+from pawguard.core.logging import get_logger
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.pdf_generation import generate_adoption_agreement
 from pawguard.core.responses import PaginatedResponse
@@ -37,6 +38,8 @@ from pawguard.modules.storage.models import FileFolder, StoredFile
 from pawguard.services.audit_service import AuditService
 from pawguard.services.storage_service import StorageService
 
+logger = get_logger(__name__)
+
 
 class FosterService:
     def __init__(
@@ -52,6 +55,23 @@ class FosterService:
         self._audit = audit_service
         self._roles = RoleRepository(repository._session)
         self._user_roles = UserRoleRepository(repository._session)
+
+    async def _send_push(
+        self,
+        user_ids: list[uuid.UUID],
+        title: str,
+        body: str,
+        action_url: str | None = None,
+    ) -> None:
+        """Best-effort push notification via the notification service."""
+        try:
+            from pawguard.modules.notifications.repository import NotificationRepository
+            from pawguard.modules.notifications.service import NotificationService
+
+            svc = NotificationService(repository=NotificationRepository(self._repo._session))
+            await svc._send_push_to_users(user_ids, title, body, action_url)
+        except Exception as exc:
+            logger.warning("Failed to send foster push notification: %s", exc)
 
     async def apply_to_foster(
         self,
@@ -109,6 +129,12 @@ class FosterService:
             role = await self._roles.get_by_name("foster_family")
             if role is not None:
                 await self._user_roles.grant_role(profile.user_id, role.id)
+            await self._send_push(
+                [profile.user_id],
+                "Foster Application Approved",
+                "Congratulations! Your foster application has been approved. You can now foster dogs.",
+                "/foster",
+            )
 
         await self._repo._session.flush()
         res = await self._repo.get_profile_by_id(profile_id)
@@ -241,6 +267,14 @@ class FosterService:
                 },
             )
 
+        dog_name = dog.name if dog else "A dog"
+        await self._send_push(
+            [foster.user_id],
+            f"{dog_name} placed in your care",
+            f"{dog_name} has been placed in your foster care. Please prepare for their arrival.",
+            f"/foster/placements/{res.id}",
+        )
+
         return res
 
     async def return_dog(
@@ -289,6 +323,15 @@ class FosterService:
                 ip_address=ip_address or "",
                 user_agent="",
                 metadata={"placement_id": str(res.id), "dog_id": str(res.dog_id)},
+            )
+
+        if foster is not None:
+            dog_name = dog.name if dog else "The dog"
+            await self._send_push(
+                [foster.user_id],
+                f"{dog_name} returned from foster care",
+                f"{dog_name} has been returned to the shelter. Thank you for your care.",
+                "/foster",
             )
 
         return res

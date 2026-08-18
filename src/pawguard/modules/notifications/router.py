@@ -217,3 +217,62 @@ async def broadcast_notification(
         data=[NotificationResponse.model_validate(n) for n in notifications],
         message="Broadcast sent.",
     )
+
+
+@router.post("/test-push", response_model=ApiResponse[dict[str, Any]])
+async def test_push_notification(
+    current_user: CurrentUser = Depends(get_current_user),
+) -> ApiResponse[dict[str, Any]]:
+    """Send a test push notification to the current user's device.
+
+    Useful for verifying FCM configuration and token registration.
+    """
+    from pawguard.services.push_service import send_push_notification
+
+    if not current_user.user.fcm_token:
+        return ApiResponse(
+            data={"sent": False, "reason": "no_fcm_token"},
+            message="No FCM token registered. Update your profile with an fcm_token first.",
+        )
+
+    if not current_user.user.push_notifications_enabled:
+        return ApiResponse(
+            data={"sent": False, "reason": "push_disabled"},
+            message="Push notifications are disabled in your preferences.",
+        )
+
+    sent = await send_push_notification(
+        current_user.user.fcm_token,
+        title="PawGuard Test Push",
+        body="If you see this, push notifications are working!",
+        data={"action_url": "/test", "type": "test_push"},
+        user_id=current_user.id,
+    )
+
+    return ApiResponse(
+        data={"sent": sent, "token_preview": current_user.user.fcm_token[:20] + "..."},
+        message="Test push sent." if sent else "Push failed. Check FCM credentials on the server.",
+    )
+
+
+@router.get("/fcm-status", response_model=ApiResponse[dict[str, Any]])
+async def fcm_status(
+    current_user: CurrentUser = Depends(get_current_user),
+) -> ApiResponse[dict[str, Any]]:
+    """Check FCM configuration status for the current user."""
+    from pawguard.core.config import get_settings
+    from pawguard.services.push_service import _get_firebase_app
+
+    settings = get_settings()
+    app = _get_firebase_app()
+
+    return ApiResponse(
+        data={
+            "firebase_initialized": app is not None,
+            "project_id": app.project_id if app else None,
+            "credentials_configured": bool(settings.fcm_credentials_path or settings.fcm_credentials_json),
+            "user_has_token": bool(current_user.user.fcm_token),
+            "user_push_enabled": current_user.user.push_notifications_enabled,
+            "token_preview": current_user.user.fcm_token[:20] + "..." if current_user.user.fcm_token else None,
+        }
+    )

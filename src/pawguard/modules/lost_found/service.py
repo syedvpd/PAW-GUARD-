@@ -170,6 +170,7 @@ class LostFoundService:
                         ),
                         notification_type="qr_sighting",
                         send_email=True,
+                        send_push=True,
                     )
                 )
             except Exception as exc:
@@ -660,7 +661,7 @@ class LostFoundService:
                 await self._notify_match(match)
 
     async def _notify_match(self, match: ReportMatch) -> None:
-        """Email the lost-pet owner and the found-pet reporter about a possible match."""
+        """Email and push the lost-pet owner and the found-pet reporter about a possible match."""
         if self._arq is None:
             return
         lost = match.lost_report
@@ -689,6 +690,25 @@ class LostFoundService:
                 )
         except Exception as exc:
             logger.warning("Failed to notify lost/found match %s: %s", match.id, exc)
+
+        # Push notifications to both parties
+        if self._notification_svc:
+            try:
+                push_user_ids = []
+                if lost.user_id:
+                    push_user_ids.append(lost.user_id)
+                if found.user_id:
+                    push_user_ids.append(found.user_id)
+                if push_user_ids:
+                    await self._notification_svc._send_push_to_users(
+                        push_user_ids,
+                        subject,
+                        body,
+                        f"/lost-found/lost/{match.lost_report_id}/matches",
+                    )
+            except Exception as exc:
+                logger.warning("Failed to send match push notification %s: %s", match.id, exc)
+
         # Workflow 6: administrators are notified so they can oversee the
         # reunification from a potential match.
         try:
@@ -720,8 +740,8 @@ class LostFoundService:
 
     async def _release_contacts(self, match: ReportMatch) -> None:
         """Workflow 6: once a match is confirmed, release each reporter's contact
-        details to the other party (via in-app notification) so they can arrange
-        the dog's return. API responses keep contact details masked otherwise."""
+        details to the other party (via in-app notification + push) so they can
+        arrange the dog's return. API responses keep contact details masked otherwise."""
         if self._notification_svc is None:
             return
         lost = match.lost_report
@@ -753,6 +773,17 @@ class LostFoundService:
                 f"{lost_user.full_name} ({lost_user.email}, {lost_user.phone})."
             ),
         )
+
+        # Push notifications for contact release
+        try:
+            await self._notification_svc._send_push_to_users(
+                [lost_user.id, found_user.id],
+                "Pet Reunification - Contact Released",
+                "Contact details have been released for a confirmed reunification. Check your notifications.",
+                f"/lost-found/lost/{match.lost_report_id}/matches",
+            )
+        except Exception as exc:
+            logger.warning("Failed to send contact release push: %s", exc)
 
     async def _send_contact_release(
         self, to_user: Any, from_user: Any, pet_name: str | None, title: str, body: str

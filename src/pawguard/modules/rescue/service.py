@@ -114,6 +114,23 @@ class RescueService:
         self._redis = redis_client
         self._arq = arq_pool
 
+    async def _send_push(
+        self,
+        user_ids: list[uuid.UUID],
+        title: str,
+        body: str,
+        action_url: str | None = None,
+    ) -> None:
+        """Best-effort push notification via the notification service."""
+        try:
+            from pawguard.modules.notifications.repository import NotificationRepository
+            from pawguard.modules.notifications.service import NotificationService
+
+            svc = NotificationService(repository=NotificationRepository(self._repo._session))
+            await svc._send_push_to_users(user_ids, title, body, action_url)
+        except Exception as exc:
+            logger.warning("Failed to send rescue push notification: %s", exc)
+
     async def _email_reporter(self, *, email: str, subject: str, body: str) -> None:
         """Send only to an existing active PawGuard account."""
         if self._arq is None or not email:
@@ -242,6 +259,22 @@ class RescueService:
             )
 
         await self._publish_dispatch_event()
+
+        # Push notification to rescue coordinators about new incident
+        try:
+            from pawguard.modules.auth.repository import UserRepository
+            user_repo = UserRepository(self._repo._session)
+            coordinator_ids = await user_repo.get_user_ids_by_roles(["rescue_coordinator"])
+            if coordinator_ids:
+                severity_label = "URGENT" if is_urgent else severity.value.upper()
+                await self._send_push(
+                    coordinator_ids,
+                    f"New Rescue Report [{severity_label}]",
+                    f"A new animal emergency ({ticket_number}) has been reported at {location_address}.",
+                    f"/rescue/{res.id}",
+                )
+        except Exception as exc:
+            logger.warning("Failed to send rescue report push: %s", exc)
 
         if not is_anonymous and reporter_email:
             await self._email_reporter(
@@ -441,6 +474,19 @@ class RescueService:
             )
 
         await self._publish_dispatch_event()
+
+        # Push notification to assigned agents about new dispatch
+        if agent_ids:
+            try:
+                await self._send_push(
+                    agent_ids,
+                    "New Rescue Dispatch Assignment",
+                    f"You have been assigned to rescue case {request.ticket_number}. Please mobilize immediately.",
+                    f"/rescue/{request_id}",
+                )
+            except Exception as exc:
+                logger.warning("Failed to send dispatch push: %s", exc)
+
         return res
 
     async def update_dispatch(
@@ -539,6 +585,22 @@ class RescueService:
         res = await self._repo.get_request_by_id(request_id)
         if res is None:
             raise NotFoundError("Rescue request not found after escalation.")
+
+        # Push notification to admins about escalation
+        try:
+            from pawguard.modules.auth.repository import UserRepository
+            user_repo = UserRepository(self._repo._session)
+            admin_ids = await user_repo.get_user_ids_by_roles(["rescue_centre_admin", "super_admin"])
+            if admin_ids:
+                await self._send_push(
+                    admin_ids,
+                    f"Rescue Escalation: {escalation_type.value}",
+                    f"Rescue case {request.ticket_number} has been escalated. Notes: {escalation_notes or 'None'}",
+                    f"/rescue/{request_id}",
+                )
+        except Exception as exc:
+            logger.warning("Failed to send escalation push: %s", exc)
+
         return res
 
     async def accept_dispatch(
@@ -690,6 +752,21 @@ class RescueService:
                 await self._create_dog_profile_for_admitted(
                     request, now=now, actor_id=actor_id, ip_address=ip_address
                 )
+
+            # Push notification to veterinarians about new intake
+            try:
+                from pawguard.modules.auth.repository import UserRepository
+                user_repo = UserRepository(self._repo._session)
+                vet_ids = await user_repo.get_user_ids_by_roles(["veterinarian"])
+                if vet_ids:
+                    await self._send_push(
+                        vet_ids,
+                        "New Animal Admitted",
+                        f"Animal from case {request.ticket_number} has been admitted and requires intake examination.",
+                        f"/rescue/{request_id}",
+                    )
+            except Exception as exc:
+                logger.warning("Failed to send admission push: %s", exc)
 
         elif status == RescueStatus.REJECTED:  # representing a failed rescue
             dispatch.failed_at = now

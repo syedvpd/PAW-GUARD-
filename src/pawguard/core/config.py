@@ -145,9 +145,10 @@ class Settings(BaseSettings):
     brevo_api_key: str = ""
 
     # --- Firebase Cloud Messaging (FCM) ---
-    # Path to the Firebase service account JSON credentials file.
+    # Path or raw JSON string of the Firebase service account credentials.
     # When unset, push notifications silently degrade to in-app only.
     fcm_credentials_path: str = ""
+    fcm_credentials_json: str = ""
 
     @computed_field  # type: ignore[prop-decorator]
     @property

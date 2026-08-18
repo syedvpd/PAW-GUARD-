@@ -251,7 +251,14 @@ class NotificationService:
         body: str,
         action_url: str | None = None,
     ) -> int:
-        """Send push notifications to users who have FCM tokens and push enabled."""
+        """Send push notifications to users who have FCM tokens and push enabled.
+
+        Respects both the user-level ``push_notifications_enabled`` flag and the
+        per-user ``NotificationPreference`` (``enable_push``, quiet hours). When
+        a preference row exists it takes precedence over the user-level flag.
+        """
+        from datetime import UTC, datetime
+
         from sqlalchemy import select
 
         from pawguard.modules.auth.models import User
@@ -260,11 +267,11 @@ class NotificationService:
         if not user_ids:
             return 0
 
-        stmt = select(User.id, User.fcm_token).where(
+        # Fetch user-level push flag + fcm_token
+        stmt = select(User.id, User.fcm_token, User.push_notifications_enabled).where(
             User.id.in_(user_ids),
             User.is_active.is_(True),
             User.deleted_at.is_(None),
-            User.push_notifications_enabled.is_(True),
             User.fcm_token.isnot(None),
             User.fcm_token != "",
         )
@@ -274,7 +281,60 @@ class NotificationService:
         if not rows:
             return 0
 
-        tokens = [(row[0], row[1]) for row in rows]
+        # Fetch per-user notification preferences (enable_push, quiet_hours)
+        pref_stmt = select(
+            NotificationPreference.user_id,
+            NotificationPreference.enable_push,
+            NotificationPreference.quiet_hours_start,
+            NotificationPreference.quiet_hours_end,
+        ).where(NotificationPreference.user_id.in_(user_ids))
+        pref_result = await self._repo._session.execute(pref_stmt)
+        prefs_by_user = {row[0]: row for row in pref_result.all()}
+
+        # Check quiet hours: current time within the quiet window
+        now = datetime.now(UTC)
+        in_quiet_hours = False
+        # Only check if we have any users with quiet hours set — single check
+        # applies to all recipients since quiet hours are per-user but we send
+        # in batch. For simplicity we check against the first user's quiet hours
+        # (all recipients share the same push context in a single batch).
+        # Individual quiet hours are best-effort at batch scale.
+
+        tokens: list[tuple[uuid.UUID, str]] = []
+        for uid, fcm_token, push_enabled in rows:
+            pref = prefs_by_user.get(uid)
+            if pref is not None:
+                pref_enable_push, pref_qh_start, pref_qh_end = pref[1], pref[2], pref[3]
+                # Preference-level push opt-out
+                if not pref_enable_push:
+                    continue
+                # Quiet hours check
+                if pref_qh_start and pref_qh_end:
+                    try:
+                        start_h, start_m = (int(x) for x in pref_qh_start.split(":"))
+                        end_h, end_m = (int(x) for x in pref_qh_end.split(":"))
+                        current_minutes = now.hour * 60 + now.minute
+                        start_minutes = start_h * 60 + start_m
+                        end_minutes = end_h * 60 + end_m
+                        if start_minutes <= end_minutes:
+                            in_quiet_hours = start_minutes <= current_minutes < end_minutes
+                        else:
+                            # Overnight quiet hours (e.g. 22:00 - 07:00)
+                            in_quiet_hours = current_minutes >= start_minutes or current_minutes < end_minutes
+                        if in_quiet_hours:
+                            continue
+                    except (ValueError, IndexError):
+                        pass  # Malformed quiet hours — ignore and send
+            else:
+                # No preference row — fall back to user-level flag
+                if not push_enabled:
+                    continue
+
+            tokens.append((uid, fcm_token))
+
+        if not tokens:
+            return 0
+
         data = {"action_url": action_url} if action_url else None
         return await send_push_notification_to_users(
             tokens, title=title, body=body, data=data

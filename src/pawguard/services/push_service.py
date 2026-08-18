@@ -19,15 +19,25 @@ def _get_firebase_app() -> Any:
 
     settings = get_settings()
     fcm_credentials_path = getattr(settings, "fcm_credentials_path", "")
-    if not fcm_credentials_path:
+    fcm_credentials_json = getattr(settings, "fcm_credentials_json", "")
+
+    if not fcm_credentials_path and not fcm_credentials_json:
         logger.debug("fcm_not_configured")
         _firebase_initialized = True
         return None
 
     try:
-        import firebase_admin  # type: ignore[import-untyped]
+        import json
 
-        cred = firebase_admin.Credentials.Cert(fcm_credentials_path)
+        import firebase_admin  # type: ignore[import-untyped]
+        from firebase_admin import credentials  # type: ignore[import-untyped]
+
+        if fcm_credentials_json:
+            cred_dict = json.loads(fcm_credentials_json) if isinstance(fcm_credentials_json, str) else fcm_credentials_json
+            cred = credentials.Certificate(cred_dict)
+        else:
+            cred = credentials.Certificate(fcm_credentials_path)
+
         _firebase_app = firebase_admin.initialize_app(cred)
         _firebase_initialized = True
         logger.info("fcm_initialized")
