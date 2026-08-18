@@ -20,7 +20,15 @@ from pawguard.modules.grievance.models import GrievanceStatus, GrievanceTicket
 from pawguard.modules.inventory.models import InventoryItem
 from pawguard.modules.medical.models import ClinicalExam, MedicalTreatment
 from pawguard.modules.rescue.models import RescueRequest, RescueStatus
-from pawguard.modules.shelter.models import Kennel, ShelterFacility
+from pawguard.modules.shelter.models import (
+    FacilityTransfer,
+    Kennel,
+    KennelSanitationState,
+    SectionType,
+    ShelterFacility,
+    ShelterSection,
+    TransferStatus,
+)
 from pawguard.modules.volunteer.models import VolunteerProfile, VolunteerStatus
 
 DASHBOARD_CACHE_TTL = 30  # seconds
@@ -117,6 +125,24 @@ async def shelter_dashboard(
         )
     )
     kennels = await session.execute(select(func.count(Kennel.id)))
+    pending_transfers = await session.execute(
+        select(func.count(FacilityTransfer.id)).where(
+            FacilityTransfer.status == TransferStatus.PENDING
+        )
+    )
+    isolation = await session.execute(
+        select(func.count(DogProfile.id))
+        .join(ShelterSection, DogProfile.section_id == ShelterSection.id)
+        .where(
+            ShelterSection.section_type == SectionType.ISOLATION,
+            DogProfile.deleted_at.is_(None),
+        )
+    )
+    pending_cleaning = await session.execute(
+        select(func.count(Kennel.id)).where(
+            Kennel.sanitation_state == KennelSanitationState.NEEDS_CLEANING
+        )
+    )
     total_dogs = dogs.scalar_one()
     total_kennels = kennels.scalar_one()
     result = {
@@ -127,6 +153,9 @@ async def shelter_dashboard(
         "occupancy_rate": (
             round(total_dogs / total_kennels * 100, 1) if total_kennels > 0 else 0
         ),
+        "pending_transfers": pending_transfers.scalar_one(),
+        "isolation_count": isolation.scalar_one(),
+        "pending_cleaning": pending_cleaning.scalar_one(),
     }
     await _set_cache(redis, cache_key, result)
     return result

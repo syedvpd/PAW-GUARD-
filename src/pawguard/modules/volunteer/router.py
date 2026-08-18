@@ -236,7 +236,7 @@ async def list_shift_attendance(
 @router.get(
     "",
     response_model=PaginatedResponse[VolunteerProfileResponse],
-    dependencies=[Depends(require_permission("volunteer:update"))],
+    dependencies=[Depends(require_permission("volunteer:read"))],
 )
 async def list_profiles(
     params: PageParams = Depends(page_params),
