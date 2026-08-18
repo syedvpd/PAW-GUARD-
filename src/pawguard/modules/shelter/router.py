@@ -244,17 +244,45 @@ async def list_kennels(
     page: PageParams = Depends(page_params),
     sort: SortParams = Depends(sort_params),
     service: ShelterService = Depends(get_shelter_service),
+    db: AsyncSession = Depends(get_db),
 ) -> PaginatedResponse[KennelResponse]:
     result = await service.list_kennels_paginated(
         page, sort, section_id=section_id,
     )
-    return PaginatedResponse(
-        data=[
-            KennelResponse.model_validate(k)
-            for k in result.data
-        ],
-        meta=result.meta,
-    )
+    # Enrich with occupancy data
+    from sqlalchemy import select
+
+    from pawguard.modules.dog.models import DogProfile
+
+    kennel_ids = [k.id for k in result.data]
+    if kennel_ids:
+        occ_stmt = select(DogProfile.kennel_id, DogProfile.id).where(
+            DogProfile.kennel_id.in_(kennel_ids),
+            DogProfile.deleted_at.is_(None),
+        )
+        rows = (await db.execute(occ_stmt)).all()
+        occ_map: dict[uuid.UUID, uuid.UUID] = {row[0]: row[1] for row in rows}
+    else:
+        occ_map = {}
+
+    enriched = []
+    for k in result.data:
+        dog_id = occ_map.get(k.id)
+        enriched.append(
+            KennelResponse(
+                id=k.id,
+                section_id=k.section_id,
+                identifier=k.identifier,
+                capacity=k.capacity,
+                sanitation_state=k.sanitation_state,
+                is_occupied=dog_id is not None,
+                occupied_by_dog_id=dog_id,
+                created_at=k.created_at,
+                updated_at=k.updated_at,
+            )
+        )
+
+    return PaginatedResponse(data=enriched, meta=result.meta)
 
 
 @router.post(

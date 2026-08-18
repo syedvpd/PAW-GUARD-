@@ -160,7 +160,6 @@ class RescueRequest(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Ba
         "DogProfile",
         primaryjoin="RescueRequest.id == foreign(DogProfile.rescue_case_id)",
         uselist=False,
-        viewonly=True,
     )
 
 

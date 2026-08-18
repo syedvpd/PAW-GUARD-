@@ -85,6 +85,8 @@ class KennelResponse(BaseModel):
     identifier: str
     capacity: int
     sanitation_state: KennelSanitationState
+    is_occupied: bool = False
+    occupied_by_dog_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
 
