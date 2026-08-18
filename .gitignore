@@ -255,3 +255,10 @@ docs/PAWGUARD-*.pdf
 scripts/test_*.py
 scripts/_check_*.py
 
+
+# Dev convenience files
+start.bat
+uv.lock
+openapi.json
+PawGuard.postman_collection.json
+
