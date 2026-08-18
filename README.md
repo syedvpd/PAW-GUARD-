@@ -429,6 +429,26 @@ Three workflows are provided:
 
 ---
 
+## Documentation
+
+Comprehensive documentation is available in the `docs/` directory:
+
+| Documentation | Location | Purpose |
+|---|---|---|
+| Architecture | [`docs/architecture/`](docs/architecture/) | System design, application layers, caching, background jobs |
+| API Reference | [`docs/api/`](docs/api/) | Endpoint documentation, request/response schemas |
+| Database | [`docs/database/`](docs/database/) | Schema, relationships, migrations, indexes, constraints |
+| Security | [`docs/security/`](docs/security/) | Authentication, authorization, rate limiting, audit logging |
+| Business Flows | [`docs/flows/`](docs/flows/) | Rescue, adoption, foster, medical workflows |
+| Decisions | [`docs/decisions/`](docs/decisions/) | Architecture Decision Records (ADRs) |
+| Deployment | [`docs/deployment/`](docs/deployment/) | Render, Supabase, Docker deployment guides |
+| Testing | [`docs/testing/`](docs/testing/) | Testing strategy and quality gates |
+| Platform | [`docs/platform/`](docs/platform/) | Cross-platform architecture, API contracts |
+
+Each module also has its own `README.md` in `src/pawguard/modules/<module>/README.md`.
+
+---
+
 ## License
 
 Proprietary — All rights reserved. Unauthorized copying, distribution, or use is prohibited.
