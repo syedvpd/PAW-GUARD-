@@ -1194,7 +1194,8 @@ class PortalService:
         volunteer = (
             await self._session.execute(
                 select(VolunteerProfile).where(
-                    VolunteerProfile.user_id == user_id
+                    VolunteerProfile.user_id == user_id,
+                    VolunteerProfile.deleted_at.is_(None),
                 )
             )
         ).scalar_one_or_none()

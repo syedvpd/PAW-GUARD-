@@ -63,8 +63,8 @@ def upgrade() -> None:
     )
     op.execute(
         sa.text(
-            "INSERT INTO role_permissions (role_id, permission_id, created_at, updated_at) "
-            "SELECT r.id, p.id, now(), now() "
+            "INSERT INTO role_permissions (role_id, permission_id) "
+            "SELECT r.id, p.id "
             "FROM roles r, permissions p "
             "WHERE r.name = 'inventory_manager' AND p.code = 'dashboard:inventory' "
             "AND NOT EXISTS ("
