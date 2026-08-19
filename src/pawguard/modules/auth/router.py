@@ -107,20 +107,18 @@ def _is_web_client(client_type: str | None) -> bool:
 
 
 def _cookie_domain() -> str | None:
-    """Cookie domain attr: None for localhost so the browser treats the cookie
-    as host-only. Set and clear must agree or logout's delete_cookie would
-    target a different domain and silently fail to clear the cookies.
+    """Return None so the browser treats auth cookies as host-only cookies
+    without an explicit Domain attribute. This enables same-origin Vercel proxy
+    (pawguard-public-web.vercel.app/api/v1) to issue and receive HttpOnly cookies cleanly.
     """
-    domain = get_settings().cookie_domain
-    return domain if domain != "localhost" else None
+    return None
 
 
 def _set_auth_cookies(response: Response, *, access_token: str, refresh_token: str | None) -> None:
     settings = get_settings()
     domain = _cookie_domain()
-    # Support cross-site cookies between Vercel frontend and Render backend
-    samesite_mode = "none" if (settings.cookie_secure or domain is None) else "lax"
-    is_secure = True if samesite_mode == "none" else settings.cookie_secure
+    samesite_mode = "none" if (settings.cookie_secure or True) else "lax"
+    is_secure = True
 
     response.set_cookie(
         ACCESS_TOKEN_COOKIE_NAME,
@@ -146,8 +144,8 @@ def _set_auth_cookies(response: Response, *, access_token: str, refresh_token: s
 def _clear_auth_cookies(response: Response) -> None:
     settings = get_settings()
     domain = _cookie_domain()
-    samesite_mode = "none" if (settings.cookie_secure or domain is None) else "lax"
-    is_secure = True if samesite_mode == "none" else settings.cookie_secure
+    samesite_mode = "none" if (settings.cookie_secure or True) else "lax"
+    is_secure = True
 
     response.delete_cookie(ACCESS_TOKEN_COOKIE_NAME, domain=domain, secure=is_secure, samesite=samesite_mode)
     response.delete_cookie(REFRESH_TOKEN_COOKIE_NAME, domain=domain, secure=is_secure, samesite=samesite_mode)
