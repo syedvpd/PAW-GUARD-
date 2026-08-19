@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 # ── Role ─────────────────────────────────────────────────────────────────────
 
@@ -116,6 +116,7 @@ class AdminUserResponse(BaseModel):
     is_verified: bool
     mfa_enabled: bool
     roles: list[str]
+    direct_permissions: list[str] = []
     created_at: datetime
     updated_at: datetime
 
@@ -126,4 +127,36 @@ class AdminUserResponse(BaseModel):
             return [r.name if hasattr(r, "name") else str(r) for r in v]
         return list(v) if isinstance(v, (list, tuple)) else []
 
+    @field_validator("direct_permissions", mode="before")
+    @classmethod
+    def serialize_direct_permissions(cls, v: Any) -> list[str]:
+        if isinstance(v, list):
+            return [p.code if hasattr(p, "code") else str(p) for p in v]
+        return list(v) if isinstance(v, (list, tuple)) else []
+
     model_config = {"from_attributes": True}
+
+
+# ── User Permission Overrides ────────────────────────────────────────────────
+
+class UserPermissionGrantRequest(BaseModel):
+    permission_codes: list[str] = Field(
+        ..., min_length=1,
+        examples=[["finance:export", "reports:export_pdf"]],
+        description="Permission codes to grant directly to the user.",
+    )
+
+
+class UserPermissionRevokeRequest(BaseModel):
+    permission_code: str = Field(
+        ..., examples=["finance:export"],
+        description="Permission code to revoke from the user.",
+    )
+
+
+class UserPermissionResponse(BaseModel):
+    user_id: uuid.UUID
+    direct_permissions: list[str]
+    granted_at: dict[str, datetime] = {}
+
+    model_config = ConfigDict(from_attributes=True)

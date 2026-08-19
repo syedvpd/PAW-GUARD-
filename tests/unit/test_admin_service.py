@@ -20,13 +20,20 @@ class _FakeRedis:
 
     def __init__(self) -> None:
         self.deleted: list[str] = []
+        self._store: dict[str, str] = {
+            "rbac:roles:a:b": "1",
+            "rbac:roles:c": "1",
+        }
 
     async def scan_iter(self, match: str = "", count: int | None = None):
-        yield "rbac:roles:a:b"
-        yield "rbac:roles:c"
+        import fnmatch
+        for key in list(self._store):
+            if fnmatch.fnmatch(key, match):
+                yield key
 
     async def delete(self, key: str) -> None:
         self.deleted.append(key)
+        self._store.pop(key, None)
 
 
 def _make_service(**overrides: object) -> AdminService:

@@ -13,7 +13,7 @@ import pyotp
 
 from pawguard.core.config import get_settings
 from pawguard.core.constants import DeviceType
-from pawguard.core.exceptions import ForbiddenError, NotFoundError
+from pawguard.core.exceptions import NotFoundError
 from pawguard.core.logging import get_logger
 from pawguard.core.security import (
     TokenError,
@@ -66,6 +66,7 @@ from pawguard.modules.auth.repository import (
     RefreshTokenRepository,
     RoleRepository,
     SessionRepository,
+    UserPermissionRepository,
     UserRepository,
     UserRoleRepository,
 )
@@ -983,6 +984,7 @@ class AdminService:
         role_repo: RoleRepository,
         permission_repo: PermissionRepository,
         user_role_repo: UserRoleRepository,
+        user_permission_repo: "UserPermissionRepository | None" = None,
         audit_service: AuditService,
         redis: RedisClient | None = None,
     ) -> None:
@@ -990,6 +992,7 @@ class AdminService:
         self._roles = role_repo
         self._permissions = permission_repo
         self._user_roles = user_role_repo
+        self._user_permissions = user_permission_repo
         self._audit = audit_service
         self._redis = redis
 
@@ -1005,6 +1008,7 @@ class AdminService:
         if self._redis is None:
             return
         await CacheService(self._redis, namespace="rbac").delete_prefix("roles")
+        await CacheService(self._redis, namespace="rbac").delete_prefix("user")
 
     # ── Role management ──────────────────────────────────────────────────────
 
@@ -1283,3 +1287,82 @@ class AdminService:
             metadata={"user_id": str(user.id), "email": email, "action": "restore_and_reset_password"},
         )
         return user
+
+    # ── User-level permission overrides ────────────────────────────────────
+
+    async def grant_user_permissions(
+        self,
+        user_id: uuid.UUID,
+        permission_codes: list[str],
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> list[str]:
+        """Grant direct permission overrides to a user (supplements role permissions)."""
+        user = await self._users.get_by_id(user_id)
+        if user is None:
+            raise NotFoundError(f"User {user_id} not found.")
+        perms = await self._permissions.get_by_codes(permission_codes)
+        found_codes = {p.code for p in perms}
+        invalid_codes = set(permission_codes) - found_codes
+        if invalid_codes:
+            from pawguard.core.exceptions import ValidationFailedError
+            raise ValidationFailedError(f"Invalid permission code(s): {', '.join(sorted(invalid_codes))}")
+        up_repo = self._user_permissions
+        for p in perms:
+            await up_repo.grant_permission(user_id, p.id, granted_by=actor_id)
+        await self._invalidate_rbac_cache()
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.ADMIN_ROLE_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "user_id": str(user_id),
+                    "action": "grant_permissions",
+                    "permission_codes": permission_codes,
+                },
+            )
+        return sorted(found_codes)
+
+    async def revoke_user_permission(
+        self,
+        user_id: uuid.UUID,
+        permission_code: str,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> bool:
+        """Revoke a single direct permission override from a user."""
+        user = await self._users.get_by_id(user_id)
+        if user is None:
+            raise NotFoundError(f"User {user_id} not found.")
+        perm = await self._permissions.get_by_code(permission_code)
+        if perm is None:
+            raise NotFoundError(f"Permission '{permission_code}' not found.")
+        up_repo = self._user_permissions
+        revoked = await up_repo.revoke_permission(user_id, perm.id)
+        await self._invalidate_rbac_cache()
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.ADMIN_ROLE_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "user_id": str(user_id),
+                    "action": "revoke_permission",
+                    "permission_code": permission_code,
+                },
+            )
+        return revoked
+
+    async def list_user_permissions(self, user_id: uuid.UUID) -> list[str]:
+        """List all direct permission overrides for a user."""
+        user = await self._users.get_by_id(user_id)
+        if user is None:
+            raise NotFoundError(f"User {user_id} not found.")
+        up_repo = self._user_permissions
+        perms = await up_repo.list_user_permissions(user_id)
+        return [p.code for p in perms]

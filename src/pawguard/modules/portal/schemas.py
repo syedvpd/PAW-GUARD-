@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from pawguard.modules.portal.models import (
     AlertSeverity,
@@ -45,12 +45,27 @@ class SuccessStoryResponse(BaseModel):
     title: str
     summary: str
     body: str
-    hero_image_url: str | None
+    hero_image_url: str | None = None
+    cover_image_url: str | None = None
+    image_url: str | None = None
+    photo_url: str | None = None
+    image: str | None = None
     dog_id: uuid.UUID | None
     status: ContentStatus
     published_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+    @model_validator(mode="after")
+    def _sync_image_fields(self) -> "SuccessStoryResponse":
+        img = self.hero_image_url or self.cover_image_url or self.image_url or self.photo_url or self.image
+        if img:
+            self.hero_image_url = img
+            self.cover_image_url = img
+            self.image_url = img
+            self.photo_url = img
+            self.image = img
+        return self
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -94,12 +109,27 @@ class BlogPostResponse(BaseModel):
     slug: str
     excerpt: str
     body: str
-    cover_image_url: str | None
+    cover_image_url: str | None = None
+    image_url: str | None = None
+    photo_url: str | None = None
+    image: str | None = None
+    hero_image_url: str | None = None
     category: str
     status: ContentStatus
     published_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+    @model_validator(mode="after")
+    def _sync_image_fields(self) -> "BlogPostResponse":
+        img = self.cover_image_url or self.image_url or self.photo_url or self.image or self.hero_image_url
+        if img:
+            self.cover_image_url = img
+            self.image_url = img
+            self.photo_url = img
+            self.image = img
+            self.hero_image_url = img
+        return self
 
     model_config = ConfigDict(from_attributes=True)
 

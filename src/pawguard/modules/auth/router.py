@@ -3,7 +3,6 @@
 import uuid
 
 import structlog
-from arq import ArqRedis
 from fastapi import APIRouter, Depends, Header, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -60,7 +59,6 @@ from pawguard.modules.auth.schemas import (
 from pawguard.modules.auth.service import AuthenticatedTokens, AuthService, RequestContext
 from pawguard.modules.outbox.service import OutboxService
 from pawguard.services.audit_service import AuditService
-from pawguard.workers.pool import get_arq_pool
 
 logger = structlog.get_logger(__name__)
 

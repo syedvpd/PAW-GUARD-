@@ -386,6 +386,7 @@ class UserPermissionRepository:
         self, user_id: uuid.UUID, permission_id: uuid.UUID, granted_by: uuid.UUID | None = None,
     ) -> None:
         from datetime import UTC, datetime
+
         from pawguard.modules.auth.models import UserPermission
 
         existing = await self._session.execute(
@@ -406,6 +407,7 @@ class UserPermissionRepository:
 
     async def revoke_permission(self, user_id: uuid.UUID, permission_id: uuid.UUID) -> bool:
         from sqlalchemy import delete
+
         from pawguard.modules.auth.models import UserPermission
 
         result = await self._session.execute(
@@ -421,7 +423,9 @@ class UserPermissionRepository:
         self, user_id: uuid.UUID, permission_ids: list[uuid.UUID], granted_by: uuid.UUID | None = None,
     ) -> None:
         from datetime import UTC, datetime
+
         from sqlalchemy import delete
+
         from pawguard.modules.auth.models import UserPermission
 
         await self._session.execute(

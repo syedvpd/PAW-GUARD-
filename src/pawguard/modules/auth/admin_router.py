@@ -21,12 +21,14 @@ from pawguard.modules.auth.admin_schemas import (
     RoleCreateRequest,
     RoleResponse,
     RoleUpdateRequest,
+    UserPermissionGrantRequest,
 )
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.rbac import require_permission
 from pawguard.modules.auth.repository import (
     PermissionRepository,
     RoleRepository,
+    UserPermissionRepository,
     UserRepository,
     UserRoleRepository,
 )
@@ -46,6 +48,7 @@ def _get_admin_service(
         role_repo=RoleRepository(db),
         permission_repo=PermissionRepository(db),
         user_role_repo=UserRoleRepository(db),
+        user_permission_repo=UserPermissionRepository(db),
         audit_service=AuditService(db),
         redis=redis,
     )
@@ -285,3 +288,64 @@ async def restore_and_reset_password(
         user_agent=request.headers.get("user-agent"),
     )
     return ApiResponse(data=user)
+
+
+# ── User-level permission overrides ──────────────────────────────────────────
+
+
+@admin_router.get(
+    "/users/{user_id}/permissions",
+    response_model=ApiResponse[list[str]],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def list_user_direct_permissions(
+    user_id: uuid.UUID,
+    service: AdminService = Depends(_get_admin_service),
+) -> ApiResponse[list[str]]:
+    """List all direct permission overrides for a user (not from roles)."""
+    codes = await service.list_user_permissions(user_id)
+    return ApiResponse(data=codes)
+
+
+@admin_router.post(
+    "/users/{user_id}/permissions",
+    response_model=ApiResponse[list[str]],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def grant_user_direct_permissions(
+    user_id: uuid.UUID,
+    payload: UserPermissionGrantRequest,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: AdminService = Depends(_get_admin_service),
+) -> ApiResponse[list[str]]:
+    """Grant direct permission overrides to a user (supplements role permissions)."""
+    codes = await service.grant_user_permissions(
+        user_id,
+        payload.permission_codes,
+        actor_id=current_user.id,
+        ip_address=resolve_client_ip(request),
+    )
+    return ApiResponse(data=codes, message="Permissions granted.")
+
+
+@admin_router.delete(
+    "/users/{user_id}/permissions/{permission_code}",
+    response_model=ApiResponse[bool],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def revoke_user_direct_permission(
+    user_id: uuid.UUID,
+    permission_code: str,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: AdminService = Depends(_get_admin_service),
+) -> ApiResponse[bool]:
+    """Revoke a single direct permission override from a user."""
+    revoked = await service.revoke_user_permission(
+        user_id,
+        permission_code,
+        actor_id=current_user.id,
+        ip_address=resolve_client_ip(request),
+    )
+    return ApiResponse(data=revoked, message="Permission revoked." if revoked else "Permission not found.")

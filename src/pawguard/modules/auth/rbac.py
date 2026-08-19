@@ -1,12 +1,14 @@
 """RBAC/PBAC permission resolution with Redis-cached role->permission lookups."""
 
+import uuid
+
 from fastapi import Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.exceptions import InsufficientPermissionsError
-from pawguard.modules.auth.models import Permission, Role, RolePermission, User
+from pawguard.modules.auth.models import Permission, Role, RolePermission, User, UserPermission
 from pawguard.services.cache_service import CacheService
 
 PERMISSIONS_CACHE_TTL_SECONDS = 300
@@ -33,10 +35,13 @@ def has_permission(user: User, permission_code: str) -> bool:
 
     Used by owner-or-permission endpoint guards (e.g. a donor reading their own
     receipt) where a full `require_permission` dependency would be too coarse.
+    Checks both role-based and user-level direct permission grants.
     """
-    return any(
-        permission_code == p.code for r in user.roles for p in r.permissions
-    )
+    if any(permission_code == p.code for r in user.roles for p in r.permissions):
+        return True
+    if hasattr(user, "user_permissions") and user.user_permissions is not None:
+        return any(permission_code == up.code for up in user.user_permissions)
+    return False
 
 
 async def get_role_permission_codes(session: AsyncSession, role_names: list[str]) -> set[str]:
@@ -47,6 +52,17 @@ async def get_role_permission_codes(session: AsyncSession, role_names: list[str]
         .join(RolePermission, RolePermission.permission_id == Permission.id)
         .join(Role, Role.id == RolePermission.role_id)
         .where(Role.name.in_(role_names))
+    )
+    result = await session.execute(stmt)
+    return {row[0] for row in result.all()}
+
+
+async def get_user_permission_codes(session: AsyncSession, user_id: uuid.UUID) -> set[str]:
+    """Fetch direct user-level permission overrides from the database."""
+    stmt = (
+        select(Permission.code)
+        .join(UserPermission, UserPermission.permission_id == Permission.id)
+        .where(UserPermission.user_id == user_id)
     )
     result = await session.execute(stmt)
     return {row[0] for row in result.all()}
@@ -64,19 +80,31 @@ class RequirePermission:
             return current
 
         cache = CacheService(current.redis, namespace="rbac")
-        cache_key = f"roles:{':'.join(sorted(current.claims.roles))}"
 
-        codes = await cache.get(cache_key)
-        if codes is None:
-            codes = sorted(await get_role_permission_codes(current.db, current.claims.roles))
-            await cache.set(cache_key, codes, ttl_seconds=PERMISSIONS_CACHE_TTL_SECONDS)
+        # Check role-based permissions (cached)
+        role_cache_key = f"roles:{':'.join(sorted(current.claims.roles))}"
+        role_codes = await cache.get(role_cache_key)
+        if role_codes is None:
+            role_codes = sorted(await get_role_permission_codes(current.db, current.claims.roles))
+            await cache.set(role_cache_key, role_codes, ttl_seconds=PERMISSIONS_CACHE_TTL_SECONDS)
 
-        if not any(code in codes or "system:admin" in codes for code in self.permission_codes):
-            req_str = ", ".join(self.permission_codes)
-            raise InsufficientPermissionsError(
-                f"Missing required permission: {req_str}"
-            )
-        return current
+        if any(code in role_codes or "system:admin" in role_codes for code in self.permission_codes):
+            return current
+
+        # Check user-level direct permission overrides (cached)
+        user_cache_key = f"user:{current.id}:perms"
+        user_codes = await cache.get(user_cache_key)
+        if user_codes is None:
+            user_codes = sorted(await get_user_permission_codes(current.db, current.id))
+            await cache.set(user_cache_key, user_codes, ttl_seconds=PERMISSIONS_CACHE_TTL_SECONDS)
+
+        if any(code in user_codes for code in self.permission_codes):
+            return current
+
+        req_str = ", ".join(self.permission_codes)
+        raise InsufficientPermissionsError(
+            f"Missing required permission: {req_str}"
+        )
 
 
 def require_permission(*permission_codes: str) -> RequirePermission:
