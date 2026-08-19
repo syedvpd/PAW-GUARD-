@@ -586,6 +586,10 @@ class DonationService:
         donation = await self._repo.get_donation_by_id(donation_id)
         if donation is None:
             raise NotFoundError("Donation record not found.")
+        if status == DonationStatus.REFUNDED:
+            raise ValidationFailedError(
+                "Cannot set status to REFUNDED directly. Use the refund API at POST /finance/refunds."
+            )
         old_status = donation.status
         updated = await self._repo.update_donation_status(donation_id, status)
         if updated is None:

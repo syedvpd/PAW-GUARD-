@@ -25,11 +25,19 @@ def _default_currency() -> str:
 
 class DonorProfileCreate(BaseModel):
     tax_identifier: str | None = Field(None, max_length=64, examples=["ABCDE1234F"])
+    pan_number: str | None = Field(None, max_length=20, examples=["ABCDE1234F"])
+    full_name_for_80g: str | None = Field(None, max_length=255, examples=["John Doe"])
+    address_for_80g: str | None = Field(None, examples=["123 Main St, City, State, PIN"])
+    is_80g_eligible: bool = Field(False, examples=[True])
     notes: str | None = Field(None, examples=["Prefers monthly recurring donations."])
 
 
 class DonorProfileUpdate(BaseModel):
     tax_identifier: str | None = Field(None, max_length=64, examples=["ABCDE1234F"])
+    pan_number: str | None = Field(None, max_length=20, examples=["ABCDE1234F"])
+    full_name_for_80g: str | None = Field(None, max_length=255, examples=["John Doe"])
+    address_for_80g: str | None = Field(None, examples=["123 Main St, City, State, PIN"])
+    is_80g_eligible: bool | None = Field(None, examples=[True])
     notes: str | None = Field(None, examples=["Updated preference: quarterly giving."])
 
 
@@ -37,6 +45,10 @@ class DonorProfileResponse(BaseModel):
     id: uuid.UUID
     user_id: uuid.UUID
     tax_identifier: str | None
+    pan_number: str | None
+    full_name_for_80g: str | None
+    address_for_80g: str | None
+    is_80g_eligible: bool
     notes: str | None
     created_at: datetime
     updated_at: datetime

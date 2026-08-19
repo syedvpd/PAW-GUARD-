@@ -364,13 +364,25 @@ async def get_donation_receipt(
     donation_id: uuid.UUID,
     current_user: CurrentUser = Depends(get_current_user),
     service: DonationService = Depends(get_donation_service),
+    db: AsyncSession = Depends(get_db),
+    audit: AuditService = Depends(get_audit_service),
 ) -> ApiResponse[DownloadUrlResponse]:
     donation = await service.get_donation(donation_id)
     is_owner = donation.donor is not None and donation.donor.user_id == current_user.user.id
     if not is_owner and not has_permission(current_user.user, "donation:read"):
         raise ForbiddenError("You do not have permission to view this receipt.")
+    if donation.status.value != "success":
+        raise NotFoundError("Receipt is only available for successful donations.")
     if not donation.receipt_file_key:
-        from pawguard.core.exceptions import NotFoundError
+        from pawguard.modules.finance.repository import FinanceRepository
+        from pawguard.modules.finance.service import FinanceService
+        finance = FinanceService(FinanceRepository(db), audit_service=audit)
+        try:
+            await finance.ensure_donation_receipt(donation_id, actor_id=current_user.id)
+        except Exception as exc:
+            raise NotFoundError("Failed to generate receipt for this donation.") from exc
+        donation = await service.get_donation(donation_id)
+    if not donation.receipt_file_key:
         raise NotFoundError("Receipt not yet generated for this donation.")
     storage = StorageService()
     download_url = storage.generate_presigned_download_url(object_key=donation.receipt_file_key)

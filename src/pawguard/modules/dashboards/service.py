@@ -395,11 +395,14 @@ async def inventory_dashboard(
             InventoryItem.category,
             func.count(InventoryItem.id),
             func.sum(InventoryItem.quantity),
-        ).group_by(InventoryItem.category)
+        )
+        .where(InventoryItem.deleted_at.is_(None))
+        .group_by(InventoryItem.category)
     )
     low_stock = await session.execute(
         select(InventoryItem).where(
-            InventoryItem.quantity <= InventoryItem.reorder_threshold
+            InventoryItem.quantity <= InventoryItem.reorder_threshold,
+            InventoryItem.deleted_at.is_(None),
         )
     )
     categories = [

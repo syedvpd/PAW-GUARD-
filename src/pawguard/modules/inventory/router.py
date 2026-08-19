@@ -25,15 +25,20 @@ from pawguard.modules.inventory.repository import InventoryRepository
 from pawguard.modules.inventory.schemas import (
     InventoryItemCreate,
     InventoryItemResponse,
+    InventoryItemUpdate,
     InventoryMovementCreate,
     InventoryMovementResponse,
     RequisitionOrderCreate,
     RequisitionOrderResponse,
     RequisitionStatusUpdate,
+    SupplierCreate,
+    SupplierResponse,
+    SupplierUpdate,
 )
 from pawguard.modules.inventory.service import InventoryService
 from pawguard.modules.notifications.repository import NotificationRepository
 from pawguard.modules.notifications.service import NotificationService
+from pawguard.redis.client import RedisClient, get_redis
 from pawguard.services.audit_service import AuditService
 from pawguard.workers.pool import get_arq_pool
 
@@ -44,11 +49,17 @@ def get_inventory_service(
     db: AsyncSession = Depends(get_db),
     audit: AuditService = Depends(get_audit_service),
     arq_pool: Any = Depends(get_arq_pool),
+    redis: RedisClient = Depends(get_redis),
 ) -> InventoryService:
     repo = InventoryRepository(db)
     notification_repo = NotificationRepository(db)
     notification_svc = NotificationService(repository=notification_repo, arq_pool=arq_pool)
-    return InventoryService(repo, audit_service=audit, notification_service=notification_svc)
+    return InventoryService(
+        repo,
+        audit_service=audit,
+        notification_service=notification_svc,
+        redis=redis,
+    )
 
 
 @router.post(
@@ -110,6 +121,28 @@ async def get_item(
 ) -> ApiResponse[InventoryItemResponse]:
     item = await service.get_item(item_id)
     return ApiResponse(data=InventoryItemResponse.model_validate(item))
+
+
+@router.put(
+    "/items/{item_id}",
+    response_model=ApiResponse[InventoryItemResponse],
+    dependencies=[Depends(require_permission("inventory:update"))],
+)
+async def update_item(
+    item_id: uuid.UUID,
+    payload: InventoryItemUpdate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: InventoryService = Depends(get_inventory_service),
+) -> ApiResponse[InventoryItemResponse]:
+    ip = request.client.host if request.client else None
+    item = await service.update_item(
+        item_id, payload, actor_id=current_user.id, ip_address=ip,
+    )
+    return ApiResponse(
+        data=InventoryItemResponse.model_validate(item),
+        message="Inventory item updated.",
+    )
 
 
 @router.post(
@@ -275,3 +308,96 @@ async def bulk_update_requisition_status(
         message=f"{updated} requisitions updated.",
         updated_count=updated,
     )
+
+
+# ── Supplier / Vendor Management ────────────────────────────────────────
+
+
+@router.post(
+    "/suppliers",
+    response_model=ApiResponse[SupplierResponse],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("inventory:create"))],
+)
+async def create_supplier(
+    payload: SupplierCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: InventoryService = Depends(get_inventory_service),
+) -> ApiResponse[SupplierResponse]:
+    ip = request.client.host if request.client else None
+    supplier = await service.create_supplier(
+        payload, actor_id=current_user.id, ip_address=ip,
+    )
+    return ApiResponse(
+        data=SupplierResponse.model_validate(supplier),
+        message="Supplier created.",
+    )
+
+
+@router.get(
+    "/suppliers",
+    response_model=PaginatedResponse[SupplierResponse],
+    dependencies=[Depends(require_permission("inventory:read"))],
+)
+async def list_suppliers(
+    page: PageParams = Depends(page_params),
+    sort: SortParams = Depends(sort_params),
+    search: str | None = None,
+    is_active: bool | None = None,
+    service: InventoryService = Depends(get_inventory_service),
+) -> PaginatedResponse[SupplierResponse]:
+    return await service.list_suppliers_paginated(page, sort, search, is_active)
+
+
+@router.get(
+    "/suppliers/{supplier_id}",
+    response_model=ApiResponse[SupplierResponse],
+    dependencies=[Depends(require_permission("inventory:read"))],
+)
+async def get_supplier(
+    supplier_id: uuid.UUID,
+    service: InventoryService = Depends(get_inventory_service),
+) -> ApiResponse[SupplierResponse]:
+    supplier = await service.get_supplier(supplier_id)
+    return ApiResponse(data=SupplierResponse.model_validate(supplier))
+
+
+@router.put(
+    "/suppliers/{supplier_id}",
+    response_model=ApiResponse[SupplierResponse],
+    dependencies=[Depends(require_permission("inventory:update"))],
+)
+async def update_supplier(
+    supplier_id: uuid.UUID,
+    payload: SupplierUpdate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: InventoryService = Depends(get_inventory_service),
+) -> ApiResponse[SupplierResponse]:
+    ip = request.client.host if request.client else None
+    supplier = await service.update_supplier(
+        supplier_id, payload, actor_id=current_user.id, ip_address=ip,
+    )
+    return ApiResponse(
+        data=SupplierResponse.model_validate(supplier),
+        message="Supplier updated.",
+    )
+
+
+@router.delete(
+    "/suppliers/{supplier_id}",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(require_permission("inventory:update"))],
+)
+async def delete_supplier(
+    supplier_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: InventoryService = Depends(get_inventory_service),
+) -> ApiResponse[None]:
+    ip = request.client.host if request.client else None
+    await service.soft_delete_supplier(
+        supplier_id, actor_id=current_user.id, ip_address=ip,
+    )
+    return ApiResponse(message="Supplier deleted.")

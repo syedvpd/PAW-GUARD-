@@ -17,6 +17,9 @@ from pawguard.modules.finance.models import (
     Budget,
     BudgetItem,
     ChartOfAccounts,
+    ExpenseCategory,
+    ExpenseStatus,
+    FinanceExpense,
     FinancialTransaction,
     GeneralLedgerEntry,
     RecurringTransaction,
@@ -577,3 +580,95 @@ class FinanceRepository:
         ).values(**{status_field: status_value})
         result = await self._session.execute(stmt)
         return result.rowcount or 0  # type: ignore[attr-defined]
+
+    SEARCH_FIELDS_EXPENSES = (
+        "expense_number", "title", "vendor_name", "description",
+        "invoice_number", "payment_reference",
+    )
+    SORTABLE_FIELDS_EXPENSES = {
+        "expense_number", "title", "amount", "expense_date",
+        "status", "category", "vendor_name", "created_at",
+    }
+
+    async def create_expense(self, expense: FinanceExpense) -> FinanceExpense:
+        self._session.add(expense)
+        await self._session.flush()
+        return expense
+
+    async def get_expense_by_id(
+        self, expense_id: uuid.UUID
+    ) -> FinanceExpense | None:
+        stmt = select(FinanceExpense).where(
+            FinanceExpense.id == expense_id,
+            FinanceExpense.deleted_at.is_(None),
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def get_expense_by_number(
+        self, number: str
+    ) -> FinanceExpense | None:
+        stmt = select(FinanceExpense).where(
+            FinanceExpense.expense_number == number
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def list_expenses_paginated(
+        self,
+        page: PageParams,
+        sort: SortParams,
+        search_term: str | None = None,
+        category: ExpenseCategory | None = None,
+        status: ExpenseStatus | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> tuple[Sequence[FinanceExpense], int]:
+        stmt = select(FinanceExpense).where(
+            FinanceExpense.deleted_at.is_(None)
+        )
+        search_filter = build_search_filter(
+            FinanceExpense, search_term, self.SEARCH_FIELDS_EXPENSES
+        )
+        if search_filter is not None:
+            stmt = stmt.where(search_filter)
+        if category is not None:
+            stmt = stmt.where(FinanceExpense.category == category)
+        if status is not None:
+            stmt = stmt.where(FinanceExpense.status == status)
+        if date_from is not None:
+            stmt = stmt.where(FinanceExpense.expense_date >= date_from)
+        if date_to is not None:
+            stmt = stmt.where(FinanceExpense.expense_date <= date_to)
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = (await self._session.execute(count_stmt)).scalar_one()
+        stmt = apply_sorting(stmt, sort, self.SORTABLE_FIELDS_EXPENSES)
+        stmt = stmt.offset(page.offset).limit(page.limit)
+        results = (await self._session.execute(stmt)).scalars().all()
+        return results, total
+
+    async def next_expense_sequence(self) -> int:
+        try:
+            stmt = text("SELECT nextval('finance_expense_seq')")
+            result = await self._session.execute(stmt)
+            return int(result.scalar_one())
+        except Exception:
+            count_stmt = select(func.count(FinanceExpense.id))
+            count = (await self._session.execute(count_stmt)).scalar_one()
+            return count + 1
+
+    async def get_expense_total_by_status(
+        self, status: ExpenseStatus, date_from: date | None = None, date_to: date | None = None,
+    ) -> dict[str, Any]:
+        stmt = select(
+            func.count(FinanceExpense.id),
+            func.coalesce(func.sum(FinanceExpense.amount), 0),
+        ).where(
+            FinanceExpense.status == status,
+            FinanceExpense.deleted_at.is_(None),
+        )
+        if date_from is not None:
+            stmt = stmt.where(FinanceExpense.expense_date >= date_from)
+        if date_to is not None:
+            stmt = stmt.where(FinanceExpense.expense_date <= date_to)
+        result = await self._session.execute(stmt)
+        count, total = result.one()
+        return {"count": count, "total_amount": float(total)}

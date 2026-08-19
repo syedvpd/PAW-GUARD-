@@ -243,6 +243,24 @@ class RescueDispatchAgentResponse(BaseModel):
     dispatch_id: uuid.UUID
     agent_id: uuid.UUID
     role: str | None = None
+    agent_name: str | None = None
+    agent_email: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _populate_agent_details(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            return data
+        obj_dict = getattr(data, "__dict__", {})
+        agent_obj = obj_dict.get("agent", None)
+        return {
+            "id": getattr(data, "id", None),
+            "dispatch_id": getattr(data, "dispatch_id", None),
+            "agent_id": getattr(data, "agent_id", None),
+            "role": getattr(data, "role", None),
+            "agent_name": getattr(agent_obj, "full_name", None) if agent_obj else None,
+            "agent_email": getattr(agent_obj, "email", None) if agent_obj else None,
+        }
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -260,23 +278,55 @@ class RescueEscalateCreate(BaseModel):
 class RescueDispatchResponse(BaseModel):
     id: uuid.UUID
     rescue_request_id: uuid.UUID
-    assigned_driver_id: uuid.UUID | None
-    vehicle_id: str | None
+    assigned_driver_id: uuid.UUID | None = None
+    driver_name: str | None = None
+    driver_email: str | None = None
+    vehicle_id: str | None = None
     assigned_vehicle_id: uuid.UUID | None = None
     agents: list[RescueDispatchAgentResponse] = Field(default_factory=list)
-    equipment_details: str | None
+    equipment_details: str | None = None
     dispatched_at: datetime
-    located_at: datetime | None
-    rescued_at: datetime | None
-    admitted_at: datetime | None
-    failed_at: datetime | None
-    failure_reason: RescueFailureReason | None
-    escalation_type: RescueEscalationType | None
-    escalation_notes: str | None
-    notes: str | None
+    located_at: datetime | None = None
+    rescued_at: datetime | None = None
+    admitted_at: datetime | None = None
+    failed_at: datetime | None = None
+    failure_reason: RescueFailureReason | None = None
+    escalation_type: RescueEscalationType | None = None
+    escalation_notes: str | None = None
+    notes: str | None = None
     status: RescueStatus | None = None
     ticket_number: str | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def _populate_driver_details(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            return data
+        obj_dict = getattr(data, "__dict__", {})
+        driver_obj = obj_dict.get("driver", None)
+        agents_val = obj_dict.get("agents", getattr(data, "agents", []))
+        return {
+            "id": getattr(data, "id", None),
+            "rescue_request_id": getattr(data, "rescue_request_id", None),
+            "assigned_driver_id": getattr(data, "assigned_driver_id", None),
+            "driver_name": getattr(driver_obj, "full_name", None) if driver_obj else None,
+            "driver_email": getattr(driver_obj, "email", None) if driver_obj else None,
+            "vehicle_id": getattr(data, "vehicle_id", None),
+            "assigned_vehicle_id": getattr(data, "assigned_vehicle_id", None),
+            "agents": agents_val,
+            "equipment_details": getattr(data, "equipment_details", None),
+            "dispatched_at": getattr(data, "dispatched_at", None),
+            "located_at": getattr(data, "located_at", None),
+            "rescued_at": getattr(data, "rescued_at", None),
+            "admitted_at": getattr(data, "admitted_at", None),
+            "failed_at": getattr(data, "failed_at", None),
+            "failure_reason": getattr(data, "failure_reason", None),
+            "escalation_type": getattr(data, "escalation_type", None),
+            "escalation_notes": getattr(data, "escalation_notes", None),
+            "notes": getattr(data, "notes", None),
+            "status": getattr(data, "status", None),
+            "ticket_number": getattr(data, "ticket_number", None),
+        }
 
     _normalise_failure = field_validator("failure_reason", mode="before")(
         lambda v: None if v is None else normalise_failure_reason(v)

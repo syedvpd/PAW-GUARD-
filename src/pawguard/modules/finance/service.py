@@ -1,6 +1,7 @@
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from typing import Any
 
 import sqlalchemy as sa
@@ -21,6 +22,9 @@ from pawguard.modules.finance.models import (
     Budget,
     BudgetItem,
     ChartOfAccounts,
+    ExpenseCategory,
+    ExpenseStatus,
+    FinanceExpense,
     FinancialTransaction,
     GeneralLedgerEntry,
     RecurringTransaction,
@@ -36,10 +40,15 @@ from pawguard.modules.finance.schemas import (
     ChartOfAccountsCreate,
     ChartOfAccountsResponse,
     ChartOfAccountsUpdate,
+    FinanceExpenseCreate,
+    FinanceExpenseResponse,
+    FinanceExpenseUpdate,
     FinancialTransactionCreate,
     FinancialTransactionResponse,
     RecurringTransactionCreate,
     RecurringTransactionResponse,
+    RefundResponse,
+    TaxReceipt80GResponse,
 )
 from pawguard.services.audit_service import AuditService
 
@@ -761,3 +770,536 @@ class FinanceService:
         count = await self._repo.bulk_soft_delete(FinancialTransaction, ids)
         await self._repo._session.flush()
         return count
+
+    async def create_expense(
+        self,
+        payload: FinanceExpenseCreate,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> FinanceExpense:
+        if payload.account_id:
+            account = await self._repo.get_account_by_id(payload.account_id)
+            if not account:
+                raise NotFoundError("Account not found.")
+        sequence = await self._repo.next_expense_sequence()
+        expense_number = f"EXP-{datetime.now(UTC).strftime('%Y%m%d')}-{sequence:05d}"
+        expense = FinanceExpense(
+            expense_number=expense_number,
+            title=payload.title,
+            description=payload.description,
+            amount=payload.amount,
+            currency=payload.currency,
+            category=payload.category,
+            vendor_name=payload.vendor_name,
+            vendor_contact=payload.vendor_contact,
+            vendor_gstin=payload.vendor_gstin,
+            expense_date=payload.expense_date,
+            payment_method=payload.payment_method,
+            payment_reference=payload.payment_reference,
+            invoice_number=payload.invoice_number,
+            status=ExpenseStatus.DRAFT,
+            account_id=payload.account_id,
+            notes=payload.notes,
+        )
+        await self._repo.create_expense(expense)
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.FINANCE_TRANSACTION_CREATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "expense_id": str(expense.id),
+                    "expense_number": expense_number,
+                    "amount": str(payload.amount),
+                    "vendor": payload.vendor_name,
+                },
+            )
+        return expense
+
+    async def get_expense(self, expense_id: uuid.UUID) -> FinanceExpense:
+        expense = await self._repo.get_expense_by_id(expense_id)
+        if not expense:
+            raise NotFoundError("Expense not found.")
+        return expense
+
+    async def update_expense(
+        self,
+        expense_id: uuid.UUID,
+        payload: FinanceExpenseUpdate,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> FinanceExpense:
+        expense = await self._repo.get_expense_by_id(expense_id)
+        if not expense:
+            raise NotFoundError("Expense not found.")
+        if expense.status not in (ExpenseStatus.DRAFT, ExpenseStatus.SUBMITTED):
+            raise ValidationFailedError(
+                "Only draft or submitted expenses can be edited."
+            )
+        update_data = payload.model_dump(exclude_unset=True, exclude_none=True)
+        if "account_id" in update_data and update_data["account_id"]:
+            account = await self._repo.get_account_by_id(update_data["account_id"])
+            if not account:
+                raise NotFoundError("Account not found.")
+        for key, value in update_data.items():
+            setattr(expense, key, value)
+        await self._repo._session.flush()
+        await self._repo._session.refresh(expense)
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.FINANCE_TRANSACTION_STATUS_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "expense_id": str(expense_id),
+                    "changes": update_data,
+                },
+            )
+        return expense
+
+    async def list_expenses_paginated(
+        self,
+        page: PageParams,
+        sort: SortParams,
+        search_term: str | None = None,
+        category: ExpenseCategory | None = None,
+        status: ExpenseStatus | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> PaginatedResponse[FinanceExpenseResponse]:
+        results, total = await self._repo.list_expenses_paginated(
+            page, sort, search_term, category, status, date_from, date_to
+        )
+        return PaginatedResponse(
+            data=[FinanceExpenseResponse.model_validate(e) for e in results],
+            meta=build_pagination_meta(total=total, params=page),
+        )
+
+    async def approve_expense(
+        self,
+        expense_id: uuid.UUID,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> FinanceExpense:
+        expense = await self._repo.get_expense_by_id(expense_id)
+        if not expense:
+            raise NotFoundError("Expense not found.")
+        if expense.status not in (ExpenseStatus.DRAFT, ExpenseStatus.SUBMITTED):
+            raise ValidationFailedError(
+                "Only draft or submitted expenses can be approved."
+            )
+        expense.status = ExpenseStatus.APPROVED
+        expense.approved_by = actor_id
+        expense.approved_at = datetime.now(UTC)
+        await self._repo._session.flush()
+        await self._repo._session.refresh(expense)
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.FINANCE_TRANSACTION_STATUS_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "expense_id": str(expense_id),
+                    "action": "approved",
+                },
+            )
+        return expense
+
+    async def reject_expense(
+        self,
+        expense_id: uuid.UUID,
+        reason: str,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> FinanceExpense:
+        expense = await self._repo.get_expense_by_id(expense_id)
+        if not expense:
+            raise NotFoundError("Expense not found.")
+        if expense.status not in (ExpenseStatus.DRAFT, ExpenseStatus.SUBMITTED):
+            raise ValidationFailedError(
+                "Only draft or submitted expenses can be rejected."
+            )
+        expense.status = ExpenseStatus.REJECTED
+        expense.rejection_reason = reason
+        await self._repo._session.flush()
+        await self._repo._session.refresh(expense)
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.FINANCE_TRANSACTION_STATUS_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "expense_id": str(expense_id),
+                    "action": "rejected",
+                    "reason": reason,
+                },
+            )
+        return expense
+
+    async def submit_expense(
+        self,
+        expense_id: uuid.UUID,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> FinanceExpense:
+        expense = await self._repo.get_expense_by_id(expense_id)
+        if not expense:
+            raise NotFoundError("Expense not found.")
+        if expense.status != ExpenseStatus.DRAFT:
+            raise ValidationFailedError("Only draft expenses can be submitted.")
+        expense.status = ExpenseStatus.SUBMITTED
+        await self._repo._session.flush()
+        await self._repo._session.refresh(expense)
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.FINANCE_TRANSACTION_STATUS_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "expense_id": str(expense_id),
+                    "action": "submitted",
+                },
+            )
+        return expense
+
+    async def pay_expense(
+        self,
+        expense_id: uuid.UUID,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> FinanceExpense:
+        expense = await self._repo.get_expense_by_id(expense_id)
+        if not expense:
+            raise NotFoundError("Expense not found.")
+        if expense.status != ExpenseStatus.APPROVED:
+            raise ValidationFailedError("Only approved expenses can be marked as paid.")
+        if expense.account_id:
+            sequence = await self._repo.next_transaction_sequence()
+            tx_number = f"TXN-{datetime.now(UTC).strftime('%Y%m%d')}-{sequence:05d}"
+            expense_account = await self._repo.get_account_by_id(expense.account_id)
+            cash_account = (
+                await self._repo._session.execute(
+                    sa.select(ChartOfAccounts).where(
+                        ChartOfAccounts.account_type == AccountType.ASSET,
+                        ChartOfAccounts.category.in_([AccountCategory.CASH, AccountCategory.BANK]),
+                        ChartOfAccounts.deleted_at.is_(None),
+                    ).limit(1)
+                )
+            ).scalar_one_or_none()
+            tx = FinancialTransaction(
+                transaction_number=tx_number,
+                transaction_type=TransactionType.EXPENSE,
+                transaction_date=datetime.now(UTC).date(),
+                amount=expense.amount,
+                currency=expense.currency,
+                description=f"Expense payment - {expense.title} ({expense.expense_number})",
+                reference_type="finance_expense",
+                reference_id=expense.id,
+                status=TransactionStatus.POSTED,
+            )
+            await self._repo.create_transaction(tx)
+            if expense_account and cash_account:
+                entry1 = GeneralLedgerEntry(
+                    account_id=expense_account.id,
+                    transaction_id=tx.id,
+                    debit_amount=expense.amount,
+                    credit_amount=0,
+                    entry_date=datetime.now(UTC).date(),
+                    description=f"Expense {expense.expense_number}",
+                )
+                await self._repo.create_ledger_entry(entry1)
+                entry2 = GeneralLedgerEntry(
+                    account_id=cash_account.id,
+                    transaction_id=tx.id,
+                    debit_amount=0,
+                    credit_amount=expense.amount,
+                    entry_date=datetime.now(UTC).date(),
+                    description=f"Expense {expense.expense_number}",
+                )
+                await self._repo.create_ledger_entry(entry2)
+            expense.transaction_id = tx.id
+        expense.status = ExpenseStatus.PAID
+        await self._repo._session.flush()
+        await self._repo._session.refresh(expense)
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.FINANCE_TRANSACTION_STATUS_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "expense_id": str(expense_id),
+                    "action": "paid",
+                    "transaction_id": str(expense.transaction_id) if expense.transaction_id else None,
+                },
+            )
+        return expense
+
+    async def soft_delete_expense(
+        self,
+        expense_id: uuid.UUID,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> None:
+        expense = await self._repo.get_expense_by_id(expense_id)
+        if not expense:
+            raise NotFoundError("Expense not found.")
+        if expense.status == ExpenseStatus.PAID:
+            raise ValidationFailedError("Paid expenses cannot be deleted.")
+        expense.deleted_at = datetime.now(UTC)
+        await self._repo._session.flush()
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.FINANCE_TRANSACTION_DELETED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"expense_id": str(expense_id)},
+            )
+
+    async def process_refund(
+        self,
+        donation_id: uuid.UUID,
+        reason: str,
+        refund_amount: Decimal | None = None,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> RefundResponse:
+        donation = await self._repo.get_donation_by_id(donation_id)
+        if not donation:
+            raise NotFoundError("Donation not found.")
+        if donation.status == DonationStatus.REFUNDED:
+            raise ConflictError("This donation has already been refunded.")
+        if donation.status != DonationStatus.SUCCESS:
+            raise ValidationFailedError(
+                "Only successful donations can be refunded."
+            )
+        original_amount = Decimal(str(donation.amount))
+        actual_refund = refund_amount if refund_amount and refund_amount <= original_amount else original_amount
+        if actual_refund <= 0:
+            raise ValidationFailedError("Refund amount must be greater than zero.")
+        sequence = await self._repo.next_transaction_sequence()
+        tx_number = f"RFD-{datetime.now(UTC).strftime('%Y%m%d')}-{sequence:05d}"
+        income_account, cash_account = await self._get_reconcile_accounts()
+        tx = FinancialTransaction(
+            transaction_number=tx_number,
+            transaction_type=TransactionType.REFUND,
+            transaction_date=datetime.now(UTC).date(),
+            amount=actual_refund,
+            currency=donation.currency or "USD",
+            description=f"Refund for donation {donation.id}: {reason}",
+            reference_type="donation_refund",
+            reference_id=donation_id,
+            donation_id=donation_id,
+            status=TransactionStatus.POSTED,
+        )
+        await self._repo.create_transaction(tx)
+        if income_account and cash_account:
+            entry1 = GeneralLedgerEntry(
+                account_id=income_account.id,
+                transaction_id=tx.id,
+                debit_amount=actual_refund,
+                credit_amount=0,
+                entry_date=datetime.now(UTC).date(),
+                description=f"Refund for donation {donation.id}",
+            )
+            await self._repo.create_ledger_entry(entry1)
+            entry2 = GeneralLedgerEntry(
+                account_id=cash_account.id,
+                transaction_id=tx.id,
+                debit_amount=0,
+                credit_amount=actual_refund,
+                entry_date=datetime.now(UTC).date(),
+                description=f"Refund for donation {donation.id}",
+            )
+            await self._repo.create_ledger_entry(entry2)
+        if actual_refund >= original_amount:
+            donation.status = DonationStatus.REFUNDED
+        else:
+            donation.notes = (
+                (donation.notes or "") + f"\nPartial refund of {actual_refund} processed: {reason}"
+            ).strip()
+        await self._repo._session.flush()
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.DONATION_REFUNDED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "donation_id": str(donation_id),
+                    "refund_amount": str(actual_refund),
+                    "original_amount": str(original_amount),
+                    "reason": reason,
+                    "transaction_number": tx_number,
+                },
+            )
+        return RefundResponse(
+            refund_id=tx.id,
+            donation_id=donation_id,
+            original_amount=original_amount,
+            refund_amount=actual_refund,
+            currency=donation.currency or "USD",
+            status=donation.status.value,
+            transaction_number=tx_number,
+            refunded_at=datetime.now(UTC),
+            reason=reason,
+        )
+
+    async def generate_80g_certificate(
+        self,
+        donation_id: uuid.UUID,
+        *,
+        actor_id: uuid.UUID | None = None,
+    ) -> TaxReceipt80GResponse:
+        from pawguard.services.storage_service import StorageService
+
+        donation = await self._repo.get_donation_by_id(donation_id)
+        if not donation:
+            raise NotFoundError("Donation not found.")
+        if donation.status != DonationStatus.SUCCESS:
+            raise ValidationFailedError(
+                "80G certificates can only be generated for successful donations."
+            )
+        donor = donation.donor
+        if not donor:
+            raise NotFoundError("Donor profile not found.")
+        if not donor.is_80g_eligible:
+            raise ValidationFailedError(
+                "This donor is not marked as 80G eligible. "
+                "Please update the donor profile with PAN and eligibility details."
+            )
+        if not donor.pan_number:
+            raise ValidationFailedError(
+                "PAN number is required for 80G certificate generation."
+            )
+        donor_name = donor.full_name_for_80g or (
+            donor.user.full_name if donor.user else "Donor"
+        )
+        receipt_number = f"80G-{donation.id.hex[:12].upper()}"
+        donation_date = donation.created_at.date() if hasattr(donation.created_at, 'date') else donation.created_at
+        try:
+            pdf_bytes = await self._generate_80g_pdf(
+                donor_name=donor_name,
+                pan_number=donor.pan_number,
+                amount=float(donation.amount),
+                currency=donation.currency,
+                donation_date=donation.created_at,
+                receipt_number=receipt_number,
+                address=donor.address_for_80g,
+            )
+            storage = StorageService()
+            object_key = storage.build_object_key(
+                folder="documents", filename=f"80g_{donation.id}.pdf"
+            )
+            import asyncio
+            await asyncio.to_thread(
+                storage.put_object,
+                object_key=object_key,
+                content=pdf_bytes,
+                content_type="application/pdf",
+            )
+            certificate_url = storage.generate_presigned_download_url(object_key=object_key)
+        except Exception:
+            certificate_url = None
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.DONATION_RECEIPT_ISSUED,
+                actor_id=actor_id,
+                ip_address="",
+                user_agent="",
+                metadata={
+                    "donation_id": str(donation_id),
+                    "certificate_type": "80G",
+                    "receipt_number": receipt_number,
+                },
+            )
+        return TaxReceipt80GResponse(
+            donation_id=donation_id,
+            donor_name=donor_name,
+            pan_number=donor.pan_number,
+            amount=Decimal(str(donation.amount)),
+            currency=donation.currency or "USD",
+            donation_date=donation_date,
+            receipt_number=receipt_number,
+            certificate_url=certificate_url,
+            is_80g_eligible=True,
+            generated_at=datetime.now(UTC),
+        )
+
+    async def _generate_80g_pdf(
+        self,
+        *,
+        donor_name: str,
+        pan_number: str,
+        amount: float,
+        currency: str,
+        donation_date: datetime,
+        receipt_number: str,
+        address: str | None = None,
+    ) -> bytes:
+        from pawguard.core.config import get_settings
+        from pawguard.core.pdf_generation import generate_80g_certificate
+
+        settings = get_settings()
+        return await __import__("asyncio").to_thread(
+            generate_80g_certificate,
+            donor_name=donor_name,
+            pan_number=pan_number,
+            amount=amount,
+            currency=currency,
+            donation_date=donation_date,
+            receipt_number=receipt_number,
+            org_name=settings.org_name,
+            org_address=settings.org_address,
+            address=address,
+        )
+
+    async def ensure_donation_receipt(
+        self,
+        donation_id: uuid.UUID,
+        *,
+        actor_id: uuid.UUID | None = None,
+    ) -> str:
+        donation = await self._repo.get_donation_by_id(donation_id)
+        if not donation:
+            raise NotFoundError("Donation not found.")
+        if donation.status != DonationStatus.SUCCESS:
+            raise ValidationFailedError(
+                "Receipts can only be generated for successful donations."
+            )
+        if donation.receipt_file_key:
+            return donation.receipt_file_key
+        from pawguard.modules.dog.repository import DogRepository
+        from pawguard.modules.donation.repository import DonationRepository
+        from pawguard.modules.donation.service import DonationService
+        from pawguard.services.storage_service import StorageService
+        donation_repo = DonationRepository(self._repo._session)
+        dog_repo = DogRepository(self._repo._session)
+        storage = StorageService()
+        temp_service = DonationService(
+            donation_repo, dog_repo, storage_service=storage, audit_service=self._audit,
+        )
+        refreshed = await donation_repo.get_donation_by_id(donation_id)
+        if not refreshed:
+            raise NotFoundError("Donation not found.")
+        await temp_service._generate_receipt(refreshed)
+        await self._repo._session.flush()
+        await self._repo._session.refresh(donation)
+        if not donation.receipt_file_key:
+            raise NotFoundError("Failed to generate receipt for this donation.")
+        return donation.receipt_file_key

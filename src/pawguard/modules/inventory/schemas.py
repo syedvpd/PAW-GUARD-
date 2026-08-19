@@ -92,3 +92,69 @@ class InventoryItemUpdate(BaseModel):
 
 class RequisitionStatusUpdate(BaseModel):
     status: RequisitionStatus = Field(..., examples=["approved"])
+
+
+class SupplierCreate(BaseModel):
+    name: str = Field(..., min_length=2, max_length=255, examples=["MedSupply Co."])
+    contact_person: str | None = Field(None, max_length=255, examples=["Rajesh Kumar"])
+    email: str | None = Field(None, max_length=255, examples=["contact@medsupply.com"])
+    phone: str | None = Field(None, max_length=64, examples=["+91-98765-43210"])
+    address: str | None = Field(None, examples=["123 Industrial Area, City, State"])
+    gst_number: str | None = Field(None, max_length=64, examples=["29ABCDE1234F1Z5"])
+    pan_number: str | None = Field(None, max_length=20, examples=["ABCDE1234F"])
+    bank_details: str | None = Field(None, examples=["HDFC Bank, Acc: 1234567890"])
+    payment_terms: str | None = Field(None, max_length=255, examples=["Net 30 days"])
+    notes: str | None = Field(None, examples=["Preferred vendor for vaccines."])
+
+
+class SupplierUpdate(BaseModel):
+    name: str | None = Field(None, min_length=2, max_length=255)
+    contact_person: str | None = Field(None, max_length=255)
+    email: str | None = Field(None, max_length=255)
+    phone: str | None = Field(None, max_length=64)
+    address: str | None = None
+    gst_number: str | None = Field(None, max_length=64)
+    pan_number: str | None = Field(None, max_length=20)
+    bank_details: str | None = None
+    payment_terms: str | None = Field(None, max_length=255)
+    is_active: bool | None = None
+    notes: str | None = None
+
+
+class SupplierResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    contact_person: str | None
+    email: str | None
+    phone: str | None
+    address: str | None
+    gst_number: str | None
+    pan_number: str | None
+    bank_details: str | None
+    payment_terms: str | None
+    is_active: bool
+    notes: str | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class InventoryItemSupplierCreate(BaseModel):
+    item_id: uuid.UUID
+    supplier_id: uuid.UUID
+    unit_cost: float = Field(..., gt=0.0, examples=[4.50])
+    lead_time_days: int | None = Field(None, ge=0, examples=[7])
+    is_preferred: bool = Field(False, examples=[True])
+
+
+class InventoryItemSupplierResponse(BaseModel):
+    id: uuid.UUID
+    item_id: uuid.UUID
+    supplier_id: uuid.UUID
+    unit_cost: float
+    lead_time_days: int | None
+    is_preferred: bool
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

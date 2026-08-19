@@ -291,3 +291,96 @@ class BudgetItem(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     account: Mapped["ChartOfAccounts"] = relationship(
         "ChartOfAccounts", lazy="joined"
     )
+
+
+class ExpenseStatus(StrEnum):
+    DRAFT = "draft"
+    SUBMITTED = "submitted"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    PAID = "paid"
+
+
+class ExpenseCategory(StrEnum):
+    MEDICAL = "medical"
+    VETERINARY = "veterinary"
+    FOOD = "food"
+    SUPPLIES = "supplies"
+    SHELTER = "shelter"
+    TRANSPORT = "transport"
+    UTILITIES = "utilities"
+    SALARY = "salary"
+    MAINTENANCE = "maintenance"
+    OTHER = "other"
+
+
+class PaymentMethod(StrEnum):
+    CASH = "cash"
+    BANK_TRANSFER = "bank_transfer"
+    CHECK = "check"
+    CREDIT_CARD = "credit_card"
+    UPI = "upi"
+    OTHER = "other"
+
+
+class FinanceExpense(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
+    __tablename__ = "finance_expenses"
+
+    __table_args__ = (
+        CheckConstraint("amount > 0", name="ck_finance_expenses_amount_positive"),
+    )
+
+    expense_number: Mapped[str] = mapped_column(
+        String(64), unique=True, nullable=False, index=True
+    )
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(
+        String(3), default="USD", nullable=False
+    )
+    category: Mapped[ExpenseCategory] = mapped_column(
+        String(64), nullable=False, index=True
+    )
+    vendor_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    vendor_contact: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    vendor_gstin: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    expense_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    payment_method: Mapped[PaymentMethod] = mapped_column(
+        String(32), nullable=False, default=PaymentMethod.CASH
+    )
+    payment_reference: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
+    invoice_number: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    status: Mapped[ExpenseStatus] = mapped_column(
+        String(32), nullable=False, default=ExpenseStatus.DRAFT, index=True
+    )
+    approved_by: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    approved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    account_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("chart_of_accounts.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    transaction_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("financial_transactions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    account: Mapped["ChartOfAccounts | None"] = relationship(
+        "ChartOfAccounts", lazy="joined"
+    )
+    transaction: Mapped["FinancialTransaction | None"] = relationship(
+        "FinancialTransaction", lazy="joined"
+    )

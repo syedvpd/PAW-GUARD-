@@ -5,7 +5,7 @@ import uuid
 from datetime import date, datetime
 from typing import Any
 
-from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from pawguard.core.constants import DeviceType
 
@@ -375,3 +375,13 @@ class OAuthAccountInfo(BaseModel):
 class OAuthLinkRequest(BaseModel):
     provider: str = Field(min_length=1, max_length=32, examples=["google"])
     provider_token: str = Field(..., examples=["ya29.a0AfH6SMC...token"])
+
+
+class UserSummaryResponse(BaseModel):
+    id: uuid.UUID
+    full_name: str
+    email: str | None = None
+    profile_picture_url: str | None = None
+    role: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)

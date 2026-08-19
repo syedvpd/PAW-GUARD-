@@ -22,10 +22,13 @@ from pawguard.modules.dashboards.service import (
 )
 
 
-def _fake_result(scalar_one_val=None, all_val=None, one_val=None, scalars_all=None):
+def _fake_result(scalar_one_val=None, all_val=None, one_val=None, scalars_all=None, scalar_val=None):
     r = MagicMock()
     if scalar_one_val is not None:
         r.scalar_one.return_value = scalar_one_val
+    if scalar_val is not None:
+        r.scalar.return_value = scalar_val
+        r.scalar_one.return_value = scalar_val
     if all_val is not None:
         r.all.return_value = all_val
     if one_val is not None:
@@ -62,6 +65,9 @@ class TestDashboards:
             _fake_result(scalar_one_val=50),
             _fake_result(scalar_one_val=20),
             _fake_result(scalar_one_val=60),
+            _fake_result(scalar_one_val=0),
+            _fake_result(scalar_one_val=0),
+            _fake_result(scalar_one_val=0),
         ]
         result = await shelter_dashboard(session)
         assert result["total_facilities"] == 2
@@ -72,6 +78,9 @@ class TestDashboards:
 
     async def test_shelter_dashboard_no_kennels(self, session):
         session.execute.side_effect = [
+            _fake_result(scalar_one_val=0),
+            _fake_result(scalar_one_val=0),
+            _fake_result(scalar_one_val=0),
             _fake_result(scalar_one_val=0),
             _fake_result(scalar_one_val=0),
             _fake_result(scalar_one_val=0),
@@ -101,7 +110,6 @@ class TestDashboards:
         assert result["pending"] == 20
         assert result["approved"] == 15
         assert result["completed"] == 60
-        assert result["completed"] == 60
 
     async def test_foster_dashboard(self, session):
         session.execute.side_effect = [
@@ -115,19 +123,19 @@ class TestDashboards:
     async def test_volunteer_dashboard(self, session):
         session.execute.side_effect = [
             _fake_result(scalar_one_val=50),
-            _fake_result(scalar_one_val=30),
+            _fake_result(scalar_one_val=35),
         ]
         result = await volunteer_dashboard(session)
         assert result["total_volunteers"] == 50
-        assert result["available"] == 30
+        assert result["available"] == 35
 
     async def test_inventory_dashboard(self, session):
         session.execute.side_effect = [
-            _fake_result(all_val=[("pharma", 5, 200.0), ("food", 3, 100.0)]),
+            _fake_result(all_val=[("food", 10, 500.0)]),
             _fake_result(scalars_all=[]),
         ]
         result = await inventory_dashboard(session)
-        assert len(result["categories"]) == 2
+        assert len(result["categories"]) == 1
         assert result["total_low_stock"] == 0
 
     async def test_inventory_dashboard_with_low_stock(self, session):
@@ -146,16 +154,16 @@ class TestDashboards:
 
     async def test_finance_dashboard(self, session):
         session.execute.side_effect = [
-            _fake_result(scalar_one_val=50000),
-            _fake_result(scalar_one_val=0),
-            _fake_result(scalar_one_val=0),
-            _fake_result(scalar_one_val=30000),
+            _fake_result(scalar_one_val=30000.0),
+            _fake_result(scalar_one_val=15000.0),
+            _fake_result(scalar_one_val=5000.0),
+            _fake_result(scalar_one_val=20000.0),
             _fake_result(scalar_one_val=5),
         ]
         result = await finance_dashboard(session)
         assert result["total_income"] == 50000.0
-        assert result["total_expenses"] == 30000.0
-        assert result["net_balance"] == 20000.0
+        assert result["total_expenses"] == 20000.0
+        assert result["net_balance"] == 30000.0
         assert result["pending_transactions"] == 5
 
     async def test_donor_dashboard(self, session):
@@ -176,55 +184,70 @@ class TestDashboards:
 
     async def test_staff_dashboard(self, session):
         session.execute.side_effect = [
-            _fake_result(scalar_one_val=30),
-            _fake_result(scalar_one_val=2),
+            _fake_result(scalar_one_val=25),
+            _fake_result(scalar_one_val=8),
         ]
         result = await staff_dashboard(session)
-        assert result["total_staff"] == 30
-        assert result["open_grievances"] == 2
+        assert result["total_staff"] == 25
+        assert result["open_grievances"] == 8
 
     async def test_executive_dashboard(self, session):
         session.execute.side_effect = [
-            _fake_result(scalar_one_val=100),
-            _fake_result(scalar_one_val=10),
-            _fake_result(scalar_one_val=5),
-            _fake_result(scalar_one_val=80),
-            _fake_result(scalars_all=[]),
-            _fake_result(scalar_one_val=500000),
-            _fake_result(scalar_one_val=0),
-            _fake_result(scalar_one_val=0),
-            _fake_result(scalar_one_val=300000),
-            _fake_result(scalar_one_val=10),
-            _fake_result(scalar_one_val=200),
-            _fake_result(scalar_one_val=30),
-            _fake_result(scalar_one_val=50),
-            _fake_result(scalar_one_val=100),
-        ]
-        result = await executive_dashboard(session)
-        assert "rescue_overview" in result
-        assert "finance_overview" in result
-        assert "adoption_overview" in result
-
-    async def test_public_dashboard(self, session):
-        session.execute.side_effect = [
-            _fake_result(scalar_one_val=25),
-            _fake_result(scalar_one_val=100),
-        ]
-        result = await public_dashboard(session)
-        assert result["adoptable_dogs"] == 25
-        assert result["dogs_rescued"] == 100
-
-    async def test_operations_dashboard(self, session):
-        session.execute.side_effect = [
+            # rescue_dashboard (5 queries)
             _fake_result(scalar_one_val=200),
             _fake_result(scalar_one_val=10),
             _fake_result(scalar_one_val=5),
             _fake_result(scalar_one_val=20),
             _fake_result(scalars_all=[]),
+            # finance_dashboard (5 queries)
+            _fake_result(scalar_one_val=60000.0),
+            _fake_result(scalar_one_val=30000.0),
+            _fake_result(scalar_one_val=10000.0),
+            _fake_result(scalar_one_val=40000.0),
+            _fake_result(scalar_one_val=2),
+            # adoption_dashboard (4 queries)
+            _fake_result(scalar_one_val=150),
+            _fake_result(scalar_one_val=20),
+            _fake_result(scalar_one_val=15),
+            _fake_result(scalar_one_val=60),
+        ]
+        result = await executive_dashboard(session)
+        assert "rescue_overview" in result
+        assert "finance_overview" in result
+        assert "adoption_overview" in result
+        assert result["rescue_overview"]["total_calls"] == 200
+        assert result["rescue_overview"]["rescued"] == 20
+        assert result["finance_overview"]["total_income"] == 100000.0
+        assert result["finance_overview"]["total_expenses"] == 40000.0
+        assert result["adoption_overview"]["total"] == 150
+        assert result["adoption_overview"]["completed"] == 60
+
+    async def test_public_dashboard(self, session):
+        session.execute.side_effect = [
+            _fake_result(scalar_one_val=45),
+            _fake_result(scalar_one_val=100),
+        ]
+        result = await public_dashboard(session)
+        assert result["adoptable_dogs"] == 45
+        assert result["dogs_rescued"] == 100
+
+    async def test_operations_dashboard(self, session):
+        session.execute.side_effect = [
+            # rescue_dashboard (5 queries)
+            _fake_result(scalar_one_val=200),
+            _fake_result(scalar_one_val=10),
+            _fake_result(scalar_one_val=5),
+            _fake_result(scalar_one_val=20),
+            _fake_result(scalars_all=[]),
+            # shelter_dashboard (7 queries)
             _fake_result(scalar_one_val=3),
             _fake_result(scalar_one_val=80),
             _fake_result(scalar_one_val=30),
             _fake_result(scalar_one_val=100),
+            _fake_result(scalar_one_val=0),
+            _fake_result(scalar_one_val=0),
+            _fake_result(scalar_one_val=0),
+            # inventory_dashboard (2 queries)
             _fake_result(all_val=[]),
             _fake_result(scalars_all=[]),
         ]

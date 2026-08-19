@@ -367,6 +367,86 @@ class UserRoleRepository:
         await self._session.flush()
 
 
+class UserPermissionRepository:
+    """Direct user→permission grants that supplement role-based permissions."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_user_permission_codes(self, user_id: uuid.UUID) -> set[str]:
+        from pawguard.modules.auth.models import Permission, UserPermission
+        stmt = (
+            select(Permission.code)
+            .join(UserPermission, UserPermission.permission_id == Permission.id)
+            .where(UserPermission.user_id == user_id)
+        )
+        return {row[0] for row in (await self._session.execute(stmt)).all()}
+
+    async def grant_permission(
+        self, user_id: uuid.UUID, permission_id: uuid.UUID, granted_by: uuid.UUID | None = None,
+    ) -> None:
+        from datetime import UTC, datetime
+        from pawguard.modules.auth.models import UserPermission
+
+        existing = await self._session.execute(
+            select(UserPermission).where(
+                UserPermission.user_id == user_id,
+                UserPermission.permission_id == permission_id,
+            )
+        )
+        if existing.scalar_one_or_none() is not None:
+            return
+        self._session.add(UserPermission(
+            user_id=user_id,
+            permission_id=permission_id,
+            granted_by=granted_by,
+            granted_at=datetime.now(UTC),
+        ))
+        await self._session.flush()
+
+    async def revoke_permission(self, user_id: uuid.UUID, permission_id: uuid.UUID) -> bool:
+        from sqlalchemy import delete
+        from pawguard.modules.auth.models import UserPermission
+
+        result = await self._session.execute(
+            delete(UserPermission).where(
+                UserPermission.user_id == user_id,
+                UserPermission.permission_id == permission_id,
+            )
+        )
+        await self._session.flush()
+        return result.rowcount > 0  # type: ignore[return-value]
+
+    async def set_permissions(
+        self, user_id: uuid.UUID, permission_ids: list[uuid.UUID], granted_by: uuid.UUID | None = None,
+    ) -> None:
+        from datetime import UTC, datetime
+        from sqlalchemy import delete
+        from pawguard.modules.auth.models import UserPermission
+
+        await self._session.execute(
+            delete(UserPermission).where(UserPermission.user_id == user_id)
+        )
+        for pid in permission_ids:
+            self._session.add(UserPermission(
+                user_id=user_id,
+                permission_id=pid,
+                granted_by=granted_by,
+                granted_at=datetime.now(UTC),
+            ))
+        await self._session.flush()
+
+    async def list_user_permissions(self, user_id: uuid.UUID) -> list[Permission]:
+        from pawguard.modules.auth.models import Permission, UserPermission
+        stmt = (
+            select(Permission)
+            .join(UserPermission, UserPermission.permission_id == Permission.id)
+            .where(UserPermission.user_id == user_id)
+            .order_by(Permission.code)
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
+
+
 class OAuthAccountRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session

@@ -211,6 +211,7 @@ class RescueDispatch(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     rescue_request: Mapped["RescueRequest"] = relationship(back_populates="dispatch")
+    driver: Mapped[Any] = relationship("User", foreign_keys=[assigned_driver_id], lazy="joined")
     # One-or-more assigned agents (PRR 3.2): the legacy `assigned_driver_id`
     # column is mirrored into this association table so a dispatch can carry a
     # full field team and agents can query "my assigned cases".
@@ -260,6 +261,7 @@ class RescueDispatchAgent(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     role: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     dispatch: Mapped["RescueDispatch"] = relationship(back_populates="agents")
+    agent: Mapped[Any] = relationship("User", foreign_keys=[agent_id], lazy="joined")
 
 
 class RescueReport(UUIDPkMixin, TimestampMixin, AuditMixin, Base):

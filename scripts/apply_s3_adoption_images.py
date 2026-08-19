@@ -89,15 +89,17 @@ async def update_dogs() -> None:
             .order_by(DogProfile.registration_number)
         )
         dogs = result.scalars().all()
-        print(f"\nUpdating {len(dogs)} adoptable dogs...")
-        for dog in dogs:
-            # All adoptable dogs share the same 3 real adoption images so the
-            # Flutter "Find a Companion" listing has actual photos on every card.
-            dog.image_urls = urls
+        print(f"\nUpdating {len(dogs)} adoptable dogs with unique images...")
+        for idx, dog in enumerate(dogs):
+            # Assign a unique S3 presigned image URL to each dog (cycling through the 11 uploaded photos)
+            primary_url = urls[idx % len(urls)]
+            # Include secondary images if available
+            secondary_url = urls[(idx + 1) % len(urls)]
+            dog.image_urls = [primary_url, secondary_url]
             updated += 1
         await session.commit()
     await engine.dispose()
-    print(f"\nUpdated {updated} adoptable dogs with S3 presigned image URLs.")
+    print(f"\nSuccessfully updated {updated} adoptable dogs with distinct S3 image URLs.")
 
 
 if __name__ == "__main__":

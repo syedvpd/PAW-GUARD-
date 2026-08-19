@@ -3,6 +3,7 @@ from datetime import date
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.bulk import (
@@ -16,7 +17,13 @@ from pawguard.db.session import get_db
 from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.rbac import require_permission
-from pawguard.modules.finance.models import AccountType, TransactionStatus, TransactionType
+from pawguard.modules.finance.models import (
+    AccountType,
+    ExpenseCategory,
+    ExpenseStatus,
+    TransactionStatus,
+    TransactionType,
+)
 from pawguard.modules.finance.repository import FinanceRepository
 from pawguard.modules.finance.schemas import (
     AccountBalanceResponse,
@@ -27,11 +34,18 @@ from pawguard.modules.finance.schemas import (
     ChartOfAccountsResponse,
     ChartOfAccountsUpdate,
     DonationReconcileRequest,
+    FinanceExpenseCreate,
+    FinanceExpenseResponse,
+    FinanceExpenseUpdate,
     FinancialTransactionCreate,
     FinancialTransactionResponse,
     FinancialTransactionUpdate,
     RecurringTransactionCreate,
     RecurringTransactionResponse,
+    RefundRequest,
+    RefundResponse,
+    TaxReceipt80GRequest,
+    TaxReceipt80GResponse,
 )
 from pawguard.modules.finance.service import FinanceService
 from pawguard.services.audit_service import AuditService
@@ -505,4 +519,270 @@ async def bulk_delete_transactions(
             message=f"{deleted} transaction(s) deleted.",
             deleted_count=deleted,
         ),
+    )
+
+
+@router.post(
+    "/expenses",
+    response_model=ApiResponse[FinanceExpenseResponse],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("finance:create"))],
+)
+async def create_expense(
+    payload: FinanceExpenseCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FinanceService = Depends(get_finance_service),
+) -> ApiResponse[FinanceExpenseResponse]:
+    ip = request.client.host if request.client else None
+    expense = await service.create_expense(
+        payload, actor_id=current_user.id, ip_address=ip
+    )
+    return ApiResponse(
+        data=FinanceExpenseResponse.model_validate(expense),
+        message="Expense created.",
+    )
+
+
+@router.get(
+    "/expenses",
+    response_model=PaginatedResponse[FinanceExpenseResponse],
+    dependencies=[Depends(require_permission("finance:read"))],
+)
+async def list_expenses(
+    page: PageParams = Depends(page_params),
+    sort: SortParams = Depends(sort_params),
+    search: str | None = Query(None),
+    category: ExpenseCategory | None = Query(None),
+    expense_status: ExpenseStatus | None = Query(None, alias="status"),
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    service: FinanceService = Depends(get_finance_service),
+) -> PaginatedResponse[FinanceExpenseResponse]:
+    return await service.list_expenses_paginated(
+        page, sort, search, category, expense_status, date_from, date_to
+    )
+
+
+@router.get(
+    "/expenses/{expense_id}",
+    response_model=ApiResponse[FinanceExpenseResponse],
+    dependencies=[Depends(require_permission("finance:read"))],
+)
+async def get_expense(
+    expense_id: uuid.UUID,
+    service: FinanceService = Depends(get_finance_service),
+) -> ApiResponse[FinanceExpenseResponse]:
+    expense = await service.get_expense(expense_id)
+    return ApiResponse(data=FinanceExpenseResponse.model_validate(expense))
+
+
+@router.patch(
+    "/expenses/{expense_id}",
+    response_model=ApiResponse[FinanceExpenseResponse],
+    dependencies=[Depends(require_permission("finance:update"))],
+)
+async def update_expense(
+    expense_id: uuid.UUID,
+    payload: FinanceExpenseUpdate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FinanceService = Depends(get_finance_service),
+) -> ApiResponse[FinanceExpenseResponse]:
+    ip = request.client.host if request.client else None
+    expense = await service.update_expense(
+        expense_id, payload, actor_id=current_user.id, ip_address=ip
+    )
+    return ApiResponse(
+        data=FinanceExpenseResponse.model_validate(expense),
+        message="Expense updated.",
+    )
+
+
+@router.post(
+    "/expenses/{expense_id}/submit",
+    response_model=ApiResponse[FinanceExpenseResponse],
+    dependencies=[Depends(require_permission("finance:update"))],
+)
+async def submit_expense(
+    expense_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FinanceService = Depends(get_finance_service),
+) -> ApiResponse[FinanceExpenseResponse]:
+    ip = request.client.host if request.client else None
+    expense = await service.submit_expense(
+        expense_id, actor_id=current_user.id, ip_address=ip
+    )
+    return ApiResponse(
+        data=FinanceExpenseResponse.model_validate(expense),
+        message="Expense submitted for approval.",
+    )
+
+
+@router.post(
+    "/expenses/{expense_id}/approve",
+    response_model=ApiResponse[FinanceExpenseResponse],
+    dependencies=[Depends(require_permission("finance:update"))],
+)
+async def approve_expense(
+    expense_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FinanceService = Depends(get_finance_service),
+) -> ApiResponse[FinanceExpenseResponse]:
+    ip = request.client.host if request.client else None
+    expense = await service.approve_expense(
+        expense_id, actor_id=current_user.id, ip_address=ip
+    )
+    return ApiResponse(
+        data=FinanceExpenseResponse.model_validate(expense),
+        message="Expense approved.",
+    )
+
+
+@router.post(
+    "/expenses/{expense_id}/reject",
+    response_model=ApiResponse[FinanceExpenseResponse],
+    dependencies=[Depends(require_permission("finance:update"))],
+)
+async def reject_expense(
+    expense_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FinanceService = Depends(get_finance_service),
+    reason: str = Query(..., min_length=5),
+) -> ApiResponse[FinanceExpenseResponse]:
+    ip = request.client.host if request.client else None
+    expense = await service.reject_expense(
+        expense_id, reason, actor_id=current_user.id, ip_address=ip
+    )
+    return ApiResponse(
+        data=FinanceExpenseResponse.model_validate(expense),
+        message="Expense rejected.",
+    )
+
+
+@router.post(
+    "/expenses/{expense_id}/pay",
+    response_model=ApiResponse[FinanceExpenseResponse],
+    dependencies=[Depends(require_permission("finance:update"))],
+)
+async def pay_expense(
+    expense_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FinanceService = Depends(get_finance_service),
+) -> ApiResponse[FinanceExpenseResponse]:
+    ip = request.client.host if request.client else None
+    expense = await service.pay_expense(
+        expense_id, actor_id=current_user.id, ip_address=ip
+    )
+    return ApiResponse(
+        data=FinanceExpenseResponse.model_validate(expense),
+        message="Expense marked as paid and posted to ledger.",
+    )
+
+
+@router.delete(
+    "/expenses/{expense_id}",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(require_permission("finance:update"))],
+)
+async def delete_expense(
+    expense_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FinanceService = Depends(get_finance_service),
+) -> ApiResponse[None]:
+    ip = request.client.host if request.client else None
+    await service.soft_delete_expense(
+        expense_id, actor_id=current_user.id, ip_address=ip
+    )
+    return ApiResponse(message="Expense deleted.")
+
+
+@router.post(
+    "/refunds",
+    response_model=ApiResponse[RefundResponse],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("finance:create"))],
+)
+async def process_refund(
+    payload: RefundRequest,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FinanceService = Depends(get_finance_service),
+) -> ApiResponse[RefundResponse]:
+    ip = request.client.host if request.client else None
+    refund = await service.process_refund(
+        donation_id=payload.donation_id,
+        reason=payload.reason,
+        refund_amount=payload.refund_amount,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=refund,
+        message="Refund processed successfully.",
+    )
+
+
+@router.post(
+    "/80g-certificate",
+    response_model=ApiResponse[TaxReceipt80GResponse],
+    dependencies=[Depends(require_permission("finance:read"))],
+)
+async def generate_80g_certificate(
+    payload: TaxReceipt80GRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FinanceService = Depends(get_finance_service),
+) -> ApiResponse[TaxReceipt80GResponse]:
+    cert = await service.generate_80g_certificate(
+        donation_id=payload.donation_id,
+        actor_id=current_user.id,
+    )
+    return ApiResponse(
+        data=cert,
+        message="80G certificate generated.",
+    )
+
+
+@router.get(
+    "/reports/pdf",
+    dependencies=[Depends(require_permission("finance:export"))],
+)
+async def generate_finance_report_pdf(
+    period_start: date = Query(...),
+    period_end: date = Query(...),
+    service: FinanceService = Depends(get_finance_service),
+) -> Response:
+    import asyncio
+
+    from pawguard.core.config import get_settings
+    from pawguard.core.pdf_generation import generate_finance_report_pdf
+
+    summary = await service.get_finance_summary(period_start, period_end)
+    pnl = await service.get_pnl(period_start, period_end)
+    settings = get_settings()
+
+    pdf_bytes = await asyncio.to_thread(
+        generate_finance_report_pdf,
+        report_title="Financial Report",
+        period_start=period_start.isoformat(),
+        period_end=period_end.isoformat(),
+        summary_data=summary,
+        income_rows=pnl.get("income", []),
+        expense_rows=pnl.get("expenses", []),
+        org_name=settings.org_name,
+        org_address=settings.org_address,
+    )
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="finance_report_{period_start}_{period_end}.pdf"'
+            )
+        },
     )

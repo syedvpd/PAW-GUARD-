@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -28,6 +28,7 @@ class DonationStatus(StrEnum):
     PENDING = "pending"
     SUCCESS = "success"
     FAILED = "failed"
+    REFUNDED = "refunded"
 
 
 class RecurringFrequency(StrEnum):
@@ -70,6 +71,10 @@ class DonorProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Bas
         unique=True,
     )
     tax_identifier: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    pan_number: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    full_name_for_80g: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    address_for_80g: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_80g_eligible: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id], lazy="joined")

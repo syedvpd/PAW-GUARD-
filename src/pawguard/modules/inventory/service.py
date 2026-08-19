@@ -5,6 +5,7 @@ Adheres to RULE-003.
 
 import uuid
 from collections.abc import Sequence
+from typing import Any
 
 from pawguard.core.exceptions import ConflictError, NotFoundError
 from pawguard.core.logging import get_logger
@@ -19,15 +20,20 @@ from pawguard.modules.inventory.models import (
     MovementType,
     RequisitionOrder,
     RequisitionStatus,
+    Supplier,
 )
 from pawguard.modules.inventory.repository import InventoryRepository
 from pawguard.modules.inventory.schemas import (
     InventoryItemCreate,
     InventoryItemResponse,
+    InventoryItemUpdate,
     InventoryMovementCreate,
     InventoryMovementResponse,
     RequisitionOrderCreate,
     RequisitionOrderResponse,
+    SupplierCreate,
+    SupplierResponse,
+    SupplierUpdate,
 )
 from pawguard.modules.notifications.schemas import BroadcastCreate
 from pawguard.modules.notifications.service import NotificationService
@@ -42,10 +48,22 @@ class InventoryService:
         repository: InventoryRepository,
         audit_service: AuditService | None = None,
         notification_service: NotificationService | None = None,
+        redis: Any | None = None,
     ) -> None:
         self._repo = repository
         self._audit = audit_service
         self._notification_svc = notification_service
+        self._redis = redis
+
+    async def _invalidate_dashboard_cache(self) -> None:
+        if self._redis:
+            try:
+                await self._redis.delete(
+                    "cache:dashboard:inventory",
+                    "cache:dashboard:operations",
+                )
+            except Exception:
+                pass
 
     async def create_item(
         self,
@@ -68,6 +86,7 @@ class InventoryService:
         )
         result = await self._repo.create_item(item)
         await self._repo._session.flush()
+        await self._invalidate_dashboard_cache()
         if self._audit and actor_id:
             await self._audit.record(
                 event_type=AuthAuditEventType.INVENTORY_ITEM_CREATED,
@@ -122,6 +141,7 @@ class InventoryService:
         )
         await self._repo.create_movement(movement)
         await self._repo._session.flush()
+        await self._invalidate_dashboard_cache()
         if self._audit and actor_id:
             await self._audit.record(
                 event_type=AuthAuditEventType.INVENTORY_STOCK_ADJUSTED,
@@ -234,6 +254,38 @@ class InventoryService:
             raise NotFoundError("Inventory item not found.")
         return item
 
+    async def update_item(
+        self,
+        item_id: uuid.UUID,
+        payload: "InventoryItemUpdate",
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> InventoryItem:
+        item = await self._repo.get_item(item_id)
+        if item is None:
+            raise NotFoundError("Inventory item not found.")
+        update_data = payload.model_dump(exclude_unset=True, exclude_none=True)
+        if "name" in update_data and update_data["name"] != item.name:
+            existing = await self._repo.get_item_by_name(update_data["name"])
+            if existing is not None:
+                raise ConflictError(
+                    f"Inventory item '{update_data['name']}' already registered."
+                )
+        updated = await self._repo.update_item(item, **update_data)
+        await self._invalidate_dashboard_cache()
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.INVENTORY_ITEM_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "item_id": str(item_id),
+                    "changes": update_data,
+                },
+            )
+        return updated
+
     async def get_items_by_ids(self, item_ids: list[uuid.UUID]) -> dict[uuid.UUID, InventoryItem | None]:
         """Fetch multiple items by ID in a single query.
 
@@ -309,6 +361,7 @@ class InventoryService:
         if not deleted:
             raise NotFoundError("Inventory item not found.")
         await self._repo._session.flush()
+        await self._invalidate_dashboard_cache()
         if self._audit and actor_id:
             await self._audit.record(
                 event_type=AuthAuditEventType.INVENTORY_ITEM_DELETED,
@@ -326,6 +379,7 @@ class InventoryService:
     ) -> int:
         count = await self._repo.bulk_delete_items(ids)
         await self._repo._session.flush()
+        await self._invalidate_dashboard_cache()
         if self._audit and actor_id:
             await self._audit.record(
                 event_type=AuthAuditEventType.INVENTORY_ITEM_DELETED,
@@ -342,3 +396,107 @@ class InventoryService:
         status: RequisitionStatus,
     ) -> int:
         return await self._repo.bulk_update_requisition_status(ids, status)
+
+    # ── Supplier CRUD ─────────────────────────────────────────────────
+
+    async def create_supplier(
+        self,
+        payload: SupplierCreate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> Supplier:
+        existing = await self._repo.get_supplier_by_name(payload.name)
+        if existing is not None:
+            raise ConflictError(f"Supplier '{payload.name}' already registered.")
+        supplier = Supplier(
+            name=payload.name,
+            contact_person=payload.contact_person,
+            email=payload.email,
+            phone=payload.phone,
+            address=payload.address,
+            gst_number=payload.gst_number,
+            pan_number=payload.pan_number,
+            bank_details=payload.bank_details,
+            payment_terms=payload.payment_terms,
+            notes=payload.notes,
+        )
+        result = await self._repo.create_supplier(supplier)
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.INVENTORY_ITEM_CREATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"supplier_id": str(result.id), "name": payload.name},
+            )
+        return result
+
+    async def get_supplier(self, supplier_id: uuid.UUID) -> Supplier:
+        supplier = await self._repo.get_supplier_by_id(supplier_id)
+        if supplier is None:
+            raise NotFoundError("Supplier not found.")
+        return supplier
+
+    async def update_supplier(
+        self,
+        supplier_id: uuid.UUID,
+        payload: SupplierUpdate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> Supplier:
+        supplier = await self._repo.get_supplier_by_id(supplier_id)
+        if supplier is None:
+            raise NotFoundError("Supplier not found.")
+        update_data = payload.model_dump(exclude_unset=True, exclude_none=True)
+        if "name" in update_data and update_data["name"] != supplier.name:
+            existing = await self._repo.get_supplier_by_name(update_data["name"])
+            if existing is not None:
+                raise ConflictError(
+                    f"Supplier '{update_data['name']}' already registered."
+                )
+        updated = await self._repo.update_supplier(supplier, **update_data)
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.INVENTORY_ITEM_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "supplier_id": str(supplier_id),
+                    "changes": update_data,
+                },
+            )
+        return updated
+
+    async def list_suppliers_paginated(
+        self,
+        page_params: PageParams,
+        sort: SortParams,
+        search_term: str | None = None,
+        is_active: bool | None = None,
+    ) -> PaginatedResponse[SupplierResponse]:
+        suppliers, total = await self._repo.list_suppliers_paginated(
+            page_params, sort, search_term=search_term, is_active=is_active,
+        )
+        return PaginatedResponse(
+            data=[SupplierResponse.model_validate(s) for s in suppliers],
+            meta=build_pagination_meta(total=total, params=page_params),
+        )
+
+    async def soft_delete_supplier(
+        self,
+        supplier_id: uuid.UUID,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> None:
+        deleted = await self._repo.soft_delete_supplier(supplier_id)
+        if not deleted:
+            raise NotFoundError("Supplier not found.")
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.INVENTORY_ITEM_DELETED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"supplier_id": str(supplier_id)},
+            )

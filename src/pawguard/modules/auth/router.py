@@ -14,6 +14,7 @@ from pawguard.core.constants import (
     REFRESH_TOKEN_COOKIE_NAME,
     ClientType,
 )
+from pawguard.core.exceptions import NotFoundError
 from pawguard.core.rate_limiter import rate_limit, resolve_client_ip
 from pawguard.core.responses import ApiResponse
 from pawguard.db.session import get_db
@@ -54,6 +55,7 @@ from pawguard.modules.auth.schemas import (
     SessionInfo,
     UserProfile,
     UserProfileUpdate,
+    UserSummaryResponse,
 )
 from pawguard.modules.auth.service import AuthenticatedTokens, AuthService, RequestContext
 from pawguard.modules.outbox.service import OutboxService
@@ -346,6 +348,29 @@ async def update_profile(
     return ApiResponse(
         data=UserProfile.model_validate(user),
         message="Profile updated.",
+    )
+
+
+@router.get("/users/{user_id}/summary", response_model=ApiResponse[UserSummaryResponse])
+async def get_user_summary(
+    user_id: uuid.UUID,
+    current: CurrentUser = Depends(get_current_user),
+    auth_service: AuthService = Depends(get_auth_service),
+) -> ApiResponse[UserSummaryResponse]:
+    """Lightweight user display summary for cards and references (safe for all authenticated roles)."""
+    user = await auth_service._users.get_by_id(user_id)
+    if user is None:
+        raise NotFoundError("User not found.")
+    roles = await auth_service._users.get_user_roles(user_id)
+    primary_role = roles[0].name if roles else None
+    return ApiResponse(
+        data=UserSummaryResponse(
+            id=user.id,
+            full_name=user.full_name,
+            email=user.email,
+            profile_picture_url=user.profile_picture_url,
+            role=primary_role,
+        )
     )
 
 

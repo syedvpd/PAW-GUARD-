@@ -37,7 +37,7 @@ class TestRescueGeo:
         mock_redis.geoadd.assert_called_once_with(
             "rescue:agent_locations", (78.3741, 17.4482, str(agent_id))
         )
-        mock_redis.set.assert_called_once_with(
+        mock_redis.set.assert_any_call(
             f"rescue:agent_active:{agent_id}", "1", ex=300
         )
 

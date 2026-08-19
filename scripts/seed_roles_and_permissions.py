@@ -290,6 +290,8 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
             pc.ADOPTION_PROCESS,
             pc.ADOPTION_APPROVE,
             pc.ADOPTION_LOCK,
+            pc.SHELTER_READ,
+            pc.MEDICAL_READ,
             pc.PUBLIC_READ,
             pc.DASHBOARD_ADOPTION,
         ],

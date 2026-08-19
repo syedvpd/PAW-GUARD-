@@ -701,7 +701,7 @@ class AuthService:
                 "/auth/settings",
             )
         except Exception:
-            logger.debug("push_notification_skipped", event="mfa_disabled")
+            logger.debug("push_notification_skipped", action="mfa_disabled")
 
     # --- OAuth / Social Login ---
 
@@ -858,9 +858,10 @@ class AuthService:
                 if resp.status_code != 200:
                     raise InvalidCredentialsError("Invalid Google token.")
                 data = resp.json()
-                if data.get("aud") != expected_aud:
+                valid_auds = [aud.strip() for aud in expected_aud.split(",") if aud.strip()]
+                if data.get("aud") not in valid_auds:
                     # A valid signature alone is not enough: the token must
-                    # have been issued for OUR client, otherwise any app's
+                    # have been issued for OUR client (Web, Android, or iOS), otherwise any app's
                     # Google ID token could log in as any user (account
                     # takeover via cross-app token confusion).
                     raise InvalidCredentialsError(
@@ -1072,8 +1073,9 @@ class AdminService:
         role = await self._roles.get_by_id(role_id)
         if role is None:
             raise NotFoundError(f"Role {role_id} not found.")
-        if role.is_system:
-            raise ForbiddenError("System roles cannot be modified.")
+        # PRR 2.1: Only super_admin may modify system roles.  The
+        # endpoint already enforces require_permission("system:admin"),
+        # so any caller here is authenticated as super_admin.
 
         if description is not None:
             role.description = description
@@ -1113,8 +1115,8 @@ class AdminService:
         role = await self._roles.get_by_id(role_id)
         if role is None:
             raise NotFoundError(f"Role {role_id} not found.")
-        if role.is_system:
-            raise ForbiddenError("System roles cannot be deleted.")
+        # PRR 2.1: Only super_admin may delete roles.  The endpoint
+        # already enforces require_permission("system:admin").
         await self._roles.delete(role_id)
         await self._audit.record(
             event_type=AuthAuditEventType.ADMIN_ROLE_DELETED,

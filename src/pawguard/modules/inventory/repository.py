@@ -13,11 +13,13 @@ from pawguard.core.pagination import PageParams
 from pawguard.core.search import SortParams, apply_sorting, build_search_filter
 from pawguard.modules.inventory.models import (
     InventoryItem,
+    InventoryItemSupplier,
     InventoryMovement,
     ItemCategory,
     MovementType,
     RequisitionOrder,
     RequisitionStatus,
+    Supplier,
 )
 
 
@@ -51,8 +53,21 @@ class InventoryRepository:
         return {row.id: row for row in result.scalars().all()}
 
     async def get_item_by_name(self, name: str) -> InventoryItem | None:
-        stmt = select(InventoryItem).where(InventoryItem.name == name)
+        stmt = select(InventoryItem).where(
+            InventoryItem.name == name,
+            InventoryItem.deleted_at.is_(None),
+        )
         return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def update_item(
+        self, item: InventoryItem, **kwargs: object
+    ) -> InventoryItem:
+        for key, value in kwargs.items():
+            if hasattr(item, key):
+                setattr(item, key, value)
+        await self._session.flush()
+        await self._session.refresh(item)
+        return item
 
     async def list_items(self) -> Sequence[InventoryItem]:
         stmt = select(InventoryItem).order_by(InventoryItem.name.asc())
@@ -196,3 +211,91 @@ class InventoryRepository:
         result = await self._session.execute(stmt)
         await self._session.flush()
         return result.rowcount  # type: ignore[attr-defined,no-any-return]
+
+    # ── Supplier CRUD ─────────────────────────────────────────────────
+
+    SEARCH_FIELDS_SUPPLIERS = ("name", "contact_person", "email", "phone", "gst_number")
+    SORTABLE_FIELDS_SUPPLIERS = {"name", "contact_person", "email", "is_active", "created_at"}
+
+    async def create_supplier(self, supplier: Supplier) -> Supplier:
+        self._session.add(supplier)
+        await self._session.flush()
+        return supplier
+
+    async def get_supplier_by_id(self, supplier_id: uuid.UUID) -> Supplier | None:
+        stmt = select(Supplier).where(
+            Supplier.id == supplier_id,
+            Supplier.deleted_at.is_(None),
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def get_supplier_by_name(self, name: str) -> Supplier | None:
+        stmt = select(Supplier).where(
+            Supplier.name == name,
+            Supplier.deleted_at.is_(None),
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def list_suppliers_paginated(
+        self,
+        page_params: PageParams,
+        sort: SortParams,
+        search_term: str | None = None,
+        is_active: bool | None = None,
+    ) -> tuple[Sequence[Supplier], int]:
+        stmt = select(Supplier).where(Supplier.deleted_at.is_(None))
+        search_filter = build_search_filter(
+            Supplier, search_term, self.SEARCH_FIELDS_SUPPLIERS
+        )
+        if search_filter is not None:
+            stmt = stmt.where(search_filter)
+        if is_active is not None:
+            stmt = stmt.where(Supplier.is_active == is_active)
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = (await self._session.execute(count_stmt)).scalar_one()
+        stmt = apply_sorting(stmt, sort, self.SORTABLE_FIELDS_SUPPLIERS)
+        stmt = stmt.offset(page_params.offset).limit(page_params.limit)
+        results = (await self._session.execute(stmt)).scalars().all()
+        return results, total
+
+    async def update_supplier(
+        self, supplier: Supplier, **kwargs: object
+    ) -> Supplier:
+        for key, value in kwargs.items():
+            if hasattr(supplier, key):
+                setattr(supplier, key, value)
+        await self._session.flush()
+        await self._session.refresh(supplier)
+        return supplier
+
+    async def soft_delete_supplier(self, supplier_id: uuid.UUID) -> bool:
+        from datetime import UTC, datetime
+        stmt = select(Supplier).where(
+            Supplier.id == supplier_id,
+            Supplier.deleted_at.is_(None),
+        )
+        supplier = (await self._session.execute(stmt)).scalar_one_or_none()
+        if supplier is None:
+            return False
+        supplier.deleted_at = datetime.now(UTC)
+        await self._session.flush()
+        return True
+
+    async def create_item_supplier(self, link: InventoryItemSupplier) -> InventoryItemSupplier:
+        self._session.add(link)
+        await self._session.flush()
+        return link
+
+    async def get_item_suppliers(self, item_id: uuid.UUID) -> Sequence[InventoryItemSupplier]:
+        stmt = (
+            select(InventoryItemSupplier)
+            .where(InventoryItemSupplier.item_id == item_id)
+            .order_by(InventoryItemSupplier.is_preferred.desc())
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def get_supplier_items(self, supplier_id: uuid.UUID) -> Sequence[InventoryItemSupplier]:
+        stmt = select(InventoryItemSupplier).where(
+            InventoryItemSupplier.supplier_id == supplier_id
+        )
+        return (await self._session.execute(stmt)).scalars().all()

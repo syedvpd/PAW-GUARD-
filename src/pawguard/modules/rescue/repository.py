@@ -34,7 +34,8 @@ class RescueRepository:
         return (
             select(RescueRequest)
             .options(
-                selectinload(RescueRequest.dispatch).selectinload(RescueDispatch.agents),
+                selectinload(RescueRequest.dispatch).selectinload(RescueDispatch.agents).selectinload(RescueDispatchAgent.agent),
+                selectinload(RescueRequest.dispatch).selectinload(RescueDispatch.driver),
                 selectinload(RescueRequest.reports),
                 selectinload(RescueRequest.dog_profile),
             )
@@ -169,14 +170,16 @@ class RescueRepository:
 
     async def get_dispatch_by_request_id(self, request_id: uuid.UUID) -> RescueDispatch | None:
         stmt = select(RescueDispatch).options(
-            selectinload(RescueDispatch.agents),
+            selectinload(RescueDispatch.agents).selectinload(RescueDispatchAgent.agent),
+            selectinload(RescueDispatch.driver),
             selectinload(RescueDispatch.rescue_request),
         ).where(RescueDispatch.rescue_request_id == request_id)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def get_dispatch_by_id(self, dispatch_id: uuid.UUID) -> RescueDispatch | None:
         stmt = select(RescueDispatch).options(
-            selectinload(RescueDispatch.agents),
+            selectinload(RescueDispatch.agents).selectinload(RescueDispatchAgent.agent),
+            selectinload(RescueDispatch.driver),
             selectinload(RescueDispatch.rescue_request),
         ).where(RescueDispatch.id == dispatch_id)
         return (await self._session.execute(stmt)).scalar_one_or_none()
@@ -187,7 +190,8 @@ class RescueRepository:
         sort: SortParams,
     ) -> tuple[Sequence[RescueDispatch], int]:
         stmt = select(RescueDispatch).options(
-            selectinload(RescueDispatch.agents),
+            selectinload(RescueDispatch.agents).selectinload(RescueDispatchAgent.agent),
+            selectinload(RescueDispatch.driver),
             selectinload(RescueDispatch.rescue_request),
         )
 

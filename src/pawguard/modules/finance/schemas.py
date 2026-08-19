@@ -7,6 +7,9 @@ from pydantic import BaseModel, ConfigDict, Field
 from pawguard.modules.finance.models import (
     AccountCategory,
     AccountType,
+    ExpenseCategory,
+    ExpenseStatus,
+    PaymentMethod,
     RecurringInterval,
     TransactionStatus,
     TransactionType,
@@ -238,3 +241,105 @@ class DonationReconcileRequest(BaseModel):
     )
 
     model_config = ConfigDict(extra="forbid")
+
+
+class FinanceExpenseCreate(BaseModel):
+    title: str = Field(..., min_length=2, max_length=255, examples=["Vet supplies restock"])
+    description: str | None = Field(None, examples=["Monthly veterinary supplies purchase."])
+    amount: Decimal = Field(..., gt=0, examples=[1500.0])
+    currency: str = Field(default="USD", min_length=3, max_length=3, examples=["INR"])
+    category: ExpenseCategory = Field(..., examples=["veterinary"])
+    vendor_name: str = Field(..., min_length=2, max_length=255, examples=["City Vet Clinic"])
+    vendor_contact: str | None = Field(None, examples=["contact@cityvet.com"])
+    vendor_gstin: str | None = Field(None, max_length=64, examples=["29ABCDE1234F1Z5"])
+    expense_date: date = Field(..., examples=["2026-08-01"])
+    payment_method: PaymentMethod = Field(default=PaymentMethod.CASH, examples=["bank_transfer"])
+    payment_reference: str | None = Field(None, examples=["NEFT/2026/000123"])
+    invoice_number: str | None = Field(None, max_length=128, examples=["INV-2026-0042"])
+    account_id: uuid.UUID | None = None
+    notes: str | None = Field(None, examples=["Approved by shelter manager."])
+
+
+class FinanceExpenseUpdate(BaseModel):
+    title: str | None = Field(None, min_length=2, max_length=255)
+    description: str | None = None
+    amount: Decimal | None = Field(default=None, gt=0)
+    currency: str | None = Field(default=None, min_length=3, max_length=3)
+    category: ExpenseCategory | None = None
+    vendor_name: str | None = Field(None, min_length=2, max_length=255)
+    vendor_contact: str | None = None
+    vendor_gstin: str | None = Field(None, max_length=64)
+    expense_date: date | None = None
+    payment_method: PaymentMethod | None = None
+    payment_reference: str | None = None
+    invoice_number: str | None = Field(None, max_length=128)
+    account_id: uuid.UUID | None = None
+    notes: str | None = None
+    status: ExpenseStatus | None = None
+    rejection_reason: str | None = None
+
+
+class FinanceExpenseResponse(BaseModel):
+    id: uuid.UUID
+    expense_number: str
+    title: str
+    description: str | None
+    amount: Decimal
+    currency: str
+    category: ExpenseCategory
+    vendor_name: str
+    vendor_contact: str | None
+    vendor_gstin: str | None
+    expense_date: date
+    payment_method: PaymentMethod
+    payment_reference: str | None
+    invoice_number: str | None
+    status: ExpenseStatus
+    approved_by: uuid.UUID | None
+    approved_at: datetime | None
+    rejection_reason: str | None
+    account_id: uuid.UUID | None
+    transaction_id: uuid.UUID | None
+    notes: str | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RefundRequest(BaseModel):
+    donation_id: uuid.UUID
+    reason: str = Field(..., min_length=5, max_length=1000, examples=["Donor requested cancellation."])
+    refund_amount: Decimal | None = Field(
+        default=None, gt=0,
+        description="Partial refund amount. If omitted, full donation amount is refunded.",
+    )
+
+
+class RefundResponse(BaseModel):
+    refund_id: uuid.UUID
+    donation_id: uuid.UUID
+    original_amount: Decimal
+    refund_amount: Decimal
+    currency: str
+    status: str
+    transaction_number: str
+    refunded_at: datetime
+    reason: str
+
+
+class TaxReceipt80GRequest(BaseModel):
+    donation_id: uuid.UUID
+
+
+class TaxReceipt80GResponse(BaseModel):
+    donation_id: uuid.UUID
+    donor_name: str
+    pan_number: str | None
+    amount: Decimal
+    currency: str
+    donation_date: date
+    receipt_number: str
+    certificate_url: str | None
+    is_80g_eligible: bool
+    generated_at: datetime
