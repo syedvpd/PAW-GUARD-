@@ -118,14 +118,17 @@ def _cookie_domain() -> str | None:
 def _set_auth_cookies(response: Response, *, access_token: str, refresh_token: str | None) -> None:
     settings = get_settings()
     domain = _cookie_domain()
+    # Support cross-site cookies between Vercel frontend and Render backend
+    samesite_mode = "none" if (settings.cookie_secure or domain is None) else "lax"
+    is_secure = True if samesite_mode == "none" else settings.cookie_secure
 
     response.set_cookie(
         ACCESS_TOKEN_COOKIE_NAME,
         access_token,
         max_age=settings.access_token_expire_minutes * 60,
         httponly=True,
-        secure=settings.cookie_secure,
-        samesite="strict",
+        secure=is_secure,
+        samesite=samesite_mode,
         domain=domain,
     )
     if refresh_token is not None:
@@ -134,16 +137,20 @@ def _set_auth_cookies(response: Response, *, access_token: str, refresh_token: s
             refresh_token,
             max_age=settings.refresh_token_expire_days * 24 * 3600,
             httponly=True,
-            secure=settings.cookie_secure,
-            samesite="strict",
+            secure=is_secure,
+            samesite=samesite_mode,
             domain=domain,
         )
 
 
 def _clear_auth_cookies(response: Response) -> None:
+    settings = get_settings()
     domain = _cookie_domain()
-    response.delete_cookie(ACCESS_TOKEN_COOKIE_NAME, domain=domain)
-    response.delete_cookie(REFRESH_TOKEN_COOKIE_NAME, domain=domain)
+    samesite_mode = "none" if (settings.cookie_secure or domain is None) else "lax"
+    is_secure = True if samesite_mode == "none" else settings.cookie_secure
+
+    response.delete_cookie(ACCESS_TOKEN_COOKIE_NAME, domain=domain, secure=is_secure, samesite=samesite_mode)
+    response.delete_cookie(REFRESH_TOKEN_COOKIE_NAME, domain=domain, secure=is_secure, samesite=samesite_mode)
 
 
 def _to_login_response(
