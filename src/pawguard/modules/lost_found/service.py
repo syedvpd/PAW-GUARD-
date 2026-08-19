@@ -70,14 +70,20 @@ class LostFoundService:
         if report.status != ReportStatus.ACTIVE:
             raise ValidationFailedError("Only active lost-pet reports can be broadcast.")
         if self._arq is None:
-            raise ValidationFailedError("Alert delivery is temporarily unavailable.")
-
-        await self._arq.enqueue_job(
-            "broadcast_lost_pet_alert",
-            report_id=str(report_id),
-            actor_id=str(actor_id),
-            ip_address=ip_address,
-        )
+            from pawguard.workers.jobs.lost_found_jobs import broadcast_lost_pet_alert
+            await broadcast_lost_pet_alert({"job_name": "broadcast_lost_pet_alert"}, report_id=str(report_id))
+        else:
+            try:
+                await self._arq.enqueue_job(
+                    "broadcast_lost_pet_alert",
+                    report_id=str(report_id),
+                    actor_id=str(actor_id),
+                    ip_address=ip_address,
+                )
+            except Exception as exc:
+                logger.warning("arq_enqueue_failed_broadcasting_inline", error=str(exc))
+                from pawguard.workers.jobs.lost_found_jobs import broadcast_lost_pet_alert
+                await broadcast_lost_pet_alert({"job_name": "broadcast_lost_pet_alert"}, report_id=str(report_id))
         if self._audit:
             await self._audit.record(
                 event_type=AuthAuditEventType.LOST_FOUND_BROADCAST_QUEUED,
