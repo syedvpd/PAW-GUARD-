@@ -851,31 +851,57 @@ class AuthService:
                 raise InvalidCredentialsError(
                     "Google OAuth is not configured on this server."
                 )
+            valid_auds = [aud.strip() for aud in expected_aud.split(",") if aud.strip()]
             async with httpx.AsyncClient() as client:
-                resp = await client.get(
-                    f"https://oauth2.googleapis.com/tokeninfo?id_token={token}",
-                    timeout=10,
-                )
-                if resp.status_code != 200:
-                    raise InvalidCredentialsError("Invalid Google token.")
-                data = resp.json()
-                valid_auds = [aud.strip() for aud in expected_aud.split(",") if aud.strip()]
-                if data.get("aud") not in valid_auds:
-                    # A valid signature alone is not enough: the token must
-                    # have been issued for OUR client (Web, Android, or iOS), otherwise any app's
-                    # Google ID token could log in as any user (account
-                    # takeover via cross-app token confusion).
-                    raise InvalidCredentialsError(
-                        "Google token was not issued for this application."
+                if token.startswith("ya29."):
+                    info_resp = await client.get(
+                        f"https://oauth2.googleapis.com/tokeninfo?access_token={token}",
+                        timeout=10,
                     )
-                if not data.get("email_verified") and not data.get("sub"):
-                    raise InvalidCredentialsError("Google email not verified.")
-                return {
-                    "sub": data["sub"],
-                    "email": data.get("email", ""),
-                    "name": data.get("name", ""),
-                    "picture": data.get("picture", ""),
-                }
+                    if info_resp.status_code != 200:
+                        raise InvalidCredentialsError("Invalid Google access token.")
+                    info_data = info_resp.json()
+                    aud = info_data.get("aud") or info_data.get("azp")
+                    if aud not in valid_auds:
+                        raise InvalidCredentialsError(
+                            "Google token was not issued for this application."
+                        )
+                    userinfo_resp = await client.get(
+                        "https://www.googleapis.com/oauth2/v3/userinfo",
+                        headers={"Authorization": f"Bearer {token}"},
+                        timeout=10,
+                    )
+                    user_data = userinfo_resp.json() if userinfo_resp.status_code == 200 else {}
+                    sub = info_data.get("sub") or user_data.get("sub")
+                    email = info_data.get("email") or user_data.get("email", "")
+                    if not sub:
+                        raise InvalidCredentialsError("Google sub identifier missing.")
+                    return {
+                        "sub": sub,
+                        "email": email,
+                        "name": user_data.get("name", ""),
+                        "picture": user_data.get("picture", ""),
+                    }
+                else:
+                    resp = await client.get(
+                        f"https://oauth2.googleapis.com/tokeninfo?id_token={token}",
+                        timeout=10,
+                    )
+                    if resp.status_code != 200:
+                        raise InvalidCredentialsError("Invalid Google token.")
+                    data = resp.json()
+                    if data.get("aud") not in valid_auds:
+                        raise InvalidCredentialsError(
+                            "Google token was not issued for this application."
+                        )
+                    if not data.get("email_verified") and not data.get("sub"):
+                        raise InvalidCredentialsError("Google email not verified.")
+                    return {
+                        "sub": data["sub"],
+                        "email": data.get("email", ""),
+                        "name": data.get("name", ""),
+                        "picture": data.get("picture", ""),
+                    }
         elif provider == "apple":
             import jwt as pyjwt
 
