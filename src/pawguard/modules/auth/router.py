@@ -154,11 +154,11 @@ def _clear_auth_cookies(response: Response) -> None:
 
 
 def _to_login_response(
-    tokens: AuthenticatedTokens, *, include_refresh_in_body: bool
+    tokens: AuthenticatedTokens, *, include_refresh_in_body: bool, is_web: bool = False
 ) -> LoginResponse:
     return LoginResponse(
-        access_token=tokens.access_token,
-        refresh_token=tokens.refresh_token if include_refresh_in_body else None,
+        access_token="" if is_web else tokens.access_token,
+        refresh_token=tokens.refresh_token if (include_refresh_in_body and not is_web) else None,
         expires_in=tokens.expires_in,
         user=UserProfile.model_validate(tokens.user),
     )
@@ -226,7 +226,7 @@ async def login(
         _set_auth_cookies(
             response, access_token=result.access_token, refresh_token=result.refresh_token
         )
-    return ApiResponse(data=_to_login_response(result, include_refresh_in_body=not is_web))
+    return ApiResponse(data=_to_login_response(result, include_refresh_in_body=not is_web, is_web=is_web))
 
 
 @router.post(
@@ -252,7 +252,7 @@ async def verify_mfa_login(
         _set_auth_cookies(
             response, access_token=tokens.access_token, refresh_token=tokens.refresh_token
         )
-    return ApiResponse(data=_to_login_response(tokens, include_refresh_in_body=not is_web))
+    return ApiResponse(data=_to_login_response(tokens, include_refresh_in_body=not is_web, is_web=is_web))
 
 
 @router.post(
@@ -574,7 +574,7 @@ async def oauth_login(
         _set_auth_cookies(
             response, access_token=tokens.access_token, refresh_token=tokens.refresh_token
         )
-    return ApiResponse(data=_to_login_response(tokens, include_refresh_in_body=not is_web))
+    return ApiResponse(data=_to_login_response(tokens, include_refresh_in_body=not is_web, is_web=is_web))
 
 
 @router.get("/oauth/accounts", response_model=ApiResponse[list[OAuthAccountInfo]])
