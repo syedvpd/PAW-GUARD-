@@ -884,6 +884,7 @@ class AuthService:
                 raise InvalidCredentialsError(
                     "Apple OAuth is not configured on this server."
                 )
+            valid_auds = [aud.strip() for aud in expected_aud.split(",") if aud.strip()]
             async with httpx.AsyncClient() as client:
                 resp = await client.get("https://appleid.apple.com/auth/keys", timeout=10)
                 if resp.status_code != 200:
@@ -899,9 +900,12 @@ class AuthService:
                     token,
                     public_key,
                     algorithms=["RS256"],  # type: ignore[arg-type]
-                    audience=expected_aud,
-                    options={"verify_aud": True},
+                    options={"verify_aud": False},
                 )
+                if payload.get("aud") not in valid_auds:
+                    raise InvalidCredentialsError(
+                        "Apple token was not issued for this application."
+                    )
             return {
                 "sub": payload["sub"],
                 "email": payload.get("email", ""),
