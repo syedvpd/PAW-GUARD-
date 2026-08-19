@@ -20,7 +20,6 @@ from pawguard.modules.notifications.models import (
     NotificationModuleConfig,
     NotificationTriggerConfig,
 )
-from pawguard.services.push_service import send_push_notification_to_users
 
 logger = get_logger(__name__)
 

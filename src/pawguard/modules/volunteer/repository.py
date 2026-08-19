@@ -15,7 +15,9 @@ from pawguard.core.pagination import PageParams
 from pawguard.core.search import SortParams, apply_sorting
 from pawguard.modules.auth.models import User
 from pawguard.modules.volunteer.models import (
+    ApplicationStatus,
     ShiftAttendance,
+    VolunteerApplication,
     VolunteerProfile,
     VolunteerShift,
     VolunteerStatus,
@@ -47,6 +49,60 @@ class VolunteerRepository:
             .where(VolunteerProfile.user_id == user_id, VolunteerProfile.deleted_at.is_(None))
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def get_application_by_user_id(self, user_id: uuid.UUID) -> VolunteerApplication | None:
+        stmt = (
+            select(VolunteerApplication)
+            .options(selectinload(VolunteerApplication.user))
+            .where(
+                VolunteerApplication.user_id == user_id,
+                VolunteerApplication.deleted_at.is_(None),
+            )
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def get_application_by_id(self, application_id: uuid.UUID) -> VolunteerApplication | None:
+        stmt = (
+            select(VolunteerApplication)
+            .options(selectinload(VolunteerApplication.user))
+            .where(
+                VolunteerApplication.id == application_id,
+                VolunteerApplication.deleted_at.is_(None),
+            )
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def create_application(self, application: VolunteerApplication) -> VolunteerApplication:
+        self._session.add(application)
+        await self._session.flush()
+        return application
+
+    async def list_applications(
+        self,
+        *,
+        status: ApplicationStatus | None = None,
+        page_params: PageParams | None = None,
+    ) -> Sequence[VolunteerApplication]:
+        stmt = (
+            select(VolunteerApplication)
+            .options(selectinload(VolunteerApplication.user))
+            .where(VolunteerApplication.deleted_at.is_(None))
+        )
+        if status is not None:
+            stmt = stmt.where(VolunteerApplication.status == status)
+        stmt = stmt.order_by(VolunteerApplication.created_at.desc())
+        if page_params:
+            stmt = stmt.offset(page_params.offset).limit(page_params.limit)
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def count_applications(self, status: ApplicationStatus | None = None) -> int:
+        stmt = select(func.count(VolunteerApplication.id)).where(
+            VolunteerApplication.deleted_at.is_(None)
+        )
+        if status is not None:
+            stmt = stmt.where(VolunteerApplication.status == status)
+        result = await self._session.execute(stmt)
+        return result.scalar_one()
 
     async def count_profiles(
         self,

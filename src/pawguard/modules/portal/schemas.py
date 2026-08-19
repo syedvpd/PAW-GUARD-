@@ -467,6 +467,11 @@ class UserDashboardSummary(BaseModel):
     rescue_cases: list[dict[str, Any]]
     adoption_applications: list[dict[str, Any]]
     volunteer_profile: dict[str, Any] | None
+    volunteer_status: str | None = Field(
+        None,
+        description="Current volunteer lifecycle state: NOT_APPLIED, PENDING, ACTIVE, REJECTED, INACTIVE",
+    )
+    volunteer_application: dict[str, Any] | None
     foster_profile: dict[str, Any] | None
     donations: list[dict[str, Any]]
     lost_found_reports: list[dict[str, Any]]

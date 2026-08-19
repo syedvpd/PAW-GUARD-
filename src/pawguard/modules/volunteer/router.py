@@ -31,6 +31,9 @@ from pawguard.modules.volunteer.models import VolunteerStatus
 from pawguard.modules.volunteer.repository import VolunteerRepository
 from pawguard.modules.volunteer.schemas import (
     ShiftAttendanceResponse,
+    VolunteerApplicationReject,
+    VolunteerApplicationResponse,
+    VolunteerLifecycleStatus,
     VolunteerProfileCreate,
     VolunteerProfileResponse,
     VolunteerProfileUpdate,
@@ -59,7 +62,7 @@ def get_volunteer_service(
 
 @router.post(
     "/apply",
-    response_model=ApiResponse[VolunteerProfileResponse],
+    response_model=ApiResponse[VolunteerApplicationResponse],
     status_code=status.HTTP_201_CREATED,
 )
 async def apply_to_volunteer(
@@ -68,17 +71,97 @@ async def apply_to_volunteer(
     current_user: CurrentUser = Depends(get_current_user),
     _: Annotated[None, Depends(rate_limit("volunteer_apply", 5, 3600))] = None,
     service: VolunteerService = Depends(get_volunteer_service),
-) -> ApiResponse[VolunteerProfileResponse]:
+) -> ApiResponse[VolunteerApplicationResponse]:
     ip = request.client.host if request.client else None
-    profile = await service.apply_to_volunteer(
+    application = await service.apply_to_volunteer(
         current_user.id,
         payload,
         actor_id=current_user.id,
         ip_address=ip,
     )
     return ApiResponse(
-        data=VolunteerProfileResponse.model_validate(profile),
+        data=VolunteerApplicationResponse.model_validate(application),
         message="Volunteer application submitted successfully.",
+    )
+
+
+@router.get(
+    "/me/status",
+    response_model=ApiResponse[VolunteerLifecycleStatus],
+)
+async def get_my_volunteer_status(
+    current_user: CurrentUser = Depends(get_current_user),
+    service: VolunteerService = Depends(get_volunteer_service),
+) -> ApiResponse[VolunteerLifecycleStatus]:
+    """Get the current user's volunteer lifecycle status."""
+    status_data = await service.get_volunteer_lifecycle_status(current_user.id)
+    return ApiResponse(data=status_data)
+
+
+@router.get(
+    "/me/application",
+    response_model=ApiResponse[VolunteerApplicationResponse | None],
+)
+async def get_my_application(
+    current_user: CurrentUser = Depends(get_current_user),
+    service: VolunteerService = Depends(get_volunteer_service),
+) -> ApiResponse[VolunteerApplicationResponse | None]:
+    """Get the current user's volunteer application if it exists."""
+    application = await service.get_application_by_user(current_user.id)
+    if application is None:
+        return ApiResponse(data=None, message="No application found.")
+    return ApiResponse(data=VolunteerApplicationResponse.model_validate(application))
+
+
+@router.post(
+    "/applications/{application_id}/approve",
+    response_model=ApiResponse[VolunteerProfileResponse],
+    dependencies=[Depends(require_permission("volunteer:update"))],
+)
+async def approve_application(
+    application_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: VolunteerService = Depends(get_volunteer_service),
+) -> ApiResponse[VolunteerProfileResponse]:
+    """Approve a volunteer application and create a volunteer profile."""
+    ip = request.client.host if request.client else None
+    profile = await service.approve_application(
+        application_id,
+        current_user.id,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=VolunteerProfileResponse.model_validate(profile),
+        message="Volunteer application approved.",
+    )
+
+
+@router.post(
+    "/applications/{application_id}/reject",
+    response_model=ApiResponse[VolunteerApplicationResponse],
+    dependencies=[Depends(require_permission("volunteer:update"))],
+)
+async def reject_application(
+    application_id: uuid.UUID,
+    payload: VolunteerApplicationReject,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: VolunteerService = Depends(get_volunteer_service),
+) -> ApiResponse[VolunteerApplicationResponse]:
+    """Reject a volunteer application."""
+    ip = request.client.host if request.client else None
+    application = await service.reject_application(
+        application_id,
+        current_user.id,
+        payload.reason,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=VolunteerApplicationResponse.model_validate(application),
+        message="Volunteer application rejected.",
     )
 
 

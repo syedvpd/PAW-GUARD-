@@ -171,11 +171,14 @@ class NotificationService:
         """Send a notification to a specific user or to all users with target_roles."""
         # Role-targeted fan-out
         if payload.target_roles:
+            from datetime import UTC, datetime
+
             from pawguard.modules.auth.repository import UserRepository
             user_repo = UserRepository(self._repo._session)
             role_user_ids = await user_repo.get_user_ids_by_roles(payload.target_roles)
             if not role_user_ids:
                 return []
+            now = datetime.now(UTC)
             notifications = [
                 Notification(
                     user_id=uid,
@@ -183,6 +186,7 @@ class NotificationService:
                     body=payload.body,
                     notification_type=payload.notification_type,
                     action_url=payload.action_url,
+                    sent_at=now,
                 )
                 for uid in role_user_ids
             ]
@@ -211,12 +215,15 @@ class NotificationService:
         # Single-user notification (legacy path)
         if payload.user_id is None:
             raise ValidationFailedError("Either user_id or target_roles must be provided.")
+        
+        from datetime import UTC, datetime
         notification = Notification(
             user_id=payload.user_id,
             title=payload.title,
             body=payload.body,
             notification_type=payload.notification_type,
             action_url=payload.action_url,
+            sent_at=datetime.now(UTC),
         )
         created = await self._repo.create(notification)
         await self._repo._session.flush()

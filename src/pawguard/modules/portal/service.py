@@ -65,7 +65,12 @@ from pawguard.modules.rescue.models import (
     RescueStatus,
 )
 from pawguard.modules.settings.models import SystemSetting
-from pawguard.modules.volunteer.models import VolunteerProfile, VolunteerStatus
+from pawguard.modules.volunteer.models import (
+    ApplicationStatus,
+    VolunteerApplication,
+    VolunteerProfile,
+    VolunteerStatus,
+)
 from pawguard.services.audit_service import AuditService
 from pawguard.services.cache_service import CacheService
 
@@ -1200,6 +1205,20 @@ class PortalService:
             )
         ).scalar_one_or_none()
 
+        volunteer_application = (
+            await self._session.execute(
+                select(VolunteerApplication).where(
+                    VolunteerApplication.user_id == user_id,
+                    VolunteerApplication.deleted_at.is_(None),
+                )
+            )
+        ).scalar_one_or_none()
+
+        # Determine volunteer lifecycle state
+        volunteer_status = self._determine_volunteer_status(
+            volunteer, volunteer_application
+        )
+
         foster = (
             await self._session.execute(
                 select(FosterProfile).where(
@@ -1258,6 +1277,12 @@ class PortalService:
                 if volunteer
                 else None
             ),
+            volunteer_status=volunteer_status,
+            volunteer_application=(
+                self._serialize_volunteer_application(volunteer_application)
+                if volunteer_application
+                else None
+            ),
             foster_profile=(
                 self._serialize_foster(foster)
                 if foster
@@ -1277,6 +1302,52 @@ class PortalService:
                 ],
             ],
         )
+
+    @staticmethod
+    def _determine_volunteer_status(
+        volunteer: VolunteerProfile | None,
+        application: VolunteerApplication | None,
+    ) -> str:
+        """Determine the volunteer lifecycle state."""
+        if volunteer is not None:
+            # Has an active volunteer profile
+            if volunteer.status == VolunteerStatus.ACTIVE:
+                return "ACTIVE"
+            elif volunteer.status == VolunteerStatus.INACTIVE:
+                return "INACTIVE"
+            elif volunteer.status == VolunteerStatus.APPLIED:
+                return "PENDING"
+            else:
+                return "PENDING"
+        
+        if application is not None:
+            # Has an application but no profile yet
+            if application.status == ApplicationStatus.REJECTED:
+                return "REJECTED"
+            elif application.status in [
+                ApplicationStatus.SUBMITTED,
+                ApplicationStatus.UNDER_REVIEW,
+            ]:
+                return "PENDING"
+            elif application.status == ApplicationStatus.WITHDRAWN:
+                return "NOT_APPLIED"
+            else:
+                return "PENDING"
+        
+        # No application and no profile
+        return "NOT_APPLIED"
+
+    @staticmethod
+    def _serialize_volunteer_application(
+        app: VolunteerApplication,
+    ) -> dict[str, Any]:
+        return {
+            "id": str(app.id),
+            "status": app.status,
+            "submitted_at": app.created_at.isoformat(),
+            "reviewed_at": app.reviewed_at.isoformat() if app.reviewed_at else None,
+            "rejection_reason": app.rejection_reason,
+        }
 
     @staticmethod
     def _serialize_rescue(r: RescueRequest) -> dict[str, Any]:

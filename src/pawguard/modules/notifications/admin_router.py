@@ -2,7 +2,6 @@
 
 import uuid
 from datetime import UTC, datetime
-from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import func, select
@@ -484,4 +483,4 @@ async def list_governance_audit_logs(
 
     stmt = stmt.order_by(NotificationGovernanceAuditLog.created_at.desc()).limit(limit)
     logs = (await db.execute(stmt)).scalars().all()
-    return ApiResponse(data=[GovernanceAuditLogResponse.model_validate(l) for l in logs])
+    return ApiResponse(data=[GovernanceAuditLogResponse.model_validate(log_entry) for log_entry in logs])

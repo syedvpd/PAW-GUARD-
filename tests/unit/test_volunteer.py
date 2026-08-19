@@ -14,7 +14,9 @@ from pawguard.core.exceptions import (
 )
 from pawguard.modules.auth.models import User
 from pawguard.modules.volunteer.models import (
+    ApplicationStatus,
     ShiftAttendance,
+    VolunteerApplication,
     VolunteerProfile,
     VolunteerShift,
     VolunteerStatus,
@@ -47,18 +49,19 @@ class TestVolunteerService:
     @pytest.mark.asyncio
     async def test_apply_to_volunteer(self, service, mock_repo):
         user_id = uuid.uuid4()
+        mock_repo.get_application_by_user_id.return_value = None
         mock_repo.get_profile_by_user_id.return_value = None
-        profile_id = uuid.uuid4()
-        mock_repo.create_profile.return_value = None
-        mock_repo.get_profile_by_id.return_value = VolunteerProfile(
-            id=profile_id, user_id=user_id, status=VolunteerStatus.APPLIED,
+        application_id = uuid.uuid4()
+        mock_repo.create_application.return_value = None
+        mock_repo.get_application_by_id.return_value = VolunteerApplication(
+            id=application_id, user_id=user_id, status=ApplicationStatus.SUBMITTED,
             emergency_contact_name="Jane", emergency_contact_phone="+123",
         )
         payload = VolunteerProfileCreate(
             emergency_contact_name="Jane", emergency_contact_phone="+123",
         )
         result = await service.apply_to_volunteer(user_id, payload)
-        assert result.status == VolunteerStatus.APPLIED
+        assert result.status == ApplicationStatus.SUBMITTED
 
     @pytest.mark.asyncio
     async def test_apply_to_volunteer_records_audit(self, mock_repo):
@@ -68,10 +71,11 @@ class TestVolunteerService:
         svc = VolunteerService(mock_repo, audit_service=mock_audit)
         user_id = uuid.uuid4()
         actor_id = uuid.uuid4()
+        mock_repo.get_application_by_user_id.return_value = None
         mock_repo.get_profile_by_user_id.return_value = None
-        mock_repo.create_profile.return_value = None
-        mock_repo.get_profile_by_id.return_value = VolunteerProfile(
-            id=uuid.uuid4(), user_id=user_id, status=VolunteerStatus.APPLIED,
+        mock_repo.create_application.return_value = None
+        mock_repo.get_application_by_id.return_value = VolunteerApplication(
+            id=uuid.uuid4(), user_id=user_id, status=ApplicationStatus.SUBMITTED,
             emergency_contact_name="Jane", emergency_contact_phone="+123",
         )
         payload = VolunteerProfileCreate(
@@ -89,8 +93,8 @@ class TestVolunteerService:
     @pytest.mark.asyncio
     async def test_apply_to_volunteer_already_exists(self, service, mock_repo):
         user_id = uuid.uuid4()
-        mock_repo.get_profile_by_user_id.return_value = VolunteerProfile(
-            id=uuid.uuid4(), user_id=user_id, status=VolunteerStatus.APPLIED,
+        mock_repo.get_application_by_user_id.return_value = VolunteerApplication(
+            id=uuid.uuid4(), user_id=user_id, status=ApplicationStatus.SUBMITTED,
             emergency_contact_name="Jane", emergency_contact_phone="+123",
         )
         with pytest.raises(ConflictError, match="already applied"):

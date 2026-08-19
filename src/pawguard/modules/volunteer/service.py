@@ -21,14 +21,19 @@ from pawguard.modules.auth.repository import RoleRepository, UserRoleRepository
 from pawguard.modules.notifications.service import NotificationService
 from pawguard.modules.storage.models import FileFolder, StoredFile
 from pawguard.modules.volunteer.models import (
+    ApplicationStatus,
     ShiftAttendance,
+    VolunteerApplication,
     VolunteerProfile,
     VolunteerShift,
     VolunteerStatus,
 )
 from pawguard.modules.volunteer.repository import VolunteerRepository
 from pawguard.modules.volunteer.schemas import (
+    VolunteerApplicationResponse,
+    VolunteerLifecycleStatus,
     VolunteerProfileCreate,
+    VolunteerProfileResponse,
     VolunteerProfileUpdate,
     VolunteerServiceSummary,
     VolunteerShiftCreate,
@@ -88,12 +93,62 @@ class VolunteerService:
         *,
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
-    ) -> VolunteerProfile:
-        existing = await self._repo.get_profile_by_user_id(user_id)
-        if existing is not None:
-            raise ConflictError("You have already applied or registered as a volunteer.")
+    ) -> VolunteerApplication:
+        # Check if user already has an application
+        existing_app = await self._repo.get_application_by_user_id(user_id)
+        if existing_app is not None:
+            if existing_app.status == ApplicationStatus.REJECTED:
+                # Allow reapplication after rejection - update the existing application
+                existing_app.status = ApplicationStatus.SUBMITTED
+                existing_app.emergency_contact_name = payload.emergency_contact_name
+                existing_app.emergency_contact_phone = payload.emergency_contact_phone
+                existing_app.skills = payload.skills
+                existing_app.availability = payload.availability
+                existing_app.notes = payload.notes
+                existing_app.medical_conditions = payload.medical_conditions
+                existing_app.animal_handling_experience = payload.animal_handling_experience
+                existing_app.reviewed_by = None
+                existing_app.reviewed_at = None
+                existing_app.rejection_reason = None
+                await self._repo._session.flush()
+                res = await self._repo.get_application_by_id(existing_app.id)
+                if res is None:
+                    raise NotFoundError("Failed to fetch re-submitted volunteer application.")
+                
+                if self._audit:
+                    await self._audit.record(
+                        event_type=AuthAuditEventType.VOLUNTEER_APPLICATION_SUBMITTED,
+                        actor_id=actor_id,
+                        ip_address=ip_address or "",
+                        user_agent="",
+                        metadata={
+                            "application_id": str(res.id),
+                            "user_id": str(user_id),
+                            "action": "reapplication",
+                        },
+                    )
+                
+                await self._notify_volunteer_application(
+                    res,
+                    title="Volunteer application re-submitted",
+                    body=(
+                        "Your volunteer application has been re-submitted for review. "
+                        "Our coordinator will review your updated application."
+                    ),
+                    notification_type="volunteer_applied",
+                    action_url="/volunteers/my-profile",
+                )
+                return res
+            else:
+                raise ConflictError("You have already applied or registered as a volunteer.")
 
-        profile = VolunteerProfile(
+        # Check if user already has a volunteer profile
+        existing_profile = await self._repo.get_profile_by_user_id(user_id)
+        if existing_profile is not None:
+            raise ConflictError("You are already a volunteer.")
+
+        # Create new application
+        application = VolunteerApplication(
             user_id=user_id,
             emergency_contact_name=payload.emergency_contact_name,
             emergency_contact_phone=payload.emergency_contact_phone,
@@ -102,15 +157,13 @@ class VolunteerService:
             notes=payload.notes,
             medical_conditions=payload.medical_conditions,
             animal_handling_experience=payload.animal_handling_experience,
-            status=VolunteerStatus.APPLIED,
+            status=ApplicationStatus.SUBMITTED,
         )
-        await self._repo.create_profile(profile)
-        res = await self._repo.get_profile_by_id(profile.id)
+        await self._repo.create_application(application)
+        res = await self._repo.get_application_by_id(application.id)
         if res is None:
-            raise NotFoundError("Failed to fetch newly created volunteer profile.")
+            raise NotFoundError("Failed to fetch newly created volunteer application.")
 
-        # Self-service public application - always audited so coordinators can
-        # trace who registered, from where, and when (PRR §6.1).
         if self._audit:
             await self._audit.record(
                 event_type=AuthAuditEventType.VOLUNTEER_APPLICATION_SUBMITTED,
@@ -118,12 +171,12 @@ class VolunteerService:
                 ip_address=ip_address or "",
                 user_agent="",
                 metadata={
-                    "profile_id": str(res.id),
+                    "application_id": str(res.id),
                     "user_id": str(user_id),
                 },
             )
 
-        await self._notify_volunteer(
+        await self._notify_volunteer_application(
             res,
             title="Volunteer application received",
             body=(
@@ -135,6 +188,247 @@ class VolunteerService:
             action_url="/volunteers/my-profile",
         )
         return res
+
+    async def get_application_by_user(self, user_id: uuid.UUID) -> VolunteerApplication | None:
+        """Get the volunteer application for a user."""
+        return await self._repo.get_application_by_user_id(user_id)
+
+    async def get_volunteer_lifecycle_status(self, user_id: uuid.UUID) -> VolunteerLifecycleStatus:
+        """Get the complete volunteer lifecycle status for a user."""
+        application = await self._repo.get_application_by_user_id(user_id)
+        profile = await self._repo.get_profile_by_user_id(user_id)
+
+        # Determine lifecycle state
+        if profile is not None:
+            if profile.status == VolunteerStatus.ACTIVE:
+                status = "ACTIVE"
+            elif profile.status == VolunteerStatus.INACTIVE:
+                status = "INACTIVE"
+            elif profile.status == VolunteerStatus.APPLIED:
+                status = "PENDING"
+            else:
+                status = "PENDING"
+            can_apply = False
+            can_reapply = False
+        elif application is not None:
+            if application.status == ApplicationStatus.REJECTED:
+                status = "REJECTED"
+                can_apply = True
+                can_reapply = True
+            elif application.status in [ApplicationStatus.SUBMITTED, ApplicationStatus.UNDER_REVIEW]:
+                status = "PENDING"
+                can_apply = False
+                can_reapply = False
+            elif application.status == ApplicationStatus.WITHDRAWN:
+                status = "NOT_APPLIED"
+                can_apply = True
+                can_reapply = True
+            else:
+                status = "PENDING"
+                can_apply = False
+                can_reapply = False
+        else:
+            status = "NOT_APPLIED"
+            can_apply = True
+            can_reapply = False
+
+        return VolunteerLifecycleStatus(
+            status=status,
+            application=VolunteerApplicationResponse.model_validate(application) if application else None,
+            profile=VolunteerProfileResponse.model_validate(profile) if profile else None,
+            can_apply=can_apply,
+            can_reapply=can_reapply,
+        )
+
+    async def approve_application(
+        self,
+        application_id: uuid.UUID,
+        reviewer_id: uuid.UUID,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> VolunteerProfile:
+        """Approve a volunteer application and create a volunteer profile."""
+        application = await self._repo.get_application_by_id(application_id)
+        if application is None:
+            raise NotFoundError("Volunteer application not found.")
+        
+        if application.status != ApplicationStatus.SUBMITTED and application.status != ApplicationStatus.UNDER_REVIEW:
+            raise ValidationFailedError(
+                f"Cannot approve application with status '{application.status}'."
+            )
+
+        # Check if profile already exists
+        existing_profile = await self._repo.get_profile_by_user_id(application.user_id)
+        if existing_profile is not None:
+            raise ConflictError("Volunteer profile already exists for this user.")
+
+        # Update application status
+        application.status = ApplicationStatus.APPROVED
+        application.reviewed_by = reviewer_id
+        application.reviewed_at = datetime.now(UTC)
+        
+        # Create volunteer profile from application
+        profile = VolunteerProfile(
+            user_id=application.user_id,
+            application_id=application.id,
+            emergency_contact_name=application.emergency_contact_name,
+            emergency_contact_phone=application.emergency_contact_phone,
+            skills=application.skills,
+            availability=application.availability,
+            notes=application.notes,
+            medical_conditions=application.medical_conditions,
+            animal_handling_experience=application.animal_handling_experience,
+            status=VolunteerStatus.APPLIED,
+        )
+        await self._repo.create_profile(profile)
+        await self._repo._session.flush()
+        
+        res = await self._repo.get_profile_by_id(profile.id)
+        if res is None:
+            raise NotFoundError("Failed to fetch newly created volunteer profile.")
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.VOLUNTEER_APPLICATION_SUBMITTED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "application_id": str(application_id),
+                    "profile_id": str(res.id),
+                    "user_id": str(application.user_id),
+                    "action": "approved",
+                },
+            )
+
+        await self._notify_volunteer(
+            res,
+            title="Volunteer application approved!",
+            body=(
+                "Congratulations! Your volunteer application has been approved. "
+                "You can now access the volunteer portal and sign up for shifts."
+            ),
+            notification_type="volunteer_approved",
+            action_url="/volunteers/my-profile",
+        )
+        return res
+
+    async def reject_application(
+        self,
+        application_id: uuid.UUID,
+        reviewer_id: uuid.UUID,
+        reason: str,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> VolunteerApplication:
+        """Reject a volunteer application."""
+        application = await self._repo.get_application_by_id(application_id)
+        if application is None:
+            raise NotFoundError("Volunteer application not found.")
+        
+        if application.status != ApplicationStatus.SUBMITTED and application.status != ApplicationStatus.UNDER_REVIEW:
+            raise ValidationFailedError(
+                f"Cannot reject application with status '{application.status}'."
+            )
+
+        application.status = ApplicationStatus.REJECTED
+        application.reviewed_by = reviewer_id
+        application.reviewed_at = datetime.now(UTC)
+        application.rejection_reason = reason
+        await self._repo._session.flush()
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.VOLUNTEER_APPLICATION_SUBMITTED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "application_id": str(application_id),
+                    "user_id": str(application.user_id),
+                    "action": "rejected",
+                    "reason": reason,
+                },
+            )
+
+        await self._notify_user(
+            application.user_id,
+            title="Volunteer application update",
+            body=(
+                "Thank you for your interest in volunteering with PawGuard. "
+                "After careful review, we are unable to approve your application at this time. "
+                "You may reapply in the future if your circumstances change."
+            ),
+            notification_type="volunteer_rejected",
+            action_url="/volunteers/my-profile",
+        )
+        return application
+
+    async def _notify_volunteer_application(
+        self,
+        application: VolunteerApplication,
+        *,
+        title: str,
+        body: str,
+        notification_type: str,
+        action_url: str | None = None,
+    ) -> None:
+        """Send notification to volunteer applicant."""
+        if self._notification_svc is None:
+            return
+        try:
+            from pawguard.modules.notifications.schemas import NotificationSend
+            await self._notification_svc.send_notification(
+                payload=NotificationSend(
+                    user_id=application.user_id,
+                    title=title,
+                    body=body,
+                    notification_type=notification_type,
+                    action_url=action_url,
+                    send_email=False,
+                    send_push=True,
+                ),
+            )
+        except Exception:
+            logger.warning(
+                "Failed to send volunteer application notification for application %s",
+                application.id,
+                exc_info=True,
+            )
+
+    async def _notify_user(
+        self,
+        user_id: uuid.UUID,
+        *,
+        title: str,
+        body: str,
+        notification_type: str,
+        action_url: str | None = None,
+    ) -> None:
+        """Send notification to a user."""
+        if self._notification_svc is None:
+            return
+        try:
+            from pawguard.modules.notifications.schemas import NotificationSend
+            await self._notification_svc.send_notification(
+                payload=NotificationSend(
+                    user_id=user_id,
+                    title=title,
+                    body=body,
+                    notification_type=notification_type,
+                    action_url=action_url,
+                    send_email=False,
+                    send_push=True,
+                ),
+            )
+        except Exception:
+            logger.warning(
+                "Failed to send notification to user %s",
+                user_id,
+                exc_info=True,
+            )
 
     async def update_profile(
         self, profile_id: uuid.UUID, payload: VolunteerProfileUpdate

@@ -151,26 +151,40 @@ async def send_notification(
     current_user: CurrentUser = Depends(get_current_user),
     service: NotificationService = Depends(get_notification_service),
 ) -> ApiResponse[Any]:
-    user_email = None
-    if payload.send_email and payload.user_id:
-        user_repo = UserRepository(db)
-        user = await user_repo.get_by_id(payload.user_id)
-        if user is not None:
-            user_email = user.email
-    result = await service.send_notification(
-        payload, user_email=user_email,
-        actor_id=current_user.id,
-        ip_address=request.client.host if request.client else None,
-    )
-    if isinstance(result, list):
-        return ApiResponse(
-            data=[NotificationResponse.model_validate(n) for n in result],
-            message=f"{len(result)} notification(s) sent.",
+    from pawguard.core.logging import get_logger
+    logger = get_logger(__name__)
+    
+    try:
+        user_email = None
+        if payload.send_email and payload.user_id:
+            user_repo = UserRepository(db)
+            user = await user_repo.get_by_id(payload.user_id)
+            if user is not None:
+                user_email = user.email
+        result = await service.send_notification(
+            payload, user_email=user_email,
+            actor_id=current_user.id,
+            ip_address=request.client.host if request.client else None,
         )
-    return ApiResponse(
-        data=NotificationResponse.model_validate(result),
-        message="Notification sent.",
-    )
+        if isinstance(result, list):
+            return ApiResponse(
+                data=[NotificationResponse.model_validate(n) for n in result],
+                message=f"{len(result)} notification(s) sent.",
+            )
+        return ApiResponse(
+            data=NotificationResponse.model_validate(result),
+            message="Notification sent.",
+        )
+    except Exception as exc:
+        logger.error(
+            "notification_send_failed",
+            error=str(exc),
+            error_type=type(exc).__name__,
+            user_id=str(payload.user_id) if payload.user_id else None,
+            target_roles=payload.target_roles,
+            exc_info=True,
+        )
+        raise
 
 
 @router.get("/preferences", response_model=ApiResponse[NotificationPreferenceResponse])

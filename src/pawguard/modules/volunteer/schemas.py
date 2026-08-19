@@ -6,7 +6,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 from pawguard.modules.auth.schemas import UserProfile
-from pawguard.modules.volunteer.models import VolunteerStatus
+from pawguard.modules.volunteer.models import ApplicationStatus, VolunteerStatus
 
 
 class VolunteerProfileCreate(BaseModel):
@@ -100,3 +100,48 @@ class VolunteerServiceSummary(BaseModel):
     period_start: datetime | None
     period_end: datetime | None
     role_summary: str
+
+
+class VolunteerApplicationResponse(BaseModel):
+    id: uuid.UUID
+    user_id: uuid.UUID
+    status: ApplicationStatus
+    emergency_contact_name: str
+    emergency_contact_phone: str
+    skills: str | None
+    availability: str | None
+    notes: str | None
+    medical_conditions: str | None
+    animal_handling_experience: str | None
+    reviewed_by: uuid.UUID | None
+    reviewed_at: datetime | None
+    rejection_reason: str | None
+    created_at: datetime
+    updated_at: datetime
+    user: UserProfile | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class VolunteerApplicationReject(BaseModel):
+    reason: str = Field(..., min_length=10, max_length=1000, examples=["Incomplete background check."])
+
+
+class VolunteerLifecycleStatus(BaseModel):
+    """Current volunteer lifecycle state for the authenticated user."""
+
+    status: str = Field(
+        ...,
+        description="Lifecycle state: NOT_APPLIED, PENDING, ACTIVE, REJECTED, INACTIVE",
+        examples=["PENDING"],
+    )
+    application: VolunteerApplicationResponse | None = None
+    profile: VolunteerProfileResponse | None = None
+    can_apply: bool = Field(
+        ...,
+        description="Whether the user can submit a new application",
+    )
+    can_reapply: bool = Field(
+        ...,
+        description="Whether the user can reapply after rejection",
+    )
