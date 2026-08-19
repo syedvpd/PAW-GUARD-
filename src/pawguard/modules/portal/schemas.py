@@ -58,6 +58,10 @@ class SuccessStoryResponse(BaseModel):
     banner_url: str | None = None
     thumbnail_url: str | None = None
     thumbnail: str | None = None
+    image_urls: list[str] = Field(default_factory=list)
+    photo_gallery_urls: list[str] = Field(default_factory=list)
+    photos: list[str] = Field(default_factory=list)
+    images: list[str] = Field(default_factory=list)
     dog_id: uuid.UUID | None
     status: ContentStatus
     published_at: datetime | None
@@ -80,6 +84,10 @@ class SuccessStoryResponse(BaseModel):
             or self.banner_url
             or self.thumbnail_url
             or self.thumbnail
+            or (self.image_urls[0] if self.image_urls else None)
+            or (self.photo_gallery_urls[0] if self.photo_gallery_urls else None)
+            or (self.photos[0] if self.photos else None)
+            or (self.images[0] if self.images else None)
         )
         if img:
             self.hero_image_url = img
@@ -95,6 +103,10 @@ class SuccessStoryResponse(BaseModel):
             self.banner_url = img
             self.thumbnail_url = img
             self.thumbnail = img
+            self.image_urls = [img]
+            self.photo_gallery_urls = [img]
+            self.photos = [img]
+            self.images = [img]
         return self
 
     model_config = ConfigDict(from_attributes=True)
@@ -152,6 +164,10 @@ class BlogPostResponse(BaseModel):
     banner_url: str | None = None
     thumbnail_url: str | None = None
     thumbnail: str | None = None
+    image_urls: list[str] = Field(default_factory=list)
+    photo_gallery_urls: list[str] = Field(default_factory=list)
+    photos: list[str] = Field(default_factory=list)
+    images: list[str] = Field(default_factory=list)
     category: str
     status: ContentStatus
     published_at: datetime | None
@@ -174,6 +190,10 @@ class BlogPostResponse(BaseModel):
             or self.banner_url
             or self.thumbnail_url
             or self.thumbnail
+            or (self.image_urls[0] if self.image_urls else None)
+            or (self.photo_gallery_urls[0] if self.photo_gallery_urls else None)
+            or (self.photos[0] if self.photos else None)
+            or (self.images[0] if self.images else None)
         )
         if img:
             self.cover_image_url = img
@@ -189,6 +209,10 @@ class BlogPostResponse(BaseModel):
             self.banner_url = img
             self.thumbnail_url = img
             self.thumbnail = img
+            self.image_urls = [img]
+            self.photo_gallery_urls = [img]
+            self.photos = [img]
+            self.images = [img]
         return self
 
     model_config = ConfigDict(from_attributes=True)
