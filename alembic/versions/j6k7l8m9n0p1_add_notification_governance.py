@@ -1,8 +1,8 @@
 """add notification governance tables
 
-Revision ID: h4i5j6k7l8m9
-Revises: g3h4i5j6k7l8
-Create Date: 2026-08-19 12:38:00.000000
+Revision ID: j6k7l8m9n0p1
+Revises: h4i5j6k7l8m9
+Create Date: 2026-08-19 19:00:00.000000
 
 """
 from typing import Sequence, Union
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = 'h4i5j6k7l8m9'
-down_revision: Union[str, None] = 'g3h4i5j6k7l8'
+revision: str = 'j6k7l8m9n0p1'
+down_revision: Union[str, None] = 'h4i5j6k7l8m9'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -22,7 +22,7 @@ def upgrade() -> None:
     # 1. notification_global_config
     op.create_table(
         'notification_global_config',
-        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text('gen_random_uuid()')),
         sa.Column('push_status', sa.String(16), nullable=False, server_default='ENABLED'),
         sa.Column('reason', sa.Text(), nullable=True),
         sa.Column('created_by', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id', ondelete='SET NULL'), nullable=True),
@@ -34,7 +34,7 @@ def upgrade() -> None:
     # 2. notification_module_configs
     op.create_table(
         'notification_module_configs',
-        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text('gen_random_uuid()')),
         sa.Column('module_name', sa.String(64), nullable=False, unique=True),
         sa.Column('push_status', sa.String(16), nullable=False, server_default='ENABLED'),
         sa.Column('reason', sa.Text(), nullable=True),
@@ -47,7 +47,7 @@ def upgrade() -> None:
     # 3. notification_trigger_configs
     op.create_table(
         'notification_trigger_configs',
-        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text('gen_random_uuid()')),
         sa.Column('trigger_code', sa.String(64), nullable=False, unique=True),
         sa.Column('module_name', sa.String(64), nullable=False),
         sa.Column('display_name', sa.String(128), nullable=False),
@@ -65,7 +65,7 @@ def upgrade() -> None:
     # 4. notification_approval_queue
     op.create_table(
         'notification_approval_queue',
-        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text('gen_random_uuid()')),
         sa.Column('trigger_code', sa.String(64), nullable=False),
         sa.Column('module_name', sa.String(64), nullable=False),
         sa.Column('title', sa.String(255), nullable=False),
@@ -98,7 +98,7 @@ def upgrade() -> None:
     # 5. notification_governance_audit_logs
     op.create_table(
         'notification_governance_audit_logs',
-        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text('gen_random_uuid()')),
         sa.Column('notification_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('notification_approval_queue.id', ondelete='SET NULL'), nullable=True),
         sa.Column('trigger_code', sa.String(64), nullable=False),
         sa.Column('module_name', sa.String(64), nullable=False),

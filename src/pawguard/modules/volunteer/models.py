@@ -20,6 +20,7 @@ class VolunteerStatus(StrEnum):
     APPLIED = "applied"
     PENDING = "pending"
     APPROVED = "approved"
+    ONBOARDED = "onboarded"
     ACTIVE = "active"
     INACTIVE = "inactive"
     REJECTED = "rejected"
