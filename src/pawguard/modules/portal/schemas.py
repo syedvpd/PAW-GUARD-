@@ -50,6 +50,14 @@ class SuccessStoryResponse(BaseModel):
     image_url: str | None = None
     photo_url: str | None = None
     image: str | None = None
+    media_url: str | None = None
+    imageUrl: str | None = None
+    photoUrl: str | None = None
+    coverImage: str | None = None
+    story_image: str | None = None
+    banner_url: str | None = None
+    thumbnail_url: str | None = None
+    thumbnail: str | None = None
     dog_id: uuid.UUID | None
     status: ContentStatus
     published_at: datetime | None
@@ -58,13 +66,35 @@ class SuccessStoryResponse(BaseModel):
 
     @model_validator(mode="after")
     def _sync_image_fields(self) -> "SuccessStoryResponse":
-        img = self.hero_image_url or self.cover_image_url or self.image_url or self.photo_url or self.image
+        img = (
+            self.hero_image_url
+            or self.cover_image_url
+            or self.image_url
+            or self.photo_url
+            or self.image
+            or self.media_url
+            or self.imageUrl
+            or self.photoUrl
+            or self.coverImage
+            or self.story_image
+            or self.banner_url
+            or self.thumbnail_url
+            or self.thumbnail
+        )
         if img:
             self.hero_image_url = img
             self.cover_image_url = img
             self.image_url = img
             self.photo_url = img
             self.image = img
+            self.media_url = img
+            self.imageUrl = img
+            self.photoUrl = img
+            self.coverImage = img
+            self.story_image = img
+            self.banner_url = img
+            self.thumbnail_url = img
+            self.thumbnail = img
         return self
 
     model_config = ConfigDict(from_attributes=True)
@@ -114,6 +144,14 @@ class BlogPostResponse(BaseModel):
     photo_url: str | None = None
     image: str | None = None
     hero_image_url: str | None = None
+    media_url: str | None = None
+    imageUrl: str | None = None
+    photoUrl: str | None = None
+    coverImage: str | None = None
+    story_image: str | None = None
+    banner_url: str | None = None
+    thumbnail_url: str | None = None
+    thumbnail: str | None = None
     category: str
     status: ContentStatus
     published_at: datetime | None
@@ -122,13 +160,35 @@ class BlogPostResponse(BaseModel):
 
     @model_validator(mode="after")
     def _sync_image_fields(self) -> "BlogPostResponse":
-        img = self.cover_image_url or self.image_url or self.photo_url or self.image or self.hero_image_url
+        img = (
+            self.cover_image_url
+            or self.image_url
+            or self.photo_url
+            or self.image
+            or self.hero_image_url
+            or self.media_url
+            or self.imageUrl
+            or self.photoUrl
+            or self.coverImage
+            or self.story_image
+            or self.banner_url
+            or self.thumbnail_url
+            or self.thumbnail
+        )
         if img:
             self.cover_image_url = img
             self.image_url = img
             self.photo_url = img
             self.image = img
             self.hero_image_url = img
+            self.media_url = img
+            self.imageUrl = img
+            self.photoUrl = img
+            self.coverImage = img
+            self.story_image = img
+            self.banner_url = img
+            self.thumbnail_url = img
+            self.thumbnail = img
         return self
 
     model_config = ConfigDict(from_attributes=True)
