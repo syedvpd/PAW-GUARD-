@@ -236,13 +236,28 @@ class NotificationService:
                 metadata={"notification_id": str(created.id)},
             )
 
-        if payload.send_email and self._arq and user_email:
-            await self._arq.enqueue_job(
-                "send_notification_email_job",
-                to=user_email,
-                subject=payload.title,
-                body=payload.body,
-            )
+        if payload.send_email and user_email:
+            enqueued = False
+            if self._arq:
+                try:
+                    await self._arq.enqueue_job(
+                        "send_notification_email_job",
+                        to=user_email,
+                        subject=payload.title,
+                        body=payload.body,
+                    )
+                    enqueued = True
+                except Exception as exc:
+                    logger.warning("arq_enqueue_failed_falling_back_to_outbox", error=str(exc))
+            if not enqueued:
+                from pawguard.modules.outbox.service import OutboxService
+                await OutboxService.enqueue_job(
+                    self._repo._session,
+                    "send_notification_email_job",
+                    to=user_email,
+                    subject=payload.title,
+                    body=payload.body,
+                )
 
         if payload.send_push:
             await self._send_push_to_users(
