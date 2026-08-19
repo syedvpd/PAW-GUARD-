@@ -102,9 +102,6 @@ class VolunteerProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin,
     animal_handling_experience: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id], lazy="joined")
-    application: Mapped["VolunteerApplication | None"] = relationship(
-        "VolunteerApplication", foreign_keys=[application_id], lazy="joined"
-    )
     attendances: Mapped[list["ShiftAttendance"]] = relationship(
         back_populates="volunteer", cascade="all, delete-orphan"
     )
