@@ -714,9 +714,10 @@ class AuthService:
         device: DeviceContext,
         ctx: RequestContext,
     ) -> AuthenticatedTokens:
+        provider = provider.lower()
         provider_data = await self._verify_oauth_token(provider, provider_token)
-        provider_user_id = provider_data["sub"]
-        provider_email = provider_data.get("email", "")
+        provider_user_id = str(provider_data["sub"])
+        provider_email = (provider_data.get("email") or "").strip()
 
         account = await self._oauth_accounts.get_by_provider(provider, provider_user_id)
         if account is not None:
@@ -725,11 +726,11 @@ class AuthService:
             normalized_email = provider_email.lower() if provider_email else ""
             user = await self._users.get_by_email(normalized_email) if normalized_email else None
             if user is None:
+                raw_name = (provider_data.get("name") or "").strip()
+                display_name = raw_name or normalized_email or f"{provider.capitalize()} User"
                 user = User(
                     email=normalized_email or f"{provider_user_id}@{provider}.oauth",
-                    full_name=provider_data.get(
-                        "name", provider_data.get("email", provider_user_id)
-                    ),
+                    full_name=display_name,
                     hashed_password=await asyncio.to_thread(
                         hash_password, generate_opaque_token()
                     ),
@@ -740,8 +741,9 @@ class AuthService:
                 if role is not None:
                     user.roles.append(role)
                 await self._users.create(user)
-                user = await self._users.get_by_id(user.id)
-                assert user is not None
+                fetched_user = await self._users.get_by_id(user.id)
+                if fetched_user is not None:
+                    user = fetched_user
                 await self._audit.record(
                     event_type=AuthAuditEventType.REGISTERED,
                     actor_id=user.id,
@@ -750,15 +752,21 @@ class AuthService:
                 )
 
             assert user is not None
-            account = OAuthAccount(
-                user_id=user.id,
-                provider=provider,
-                provider_user_id=provider_user_id,
-                provider_email=provider_email,
-                display_name=provider_data.get("name"),
-                picture_url=provider_data.get("picture"),
-            )
-            await self._oauth_accounts.create(account)
+            # Double-check if account was created concurrently
+            existing_account = await self._oauth_accounts.get_by_provider(provider, provider_user_id)
+            if existing_account is None:
+                account = OAuthAccount(
+                    user_id=user.id,
+                    provider=provider,
+                    provider_user_id=provider_user_id,
+                    provider_email=provider_email or None,
+                    display_name=provider_data.get("name") or None,
+                    picture_url=provider_data.get("picture") or None,
+                )
+                try:
+                    await self._oauth_accounts.create(account)
+                except Exception as exc:
+                    logger.warning("oauth_account_create_skipped", error=str(exc))
 
         if not user or not user.is_active:
             raise AccountInactiveError("This account has been deactivated.")
