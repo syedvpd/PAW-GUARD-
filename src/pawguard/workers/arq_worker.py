@@ -94,7 +94,7 @@ async def outbox_poller_loop(ctx: dict[str, Any]) -> None:
         try:
             await asyncio.sleep(2)
         except asyncio.CancelledError:
-            break
+            raise
 
 
 async def startup(ctx: dict[str, object]) -> None:

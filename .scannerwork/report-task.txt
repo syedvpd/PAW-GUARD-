@@ -1,0 +1,6 @@
+projectKey=syedvpd_PAW-GUARD-
+serverUrl=http://localhost:9000
+serverVersion=26.8.0.126808
+dashboardUrl=http://localhost:9000/dashboard?id=syedvpd_PAW-GUARD-
+ceTaskId=c64a713f-1f2a-48d6-ad8d-ac482cf8d09a
+ceTaskUrl=http://localhost:9000/api/ce/task?id=c64a713f-1f2a-48d6-ad8d-ac482cf8d09a

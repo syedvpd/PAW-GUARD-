@@ -147,6 +147,12 @@ def create_app() -> FastAPI:
 
     app.openapi = custom_openapi
 
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts_list)
+    app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(RequestBodySizeMiddleware)
+    app.add_middleware(IdempotencyMiddleware)
+    app.add_middleware(RequestLoggingMiddleware)
+    app.add_middleware(RequestIDMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins_list,
@@ -154,12 +160,6 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts_list)
-    app.add_middleware(SecurityHeadersMiddleware)
-    app.add_middleware(RequestBodySizeMiddleware)
-    app.add_middleware(IdempotencyMiddleware)
-    app.add_middleware(RequestLoggingMiddleware)
-    app.add_middleware(RequestIDMiddleware)
 
     register_exception_handlers(app)
 

@@ -119,9 +119,9 @@ def clean_error_message(msg: str) -> str:
         return "Internal processing error: database entity relations failed to load during serialization."
 
     import re
-    msg = re.sub(r"\s*For further information visit https://errors\.pydantic\.dev/[^\s]+", "", msg)
-    msg = re.sub(r"\s*\[type=[^\]]+\]", "", msg)
-    msg = re.sub(r"\(Background on this error at: [^\)]+\)", "", msg)
+    msg = re.sub(r"\s*For further information visit https://errors\.pydantic\.dev/\S+", "", msg)
+    msg = re.sub(r"\s*\[type=[^\]\s]+\]", "", msg)
+    msg = re.sub(r"\(Background on this error at: [^)]+\)", "", msg)
 
     lines = [line.strip() for line in msg.splitlines() if line.strip()]
     if not lines:

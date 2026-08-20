@@ -8,6 +8,7 @@ Connection is lazy — Redis is optional.  If unavailable the application still 
 and rate-limiting / caching degrade gracefully.
 """
 
+import asyncio
 from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any, cast
 
@@ -31,6 +32,7 @@ class _NullRedis:
     """Stand-in when real Redis is unreachable — all operations no-op."""
 
     async def get(self, key: str) -> None:
+        await asyncio.sleep(0)
         return None
 
     async def set(
@@ -41,38 +43,41 @@ class _NullRedis:
         px: int | None = None,
         nx: bool | None = None,
     ) -> Any:
+        await asyncio.sleep(0)
         return None
 
     async def delete(self, key: str) -> None:
+        await asyncio.sleep(0)
         return None
 
     async def incr(self, key: str) -> int:
+        await asyncio.sleep(0)
         return 0
 
     async def expire(self, key: str, seconds: int) -> None:
+        await asyncio.sleep(0)
         return None
 
     async def eval(self, script: str, numkeys: int, *keys_and_args: Any) -> Any:
+        await asyncio.sleep(0)
         return None
 
     async def ping(self) -> bool:
+        await asyncio.sleep(0)
         return False
 
     async def scan_iter(self, match: str = "", count: int | None = None):
-        """No-op async generator mirroring redis-py's scan_iter protocol.
-
-        ``CacheService.delete_prefix`` consumes scan_iter with ``async for``.
-        If this returned a coroutine yielding a list, ``async for`` would raise
-        TypeError the moment Redis is unavailable (e.g. RBAC cache invalidation
-        or portal stats purges in dev/CI) instead of gracefully no-op'ing.
-        """
+        """No-op async generator mirroring redis-py's scan_iter protocol."""
+        await asyncio.sleep(0)
         return
-        yield  # pragma: no cover — marks this function as an async generator
+        yield
 
     async def geoadd(self, name: str, *args: Any, **kwargs: Any) -> int:
+        await asyncio.sleep(0)
         return 0
 
     async def geosearch(self, name: str, *args: Any, **kwargs: Any) -> list[Any]:
+        await asyncio.sleep(0)
         return []
 
 

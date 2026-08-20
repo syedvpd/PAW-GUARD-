@@ -1,6 +1,6 @@
 import uuid
 from collections.abc import Sequence
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -312,7 +312,7 @@ class FinanceRepository:
             FinancialTransaction.id == transaction_id
         ).values(
             status=TransactionStatus.RECONCILED,
-            reconciled_at=datetime.utcnow(),
+            reconciled_at=datetime.now(UTC),
             donation_id=donation_id,
         )
         await self._session.execute(stmt)

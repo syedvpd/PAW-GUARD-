@@ -1,11 +1,13 @@
 """Standard API response envelope used by every endpoint."""
 
-from typing import Any
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel
 
+T = TypeVar("T")
 
-class ApiResponse[T](BaseModel):
+
+class ApiResponse(BaseModel, Generic[T]):
     success: bool = True
     data: T | None = None
     message: str | None = None
@@ -18,7 +20,7 @@ class PaginationMeta(BaseModel):
     total_pages: int
 
 
-class PaginatedResponse[T](BaseModel):
+class PaginatedResponse(BaseModel, Generic[T]):
     success: bool = True
     data: list[T]
     meta: PaginationMeta
