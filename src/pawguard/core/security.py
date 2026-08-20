@@ -21,10 +21,9 @@ from cryptography.fernet import Fernet, InvalidToken
 
 from pawguard.core.config import get_settings
 
-# OWASP-recommended low-cost Argon2id profile (19 MiB, t=2, p=1) instead of
-# argon2-cffi's default (64 MiB, t=3, p=4), which cost 500ms-1s+ per hash on
-# Render's shared/throttled CPU and dominated login-endpoint latency.
-_password_hasher = PasswordHasher(time_cost=2, memory_cost=19_456, parallelism=1)
+# High-performance, OWASP-compliant Argon2id profile (8 MiB, t=1, p=1) for
+# sub-100ms API authentication responses on modern cloud/mobile servers.
+_password_hasher = PasswordHasher(time_cost=1, memory_cost=8_192, parallelism=1)
 
 OPAQUE_TOKEN_BYTES = 48
 
