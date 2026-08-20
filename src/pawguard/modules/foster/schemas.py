@@ -57,6 +57,18 @@ class FosterProfileUpdate(BaseModel):
     is_available: bool | None = Field(None, examples=[True])
     notes: str | None = Field(None, examples=["Home inspection passed on 2026-07-20."])
 
+    # Vetting & Background Verification
+    background_check_passed: bool | None = Field(None, examples=[True])
+    references_checked: bool | None = Field(None, examples=[True])
+    vetting_notes: str | None = Field(None, examples=["Background check clear."])
+    vetted_at: datetime | None = Field(None)
+
+    # Home Inspection
+    home_inspection_passed: bool | None = Field(None, examples=[True])
+    home_inspection_notes: str | None = Field(None, examples=["Fenced yard verified."])
+    home_inspection_address: str | None = Field(None, examples=["123 Shelter Way"])
+    inspected_at: datetime | None = Field(None)
+
 
 class FosterProfileResponse(BaseModel):
     id: uuid.UUID
@@ -67,6 +79,19 @@ class FosterProfileResponse(BaseModel):
     active_count: int
     is_available: bool
     notes: str | None
+
+    # Vetting & Background Verification
+    background_check_passed: bool | None = None
+    references_checked: bool | None = None
+    vetting_notes: str | None = None
+    vetted_at: datetime | None = None
+
+    # Home Inspection
+    home_inspection_passed: bool | None = None
+    home_inspection_notes: str | None = None
+    home_inspection_address: str | None = None
+    inspected_at: datetime | None = None
+
     created_at: datetime
     updated_at: datetime
     user: UserProfile | None = None

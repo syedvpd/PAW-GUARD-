@@ -44,6 +44,18 @@ class FosterProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Ba
     is_available: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Vetting & Background Verification
+    background_check_passed: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    references_checked: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    vetting_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    vetted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Home Inspection
+    home_inspection_passed: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    home_inspection_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    home_inspection_address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    inspected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id], lazy="joined")
     placements: Mapped[list["FosterPlacement"]] = relationship(
         back_populates="foster", cascade="all, delete-orphan"

@@ -367,3 +367,42 @@ class TestFosterPortalFlows:
         )
         assert dispatch_resp.status_code == 201
         assert dispatch_resp.json()["data"]["item_type"] == "crate"
+
+    async def test_vetting_and_home_inspection_update(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        """Verify updating vetting and home inspection fields on a foster profile."""
+        email_foster = f"foster_vetting_{uuid.uuid4().hex[:6]}@example.com"
+        email_staff = f"staff_vetter_{uuid.uuid4().hex[:6]}@example.com"
+
+        foster_headers = await register_and_auth(client, db_session, email=email_foster, role="general_public")
+        staff_headers = await register_and_auth(client, db_session, email=email_staff, role="super_admin")
+
+        # Foster applies
+        apply_resp = await client.post("/api/v1/fosters/apply", json={"max_capacity": 2}, headers=foster_headers)
+        assert apply_resp.status_code == 201
+        foster_id = apply_resp.json()["data"]["id"]
+
+        # Staff updates vetting & home inspection fields
+        update_payload = {
+            "status": "approved",
+            "background_check_passed": True,
+            "references_checked": True,
+            "vetting_notes": "All 3 references verified, clear criminal record.",
+            "home_inspection_passed": True,
+            "home_inspection_notes": "6ft fenced backyard, no hazards.",
+            "home_inspection_address": "100 Rescue Avenue, Paw City",
+        }
+        update_resp = await client.put(f"/api/v1/fosters/{foster_id}", json=update_payload, headers=staff_headers)
+        assert update_resp.status_code == 200
+        data = update_resp.json()["data"]
+        assert data["background_check_passed"] is True
+        assert data["references_checked"] is True
+        assert data["vetting_notes"] == "All 3 references verified, clear criminal record."
+        assert data["home_inspection_passed"] is True
+        assert data["home_inspection_notes"] == "6ft fenced backyard, no hazards."
+        assert data["home_inspection_address"] == "100 Rescue Avenue, Paw City"
+        assert data["vetted_at"] is not None
+        assert data["inspected_at"] is not None

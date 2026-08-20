@@ -121,6 +121,11 @@ class FosterService:
         for key, value in update_data.items():
             setattr(profile, key, value)
 
+        if payload.background_check_passed is not None and payload.vetted_at is None and profile.vetted_at is None:
+            profile.vetted_at = datetime.now(UTC)
+        if payload.home_inspection_passed is not None and payload.inspected_at is None and profile.inspected_at is None:
+            profile.inspected_at = datetime.now(UTC)
+
         # Coordinator approval (after the home inspection audit) is what
         # actually unlocks self-service foster access - the "foster_family"
         # role is granted here, not at application time, so an unvetted
