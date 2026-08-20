@@ -1,5 +1,6 @@
 """DashboardRepository: data access for admin dashboard metrics (RULE-002)."""
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -50,32 +51,32 @@ class DashboardRepository:
         stmt = select(RescueRequest.status, func.count(RescueRequest.id))
         stmt = stmt.where(RescueRequest.deleted_at.is_(None)).group_by(RescueRequest.status)
         rows = (await self._session.execute(stmt)).all()
-        return {r.status: r.count for r in rows}  # type: ignore[misc]
+        return {str(r[0].value if hasattr(r[0], "value") else r[0]): r[1] for r in rows}
 
     async def count_dogs_by_status(self) -> dict[str, int]:
         stmt = select(DogProfile.status, func.count(DogProfile.id))
         stmt = stmt.where(DogProfile.deleted_at.is_(None)).group_by(DogProfile.status)
         rows = (await self._session.execute(stmt)).all()
-        return {r.status: r.count for r in rows}  # type: ignore[misc]
+        return {str(r[0].value if hasattr(r[0], "value") else r[0]): r[1] for r in rows}
 
     async def count_adoptions_by_status(self) -> dict[str, int]:
         stmt = select(AdoptionApplication.status, func.count(AdoptionApplication.id))
         stmt = stmt.where(AdoptionApplication.deleted_at.is_(None))
         stmt = stmt.group_by(AdoptionApplication.status)
         rows = (await self._session.execute(stmt)).all()
-        return {r.status: r.count for r in rows}  # type: ignore[misc]
+        return {str(r[0].value if hasattr(r[0], "value") else r[0]): r[1] for r in rows}
 
     async def count_volunteers_by_status(self) -> dict[str, int]:
         stmt = select(VolunteerProfile.status, func.count(VolunteerProfile.id))
         stmt = stmt.where(VolunteerProfile.deleted_at.is_(None)).group_by(VolunteerProfile.status)
         rows = (await self._session.execute(stmt)).all()
-        return {r.status: r.count for r in rows}  # type: ignore[misc]
+        return {str(r[0].value if hasattr(r[0], "value") else r[0]): r[1] for r in rows}
 
     async def count_grievances_by_status(self) -> dict[str, int]:
         stmt = select(GrievanceTicket.status, func.count(GrievanceTicket.id))
         stmt = stmt.where(GrievanceTicket.deleted_at.is_(None)).group_by(GrievanceTicket.status)
         rows = (await self._session.execute(stmt)).all()
-        return {r.status: r.count for r in rows}  # type: ignore[misc]
+        return {str(r[0].value if hasattr(r[0], "value") else r[0]): r[1] for r in rows}
 
     async def get_donation_totals(self) -> dict[str, Any]:
         stmt = select(
@@ -389,15 +390,27 @@ class DashboardRepository:
         return (await self._session.execute(stmt)).scalar_one()
 
     async def get_system_metrics(self) -> dict[str, int]:
-        total_users = await self.get_total_users_count()
-        active_users = await self.get_active_users_count()
-        verified_users = await self.get_verified_users_count()
-        total_roles = await self.get_total_roles_count()
-        active_sessions = await self.get_active_sessions_count()
-        total_dogs = await self.get_total_dogs_count()
-        adoptable_dogs = await self.get_adoptable_dogs_count()
-        pending_adoptions = await self.get_pending_adoptions_count()
-        total_rescues = await self.get_total_rescues_count()
+        (
+            total_users,
+            active_users,
+            verified_users,
+            total_roles,
+            active_sessions,
+            total_dogs,
+            adoptable_dogs,
+            pending_adoptions,
+            total_rescues,
+        ) = await asyncio.gather(
+            self.get_total_users_count(),
+            self.get_active_users_count(),
+            self.get_verified_users_count(),
+            self.get_total_roles_count(),
+            self.get_active_sessions_count(),
+            self.get_total_dogs_count(),
+            self.get_adoptable_dogs_count(),
+            self.get_pending_adoptions_count(),
+            self.get_total_rescues_count(),
+        )
         return {
             "total_users": total_users,
             "active_users": active_users,
@@ -411,65 +424,105 @@ class DashboardRepository:
         }
 
     async def get_summary(self) -> dict[str, Any]:
-        users = {
-            "total_users": await self.get_total_users_count(),
-            "active_users": await self.get_active_users_count(),
-            "verified_users": await self.get_verified_users_count(),
-        }
-        dogs = {
-            "total_dogs": await self.get_total_dogs_count(),
-            "adoptable_dogs": await self.get_adoptable_dogs_count(),
-            "by_status": await self.count_dogs_by_status(),
-        }
-        rescues = {
-            "total": await self.get_total_rescues_count(),
-            "by_status": await self.count_rescues_by_status(),
-        }
-        adoptions = {
-            "by_status": await self.count_adoptions_by_status(),
-            "adoption_rate_pct": await self.get_adoption_rate(),
-            "pending": await self.get_pending_adoptions_count(),
-        }
+        stmt = text("""
+            SELECT
+                (SELECT COUNT(*) FROM users WHERE deleted_at IS NULL) AS total_users,
+                (SELECT COUNT(*) FROM users WHERE is_active = true AND deleted_at IS NULL) AS active_users,
+                (SELECT COUNT(*) FROM users WHERE is_verified = true AND deleted_at IS NULL) AS verified_users,
+                (SELECT COUNT(*) FROM dog_profiles WHERE deleted_at IS NULL) AS total_dogs,
+                (SELECT COUNT(*) FROM dog_profiles WHERE is_adoptable = true AND deleted_at IS NULL) AS adoptable_dogs,
+                (SELECT COUNT(*) FROM rescue_requests WHERE deleted_at IS NULL) AS total_rescues,
+                (SELECT COUNT(*) FROM adoption_applications WHERE status = 'submitted') AS pending_adoptions,
+                (SELECT COUNT(*) FROM volunteer_profiles) AS total_volunteers,
+                (SELECT COUNT(*) FROM grievance_tickets WHERE status != 'resolved' AND deleted_at IS NULL) AS open_grievances,
+                (SELECT COUNT(*) FROM notifications WHERE is_read = false) AS unread_notifications,
+                (SELECT COUNT(*) FROM notifications) AS total_notifications
+        """)
+        row = (await self._session.execute(stmt)).one()
+        (
+            total_users,
+            active_users,
+            verified_users,
+            total_dogs,
+            adoptable_dogs,
+            total_rescues,
+            pending_adoptions,
+            total_volunteers,
+            open_grievances,
+            unread_notifications,
+            total_notifications,
+        ) = row
+
+        dogs_by_status = await self.count_dogs_by_status()
+        rescues_by_status = await self.count_rescues_by_status()
+        adoptions_by_status = await self.count_adoptions_by_status()
+        adoption_rate = await self.get_adoption_rate()
         donations = await self.get_donation_totals()
         shelters = await self.get_shelter_occupancy()
-        volunteers = {
-            "total": await self.get_total_volunteers_count(),
-            "by_status": await self.count_volunteers_by_status(),
-            "hours_logged": await self.get_volunteer_hours(),
-        }
-        grievances = {
-            "open": await self.get_open_grievances(),
-            "by_status": await self.count_grievances_by_status(),
-        }
+        volunteers_by_status = await self.count_volunteers_by_status()
+        volunteer_hours = await self.get_volunteer_hours()
+        grievances_by_status = await self.count_grievances_by_status()
         lost_found = await self.get_active_lost_found()
-        notifications = {
-            "unread": await self.get_unread_notifications_count(),
-            "total": await self.get_total_notifications_count(),
-        }
         fosters = await self.get_foster_stats()
         return {
-            "users": users,
-            "dogs": dogs,
-            "rescues": rescues,
-            "adoptions": adoptions,
+            "users": {
+                "total_users": total_users,
+                "active_users": active_users,
+                "verified_users": verified_users,
+            },
+            "dogs": {
+                "total_dogs": total_dogs,
+                "adoptable_dogs": adoptable_dogs,
+                "by_status": dogs_by_status,
+            },
+            "rescues": {
+                "total": total_rescues,
+                "by_status": rescues_by_status,
+            },
+            "adoptions": {
+                "by_status": adoptions_by_status,
+                "adoption_rate_pct": adoption_rate,
+                "pending": pending_adoptions,
+            },
             "donations": donations,
             "shelters": shelters,
-            "volunteers": volunteers,
-            "grievances": grievances,
+            "volunteers": {
+                "total": total_volunteers,
+                "by_status": volunteers_by_status,
+                "hours_logged": volunteer_hours,
+            },
+            "grievances": {
+                "open": open_grievances,
+                "by_status": grievances_by_status,
+            },
             "lost_found": lost_found,
-            "notifications": notifications,
+            "notifications": {
+                "unread": unread_notifications,
+                "total": total_notifications,
+            },
             "fosters": fosters,
         }
 
     async def get_kpis(self) -> dict[str, Any]:
-        adoption_rate = await self.get_adoption_rate()
-        shelter = await self.get_shelter_occupancy()
-        rescue = await self.get_rescue_kpis()
-        donations = await self.get_donation_totals()
-        open_grievances = await self.get_open_grievances()
-        unread = await self.get_unread_notifications_count()
-        active_fosters = await self.get_active_fosters()
-        volunteer_hours = await self.get_volunteer_hours()
+        (
+            adoption_rate,
+            shelter,
+            rescue,
+            donations,
+            open_grievances,
+            unread,
+            active_fosters,
+            volunteer_hours,
+        ) = await asyncio.gather(
+            self.get_adoption_rate(),
+            self.get_shelter_occupancy(),
+            self.get_rescue_kpis(),
+            self.get_donation_totals(),
+            self.get_open_grievances(),
+            self.get_unread_notifications_count(),
+            self.get_active_fosters(),
+            self.get_volunteer_hours(),
+        )
         return {
             "adoption_rate_pct": adoption_rate,
             "shelter_occupancy_pct": shelter["occupancy_pct"],
@@ -483,17 +536,30 @@ class DashboardRepository:
         }
 
     async def get_charts(self) -> dict[str, Any]:
+        (
+            adoption_trend,
+            rescue_trend,
+            donation_trend,
+            breed_distribution,
+        ) = await asyncio.gather(
+            self.get_monthly_adoption_trend(),
+            self.get_monthly_rescue_trend(),
+            self.get_monthly_donation_trend(),
+            self.get_dog_breed_distribution(),
+        )
         return {
-            "adoption_trend": await self.get_monthly_adoption_trend(),
-            "rescue_trend": await self.get_monthly_rescue_trend(),
-            "donation_trend": await self.get_monthly_donation_trend(),
-            "breed_distribution": await self.get_dog_breed_distribution(),
+            "adoption_trend": adoption_trend,
+            "rescue_trend": rescue_trend,
+            "donation_trend": donation_trend,
+            "breed_distribution": breed_distribution,
         }
 
     async def get_donation_summary(self) -> dict[str, Any]:
-        totals = await self.get_donation_totals()
-        recent = await self.get_recent_donations(days=30)
-        trend = await self.get_monthly_donation_trend(months=6)
+        totals, recent, trend = await asyncio.gather(
+            self.get_donation_totals(),
+            self.get_recent_donations(days=30),
+            self.get_monthly_donation_trend(months=6),
+        )
         return {
             "total_donations": totals["total_donations"],
             "total_raised": totals["total_raised"],
@@ -502,8 +568,10 @@ class DashboardRepository:
         }
 
     async def get_rescue_stats(self) -> dict[str, Any]:
-        kpis = await self.get_rescue_kpis()
-        by_status = await self.count_rescues_by_status()
+        kpis, by_status = await asyncio.gather(
+            self.get_rescue_kpis(),
+            self.count_rescues_by_status(),
+        )
         return {
             "total_rescues": kpis["total_rescues"],
             "admitted": kpis["admitted"],
@@ -513,10 +581,12 @@ class DashboardRepository:
         }
 
     async def get_adoption_stats(self) -> dict[str, Any]:
-        by_status = await self.count_adoptions_by_status()
-        rate = await self.get_adoption_rate()
-        pending = await self.get_pending_adoptions_count()
-        trend = await self.get_monthly_adoption_trend()
+        by_status, rate, pending, trend = await asyncio.gather(
+            self.count_adoptions_by_status(),
+            self.get_adoption_rate(),
+            self.get_pending_adoptions_count(),
+            self.get_monthly_adoption_trend(),
+        )
         return {
             "by_status": by_status,
             "adoption_rate_pct": rate,
@@ -525,9 +595,11 @@ class DashboardRepository:
         }
 
     async def get_volunteer_stats(self) -> dict[str, Any]:
-        total = await self.get_total_volunteers_count()
-        by_status = await self.count_volunteers_by_status()
-        hours = await self.get_volunteer_hours()
+        total, by_status, hours = await asyncio.gather(
+            self.get_total_volunteers_count(),
+            self.count_volunteers_by_status(),
+            self.get_volunteer_hours(),
+        )
         return {
             "total_volunteers": total,
             "by_status": by_status,
@@ -535,8 +607,10 @@ class DashboardRepository:
         }
 
     async def get_notification_summary(self) -> dict[str, Any]:
-        unread = await self.get_unread_notifications_count()
-        total = await self.get_total_notifications_count()
+        unread, total = await asyncio.gather(
+            self.get_unread_notifications_count(),
+            self.get_total_notifications_count(),
+        )
         return {
             "total": total,
             "unread": unread,
@@ -544,8 +618,10 @@ class DashboardRepository:
         }
 
     async def get_shelter_stats(self) -> dict[str, Any]:
-        occupancy = await self.get_shelter_occupancy()
-        total_facilities = await self.get_total_facilities_count()
+        occupancy, total_facilities = await asyncio.gather(
+            self.get_shelter_occupancy(),
+            self.get_total_facilities_count(),
+        )
         return {
             "total_facilities": total_facilities,
             "capacity": occupancy["capacity"],

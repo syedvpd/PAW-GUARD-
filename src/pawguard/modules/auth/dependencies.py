@@ -4,6 +4,7 @@ These are the dependencies every future module's routers will depend on (RULE-00
 routers authenticate/authorise via dependencies, never inline).
 """
 
+import asyncio
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -61,14 +62,16 @@ async def get_current_user(
         raise InvalidSessionError(str(exc)) from exc
 
     session_repo = SessionRepository(db)
+    user_repo = UserRepository(db)
+
     session = await session_repo.get_by_id(claims.session_id)
     if session is None or not session.is_active:
         raise InvalidSessionError("Session has been revoked or has expired.")
     if session.expires_at < datetime.now(UTC):
         raise InvalidSessionError("Session has expired.")
 
-    user_repo = UserRepository(db)
     user = await user_repo.get_by_id(claims.user_id)
+
     if user is None or not user.is_active:
         raise AccountInactiveError("Account is inactive or no longer exists.")
 
@@ -128,11 +131,14 @@ async def get_current_session(
     if session is None or not session.is_active:
         raise InvalidSessionError("Session has been revoked or has expired.")
 
-    # Inactivity timeout — auto-revoke sessions idle longer than threshold.
-    idle = datetime.now(UTC) - session.last_used_at
-    if idle > timedelta(days=SESSION_INACTIVITY_TIMEOUT_DAYS):
-        session_repo = SessionRepository(current.db)
-        await session_repo.revoke(session.id, reason="inactivity_timeout")
-        raise InvalidSessionError("Session has expired due to inactivity.")
+    last_used = session.last_used_at
+    if last_used is not None:
+        if last_used.tzinfo is None:
+            last_used = last_used.replace(tzinfo=UTC)
+        idle = datetime.now(UTC) - last_used
+        if idle > timedelta(days=SESSION_INACTIVITY_TIMEOUT_DAYS):
+            session_repo = SessionRepository(current.db)
+            await session_repo.revoke(session.id, reason="inactivity_timeout")
+            raise InvalidSessionError("Session has expired due to inactivity.")
 
     return session

@@ -112,6 +112,17 @@ class FosterRepository:
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    async def get_placements_by_foster_id(
+        self, foster_id: uuid.UUID
+    ) -> Sequence[FosterPlacement]:
+        stmt = (
+            select(FosterPlacement)
+            .options(selectinload(FosterPlacement.dog))
+            .where(FosterPlacement.foster_id == foster_id)
+            .order_by(FosterPlacement.placed_at.desc())
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
     async def list_profiles_by_ids(self, ids: list[uuid.UUID]) -> Sequence[FosterProfile]:
         stmt = (
             select(FosterProfile)

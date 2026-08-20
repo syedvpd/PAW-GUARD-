@@ -156,6 +156,19 @@ class FosterService:
             raise NotFoundError("Foster profile not found.")
         return profile
 
+    async def get_my_profile(self, user_id: uuid.UUID) -> FosterProfile:
+        profile = await self._repo.get_profile_by_user_id(user_id)
+        if profile is None:
+            raise NotFoundError("Foster profile not found for this user.")
+        return profile
+
+    async def get_my_placements(self, user_id: uuid.UUID) -> list[FosterPlacement]:
+        profile = await self._repo.get_profile_by_user_id(user_id)
+        if profile is None:
+            raise NotFoundError("Foster profile not found for this user.")
+        placements = await self._repo.get_placements_by_foster_id(profile.id)
+        return list(placements)
+
     async def soft_delete_profile(
         self,
         profile_id: uuid.UUID,
@@ -411,6 +424,46 @@ class FosterService:
                     "dispatch_id": str(dispatch.id),
                     "item_type": dispatch.item_type.value,
                     "quantity": dispatch.quantity,
+                },
+            )
+        return dispatch
+
+    async def request_supplies(
+        self,
+        placement_id: uuid.UUID,
+        payload: FosterSupplyDispatchCreate,
+        *,
+        actor_id: uuid.UUID,
+        ip_address: str | None = None,
+    ) -> FosterSupplyDispatch:
+        placement = await self._repo.get_placement_by_id(placement_id)
+        if placement is None:
+            raise NotFoundError("Foster placement not found.")
+        if not placement.is_active:
+            raise ConflictError("Cannot request supplies for an inactive foster placement.")
+
+        dispatch = FosterSupplyDispatch(
+            placement_id=placement_id,
+            dispatched_by_id=actor_id,
+            item_type=payload.item_type,
+            description=f"[REQUESTED] {payload.description or ''}".strip(),
+            quantity=payload.quantity,
+            dispatched_at=datetime.now(UTC),
+        )
+        await self._repo.create_supply_dispatch(dispatch)
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.FOSTER_SUPPLY_DISPATCHED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "placement_id": str(placement_id),
+                    "dispatch_id": str(dispatch.id),
+                    "item_type": dispatch.item_type.value,
+                    "quantity": dispatch.quantity,
+                    "type": "request",
                 },
             )
         return dispatch

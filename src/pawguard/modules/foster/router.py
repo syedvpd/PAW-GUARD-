@@ -79,6 +79,32 @@ async def apply_to_foster(
     )
 
 
+@router.get(
+    "/me",
+    response_model=ApiResponse[FosterProfileResponse],
+)
+async def get_my_foster_profile(
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FosterService = Depends(get_foster_service),
+) -> ApiResponse[FosterProfileResponse]:
+    profile = await service.get_my_profile(current_user.user.id)
+    return ApiResponse(data=FosterProfileResponse.model_validate(profile))
+
+
+@router.get(
+    "/me/placements",
+    response_model=ApiResponse[list[FosterPlacementResponse]],
+)
+async def get_my_foster_placements(
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FosterService = Depends(get_foster_service),
+) -> ApiResponse[list[FosterPlacementResponse]]:
+    placements = await service.get_my_placements(current_user.user.id)
+    return ApiResponse(
+        data=[FosterPlacementResponse.model_validate(p) for p in placements]
+    )
+
+
 @router.put(
     "/{profile_id}",
     response_model=ApiResponse[FosterProfileResponse],
@@ -325,10 +351,38 @@ async def list_supply_dispatches(
 
 
 @router.post(
+    "/placements/{placement_id}/supplies/request",
+    response_model=ApiResponse[FosterSupplyDispatchResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def request_supplies(
+    placement_id: uuid.UUID,
+    payload: FosterSupplyDispatchCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FosterService = Depends(get_foster_service),
+) -> ApiResponse[FosterSupplyDispatchResponse]:
+    placement = await service.get_placement(placement_id)
+    is_owner = placement.foster.user_id == current_user.user.id
+    if not is_owner and not has_permission(current_user.user, "foster:approve"):
+        raise ForbiddenError("You do not have permission to request supplies for this placement.")
+    ip = request.client.host if request.client else None
+    dispatch = await service.request_supplies(
+        placement_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=FosterSupplyDispatchResponse.model_validate(dispatch),
+        message="Supply request submitted successfully.",
+    )
+
+
+@router.post(
     "/placements/{placement_id}/convert-to-adopt",
     response_model=ApiResponse[dict[str, Any]],
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_permission("foster:approve"))],
 )
 async def convert_to_adopt(
     placement_id: uuid.UUID,
@@ -336,6 +390,10 @@ async def convert_to_adopt(
     current_user: CurrentUser = Depends(get_current_user),
     service: FosterService = Depends(get_foster_service),
 ) -> ApiResponse[dict[str, Any]]:
+    placement = await service.get_placement(placement_id)
+    is_owner = placement.foster.user_id == current_user.user.id
+    if not is_owner and not has_permission(current_user.user, "foster:approve"):
+        raise ForbiddenError("You do not have permission to convert this placement to adoption.")
     ip = request.client.host if request.client else None
     app = await service.convert_to_adoption(
         placement_id,

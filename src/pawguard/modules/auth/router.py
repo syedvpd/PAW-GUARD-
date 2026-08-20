@@ -106,6 +106,23 @@ def _is_web_client(client_type: str | None) -> bool:
     return client_type == ClientType.WEB.value
 
 
+def _build_verify_url(raw_token: str, client_type: str | None) -> str:
+    """Construct the email-verification link for the calling client.
+
+    Website registrations keep receiving the existing web verification URL
+    unchanged. Mobile app registrations receive a ``pawguard://`` deep link
+    that the Flutter app intercepts and resolves locally. Both share the same
+    opaque token and the same verification endpoint, so the token generation
+    and validation logic is reused without duplication.
+    """
+    settings = get_settings()
+    if client_type == ClientType.MOBILE.value:
+        base = settings.mobile_deep_link_base.strip().rstrip("/")
+    else:
+        base = settings.web_app_url.strip().rstrip("/")
+    return f"{base}/verify-email?token={raw_token}"
+
+
 def _cookie_domain() -> str | None:
     """Return None so the browser treats auth cookies as host-only cookies
     without an explicit Domain attribute. This enables same-origin Vercel proxy
@@ -117,8 +134,8 @@ def _cookie_domain() -> str | None:
 def _set_auth_cookies(response: Response, *, access_token: str, refresh_token: str | None) -> None:
     settings = get_settings()
     domain = _cookie_domain()
-    samesite_mode = "none" if (settings.cookie_secure or True) else "lax"
-    is_secure = True
+    samesite_mode = "none" if settings.cookie_secure else "lax"
+    is_secure = settings.cookie_secure
 
     response.set_cookie(
         ACCESS_TOKEN_COOKIE_NAME,
@@ -144,8 +161,8 @@ def _set_auth_cookies(response: Response, *, access_token: str, refresh_token: s
 def _clear_auth_cookies(response: Response) -> None:
     settings = get_settings()
     domain = _cookie_domain()
-    samesite_mode = "none" if (settings.cookie_secure or True) else "lax"
-    is_secure = True
+    samesite_mode = "none" if settings.cookie_secure else "lax"
+    is_secure = settings.cookie_secure
 
     response.delete_cookie(ACCESS_TOKEN_COOKIE_NAME, domain=domain, secure=is_secure, samesite=samesite_mode)
     response.delete_cookie(REFRESH_TOKEN_COOKIE_NAME, domain=domain, secure=is_secure, samesite=samesite_mode)
@@ -171,6 +188,7 @@ def _to_login_response(
 async def register(
     payload: RegisterRequest,
     request: Request,
+    client_type: str | None = Header(default=None, alias=CLIENT_TYPE_HEADER),
     auth_service: AuthService = Depends(get_auth_service),
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[UserProfile]:
@@ -184,7 +202,7 @@ async def register(
     raw_token = await auth_service.request_email_verification(
         user=user, ctx=_build_request_context(request)
     )
-    verify_url = f"{get_settings().web_app_url}/verify-email?token={raw_token}"
+    verify_url = _build_verify_url(raw_token, client_type)
     try:
         await OutboxService.enqueue_job(
             db, "send_email_verification_email_job", to=user.email, verify_url=verify_url
@@ -495,11 +513,20 @@ async def confirm_email_verification(
 async def request_email_verification(
     request: Request,
     current: CurrentUser = Depends(get_current_user),
+    client_type: str | None = Header(default=None, alias=CLIENT_TYPE_HEADER),
     auth_service: AuthService = Depends(get_auth_service),
+    db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[None]:
-    await auth_service.request_email_verification(
+    raw_token = await auth_service.request_email_verification(
         user=current.user, ctx=_build_request_context(request)
     )
+    verify_url = _build_verify_url(raw_token, client_type)
+    try:
+        await OutboxService.enqueue_job(
+            db, "send_email_verification_email_job", to=current.user.email, verify_url=verify_url
+        )
+    except Exception as exc:
+        logger.warning("email_verification_job_enqueue_failed", error=str(exc))
     return ApiResponse(message="Verification email sent.")
 
 

@@ -1,3 +1,4 @@
+import asyncio
 import json
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
@@ -74,24 +75,26 @@ async def rescue_dashboard(
     if cached is not None:
         return cached
 
-    total = await session.execute(select(func.count(RescueRequest.id)))
-    pending = await session.execute(
-        select(func.count(RescueRequest.id)).where(
-            RescueRequest.status == RescueStatus.REPORTED
-        )
-    )
-    dispatched = await session.execute(
-        select(func.count(RescueRequest.id)).where(
-            RescueRequest.status == RescueStatus.DISPATCHED
-        )
-    )
-    rescued = await session.execute(
-        select(func.count(RescueRequest.id)).where(
-            RescueRequest.status == RescueStatus.RESCUED
-        )
-    )
-    recent = await session.execute(
-        select(RescueRequest).order_by(RescueRequest.created_at.desc()).limit(10)
+    total_res, pending_res, dispatched_res, rescued_res, recent_res = await asyncio.gather(
+        session.execute(select(func.count(RescueRequest.id))),
+        session.execute(
+            select(func.count(RescueRequest.id)).where(
+                RescueRequest.status == RescueStatus.REPORTED
+            )
+        ),
+        session.execute(
+            select(func.count(RescueRequest.id)).where(
+                RescueRequest.status == RescueStatus.DISPATCHED
+            )
+        ),
+        session.execute(
+            select(func.count(RescueRequest.id)).where(
+                RescueRequest.status == RescueStatus.RESCUED
+            )
+        ),
+        session.execute(
+            select(RescueRequest).order_by(RescueRequest.created_at.desc()).limit(10)
+        ),
     )
     recent_list = [
         {
@@ -102,13 +105,13 @@ async def rescue_dashboard(
             "animal_count": r.animal_count,
             "created_at": r.created_at.isoformat(),
         }
-        for r in recent.scalars().all()
+        for r in recent_res.scalars().all()
     ]
     result = {
-        "total_calls": total.scalar_one(),
-        "pending": pending.scalar_one(),
-        "dispatched": dispatched.scalar_one(),
-        "rescued": rescued.scalar_one(),
+        "total_calls": total_res.scalar_one(),
+        "pending": pending_res.scalar_one(),
+        "dispatched": dispatched_res.scalar_one(),
+        "rescued": rescued_res.scalar_one(),
         "recent_calls": recent_list,
     }
     await _set_cache(redis, cache_key, result)
@@ -124,45 +127,38 @@ async def rescue_operations_dashboard(
     if cached is not None:
         return cached
 
-    # Status counts
-    status_rows = (
-        await session.execute(
-            select(RescueRequest.status, func.count())
-            .where(RescueRequest.deleted_at.is_(None))
-            .group_by(RescueRequest.status)
-        )
-    ).all()
-    by_status: dict[str, int] = {str(row[0]): row[1] for row in status_rows}
-
-    # Severity counts
-    severity_rows = (
-        await session.execute(
-            select(RescueRequest.severity, func.count())
-            .where(RescueRequest.deleted_at.is_(None))
-            .group_by(RescueRequest.severity)
-        )
-    ).all()
-    by_severity: dict[str, int] = {str(row[0]): row[1] for row in severity_rows}
-
     active_statuses = [
         RescueStatus.DISPATCHED, RescueStatus.LOCATED, RescueStatus.RESCUED,
     ]
 
-    # Active dispatches
-    active_dispatches = (
-        await session.execute(
+    (
+        status_res,
+        severity_res,
+        active_disp_res,
+        agents_busy_res,
+        agents_total_res,
+        veh_assigned_res,
+        veh_total_res,
+    ) = await asyncio.gather(
+        session.execute(
+            select(RescueRequest.status, func.count())
+            .where(RescueRequest.deleted_at.is_(None))
+            .group_by(RescueRequest.status)
+        ),
+        session.execute(
+            select(RescueRequest.severity, func.count())
+            .where(RescueRequest.deleted_at.is_(None))
+            .group_by(RescueRequest.severity)
+        ),
+        session.execute(
             select(func.count(RescueDispatch.id))
             .join(RescueRequest, RescueRequest.id == RescueDispatch.rescue_request_id)
             .where(
                 RescueRequest.status.in_(active_statuses),
                 RescueRequest.deleted_at.is_(None),
             )
-        )
-    ).scalar_one()
-
-    # Agent availability
-    agents_busy = (
-        await session.execute(
+        ),
+        session.execute(
             select(func.count(func.distinct(RescueDispatchAgent.agent_id)))
             .join(RescueDispatch, RescueDispatch.id == RescueDispatchAgent.dispatch_id)
             .join(RescueRequest, RescueRequest.id == RescueDispatch.rescue_request_id)
@@ -170,10 +166,8 @@ async def rescue_operations_dashboard(
                 RescueRequest.status.in_(active_statuses),
                 RescueRequest.deleted_at.is_(None),
             )
-        )
-    ).scalar_one()
-    agents_total = (
-        await session.execute(
+        ),
+        session.execute(
             select(func.count(func.distinct(User.id)))
             .join(UserRole, UserRole.user_id == User.id)
             .join(Role, Role.id == UserRole.role_id)
@@ -182,13 +176,8 @@ async def rescue_operations_dashboard(
                 User.is_active.is_(True),
                 Role.name == "rescue_agent",
             )
-        )
-    ).scalar_one()
-    agents_available = max(agents_total - agents_busy, 0)
-
-    # Vehicle availability
-    vehicles_assigned = (
-        await session.execute(
+        ),
+        session.execute(
             select(func.count(func.distinct(RescueDispatch.assigned_vehicle_id)))
             .join(RescueRequest, RescueRequest.id == RescueDispatch.rescue_request_id)
             .where(
@@ -196,13 +185,20 @@ async def rescue_operations_dashboard(
                 RescueRequest.status.in_(active_statuses),
                 RescueRequest.deleted_at.is_(None),
             )
-        )
-    ).scalar_one()
-    vehicles_total = (
-        await session.execute(
+        ),
+        session.execute(
             select(func.count(Vehicle.id)).where(Vehicle.deleted_at.is_(None))
-        )
-    ).scalar_one()
+        ),
+    )
+
+    by_status: dict[str, int] = {str(row[0]): row[1] for row in status_res.all()}
+    by_severity: dict[str, int] = {str(row[0]): row[1] for row in severity_res.all()}
+    active_dispatches = active_disp_res.scalar_one()
+    agents_busy = agents_busy_res.scalar_one()
+    agents_total = agents_total_res.scalar_one()
+    agents_available = max(agents_total - agents_busy, 0)
+    vehicles_assigned = veh_assigned_res.scalar_one()
+    vehicles_total = veh_total_res.scalar_one()
     vehicles_available = max(vehicles_total - vehicles_assigned, 0)
 
     result = {
@@ -233,45 +229,56 @@ async def shelter_dashboard(
     if cached is not None:
         return cached
 
-    facilities = await session.execute(select(func.count(ShelterFacility.id)))
-    dogs = await session.execute(select(func.count(DogProfile.id)))
-    adoptable = await session.execute(
-        select(func.count(DogProfile.id)).where(
-            DogProfile.status == DogStatus.SHELTER
-        )
+    (
+        facilities_res,
+        dogs_res,
+        adoptable_res,
+        kennels_res,
+        transfers_res,
+        isolation_res,
+        cleaning_res,
+    ) = await asyncio.gather(
+        session.execute(select(func.count(ShelterFacility.id))),
+        session.execute(select(func.count(DogProfile.id))),
+        session.execute(
+            select(func.count(DogProfile.id)).where(
+                DogProfile.status == DogStatus.SHELTER
+            )
+        ),
+        session.execute(select(func.count(Kennel.id))),
+        session.execute(
+            select(func.count(FacilityTransfer.id)).where(
+                FacilityTransfer.status == TransferStatus.PENDING
+            )
+        ),
+        session.execute(
+            select(func.count(DogProfile.id))
+            .join(ShelterSection, DogProfile.section_id == ShelterSection.id)
+            .where(
+                ShelterSection.section_type == SectionType.ISOLATION,
+                DogProfile.deleted_at.is_(None),
+            )
+        ),
+        session.execute(
+            select(func.count(Kennel.id)).where(
+                Kennel.sanitation_state == KennelSanitationState.NEEDS_CLEANING
+            )
+        ),
     )
-    kennels = await session.execute(select(func.count(Kennel.id)))
-    pending_transfers = await session.execute(
-        select(func.count(FacilityTransfer.id)).where(
-            FacilityTransfer.status == TransferStatus.PENDING
-        )
-    )
-    isolation = await session.execute(
-        select(func.count(DogProfile.id))
-        .join(ShelterSection, DogProfile.section_id == ShelterSection.id)
-        .where(
-            ShelterSection.section_type == SectionType.ISOLATION,
-            DogProfile.deleted_at.is_(None),
-        )
-    )
-    pending_cleaning = await session.execute(
-        select(func.count(Kennel.id)).where(
-            Kennel.sanitation_state == KennelSanitationState.NEEDS_CLEANING
-        )
-    )
-    total_dogs = dogs.scalar_one()
-    total_kennels = kennels.scalar_one()
+
+    total_dogs = dogs_res.scalar_one()
+    total_kennels = kennels_res.scalar_one()
     result = {
-        "total_facilities": facilities.scalar_one(),
+        "total_facilities": facilities_res.scalar_one(),
         "total_dogs": total_dogs,
-        "adoptable_dogs": adoptable.scalar_one(),
+        "adoptable_dogs": adoptable_res.scalar_one(),
         "total_kennels": total_kennels,
         "occupancy_rate": (
             round(total_dogs / total_kennels * 100, 1) if total_kennels > 0 else 0
         ),
-        "pending_transfers": pending_transfers.scalar_one(),
-        "isolation_count": isolation.scalar_one(),
-        "pending_cleaning": pending_cleaning.scalar_one(),
+        "pending_transfers": transfers_res.scalar_one(),
+        "isolation_count": isolation_res.scalar_one(),
+        "pending_cleaning": cleaning_res.scalar_one(),
     }
     await _set_cache(redis, cache_key, result)
     return result

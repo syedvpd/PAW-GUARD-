@@ -65,6 +65,12 @@ def configure_logging() -> None:
         foreign_pre_chain=shared_processors,
     )
 
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(formatter)
 

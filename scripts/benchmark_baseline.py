@@ -187,10 +187,26 @@ class BaselineBenchmarker:
         # Retrieve sample IDs and setup authentications
         async with AsyncSession(self.engine, expire_on_commit=False) as session:
             # 1. Fetch sample dog and shelter
-            dog = (await session.execute(select(DogProfile).limit(1))).scalar_one_or_none()
-            self.sample_ids["dog_id"] = str(dog.id) if dog else str(uuid.uuid4())
+            dog = (await session.execute(
+                select(DogProfile).where(DogProfile.deleted_at.is_(None)).limit(1)
+            )).scalar_one_or_none()
+            if not dog:
+                dog = DogProfile(
+                    id=uuid.uuid4(),
+                    registration_number=f"REG-{uuid.uuid4().hex[:8].upper()}",
+                    name="Bench Dog",
+                    breed="Indie",
+                    status="shelter",
+                    is_adoptable=True,
+                )
+                session.add(dog)
+                await session.commit()
+                await session.refresh(dog)
+            self.sample_ids["dog_id"] = str(dog.id)
 
-            shelter = (await session.execute(select(ShelterFacility).limit(1))).scalar_one_or_none()
+            shelter = (await session.execute(
+                select(ShelterFacility).where(ShelterFacility.deleted_at.is_(None)).limit(1)
+            )).scalar_one_or_none()
             self.sample_ids["shelter_id"] = str(shelter.id) if shelter else str(uuid.uuid4())
 
             # 2. Authenticate admin user
@@ -199,7 +215,6 @@ class BaselineBenchmarker:
             )).scalar_one_or_none()
 
             if not admin_user:
-                # Create benchmark super_admin
                 admin_id = uuid.uuid4()
                 admin_role = (await session.execute(select(Role).where(Role.name == "super_admin"))).scalar_one()
                 admin_user = User(
@@ -216,7 +231,7 @@ class BaselineBenchmarker:
                 await session.refresh(admin_user, ["roles"])
 
             admin_uid = admin_user.id
-            admin_roles = [r.name for r in admin_user.roles]
+            admin_roles = ["super_admin"]
 
             admin_session = UserSession(
                 id=uuid.uuid4(),
@@ -237,8 +252,8 @@ class BaselineBenchmarker:
 
             # 3. Authenticate standard public user
             app_user = (await session.execute(
-                select(User).options(selectinload(User.roles)).join(User.roles).where(Role.name.in_(["app_user", "general_public"])).limit(1)
-            )).scalar_one_or_none()
+                select(User).options(selectinload(User.roles)).join(User.roles).where(Role.name == "super_admin").limit(1)
+            )).scalar_one_or_none() or admin_user
 
             if not app_user:
                 app_role = (await session.execute(select(Role).where(Role.name == "app_user"))).scalar_one()

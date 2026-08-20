@@ -53,14 +53,16 @@ class CompanionPetRepository:
         stmt = select(CompanionPet).where(CompanionPet.deleted_at.is_(None))
         if owner_id is not None:
             stmt = stmt.where(CompanionPet.owner_id == owner_id)
-        count = await self._session.execute(select(func.count()).select_from(stmt.subquery()))
-        total = count.scalar_one()
-        stmt = apply_sorting(stmt, sort, self.PET_SORTABLE_FIELDS, "created_at")
-        rows = (
-            (await self._session.execute(stmt.offset(page.offset).limit(page.limit)))
-            .scalars()
-            .all()
-        )
+        sorted_stmt = apply_sorting(stmt, sort, self.PET_SORTABLE_FIELDS, "created_at")
+        page_stmt = sorted_stmt.offset(page.offset).limit(page.limit)
+        rows = (await self._session.execute(page_stmt)).scalars().all()
+
+        if page.page == 1 and len(rows) < page.limit:
+            total = len(rows)
+        else:
+            count = await self._session.execute(select(func.count()).select_from(stmt.order_by(None).subquery()))
+            total = count.scalar_one()
+
         return rows, total
 
     async def create_medical_record(self, record: PetMedicalRecord) -> PetMedicalRecord:

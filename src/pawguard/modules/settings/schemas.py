@@ -143,6 +143,7 @@ class GeneralSettingsResponse(BaseModel):
     cors_origins: str
     web_app_url: str
     admin_app_url: str
+    mobile_deep_link_base: str
 
 
 class EmailSettingsResponse(BaseModel):

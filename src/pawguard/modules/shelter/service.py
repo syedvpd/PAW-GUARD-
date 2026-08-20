@@ -476,7 +476,7 @@ class ShelterService:
     ) -> PaginatedResponse[ShelterFacilityResponse]:
         facilities, total = await self._repo.list_facilities_paginated(
             page_params, sort, search_term=search_term, status=status,
-            facility_type=FacilityType(facility_type) if facility_type else None,
+            facility_type=FacilityType(facility_type) if isinstance(facility_type, str) else facility_type,
         )
         return PaginatedResponse(
             data=list(facilities),

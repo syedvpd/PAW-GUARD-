@@ -217,6 +217,7 @@ class AppConfigService:
             cors_origins=s.cors_origins,
             web_app_url=s.web_app_url,
             admin_app_url=s.admin_app_url,
+            mobile_deep_link_base=s.mobile_deep_link_base,
         )
 
     def get_email_settings(self) -> dict[str, Any]:

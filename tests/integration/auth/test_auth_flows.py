@@ -18,6 +18,7 @@ from pawguard.modules.auth.models import (
     EmailVerificationToken,
     User,
 )
+from pawguard.modules.outbox.models import OutboxEvent
 
 REGISTER_PAYLOAD = {
     "email": "testuser@example.com",
@@ -43,6 +44,43 @@ class TestRegistration:
         assert data["email"] == REGISTER_PAYLOAD["email"]
         assert data["full_name"] == REGISTER_PAYLOAD["full_name"]
         assert data["is_verified"] is False
+
+    async def test_register_web_uses_web_verify_url(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        await client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
+        events = (
+            await db_session.execute(
+                select(OutboxEvent).where(
+                    OutboxEvent.job_name == "send_email_verification_email_job"
+                )
+            )
+        ).scalars().all()
+        matching = [e for e in events if e.payload.get("to") == REGISTER_PAYLOAD["email"]]
+        assert matching, "expected a verification email outbox event"
+        verify_url = matching[-1].payload["verify_url"]
+        assert verify_url.startswith("http://localhost:3000/verify-email?token=")
+        assert "pawguard://" not in verify_url
+
+    async def test_register_mobile_uses_deep_link_verify_url(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        await client.post(
+            "/api/v1/auth/register",
+            json=REGISTER_PAYLOAD,
+            headers={CLIENT_TYPE_HEADER: ClientType.MOBILE.value},
+        )
+        events = (
+            await db_session.execute(
+                select(OutboxEvent).where(
+                    OutboxEvent.job_name == "send_email_verification_email_job"
+                )
+            )
+        ).scalars().all()
+        matching = [e for e in events if e.payload.get("to") == REGISTER_PAYLOAD["email"]]
+        assert matching, "expected a verification email outbox event"
+        verify_url = matching[-1].payload["verify_url"]
+        assert verify_url.startswith("pawguard://pawguard.com/verify-email?token=")
 
     async def test_register_duplicate_email(self, client: AsyncClient) -> None:
         await client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)

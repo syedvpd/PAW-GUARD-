@@ -162,6 +162,10 @@ class Settings(BaseSettings):
     web_app_url: str = "http://localhost:3000"
     admin_app_url: str = "http://localhost:5173"
     frontend_base_url: str = ""
+    # Mobile deep link base used for email verification links sent to the
+    # mobile app. The Flutter app registers the ``pawguard://`` scheme and
+    # handles ``pawguard://pawguard.com/verify-email?token=<TOKEN>``.
+    mobile_deep_link_base: str = "pawguard://pawguard.com"
 
     # --- Rate limiting ---
     rate_limiting_enabled: bool = True

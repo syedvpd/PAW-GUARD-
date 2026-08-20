@@ -107,13 +107,15 @@ class AdoptionRepository:
         if adopter_id is not None:
             stmt = stmt.where(AdoptionApplication.adopter_id == adopter_id)
 
-        stmt = apply_sorting(stmt, sort, self.SORTABLE_FIELDS)
+        sorted_stmt = apply_sorting(stmt, sort, self.SORTABLE_FIELDS)
+        page_stmt = sorted_stmt.offset(page.offset).limit(page.limit)
+        results = (await self._session.execute(page_stmt)).scalars().all()
 
-        count_stmt = select(func.count()).select_from(stmt.subquery())
-        total = (await self._session.execute(count_stmt)).scalar_one()
-
-        stmt = stmt.offset(page.offset).limit(page.limit)
-        results = (await self._session.execute(stmt)).scalars().all()
+        if page.page == 1 and len(results) < page.limit:
+            total = len(results)
+        else:
+            count_stmt = select(func.count()).select_from(stmt.order_by(None).subquery())
+            total = (await self._session.execute(count_stmt)).scalar_one()
 
         return results, total
 
