@@ -66,11 +66,10 @@ class _NullRedis:
         await asyncio.sleep(0)
         return False
 
-    async def scan_iter(self, match: str = "", count: int | None = None):
+    async def scan_iter(self, match: str = "", count: int | None = None) -> AsyncGenerator[Any, None]:
         """No-op async generator mirroring redis-py's scan_iter protocol."""
-        await asyncio.sleep(0)
-        return
-        yield
+        if False:
+            yield None
 
     async def geoadd(self, name: str, *args: Any, **kwargs: Any) -> int:
         await asyncio.sleep(0)

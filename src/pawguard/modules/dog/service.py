@@ -23,6 +23,7 @@ from pawguard.core.metrics import increment_counter
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
+from pawguard.services.storage_service import StorageService
 from pawguard.modules.auth.models import AuthAuditEventType
 from pawguard.modules.dog.models import (
     DogActivityEventType,
@@ -384,11 +385,7 @@ class DogService:
         )
         result = await self._repo._session.execute(stmt)
         files = result.scalars().all()
-        if not files:
-            return []
-        from pawguard.services.storage_service import StorageService as S3Storage
-
-        s3 = S3Storage()
+        s3 = StorageService()
         return [s3.generate_presigned_download_url(object_key=f.object_key) for f in files]
 
     async def update_dog(

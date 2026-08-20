@@ -4,6 +4,7 @@ Never leak SQL errors, stack traces, or framework internals to clients — every
 carries a stable machine-readable `code` and a safe client-facing `message`.
 """
 
+import re
 from collections.abc import Sequence
 from enum import StrEnum
 from typing import Any
@@ -118,7 +119,6 @@ def clean_error_message(msg: str) -> str:
     if "MissingGreenlet" in msg or "Error extracting attribute" in msg or "get_attribute_error" in msg:
         return "Internal processing error: database entity relations failed to load during serialization."
 
-    import re
     msg = re.sub(r"\s*For further information visit https://errors\.pydantic\.dev/\S+", "", msg)
     msg = re.sub(r"\s*\[type=[^\]\s]+\]", "", msg)
     msg = re.sub(r"\(Background on this error at: [^)]+\)", "", msg)

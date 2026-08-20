@@ -91,10 +91,7 @@ async def outbox_poller_loop(ctx: dict[str, Any]) -> None:
         except Exception as e:
             logger.error("outbox_poller_loop_error", error=str(e))
         
-        try:
-            await asyncio.sleep(2)
-        except asyncio.CancelledError:
-            raise
+        await asyncio.sleep(2)
 
 
 async def startup(ctx: dict[str, object]) -> None:
