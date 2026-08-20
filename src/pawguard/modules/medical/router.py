@@ -21,7 +21,7 @@ from pawguard.core.search import SortParams, sort_params
 from pawguard.db.session import get_db
 from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
-from pawguard.modules.auth.rbac import require_permission
+from pawguard.modules.auth.rbac import require_permission, require_role
 from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.inventory.repository import InventoryRepository
 from pawguard.modules.inventory.service import InventoryService
@@ -150,7 +150,10 @@ async def prescribe_medication(
 @router.post(
     "/clearance/{dog_id}",
     response_model=ApiResponse[bool],
-    dependencies=[Depends(require_permission("medical:clearance"))],
+    dependencies=[
+        Depends(require_permission("medical:clearance")),
+        Depends(require_role("veterinarian")),
+    ],
 )
 async def authorize_adoption_clearance(
     dog_id: uuid.UUID,
@@ -159,7 +162,9 @@ async def authorize_adoption_clearance(
     service: MedicalService = Depends(get_medical_service),
     payload: MedicalClearanceCreate | None = None,
 ) -> ApiResponse[bool]:
-    roles = {r.name for r in current_user.user.roles}
+    roles = set(current_user.claims.roles)
+    if hasattr(current_user.user, "roles") and current_user.user.roles:
+        roles.update(r.name for r in current_user.user.roles)
     ip = request.client.host if request.client else None
     success = await service.authorize_adoption_clearance(
         dog_id, roles, actor_id=current_user.id, ip_address=ip, payload=payload,

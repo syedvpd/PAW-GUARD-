@@ -255,7 +255,7 @@ class MedicalService:
         ip_address: str | None = None,
         payload: MedicalClearanceCreate | None = None,
     ) -> bool:
-        if "veterinarian" not in roles:
+        if not ("veterinarian" in roles or "super_admin" in roles or "system:admin" in roles):
             raise ForbiddenError(
                 "Adoption medical clearances require a veterinarian's authority."
             )

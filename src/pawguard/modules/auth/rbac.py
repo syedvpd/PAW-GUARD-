@@ -109,3 +109,30 @@ class RequirePermission:
 
 def require_permission(*permission_codes: str) -> RequirePermission:
     return RequirePermission(*permission_codes)
+
+
+class RequireRole:
+    """FastAPI dependency: `Depends(require_role("veterinarian"))`."""
+
+    def __init__(self, *role_names: str) -> None:
+        self.role_names = set(role_names)
+
+    async def __call__(self, current: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+        if is_admin_role(current.claims):
+            return current
+
+        user_roles = set(current.claims.roles)
+        if hasattr(current.user, "roles") and current.user.roles:
+            user_roles.update(r.name for r in current.user.roles)
+
+        if not (self.role_names & user_roles):
+            req_str = ", ".join(self.role_names)
+            raise InsufficientPermissionsError(
+                f"Missing required role: {req_str}"
+            )
+        return current
+
+
+def require_role(*role_names: str) -> RequireRole:
+    return RequireRole(*role_names)
+
