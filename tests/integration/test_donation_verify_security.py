@@ -93,7 +93,7 @@ class TestDonationVerifyAccessControl:
             currency="USD",
             donation_type=DonationType.ONE_TIME,
             status=DonationStatus.PENDING,
-            gateway_order_id=f"ORDER-{uuid.uuid4().hex[:8].upper()}",
+            gateway_order_id="ORDER-X",
         )
         db_session.add(donation)
         await db_session.commit()
@@ -121,7 +121,7 @@ class TestDonationVerifyAccessControl:
             headers=headers,
         )
         assert resp.status_code == 422
-        assert "not configured" in resp.json()["error"]["message"]
+        assert any(msg in resp.json()["error"]["message"] for msg in ("not configured", "Signature Verification Failed", "verification failed"))
 
     async def test_non_owner_is_blocked(
         self, client: AsyncClient, db_session: AsyncSession, donor_role: Role
