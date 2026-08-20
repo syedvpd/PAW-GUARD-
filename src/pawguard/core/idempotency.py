@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 import logging
+from typing import Any
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response, JSONResponse
