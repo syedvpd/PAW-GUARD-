@@ -174,6 +174,19 @@ class FosterService:
         placements = await self._repo.get_placements_by_foster_id(profile.id)
         return list(placements)
 
+    async def get_placements_for_profile(self, profile_id: uuid.UUID) -> list[FosterPlacement]:
+        """Coordinator/admin view of a specific foster's placements (dogs
+        assigned to them). get_my_placements above is the volunteer's own
+        self-service equivalent; there was no admin-facing counterpart, so
+        the admin app had no way to load a foster's assigned dogs from the
+        database - it only ever showed placements created earlier in the
+        same in-memory session."""
+        profile = await self._repo.get_profile_by_id(profile_id)
+        if profile is None:
+            raise NotFoundError("Foster profile not found.")
+        placements = await self._repo.get_placements_by_foster_id(profile_id)
+        return list(placements)
+
     async def soft_delete_profile(
         self,
         profile_id: uuid.UUID,

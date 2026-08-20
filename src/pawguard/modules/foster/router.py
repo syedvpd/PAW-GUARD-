@@ -183,6 +183,22 @@ async def place_dog(
     )
 
 
+@router.get(
+    "/{profile_id}/placements",
+    response_model=ApiResponse[list[FosterPlacementResponse]],
+    dependencies=[Depends(require_permission("foster:read"))],
+)
+async def list_foster_placements(
+    profile_id: uuid.UUID,
+    service: FosterService = Depends(get_foster_service),
+) -> ApiResponse[list[FosterPlacementResponse]]:
+    """Coordinator/admin view of the dogs assigned to a specific foster."""
+    placements = await service.get_placements_for_profile(profile_id)
+    return ApiResponse(
+        data=[FosterPlacementResponse.model_validate(p) for p in placements]
+    )
+
+
 @router.post(
     "/placements/{placement_id}/return",
     response_model=ApiResponse[FosterPlacementResponse],
