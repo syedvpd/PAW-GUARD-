@@ -82,7 +82,7 @@ def create_thumbnail(content: bytes, max_size: int = 400) -> bytes | None:
     try:
         with Image.open(BytesIO(content)) as img:
             img.load()
-    except (UnidentifiedImageError, OSError, ValueError, TypeError):
+    except (OSError, ValueError, TypeError):
         return None
 
     # Expose the correct pixel orientation and drop the EXIF block.

@@ -106,17 +106,18 @@ def _sanitize_errors(errors: Sequence[Any]) -> list[dict[str, Any]]:
     return sanitized
 
 
+ERR_PATTERNS = ("MissingGreenlet", "Error extracting attribute", "get_attribute_error")
+PREFIX_PATTERNS = ("1 validation error for", "Validation error for")
+
+
 def clean_error_message(msg: str) -> str:
     """Format validation and exception messages to be concise, clean (1-2 lines),
-    and production-ready per enterprise API design standards (Google / Amazon).
-
-    Strips raw internal stack traces, MissingGreenlet/SQLAlchemy framework errors,
-    Pydantic documentation URLs, and verbose dump blocks.
+    and production-ready per enterprise API design standards.
     """
     if not msg:
         return "Invalid request payload or schema validation error."
 
-    if "MissingGreenlet" in msg or "Error extracting attribute" in msg or "get_attribute_error" in msg:
+    if any(p in msg for p in ERR_PATTERNS):
         return "Internal processing error: database entity relations failed to load during serialization."
 
     msg = re.sub(r"\s*For further information visit https://errors\.pydantic\.dev/\S+", "", msg)
@@ -130,13 +131,7 @@ def clean_error_message(msg: str) -> str:
     if len(lines) == 1:
         return lines[0]
 
-    # Summarize Pydantic multi-line errors into a clean 1-line statement
-    cleaned_lines = []
-    for line in lines:
-        if line.startswith("1 validation error for") or line.startswith("Validation error for"):
-            continue
-        cleaned_lines.append(line)
-
+    cleaned_lines = [line for line in lines if not line.startswith(PREFIX_PATTERNS)]
     return " | ".join(cleaned_lines) if cleaned_lines else lines[0]
 
 

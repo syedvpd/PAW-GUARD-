@@ -35,7 +35,7 @@ class _HistogramAccumulator:
         self.sum: float = 0.0
         self.min: float = float("inf")
         self.max: float = 0.0
-        self.buckets: dict[float, int] = {b: 0 for b in buckets}
+        self.buckets: dict[float, int] = dict.fromkeys(buckets, 0)
 
     def observe(self, val: float) -> None:
         self.count += 1

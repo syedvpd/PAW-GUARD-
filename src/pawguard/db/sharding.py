@@ -44,8 +44,7 @@ class ShardedSessionManager:
 
     def get_shard_key_for_shelter(self, shelter_id: uuid.UUID) -> str:
         """Example routing strategy: shard database by region group based on shelter ID prefix."""
-        # Simple consistent hashing or routing rule
         id_str = str(shelter_id)
-        if id_str.startswith("0") or id_str.startswith("1") or id_str.startswith("2"):
+        if id_str.startswith(("0", "1", "2")):
             return "shard_east"
         return "shard_west"
