@@ -53,7 +53,7 @@ class VolunteerRepository:
     async def get_application_by_user_id(self, user_id: uuid.UUID) -> VolunteerApplication | None:
         stmt = (
             select(VolunteerApplication)
-            .options(selectinload(VolunteerApplication.user))
+            .options(selectinload(VolunteerApplication.user).selectinload(User.roles))
             .where(
                 VolunteerApplication.user_id == user_id,
                 VolunteerApplication.deleted_at.is_(None),
@@ -64,7 +64,7 @@ class VolunteerRepository:
     async def get_application_by_id(self, application_id: uuid.UUID) -> VolunteerApplication | None:
         stmt = (
             select(VolunteerApplication)
-            .options(selectinload(VolunteerApplication.user))
+            .options(selectinload(VolunteerApplication.user).selectinload(User.roles))
             .where(
                 VolunteerApplication.id == application_id,
                 VolunteerApplication.deleted_at.is_(None),
@@ -85,7 +85,7 @@ class VolunteerRepository:
     ) -> Sequence[VolunteerApplication]:
         stmt = (
             select(VolunteerApplication)
-            .options(selectinload(VolunteerApplication.user))
+            .options(selectinload(VolunteerApplication.user).selectinload(User.roles))
             .where(VolunteerApplication.deleted_at.is_(None))
         )
         if status is not None:
