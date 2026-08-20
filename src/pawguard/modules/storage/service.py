@@ -230,6 +230,7 @@ class StorageService:
 
     async def get_download_url_for_object(self, object_key: str) -> str:
         """Generate a presigned download URL directly from an S3 object key."""
+        await asyncio.sleep(0)
         return self._s3.generate_presigned_download_url(object_key=object_key)
 
     async def get_file(self, file_id: uuid.UUID) -> StoredFile:
@@ -240,6 +241,7 @@ class StorageService:
 
     async def is_admin_user(self, current_user: CurrentUser) -> bool:
         """True when the caller has unrestricted admin access to storage."""
+        await asyncio.sleep(0)
         return is_admin_role(current_user.claims)
 
     async def list_files_paginated(

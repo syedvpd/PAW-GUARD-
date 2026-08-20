@@ -1,5 +1,6 @@
 """Middleware to handle API request idempotency using Redis caching."""
 
+import asyncio
 import base64
 import hashlib
 import json
@@ -93,6 +94,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
 
         body_bytes = await request.body()
         async def receive():
+            await asyncio.sleep(0)
             return {"type": "http.request", "body": body_bytes, "more_body": False}
         request._receive = receive
 

@@ -74,7 +74,7 @@ _MIX_BREED_KEYWORDS = ("mix", "cross", "mongrel", "indie")
 # silently extracting "5 years"/"18 months" - consistent with the migration's
 # anchored backfill, and unparseable rows are excluded from filters rather
 # than mis-filtered (PRR 3.1.4).
-_AGE_NUMBER_RE = re.compile(r"^\s*(\d+)\s*-?\s*(year|month|yr|mo)", re.IGNORECASE)
+_AGE_NUMBER_RE = re.compile(r"^\s*(\d+)[-\s]*(year|month|yr|mo)", re.IGNORECASE)
 
 
 def _infer_breed_classification(breed: str) -> DogBreedClassification:

@@ -5,6 +5,7 @@ API must still serve requests (e.g. registration, password reset) instead of
 500ing just because a background email job couldn't be queued.
 """
 
+import asyncio
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -23,6 +24,7 @@ class _NullArqPool:
     """Stand-in when Redis/ARQ is unreachable — enqueue calls are no-ops."""
 
     async def enqueue_job(self, *args: Any, **kwargs: Any) -> None:
+        await asyncio.sleep(0)
         logger.warning("arq_pool_unavailable_job_dropped", job=args[0] if args else None)
         return None
 

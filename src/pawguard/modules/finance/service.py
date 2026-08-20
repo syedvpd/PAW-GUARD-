@@ -184,15 +184,8 @@ class FinanceService:
             status=TransactionStatus.PENDING,
         )
         await self._repo.create_transaction(tx)
-        if payload.transaction_type in (
-            TransactionType.INCOME,
-            TransactionType.RECONCILIATION,
-        ) or payload.transaction_type == TransactionType.EXPENSE:
-            debit, credit = payload.debit_account_id, payload.credit_account_id
-            debit_amt, credit_amt = payload.amount, payload.amount
-        else:
-            debit, credit = payload.debit_account_id, payload.credit_account_id
-            debit_amt, credit_amt = payload.amount, payload.amount
+        debit, credit = payload.debit_account_id, payload.credit_account_id
+        debit_amt, credit_amt = payload.amount, payload.amount
         entry = GeneralLedgerEntry(
             account_id=debit,
             transaction_id=tx.id,

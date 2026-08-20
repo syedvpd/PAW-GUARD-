@@ -639,7 +639,7 @@ class CompanionPetService:
                     f"/companion-pets/{pet.id if pet else tag.pet_id}",
                 )
             except Exception:
-                logger.debug("push_notification_skipped", event="safety_tag_scan")
+                logger.debug("push_notification_skipped", action="safety_tag_scan")
 
         return tag, pet, lost_info
 

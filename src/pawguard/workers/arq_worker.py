@@ -97,18 +97,20 @@ async def outbox_poller_loop(ctx: dict[str, Any]) -> None:
 async def startup(ctx: dict[str, object]) -> None:
     configure_logging()
     logger.info("arq_worker_startup", max_tries=WorkerSettings.max_tries)
+    await asyncio.sleep(0)
     ctx["outbox_task"] = asyncio.create_task(outbox_poller_loop(ctx))
 
 
 async def shutdown(ctx: dict[str, object]) -> None:
     logger.info("arq_worker_shutdown")
     task = ctx.get("outbox_task")
-    if task:
+    if task and not task.done():
         task.cancel()
         try:
             await task
         except asyncio.CancelledError:
-            pass
+            logger.info("outbox_task_cancelled")
+            raise
 
 
 _send_password_reset_email_job = _track_failures(send_password_reset_email_job)

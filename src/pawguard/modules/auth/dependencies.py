@@ -38,7 +38,7 @@ class CurrentUser:
         return self.user.id
 
 
-async def _extract_access_token(
+def _extract_access_token(
     request: Request,
     authorization: str | None = Header(default=None),
     access_token_cookie: str | None = Cookie(default=None, alias=ACCESS_TOKEN_COOKIE_NAME),
