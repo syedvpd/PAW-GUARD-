@@ -27,7 +27,7 @@ from pawguard.modules.auth.rbac import has_permission, require_permission
 from pawguard.modules.notifications.repository import NotificationRepository
 from pawguard.modules.notifications.service import NotificationService
 from pawguard.modules.storage.schemas import DownloadUrlResponse
-from pawguard.modules.volunteer.models import VolunteerStatus
+from pawguard.modules.volunteer.models import ApplicationStatus, VolunteerStatus
 from pawguard.modules.volunteer.repository import VolunteerRepository
 from pawguard.modules.volunteer.schemas import (
     ShiftAttendanceResponse,
@@ -111,6 +111,25 @@ async def get_my_application(
     if application is None:
         return ApiResponse(data=None, message="No application found.")
     return ApiResponse(data=VolunteerApplicationResponse.model_validate(application))
+
+
+@router.get(
+    "/applications",
+    response_model=PaginatedResponse[VolunteerApplicationResponse],
+    dependencies=[Depends(require_permission("volunteer:read"))],
+)
+async def list_applications(
+    params: PageParams = Depends(page_params),
+    status: ApplicationStatus | None = Query(None, description="Filter by application status"),
+    service: VolunteerService = Depends(get_volunteer_service),
+) -> PaginatedResponse[VolunteerApplicationResponse]:
+    """Coordinator review queue: applications submitted via POST /apply,
+    not yet promoted to a VolunteerProfile by approve/reject."""
+    applications, meta = await service.list_applications(page_params=params, status=status)
+    return PaginatedResponse(
+        data=[VolunteerApplicationResponse.model_validate(a) for a in applications],
+        meta=meta,
+    )
 
 
 @router.post(

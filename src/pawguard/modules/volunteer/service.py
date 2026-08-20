@@ -193,6 +193,24 @@ class VolunteerService:
         """Get the volunteer application for a user."""
         return await self._repo.get_application_by_user_id(user_id)
 
+    async def list_applications(
+        self,
+        *,
+        page_params: PageParams | None = None,
+        status: ApplicationStatus | None = None,
+    ) -> tuple[list[VolunteerApplication], PaginationMeta]:
+        """List volunteer applications for the coordinator review queue.
+
+        Applications live in a separate table from approved VolunteerProfile
+        rows (see apply_to_volunteer/approve_application) - this is the only
+        way for a coordinator to discover application_ids to pass to
+        approve_application/reject_application.
+        """
+        total = await self._repo.count_applications(status=status)
+        applications = await self._repo.list_applications(status=status, page_params=page_params)
+        meta = build_pagination_meta(total=total, params=page_params or PageParams())
+        return list(applications), meta
+
     async def get_volunteer_lifecycle_status(self, user_id: uuid.UUID) -> VolunteerLifecycleStatus:
         """Get the complete volunteer lifecycle status for a user."""
         application = await self._repo.get_application_by_user_id(user_id)
