@@ -479,26 +479,48 @@ class NotificationGovernanceService:
         body: str,
         action_url: str | None,
     ) -> None:
-        """Internal helper to dispatch push via FCM."""
+        """Internal helper to dispatch push via FCM and create in-app Notification records."""
         from pawguard.modules.auth.models import User
         if target_user_ids:
             uids = target_user_ids
         else:
-            # Broadcast to all active users with fcm_token
+            # Broadcast to all active users
             stmt = select(User.id).where(
                 User.is_active.is_(True),
                 User.deleted_at.is_(None),
-                User.fcm_token.isnot(None),
-                User.fcm_token != "",
             )
             uids = list((await self._session.execute(stmt)).scalars().all())
 
         if not uids:
             return
 
+        from datetime import UTC, datetime
+        from pawguard.modules.notifications.models import Notification
         from pawguard.modules.notifications.repository import NotificationRepository
         from pawguard.modules.notifications.service import NotificationService
+
         notif_svc = NotificationService(NotificationRepository(self._session))
+
+        # 1. Create in-app notification rows in database
+        now = datetime.now(UTC)
+        notif_rows = [
+            Notification(
+                user_id=uid,
+                title=title,
+                body=body,
+                notification_type="governance_push",
+                action_url=action_url,
+                sent_at=now,
+            )
+            for uid in uids
+        ]
+        try:
+            await notif_svc._repo.create_many(notif_rows)
+            await self._session.flush()
+        except Exception as exc:
+            logger.warning("failed_creating_in_app_notifications", error=str(exc))
+
+        # 2. Send real-time FCM Push Notifications to active device tokens
         await notif_svc._send_push_to_users(uids, title, body, action_url)
 
     async def record_audit(
@@ -535,3 +557,35 @@ class NotificationGovernanceService:
         self._session.add(log)
         await self._session.flush()
         return log
+
+
+async def dispatch_governed_notification(
+    session: AsyncSession,
+    *,
+    trigger_code: str,
+    module_name: str,
+    title: str,
+    body: str,
+    target_user_ids: list[uuid.UUID] | None = None,
+    action_url: str | None = None,
+    image_url: str | None = None,
+    metadata_json: dict[str, Any] | None = None,
+    requested_by: uuid.UUID | None = None,
+) -> tuple[str, NotificationApprovalQueue | None]:
+    """Top-level helper to trigger a governed push notification from any module service.
+
+    Evaluates Global -> Module -> Trigger governance settings. If auto-approved, dispatches
+    real-time FCM push & in-app notification immediately. If approval required, queues for Admin.
+    """
+    svc = NotificationGovernanceService(session)
+    return await svc.process_event(
+        trigger_code=trigger_code,
+        module_name=module_name,
+        title=title,
+        body=body,
+        target_user_ids=target_user_ids,
+        action_url=action_url,
+        image_url=image_url,
+        metadata_json=metadata_json,
+        requested_by=requested_by,
+    )

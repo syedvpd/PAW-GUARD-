@@ -486,6 +486,22 @@ class DonationService:
         await self._generate_receipt(res)
         await self._refresh_campaign_progress(res.campaign_id)
         await self._post_donation_to_ledger(res)
+
+        if res.donor and res.donor.user_id:
+            try:
+                from pawguard.modules.notifications.governance_service import dispatch_governed_notification
+                await dispatch_governed_notification(
+                    self._repo._session,
+                    trigger_code="donation_received",
+                    module_name="donation",
+                    title="Thank you for your donation!",
+                    body=f"Your donation of {res.currency} {res.amount} has been confirmed. Thank you for supporting PawGuard!",
+                    target_user_ids=[res.donor.user_id],
+                    action_url=f"/donations/history",
+                )
+            except Exception as exc:
+                logger.warning("failed_sending_donation_push", error=str(exc))
+
         return res
 
     async def handle_gateway_webhook(self, payload: bytes, signature: str) -> None:

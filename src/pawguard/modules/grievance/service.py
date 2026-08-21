@@ -53,9 +53,22 @@ class GrievanceService:
 
     async def submit_complaint(self, payload: GrievanceCreate) -> GrievanceTicket:
         sla_due_at = datetime.now(UTC) + timedelta(hours=DEFAULT_SLA_HOURS)
-        return await self._repo.create_ticket(
+        ticket = await self._repo.create_ticket(
             GrievanceTicket(**payload.model_dump(), sla_due_at=sla_due_at)
         )
+        try:
+            from pawguard.modules.notifications.governance_service import dispatch_governed_notification
+            await dispatch_governed_notification(
+                self._repo._session,
+                trigger_code="grievance_submitted",
+                module_name="grievance",
+                title=f"New Grievance Submitted: {ticket.subject[:30]}",
+                body=f"A new grievance ticket #{ticket.ticket_number or ticket.id} has been submitted.",
+                action_url=f"/grievances/{ticket.id}",
+            )
+        except Exception as exc:
+            logger.warning("failed_sending_grievance_submission_push", error=str(exc))
+        return ticket
 
     async def update_ticket(
         self,
@@ -134,6 +147,21 @@ class GrievanceService:
                     "changes": {"status": new_status},
                 },
             )
+
+        if ticket.complainant_user_id:
+            try:
+                from pawguard.modules.notifications.governance_service import dispatch_governed_notification
+                await dispatch_governed_notification(
+                    self._repo._session,
+                    trigger_code="grievance_status_updated",
+                    module_name="grievance",
+                    title=f"Grievance Ticket Status: {new_status.value.upper()}",
+                    body=f"Your grievance ticket #{ticket.ticket_number or ticket.id} has been updated to {new_status.value}.",
+                    target_user_ids=[ticket.complainant_user_id],
+                    action_url=f"/grievances/my/{ticket.id}",
+                )
+            except Exception as exc:
+                logger.warning("failed_sending_grievance_status_push", error=str(exc))
 
         return ticket
 

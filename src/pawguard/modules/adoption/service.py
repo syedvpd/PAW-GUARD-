@@ -93,21 +93,18 @@ class AdoptionService:
         action_url: str | None = None,
     ) -> None:
         """Send the adopter an in-app notification, email, and push about their application."""
-        if self._notification_svc is None or application.adopter is None:
+        if application.adopter is None:
             return
         try:
-            from pawguard.modules.notifications.schemas import NotificationSend
-            await self._notification_svc.send_notification(
-                payload=NotificationSend(
-                    user_id=application.adopter_id,
-                    title=title,
-                    body=body,
-                    notification_type=notification_type,
-                    action_url=action_url,
-                    send_email=True,
-                    send_push=True,
-                ),
-                user_email=application.adopter.email,
+            from pawguard.modules.notifications.governance_service import dispatch_governed_notification
+            await dispatch_governed_notification(
+                self._repo._session,
+                trigger_code=notification_type,
+                module_name="adoption",
+                title=title,
+                body=body,
+                target_user_ids=[application.adopter_id],
+                action_url=action_url,
             )
         except Exception as exc:
             logger.warning(

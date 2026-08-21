@@ -298,6 +298,20 @@ class FosterService:
                 },
             )
 
+        try:
+            from pawguard.modules.notifications.governance_service import dispatch_governed_notification
+            await dispatch_governed_notification(
+                self._repo._session,
+                trigger_code="foster_assigned",
+                module_name="foster",
+                title=f"New Foster Placement: {dog.name}",
+                body=f"You have been assigned to foster {dog.name}. Please check the foster portal for details.",
+                target_user_ids=[foster.user_id],
+                action_url=f"/foster/placements/{res.id}",
+            )
+        except Exception as exc:
+            logger.warning("failed_sending_foster_placement_push", error=str(exc))
+
         dog_name = dog.name if dog else "A dog"
         await self._send_push(
             [foster.user_id],
