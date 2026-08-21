@@ -10,6 +10,10 @@ from typing import Any
 os.environ.setdefault("AWS_ACCESS_KEY_ID", "mock_key")
 os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "mock_secret")
 os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
+os.environ.setdefault(
+    "DATABASE_URL",
+    "postgresql+asyncpg://postgres:postgres@localhost:5432/pawguard_test",
+)
 os.environ["ENVIRONMENT"] = "test"
 
 import base64
