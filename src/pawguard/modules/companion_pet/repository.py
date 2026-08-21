@@ -9,7 +9,6 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-
 from pawguard.core.pagination import PageParams
 from pawguard.core.search import SortParams, apply_sorting, build_search_filter
 from pawguard.modules.auth.models import Role, User
@@ -199,6 +198,14 @@ class CompanionPetRepository:
         )
         return (await self._session.execute(stmt)).scalar_one_or_none() is not None
 
+    async def list_membership_clinic_ids(self, user_id: uuid.UUID) -> Sequence[uuid.UUID]:
+        stmt = select(ClinicMembership.clinic_id).where(
+            ClinicMembership.user_id == user_id,
+            ClinicMembership.is_active.is_(True),
+            ClinicMembership.deleted_at.is_(None),
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
     async def has_pet_clinic_access(self, user_id: uuid.UUID, pet_id: uuid.UUID) -> bool:
         stmt = (
             select(PetClinicAccess.id)
@@ -260,11 +267,23 @@ class CompanionPetRepository:
         *,
         owner_id: uuid.UUID | None = None,
         clinic_id: uuid.UUID | None = None,
+        clinic_ids: Sequence[uuid.UUID] | None = None,
         pet_id: uuid.UUID | None = None,
     ) -> tuple[Sequence[PetAppointment], int]:
         stmt = select(PetAppointment).where(PetAppointment.deleted_at.is_(None))
-        if owner_id is not None:
-            stmt = stmt.where(PetAppointment.owner_id == owner_id)
+        if owner_id is not None and clinic_ids:
+            # Staff visibility: appointments they own OR at their clinics.
+            stmt = stmt.where(
+                or_(
+                    PetAppointment.owner_id == owner_id,
+                    PetAppointment.clinic_id.in_(clinic_ids),
+                )
+            )
+        else:
+            if owner_id is not None:
+                stmt = stmt.where(PetAppointment.owner_id == owner_id)
+            if clinic_ids:
+                stmt = stmt.where(PetAppointment.clinic_id.in_(clinic_ids))
         if clinic_id is not None:
             stmt = stmt.where(PetAppointment.clinic_id == clinic_id)
         if pet_id is not None:
