@@ -14,7 +14,7 @@
       "type": "timeseries",
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "datasource": null,
           "expr": "sum(rate(http_requests_total[1m]))",
           "legendFormat": "Total RPS"
         }
@@ -27,7 +27,7 @@
       "type": "timeseries",
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "datasource": null,
           "expr": "rate(http_request_duration_ms_sum[1m]) / rate(http_request_duration_ms_count[1m])",
           "legendFormat": "Avg Latency (ms)"
         }
@@ -40,12 +40,12 @@
       "type": "timeseries",
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "datasource": null,
           "expr": "sum(rate(http_requests_total{status=~\"5..\"}[1m]))",
           "legendFormat": "5xx Internal Errors"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "datasource": null,
           "expr": "sum(rate(http_requests_total{status=~\"4..\"}[1m]))",
           "legendFormat": "4xx Client Errors"
         }
@@ -58,12 +58,12 @@
       "type": "timeseries",
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "datasource": null,
           "expr": "sum(rate(auth_login_attempts_total[1m]))",
           "legendFormat": "Login Attempts"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "datasource": null,
           "expr": "sum(rate(fcm_push_dispatches_total[1m]))",
           "legendFormat": "FCM Push Dispatches"
         }
