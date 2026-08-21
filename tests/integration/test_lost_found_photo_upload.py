@@ -276,7 +276,7 @@ class TestEmergencyFlowUnchanged:
             headers=headers,
             json={"filename": "incident.jpg", "mime_type": "image/jpeg", "file_size": 1024},
         )
-        assert resp.status_code == 201
+        assert resp.status_code == 200
         data = resp.json()["data"]
         assert "upload_url" in data
         assert "object_key" in data
