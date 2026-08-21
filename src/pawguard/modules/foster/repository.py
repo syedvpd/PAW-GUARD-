@@ -44,6 +44,18 @@ class FosterRepository:
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    async def get_profile_by_id_for_update(
+        self, profile_id: uuid.UUID
+    ) -> FosterProfile | None:
+        """Return a foster profile under a row lock for placement allocation."""
+        stmt = (
+            select(FosterProfile)
+            .options(selectinload(FosterProfile.user).selectinload(User.roles))
+            .where(FosterProfile.id == profile_id, FosterProfile.deleted_at.is_(None))
+            .with_for_update()
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
     async def get_profile_by_user_id(self, user_id: uuid.UUID) -> FosterProfile | None:
         stmt = (
             select(FosterProfile)

@@ -9,13 +9,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from tests.auth_helpers import register_and_auth
 
-from pawguard.modules.auth.models import Role, User
+from pawguard.modules.auth.models import User
 from pawguard.modules.dog.models import DogProfile, DogStatus
 from pawguard.modules.foster.models import (
     FosterPlacement,
     FosterProfile,
     FosterStatus,
-    SupplyItemType,
 )
 from pawguard.modules.medical.models import MedicalClearance
 

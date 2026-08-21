@@ -7,7 +7,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from pawguard.modules.auth.schemas import UserProfile
 from pawguard.modules.dog.schemas import DogProfileResponse
-from pawguard.modules.foster.models import FosterStatus, SupplyItemType
+from pawguard.modules.foster.models import (
+    FosterPlacementStatus,
+    FosterStatus,
+    SupplyItemType,
+)
 
 
 class FosterProgressLogCreate(BaseModel):
@@ -59,7 +63,9 @@ class FosterProfileUpdate(BaseModel):
 
     # Vetting & Background Verification
     background_check_passed: bool | None = Field(None, examples=[True])
+    background_check_notes: str | None = Field(None, examples=["Background check clear."])
     references_checked: bool | None = Field(None, examples=[True])
+    reference_notes: str | None = Field(None, examples=["References verified."])
     vetting_notes: str | None = Field(None, examples=["Background check clear."])
     vetted_at: datetime | None = Field(None)
 
@@ -82,7 +88,9 @@ class FosterProfileResponse(BaseModel):
 
     # Vetting & Background Verification
     background_check_passed: bool | None = None
+    background_check_notes: str | None = None
     references_checked: bool | None = None
+    reference_notes: str | None = None
     vetting_notes: str | None = None
     vetted_at: datetime | None = None
 
@@ -111,6 +119,8 @@ class FosterPlacementResponse(BaseModel):
     placed_at: datetime
     returned_at: datetime | None
     is_active: bool
+    status: FosterPlacementStatus
+    adoption_application_id: uuid.UUID | None
     notes: str | None
     created_at: datetime
     dog: DogProfileResponse | None = None

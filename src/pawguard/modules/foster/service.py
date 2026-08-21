@@ -1,14 +1,11 @@
 """FosterService: owns foster applications, home availability, and placements (RULE-003)."""
 
-import asyncio
 import uuid
 from datetime import UTC, datetime
 
-from pawguard.core.config import get_settings
 from pawguard.core.exceptions import ConflictError, NotFoundError, ValidationFailedError
 from pawguard.core.logging import get_logger
 from pawguard.core.pagination import PageParams, build_pagination_meta
-from pawguard.core.pdf_generation import generate_adoption_agreement
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
 from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
@@ -19,6 +16,7 @@ from pawguard.modules.dog.models import DogStatus
 from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.foster.models import (
     FosterPlacement,
+    FosterPlacementStatus,
     FosterProfile,
     FosterProgressLog,
     FosterStatus,
@@ -34,9 +32,7 @@ from pawguard.modules.foster.schemas import (
     FosterSupplyDispatchCreate,
 )
 from pawguard.modules.medical.repository import MedicalRepository
-from pawguard.modules.storage.models import FileFolder, StoredFile
 from pawguard.services.audit_service import AuditService
-from pawguard.services.storage_service import StorageService
 
 logger = get_logger(__name__)
 
@@ -88,6 +84,7 @@ class FosterService:
             user_id=user_id,
             preferences=payload.preferences,
             max_capacity=payload.max_capacity,
+            notes=payload.notes,
             status=FosterStatus.APPLIED,
             is_available=True,
         )
@@ -118,6 +115,39 @@ class FosterService:
 
         update_data = payload.model_dump(exclude_unset=True)
         was_approved = profile.status == FosterStatus.APPROVED
+
+        background_check_passed = (
+            payload.background_check_passed
+            if payload.background_check_passed is not None
+            else profile.background_check_passed
+        )
+        references_checked = (
+            payload.references_checked
+            if payload.references_checked is not None
+            else profile.references_checked
+        )
+        home_inspection_passed = (
+            payload.home_inspection_passed
+            if payload.home_inspection_passed is not None
+            else profile.home_inspection_passed
+        )
+        if payload.status == FosterStatus.APPROVED and not was_approved:
+            if profile.status != FosterStatus.APPLIED:
+                raise ConflictError("Only an applied foster profile can be approved.")
+            if not background_check_passed or not references_checked:
+                raise ValidationFailedError(
+                    "Approval requires a passed background check and verified references."
+                )
+            if not home_inspection_passed:
+                raise ValidationFailedError(
+                    "Approval requires a passed home inspection."
+                )
+        if payload.status == FosterStatus.REJECTED and profile.status != FosterStatus.APPLIED:
+            raise ConflictError("Only an applied foster profile can be rejected.")
+        if payload.status == FosterStatus.INACTIVE and profile.active_count > 0:
+            raise ConflictError(
+                "A foster home with active placements cannot be marked inactive."
+            )
         for key, value in update_data.items():
             setattr(profile, key, value)
 
@@ -233,7 +263,9 @@ class FosterService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> FosterPlacement:
-        foster = await self._repo.get_profile_by_id(foster_id)
+        # Lock allocation before checking capacity so two coordinators cannot
+        # consume the final foster slot concurrently.
+        foster = await self._repo.get_profile_by_id_for_update(foster_id)
         if foster is None:
             raise NotFoundError("Foster profile not found.")
 
@@ -243,12 +275,23 @@ class FosterService:
         if not foster.is_available or foster.active_count >= foster.max_capacity:
             raise ConflictError("Foster home has reached maximum capacity or is unavailable.")
 
-        dog = await self._dog_repo.get_by_id(payload.dog_id)
+        dog = await self._dog_repo.get_by_id_for_update(payload.dog_id)
         if dog is None:
             raise NotFoundError("Dog profile not found.")
 
         if dog.status == DogStatus.ADOPTED:
             raise ConflictError("Cannot place an adopted dog into foster care.")
+        if dog.status == DogStatus.FOSTERED:
+            raise ConflictError("Dog is already in an active or adoption-pending foster placement.")
+
+        medical_repo = MedicalRepository(self._repo._session)
+        clearance = await medical_repo.get_latest_approved_clearance(payload.dog_id)
+        if clearance is None:
+            raise ValidationFailedError(
+                "Dog is not medically eligible for foster placement. Record an "
+                "approved, non-expired medical clearance or veterinarian foster "
+                "exception first."
+            )
 
         existing_placement = await self._repo.get_active_placement_for_dog(payload.dog_id)
         if existing_placement is not None:
@@ -259,6 +302,7 @@ class FosterService:
             dog_id=payload.dog_id,
             placed_at=datetime.now(UTC),
             is_active=True,
+            status=FosterPlacementStatus.ACTIVE,
             notes=payload.notes,
         )
         # Attach the already-loaded dog: the placement is built in Python and
@@ -272,6 +316,8 @@ class FosterService:
             foster.is_available = False
 
         dog.status = DogStatus.FOSTERED
+        # A fostered dog cannot retain a physical kennel allocation.
+        dog.kennel_id = None
 
         # Re-fetch so the response serializer sees a fully-loaded object: the
         # placement is built in Python and only flushed (never SELECTed), so
@@ -299,7 +345,9 @@ class FosterService:
             )
 
         try:
-            from pawguard.modules.notifications.governance_service import dispatch_governed_notification
+            from pawguard.modules.notifications.governance_service import (
+                dispatch_governed_notification,
+            )
             await dispatch_governed_notification(
                 self._repo._session,
                 trigger_code="foster_assigned",
@@ -340,6 +388,7 @@ class FosterService:
         now = datetime.now(UTC)
         placement.returned_at = now
         placement.is_active = False
+        placement.status = FosterPlacementStatus.RETURNED
         if notes:
             placement.notes = notes
 
@@ -580,63 +629,25 @@ class FosterService:
             household_members_count=1,
             existing_pets_medical_details="None",
             pet_care_experience="Approved PawGuard Foster Caregiver",
-            status=AdoptionStatus.COMPLETED,
-            completed_at=now,
+            # Foster-to-adopt pre-populates the application but still follows
+            # the normal adoption review, approval and dog-lock workflow.
+            status=AdoptionStatus.SUBMITTED,
         )
         await self._adoption_repo.create(app)
         await self._repo._session.flush()
 
-        # Generate and save adoption agreement PDF (legal lease)
-        storage = StorageService()
-        try:
-            adopter_name = foster.user.full_name if foster.user else "Foster Parent"
-            settings = get_settings()
-            pdf_bytes = await asyncio.to_thread(
-                generate_adoption_agreement,
-                adopter_name=adopter_name,
-                dog_name=dog.name if dog else "Dog",
-                dog_registration_number=dog.registration_number if dog else "",
-                dog_breed=dog.breed if dog else "",
-                fee_amount=0.0,
-                org_name=settings.org_name,
-                org_address=settings.org_address,
-            )
-            object_key = storage.build_object_key(
-                folder="documents", filename=f"agreement_{app.id}.pdf"
-            )
-            await asyncio.to_thread(
-                storage.put_object,
-                object_key=object_key,
-                content=pdf_bytes,
-                content_type="application/pdf",
-            )
-            stored = StoredFile(
-                object_key=object_key,
-                original_filename=f"adoption_agreement_{app.id}.pdf",
-                mime_type="application/pdf",
-                file_size=len(pdf_bytes),
-                folder=FileFolder.DOCUMENTS.value,
-                is_uploaded=True,
-                uploaded_at=now,
-                entity_type="adoption_application",
-                entity_id=app.id,
-            )
-            self._repo._session.add(stored)
-            app.adoption_agreement_url = object_key
-        except Exception as exc:
-            import logging
-            logging.getLogger(__name__).warning(
-                "Failed to generate agreement for foster-to-adopt application "
-                "%s: %s", app.id, exc, exc_info=True,
-            )
-
         placement.returned_at = now
         placement.is_active = False
+        placement.status = FosterPlacementStatus.CONVERTED_TO_ADOPT
+        placement.adoption_application_id = app.id
         foster.active_count = max(0, foster.active_count - 1)
         if foster.active_count < foster.max_capacity:
             foster.is_available = True
 
-        dog.status = DogStatus.ADOPTED
+        # Custody remains with the foster family while the application is
+        # reviewed. AdoptionService performs the final adopted transition and
+        # agreement generation after approval/handover.
+        dog.status = DogStatus.FOSTERED
 
         await self._repo._session.flush()
 

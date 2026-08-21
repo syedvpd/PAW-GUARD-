@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -111,6 +112,9 @@ class TestFosterService:
         profile = FosterProfile(
             id=profile_id, user_id=user_id, status=FosterStatus.APPLIED,
             max_capacity=2, is_available=True,
+            background_check_passed=True,
+            references_checked=True,
+            home_inspection_passed=True,
         )
         mock_repo.get_profile_by_id.side_effect = [profile, profile]
 
@@ -146,22 +150,26 @@ class TestFosterService:
             id=foster_id, user_id=uuid.uuid4(), status=FosterStatus.APPROVED,
             max_capacity=2, active_count=0, is_available=True,
         )
-        mock_repo.get_profile_by_id.return_value = foster
-        mock_dog_repo.get_by_id.return_value = DogProfile(
+        mock_repo.get_profile_by_id_for_update.return_value = foster
+        mock_dog_repo.get_by_id_for_update.return_value = DogProfile(
             id=dog_id, registration_number="DOG-001", name="Rex", breed="Mix",
             gender="male", status=DogStatus.SHELTER, is_adoptable=False,
         )
         mock_repo.get_active_placement_for_dog.return_value = None
-        uuid.uuid4()
-        mock_repo.create_placement.return_value = None
-        # place_dog re-fetches the placement before returning (so the response
-        # serializer sees non-expired columns) - configure that mock too.
-        mock_repo.get_placement_by_id.return_value = FosterPlacement(
-            id=uuid.uuid4(), foster_id=foster_id, dog_id=dog_id,
-            is_active=True, placed_at=datetime.now(),
-        )
-        payload = FosterPlacementCreate(dog_id=dog_id)
-        result = await service.place_dog(foster_id, payload, actor_id=uuid.uuid4())
+        with patch(
+            "pawguard.modules.foster.service.MedicalRepository.get_latest_approved_clearance",
+            AsyncMock(return_value=SimpleNamespace(id=uuid.uuid4())),
+        ):
+            uuid.uuid4()
+            mock_repo.create_placement.return_value = None
+            # place_dog re-fetches the placement before returning (so the response
+            # serializer sees non-expired columns) - configure that mock too.
+            mock_repo.get_placement_by_id.return_value = FosterPlacement(
+                id=uuid.uuid4(), foster_id=foster_id, dog_id=dog_id,
+                is_active=True, placed_at=datetime.now(),
+            )
+            payload = FosterPlacementCreate(dog_id=dog_id)
+            result = await service.place_dog(foster_id, payload, actor_id=uuid.uuid4())
         assert result.dog_id == dog_id
         assert foster.active_count == 1
 
@@ -171,7 +179,7 @@ class TestFosterService:
             id=uuid.uuid4(), user_id=uuid.uuid4(), status=FosterStatus.APPLIED,
             max_capacity=1, is_available=True,
         )
-        mock_repo.get_profile_by_id.return_value = foster
+        mock_repo.get_profile_by_id_for_update.return_value = foster
         with pytest.raises(ConflictError, match="must be approved"):
             await service.place_dog(uuid.uuid4(), FosterPlacementCreate(dog_id=uuid.uuid4()))
 
@@ -311,14 +319,9 @@ class TestFosterToAdopt:
         return FosterService(mock_repo, mock_dog_repo, mock_adoption_repo, mock_audit)
 
     @pytest.mark.asyncio
-    @patch("pawguard.modules.foster.service.StorageService")
     async def test_convert_to_adoption(
-        self, mock_storage_class, service, mock_repo, mock_dog_repo, mock_adoption_repo,
+        self, service, mock_repo, mock_dog_repo, mock_adoption_repo,
     ):
-        mock_storage = mock_storage_class.return_value
-        mock_storage.build_object_key.return_value = "documents/test_agreement.pdf"
-        mock_storage.put_object.return_value = None
-
         placement_id = uuid.uuid4()
         foster_id = uuid.uuid4()
         dog_id = uuid.uuid4()
@@ -343,15 +346,19 @@ class TestFosterToAdopt:
         mock_adoption_repo.create.return_value = None
         mock_adoption_repo.get_by_id.return_value = AdoptionApplication(
             id=app_id, dog_id=dog_id, adopter_id=user_id,
-            residential_status="foster", status=AdoptionStatus.COMPLETED,
+            residential_status="foster", status=AdoptionStatus.SUBMITTED,
         )
-        result = await service.convert_to_adoption(
-            placement_id, actor_id=uuid.uuid4(),
-        )
+        with patch(
+            "pawguard.modules.foster.service.MedicalRepository.get_latest_approved_clearance",
+            AsyncMock(return_value=SimpleNamespace(id=uuid.uuid4())),
+        ):
+            result = await service.convert_to_adoption(
+                placement_id, actor_id=uuid.uuid4(),
+            )
         assert result.id == app_id
-        assert result.status == AdoptionStatus.COMPLETED
+        assert result.status == AdoptionStatus.SUBMITTED
         assert placement.is_active is False
-        assert dog.status == DogStatus.ADOPTED
+        assert dog.status == DogStatus.FOSTERED
 
     @pytest.mark.asyncio
     async def test_convert_to_adopt_already_adopted(

@@ -7,9 +7,9 @@ The foster workflow manages temporary dog placements with approved foster homes.
 ## State Machine
 
 ```
-APPLIED --> APPROVED --> (placement active) --> INACTIVE
-    |
-    +--> REJECTED
+APPLIED --> APPROVED --> ACTIVE PLACEMENT --> RETURNED
+    |                                  |
+    +--> REJECTED                      +--> CONVERTED_TO_ADOPT --> Adoption review
 ```
 
 ### Status Definitions
@@ -19,7 +19,7 @@ APPLIED --> APPROVED --> (placement active) --> INACTIVE
 | `applied` | Foster application submitted |
 | `approved` | Application approved, eligible for placements |
 | `rejected` | Application rejected |
-| `inactive` | No active placements |
+| `inactive` | Approved foster temporarily unavailable; cannot have active placements |
 
 ## Data Models
 
@@ -39,6 +39,8 @@ APPLIED --> APPROVED --> (placement active) --> INACTIVE
 - `returned_at`: Placement end datetime (nullable)
 - `is_active`: Currently active
 - `notes`: Placement notes
+- `status`: `active`, `returned`, or `converted_to_adopt`
+- `adoption_application_id`: linked fast-track application when converted
 
 ### FosterProgressLog
 - `placement_id`: Associated placement
@@ -67,7 +69,7 @@ APPLIED --> APPROVED --> (placement active) --> INACTIVE
 
 **Actor**: Public user (authenticated)
 
-**Endpoint**: `POST /foster`
+**Endpoint**: `POST /fosters/apply`
 
 **Data Required**:
 - Preferences (accepted dog types)
@@ -82,15 +84,16 @@ APPLIED --> APPROVED --> (placement active) --> INACTIVE
 
 **Actor**: Foster coordinator
 
-**Endpoint**: `PATCH /foster/{id}/status`
+**Endpoint**: `PUT /fosters/{id}`
 
-**Transition**: `APPLIED` -> `APPROVED` or `REJECTED`
+**Transition**: `APPLIED` -> `APPROVED` or `REJECTED`. Approval requires a
+passed background check, verified references, and a passed home inspection.
 
 ### 3. Place Dog
 
 **Actor**: Foster coordinator
 
-**Endpoint**: `POST /foster/{id}/placements`
+**Endpoint**: `POST /fosters/{id}/placements`
 
 **Data Required**:
 - Dog ID
@@ -99,7 +102,8 @@ APPLIED --> APPROVED --> (placement active) --> INACTIVE
 **Validation**:
 - Foster profile must be `APPROVED`
 - `active_count` < `max_capacity`
-- Dog must be available for foster
+- Dog must have a current approved medical clearance (or veterinarian exception)
+- Dog must not already be fostered, adopted, or allocated by another active placement
 
 **Side Effects**:
 - Foster placement created
@@ -111,7 +115,7 @@ APPLIED --> APPROVED --> (placement active) --> INACTIVE
 
 **Actor**: Foster parent or staff
 
-**Endpoint**: `POST /foster/placements/{placement_id}/progress`
+**Endpoint**: `POST /fosters/placements/{placement_id}/progress`
 
 **Data Captured**:
 - Weight measurement
@@ -126,7 +130,7 @@ APPLIED --> APPROVED --> (placement active) --> INACTIVE
 
 **Actor**: Staff
 
-**Endpoint**: `POST /foster/placements/{placement_id}/supplies`
+**Endpoint**: `POST /fosters/placements/{placement_id}/supplies`
 
 **Data Required**:
 - Item type (food, crate, medication, bedding, toys, other)
@@ -141,7 +145,7 @@ APPLIED --> APPROVED --> (placement active) --> INACTIVE
 
 **Actor**: Foster coordinator
 
-**Endpoint**: `PATCH /foster/placements/{placement_id}`
+**Endpoint**: `POST /fosters/placements/{placement_id}/return`
 
 **Data Required**:
 - Return notes
@@ -152,6 +156,15 @@ APPLIED --> APPROVED --> (placement active) --> INACTIVE
 - `active_count` decremented
 - Dog status updated (back to `SHELTER` or `ADOPTED`)
 - Audit event (`foster_placement_ended`)
+
+### 7. Foster-to-Adopt
+
+**Endpoint**: `POST /fosters/placements/{placement_id}/convert-to-adopt`
+
+The endpoint creates a pre-populated adoption application with `submitted`
+status and links it to the placement. It does not mark the dog adopted or
+bypass adoption review. The ordinary adoption workflow performs approval,
+exclusive dog locking, agreement generation, handover, and final adoption.
 
 ## Kennel Exclusivity Constraint
 

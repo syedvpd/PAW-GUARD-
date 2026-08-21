@@ -24,6 +24,12 @@ class FosterStatus(StrEnum):
     INACTIVE = "inactive"
 
 
+class FosterPlacementStatus(StrEnum):
+    ACTIVE = "active"
+    RETURNED = "returned"
+    CONVERTED_TO_ADOPT = "converted_to_adopt"
+
+
 class FosterProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "foster_profiles"
 
@@ -46,7 +52,9 @@ class FosterProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Ba
 
     # Vetting & Background Verification
     background_check_passed: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    background_check_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     references_checked: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    reference_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     vetting_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     vetted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -81,6 +89,15 @@ class FosterPlacement(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     placed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     returned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    status: Mapped[FosterPlacementStatus] = mapped_column(
+        String(32), default=FosterPlacementStatus.ACTIVE, nullable=False, index=True
+    )
+    adoption_application_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("adoption_applications.id", ondelete="SET NULL"),
+        nullable=True,
+        unique=True,
+    )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     foster: Mapped["FosterProfile"] = relationship(back_populates="placements")
