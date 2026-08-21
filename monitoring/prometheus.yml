@@ -1,0 +1,22 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'pawguard-backend-production'
+    metrics_path: '/metrics'
+    scheme: 'https'
+    static_configs:
+      - targets: ['pawguard-backend-mqri.onrender.com']
+        labels:
+          environment: 'production'
+          app: 'pawguard-backend'
+
+  - job_name: 'pawguard-backend-local'
+    metrics_path: '/metrics'
+    scheme: 'http'
+    static_configs:
+      - targets: ['host.docker.internal:8000']
+        labels:
+          environment: 'local'
+          app: 'pawguard-backend'
