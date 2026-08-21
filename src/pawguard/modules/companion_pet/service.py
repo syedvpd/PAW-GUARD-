@@ -901,6 +901,7 @@ class CompanionPetService:
         pet_id: uuid.UUID | None = None,
     ) -> PaginatedResponse[PetAppointmentResponse]:
         owner_id = None
+        clinic_ids = None
         if not self._is_admin(current_user):
             if clinic_id is not None and await self._repo.has_membership(
                 current_user.id, clinic_id
@@ -911,9 +912,18 @@ class CompanionPetService:
                 await self._authorize_pet(current_user, pet)
                 owner_id = current_user.id if pet.owner_id == current_user.id else None
             else:
+                # Clinic staff with no explicit filter see their clinics'
+                # appointments plus any they own as a customer. Without a
+                # membership this degrades to the plain owner filter.
+                clinic_ids = list(await self._repo.list_membership_clinic_ids(current_user.id))
                 owner_id = current_user.id
         rows, total = await self._repo.list_appointments(
-            page, sort, owner_id=owner_id, clinic_id=clinic_id, pet_id=pet_id
+            page,
+            sort,
+            owner_id=owner_id,
+            clinic_id=clinic_id,
+            clinic_ids=clinic_ids,
+            pet_id=pet_id,
         )
         return PaginatedResponse(
             data=[PetAppointmentResponse.model_validate(row) for row in rows],

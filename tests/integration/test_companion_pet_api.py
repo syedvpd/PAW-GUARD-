@@ -7,8 +7,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-from tests.auth_helpers import promote_and_auth, register_and_auth
+from tests.auth_helpers import register_and_auth
 
 from pawguard.modules.auth.models import User
 from pawguard.modules.companion_pet.models import SafetyTag
@@ -460,4 +459,84 @@ async def test_medical_records_and_files_endpoints(
         headers=other_headers,
     )
     assert dl_res_unauth.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_vet_sees_doctor_assigned_appointments_without_clinic_filter(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Regression (2026-08-21): a public booking that selects a doctor carries
+    that doctor's user id in vet_id. A veterinarian listing appointments with
+    no query params used to get only their own owned appointments (empty for
+    staff accounts), hiding every doctor-assigned booking from the admin app."""
+    owner_headers = await _public_owner_auth(client, db_session, "vet-visibility-owner@example.com")
+    admin_headers = await register_and_auth(
+        client, db_session, email="vet-visibility-admin@example.com", role="super_admin"
+    )
+    vet_headers = await register_and_auth(
+        client, db_session, email="vet-visibility-vet@example.com", role="veterinarian"
+    )
+    outsider_headers = await register_and_auth(
+        client, db_session, email="vet-visibility-outsider@example.com", role="veterinarian"
+    )
+
+    created = await client.post(
+        "/api/v1/companion-pets",
+        json={"name": "Bella", "species": "cat"},
+        headers=owner_headers,
+    )
+    assert created.status_code == 201, created.text
+    pet_id = created.json()["data"]["id"]
+
+    clinic = await client.post(
+        "/api/v1/companion-pets/clinics",
+        json={"name": "Vet Visibility Clinic", "address": "2 Care Lane", "phone": "+123456789"},
+        headers=admin_headers,
+    )
+    assert clinic.status_code == 201, clinic.text
+    clinic_id = clinic.json()["data"]["id"]
+
+    vet = (
+        await db_session.execute(select(User).where(User.email == "vet-visibility-vet@example.com"))
+    ).scalar_one()
+    membership = await client.post(
+        f"/api/v1/companion-pets/clinics/{clinic_id}/memberships",
+        json={"user_id": str(vet.id), "membership_role": "vet"},
+        headers=admin_headers,
+    )
+    assert membership.status_code == 201, membership.text
+
+    starts_at = datetime.now(UTC) + timedelta(days=3)
+    booked = await client.post(
+        "/api/v1/companion-pets/appointments",
+        json={
+            "pet_id": pet_id,
+            "clinic_id": clinic_id,
+            "vet_id": str(vet.id),
+            "starts_at": starts_at.isoformat(),
+            "ends_at": (starts_at + timedelta(minutes=30)).isoformat(),
+            "reason": "Doctor-selected booking",
+        },
+        headers=owner_headers,
+    )
+    assert booked.status_code == 201, booked.text
+    appointment_id = booked.json()["data"]["id"]
+    assert booked.json()["data"]["vet_id"] == str(vet.id)
+
+    # The veterinarian sees the doctor-assigned booking without any filter.
+    vet_list = await client.get("/api/v1/companion-pets/appointments", headers=vet_headers)
+    assert vet_list.status_code == 200, vet_list.text
+    vet_ids = [row["id"] for row in vet_list.json()["data"]]
+    assert appointment_id in vet_ids
+
+    # Admin still sees everything; a vet without membership at this clinic does not.
+    admin_list = await client.get("/api/v1/companion-pets/appointments", headers=admin_headers)
+    assert admin_list.status_code == 200, admin_list.text
+    assert appointment_id in [row["id"] for row in admin_list.json()["data"]]
+
+    outsider_list = await client.get(
+        "/api/v1/companion-pets/appointments", headers=outsider_headers
+    )
+    assert outsider_list.status_code == 200, outsider_list.text
+    assert appointment_id not in [row["id"] for row in outsider_list.json()["data"]]
 
