@@ -95,7 +95,9 @@ class TestLostFoundPhotoUploadUrl:
         assert resp.status_code == 201
         assert resp.json()["data"]["object_key"].endswith(".webp")
 
-    async def test_invalid_mime_rejected(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_invalid_mime_rejected(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         headers = await _auth(client, db_session)
         resp = await client.post(
             PHOTO_ENDPOINT,
@@ -151,18 +153,19 @@ class TestLostReportPhotoFlow:
 
         data = await self._create_with_photo(client, headers, object_key, None)
         report_id = data["id"]
-        assert data["photo_object_key"] == object_key
-        # Fresh signed download URL is exposed via photo_url, not the raw key.
+        # The raw object key is NOT leaked; a fresh signed download URL is
+        # exposed via photo_url and embeds the key path.
+        assert data.get("photo_object_key") is None
         assert data["photo_url"] != object_key
-        assert "lost-found/" in data["photo_url"]
+        assert object_key in data["photo_url"]
 
-        # Read again and confirm the URL is freshly resolved (key not leaked).
+        # Read again and confirm the URL is freshly resolved from the key.
         get_resp = await client.get(f"{LOST_ENDPOINT}/{report_id}", headers=headers)
         assert get_resp.status_code == 200
         get_data = get_resp.json()["data"]
-        assert get_data["photo_object_key"] == object_key
+        assert get_data.get("photo_object_key") is None
         assert get_data["photo_url"] != object_key
-        assert "lost-found/" in get_data["photo_url"]
+        assert object_key in get_data["photo_url"]
 
     async def test_legacy_photo_url_preserved(
         self, client: AsyncClient, db_session: AsyncSession
@@ -202,8 +205,8 @@ class TestLostReportPhotoFlow:
         resp = await client.get(f"{LOST_ENDPOINT}?status=active", headers=headers)
         assert resp.status_code == 200
         items = resp.json()["data"]
-        matched = [i for i in items if i.get("photo_object_key") == object_key]
-        assert matched, "created report missing from list"
+        matched = [i for i in items if i.get("photo_url") and object_key in i["photo_url"]]
+        assert matched, "created report missing from list / URL not resolved"
         assert matched[0]["photo_url"] != object_key
 
 
@@ -231,15 +234,16 @@ class TestFoundReportPhotoFlow:
 
         data = await self._create_with_photo(client, headers, object_key, None)
         report_id = data["id"]
-        assert data["photo_object_key"] == object_key
+        assert data.get("photo_object_key") is None
         assert data["photo_url"] != object_key
-        assert "lost-found/" in data["photo_url"]
+        assert object_key in data["photo_url"]
 
         get_resp = await client.get(f"{FOUND_ENDPOINT}/{report_id}", headers=headers)
         assert get_resp.status_code == 200
         get_data = get_resp.json()["data"]
-        assert get_data["photo_object_key"] == object_key
+        assert get_data.get("photo_object_key") is None
         assert get_data["photo_url"] != object_key
+        assert object_key in get_data["photo_url"]
 
     async def test_legacy_photo_url_preserved(
         self, client: AsyncClient, db_session: AsyncSession

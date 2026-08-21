@@ -815,6 +815,8 @@ class LostFoundService:
     async def _send_contact_release(
         self, to_user: Any, from_user: Any, pet_name: str | None, title: str, body: str
     ) -> None:
+        if self._notification_svc is None:
+            return
         try:
             await self._notification_svc.send_notification(
                 payload=NotificationSend(

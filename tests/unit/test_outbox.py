@@ -57,7 +57,9 @@ async def test_outbox_process_pending_events_success(db_session: AsyncSession):
     assert arq_pool.enqueued_jobs[0] == (job_name, payload)
 
     # 3. Verify event updated to completed in DB
-    stmt = select(OutboxEvent).where(OutboxEvent.job_name == job_name, OutboxEvent.status == "completed")
+    stmt = select(OutboxEvent).where(
+        OutboxEvent.job_name == job_name, OutboxEvent.status == "completed"
+    )
     db_event = (await db_session.execute(stmt)).scalar_one_or_none()
     assert db_event is not None
     assert db_event.processed_at is not None

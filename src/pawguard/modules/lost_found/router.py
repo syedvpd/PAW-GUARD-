@@ -151,14 +151,15 @@ async def request_lost_found_photo_upload_url(
     """
     if payload.mime_type not in _LOST_FOUND_PHOTO_MIME_TYPES:
         raise ValidationFailedError(
-            f"Unsupported image type '{payload.mime_type}'. "
-            "Allowed types: JPEG, PNG, WEBP."
+            f"Unsupported image type '{payload.mime_type}'. Allowed types: JPEG, PNG, WEBP."
         )
     if payload.file_size > _LOST_FOUND_PHOTO_MAX_BYTES:
         raise ValidationFailedError("File size exceeds the maximum 50MB limit for pet photos.")
 
     storage = StorageService()
-    object_key = storage.build_object_key(folder=_LOST_FOUND_PHOTO_FOLDER, filename=payload.filename)
+    object_key = storage.build_object_key(
+        folder=_LOST_FOUND_PHOTO_FOLDER, filename=payload.filename
+    )
     upload_url = storage.generate_presigned_upload_url(
         object_key=object_key, content_type=payload.mime_type
     )
