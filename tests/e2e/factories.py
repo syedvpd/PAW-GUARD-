@@ -3,13 +3,13 @@
 Creates prerequisite records in correct order:
   auth -> users -> dogs -> rescue -> foster -> adoption -> medical -> etc.
 """
+
 import uuid
 from datetime import UTC, date, datetime, timedelta
 
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from tests.auth_helpers import register_and_auth, _bearer
+from tests.auth_helpers import register_and_auth
 
 
 class TestData:
@@ -70,9 +70,7 @@ TEST = TestData()
 async def setup_admin_user(client: AsyncClient, db: AsyncSession) -> dict:
     """Register + promote user to super_admin. Returns Bearer headers."""
     email = f"admin_{uuid.uuid4().hex[:8]}@test.com"
-    headers = await register_and_auth(
-        client, db, email=email, role="super_admin"
-    )
+    headers = await register_and_auth(client, db, email=email, role="super_admin")
     TEST.admin_headers = headers
     return headers
 
@@ -80,9 +78,7 @@ async def setup_admin_user(client: AsyncClient, db: AsyncSession) -> dict:
 async def setup_staff_user(client: AsyncClient, db: AsyncSession) -> dict:
     """Register + promote user to shelter_manager role."""
     email = f"staff_{uuid.uuid4().hex[:8]}@test.com"
-    headers = await register_and_auth(
-        client, db, email=email, role="shelter_manager"
-    )
+    headers = await register_and_auth(client, db, email=email, role="shelter_manager")
     TEST.staff_headers = headers
     return headers
 
@@ -90,9 +86,7 @@ async def setup_staff_user(client: AsyncClient, db: AsyncSession) -> dict:
 async def setup_regular_user(client: AsyncClient, db: AsyncSession) -> dict:
     """Register a regular authenticated user."""
     email = f"user_{uuid.uuid4().hex[:8]}@test.com"
-    headers = await register_and_auth(
-        client, db, email=email, role="volunteer"
-    )
+    headers = await register_and_auth(client, db, email=email, role="volunteer")
     TEST.user_headers = headers
     return headers
 
@@ -100,9 +94,7 @@ async def setup_regular_user(client: AsyncClient, db: AsyncSession) -> dict:
 async def setup_vet_user(client: AsyncClient, db: AsyncSession) -> dict:
     """Register + promote user to veterinarian (required for medical clearance)."""
     email = f"vet_{uuid.uuid4().hex[:8]}@test.com"
-    headers = await register_and_auth(
-        client, db, email=email, role="veterinarian"
-    )
+    headers = await register_and_auth(client, db, email=email, role="veterinarian")
     TEST.vet_headers = headers
     return headers
 
@@ -157,7 +149,8 @@ async def create_section(client: AsyncClient, headers: dict, facility_id: str) -
     }
     r = await client.post(
         f"/api/v1/shelter/facilities/{facility_id}/sections",
-        json=payload, headers=headers,
+        json=payload,
+        headers=headers,
     )
     if r.status_code in (200, 201):
         data = r.json()["data"]
@@ -170,7 +163,8 @@ async def create_kennel(client: AsyncClient, headers: dict, section_id: str) -> 
     payload = {"identifier": f"K-{_uid()}", "capacity": 1}
     r = await client.post(
         f"/api/v1/shelter/sections/{section_id}/kennels",
-        json=payload, headers=headers,
+        json=payload,
+        headers=headers,
     )
     if r.status_code in (200, 201):
         data = r.json()["data"]
@@ -201,7 +195,8 @@ async def create_dispatch(client: AsyncClient, headers: dict, request_id: str) -
     payload = {"notes": "Deploying team"}
     r = await client.post(
         f"/api/v1/rescue/{request_id}/dispatch",
-        json=payload, headers=headers,
+        json=payload,
+        headers=headers,
     )
     if r.status_code in (200, 201):
         data = r.json().get("data", {})

@@ -291,6 +291,7 @@ class RoleRepository:
 
     async def get_permission_codes(self, role_id: uuid.UUID) -> set[str]:
         from pawguard.modules.auth.models import Permission, RolePermission
+
         stmt = (
             select(Permission.code)
             .join(RolePermission, RolePermission.permission_id == Permission.id)
@@ -302,6 +303,7 @@ class RoleRepository:
         from sqlalchemy import delete
 
         from pawguard.modules.auth.models import RolePermission
+
         await self._session.execute(delete(RolePermission).where(RolePermission.role_id == role_id))
         for pid in permission_ids:
             self._session.add(RolePermission(role_id=role_id, permission_id=pid))
@@ -342,6 +344,7 @@ class UserRoleRepository:
         from sqlalchemy import delete
 
         from pawguard.modules.auth.models import UserRole
+
         await self._session.execute(delete(UserRole).where(UserRole.user_id == user_id))
         for rid in role_ids:
             self._session.add(UserRole(user_id=user_id, role_id=rid))
@@ -357,9 +360,7 @@ class UserRoleRepository:
         from pawguard.modules.auth.models import UserRole
 
         existing = await self._session.execute(
-            select(UserRole).where(
-                UserRole.user_id == user_id, UserRole.role_id == role_id
-            )
+            select(UserRole).where(UserRole.user_id == user_id, UserRole.role_id == role_id)
         )
         if existing.scalar_one_or_none() is not None:
             return
@@ -375,6 +376,7 @@ class UserPermissionRepository:
 
     async def get_user_permission_codes(self, user_id: uuid.UUID) -> set[str]:
         from pawguard.modules.auth.models import Permission, UserPermission
+
         stmt = (
             select(Permission.code)
             .join(UserPermission, UserPermission.permission_id == Permission.id)
@@ -383,7 +385,10 @@ class UserPermissionRepository:
         return {row[0] for row in (await self._session.execute(stmt)).all()}
 
     async def grant_permission(
-        self, user_id: uuid.UUID, permission_id: uuid.UUID, granted_by: uuid.UUID | None = None,
+        self,
+        user_id: uuid.UUID,
+        permission_id: uuid.UUID,
+        granted_by: uuid.UUID | None = None,
     ) -> None:
         from datetime import UTC, datetime
 
@@ -397,12 +402,14 @@ class UserPermissionRepository:
         )
         if existing.scalar_one_or_none() is not None:
             return
-        self._session.add(UserPermission(
-            user_id=user_id,
-            permission_id=permission_id,
-            granted_by=granted_by,
-            granted_at=datetime.now(UTC),
-        ))
+        self._session.add(
+            UserPermission(
+                user_id=user_id,
+                permission_id=permission_id,
+                granted_by=granted_by,
+                granted_at=datetime.now(UTC),
+            )
+        )
         await self._session.flush()
 
     async def revoke_permission(self, user_id: uuid.UUID, permission_id: uuid.UUID) -> bool:
@@ -420,7 +427,10 @@ class UserPermissionRepository:
         return result.rowcount > 0  # type: ignore[return-value]
 
     async def set_permissions(
-        self, user_id: uuid.UUID, permission_ids: list[uuid.UUID], granted_by: uuid.UUID | None = None,
+        self,
+        user_id: uuid.UUID,
+        permission_ids: list[uuid.UUID],
+        granted_by: uuid.UUID | None = None,
     ) -> None:
         from datetime import UTC, datetime
 
@@ -428,20 +438,21 @@ class UserPermissionRepository:
 
         from pawguard.modules.auth.models import UserPermission
 
-        await self._session.execute(
-            delete(UserPermission).where(UserPermission.user_id == user_id)
-        )
+        await self._session.execute(delete(UserPermission).where(UserPermission.user_id == user_id))
         for pid in permission_ids:
-            self._session.add(UserPermission(
-                user_id=user_id,
-                permission_id=pid,
-                granted_by=granted_by,
-                granted_at=datetime.now(UTC),
-            ))
+            self._session.add(
+                UserPermission(
+                    user_id=user_id,
+                    permission_id=pid,
+                    granted_by=granted_by,
+                    granted_at=datetime.now(UTC),
+                )
+            )
         await self._session.flush()
 
     async def list_user_permissions(self, user_id: uuid.UUID) -> list[Permission]:
         from pawguard.modules.auth.models import Permission, UserPermission
+
         stmt = (
             select(Permission)
             .join(UserPermission, UserPermission.permission_id == Permission.id)
@@ -455,9 +466,7 @@ class OAuthAccountRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def get_by_provider(
-        self, provider: str, provider_user_id: str
-    ) -> OAuthAccount | None:
+    async def get_by_provider(self, provider: str, provider_user_id: str) -> OAuthAccount | None:
         stmt = select(OAuthAccount).where(
             OAuthAccount.provider == provider,
             OAuthAccount.provider_user_id == provider_user_id,
@@ -502,9 +511,8 @@ class AuthAuditLogRepository:
         event_type: str | None = None,
         user_id: uuid.UUID | None = None,
     ) -> list[AuthAuditLog]:
-        stmt = (
-            select(AuthAuditLog)
-            .options(selectinload(AuthAuditLog.user).selectinload(User.roles))
+        stmt = select(AuthAuditLog).options(
+            selectinload(AuthAuditLog.user).selectinload(User.roles)
         )
         if event_type:
             stmt = stmt.where(AuthAuditLog.event_type == event_type)

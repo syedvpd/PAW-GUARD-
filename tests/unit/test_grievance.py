@@ -44,13 +44,18 @@ class TestGrievanceService:
     async def test_submit_complaint(self, service, mock_repo):
         ticket_id = uuid.uuid4()
         mock_repo.create_ticket.return_value = GrievanceTicket(
-            id=ticket_id, reporter_name="John", reporter_phone="+1234567890",
-            complaint_type="service", details="Bad experience",
+            id=ticket_id,
+            reporter_name="John",
+            reporter_phone="+1234567890",
+            complaint_type="service",
+            details="Bad experience",
             status=GrievanceStatus.OPEN,
         )
         payload = GrievanceCreate(
-            reporter_name="John", reporter_phone="+1234567890",
-            complaint_type="service", details="Bad experience",
+            reporter_name="John",
+            reporter_phone="+1234567890",
+            complaint_type="service",
+            details="Bad experience",
         )
         result = await service.submit_complaint(payload)
         assert result.status == GrievanceStatus.OPEN
@@ -62,8 +67,11 @@ class TestGrievanceService:
     async def test_update_ticket(self, service, mock_repo):
         ticket_id = uuid.uuid4()
         ticket = GrievanceTicket(
-            id=ticket_id, reporter_name="J", reporter_phone="+1",
-            complaint_type="service", details="Bad",
+            id=ticket_id,
+            reporter_name="J",
+            reporter_phone="+1",
+            complaint_type="service",
+            details="Bad",
             status=GrievanceStatus.OPEN,
         )
         mock_repo.get_ticket.return_value = ticket
@@ -81,8 +89,11 @@ class TestGrievanceService:
     async def test_update_ticket_invalid_transition(self, service, mock_repo):
         ticket_id = uuid.uuid4()
         ticket = GrievanceTicket(
-            id=ticket_id, reporter_name="J", reporter_phone="+1",
-            complaint_type="service", details="Bad",
+            id=ticket_id,
+            reporter_name="J",
+            reporter_phone="+1",
+            complaint_type="service",
+            details="Bad",
             status=GrievanceStatus.CLOSED,
         )
         mock_repo.get_ticket.return_value = ticket
@@ -94,13 +105,18 @@ class TestGrievanceService:
     async def test_update_ticket_status(self, service, mock_repo):
         ticket_id = uuid.uuid4()
         ticket = GrievanceTicket(
-            id=ticket_id, reporter_name="J", reporter_phone="+1",
-            complaint_type="service", details="Bad",
+            id=ticket_id,
+            reporter_name="J",
+            reporter_phone="+1",
+            complaint_type="service",
+            details="Bad",
             status=GrievanceStatus.OPEN,
         )
         mock_repo.get_ticket.return_value = ticket
         result = await service.update_ticket_status(
-            ticket_id, GrievanceStatus.INVESTIGATING, actor_id=uuid.uuid4(),
+            ticket_id,
+            GrievanceStatus.INVESTIGATING,
+            actor_id=uuid.uuid4(),
         )
         assert result.status == GrievanceStatus.INVESTIGATING
 
@@ -108,8 +124,11 @@ class TestGrievanceService:
     async def test_update_ticket_status_invalid(self, service, mock_repo):
         ticket_id = uuid.uuid4()
         ticket = GrievanceTicket(
-            id=ticket_id, reporter_name="J", reporter_phone="+1",
-            complaint_type="service", details="Bad",
+            id=ticket_id,
+            reporter_name="J",
+            reporter_phone="+1",
+            complaint_type="service",
+            details="Bad",
             status=GrievanceStatus.CLOSED,
         )
         mock_repo.get_ticket.return_value = ticket
@@ -121,8 +140,11 @@ class TestGrievanceService:
         ticket_id = uuid.uuid4()
         admin_id = uuid.uuid4()
         ticket = GrievanceTicket(
-            id=ticket_id, reporter_name="J", reporter_phone="+1",
-            complaint_type="service", details="Bad",
+            id=ticket_id,
+            reporter_name="J",
+            reporter_phone="+1",
+            complaint_type="service",
+            details="Bad",
             status=GrievanceStatus.OPEN,
         )
         mock_repo.get_ticket.return_value = ticket
@@ -139,8 +161,11 @@ class TestGrievanceService:
     async def test_get_ticket(self, service, mock_repo):
         ticket_id = uuid.uuid4()
         mock_repo.get_ticket.return_value = GrievanceTicket(
-            id=ticket_id, reporter_name="J", reporter_phone="+1",
-            complaint_type="service", details="Bad",
+            id=ticket_id,
+            reporter_name="J",
+            reporter_phone="+1",
+            complaint_type="service",
+            details="Bad",
             status=GrievanceStatus.OPEN,
         )
         result = await service.get_ticket(ticket_id)
@@ -155,8 +180,11 @@ class TestGrievanceService:
     @pytest.mark.asyncio
     async def test_list_tickets(self, service, mock_repo):
         ticket = GrievanceTicket(
-            id=uuid.uuid4(), reporter_name="J", reporter_phone="+1",
-            complaint_type="service", details="Bad",
+            id=uuid.uuid4(),
+            reporter_name="J",
+            reporter_phone="+1",
+            complaint_type="service",
+            details="Bad",
             status=GrievanceStatus.OPEN,
         )
         mock_repo.count_tickets.return_value = 1
@@ -168,8 +196,11 @@ class TestGrievanceService:
     @pytest.mark.asyncio
     async def test_list_tickets_with_filter(self, service, mock_repo):
         ticket = GrievanceTicket(
-            id=uuid.uuid4(), reporter_name="J", reporter_phone="+1",
-            complaint_type="service", details="Bad",
+            id=uuid.uuid4(),
+            reporter_name="J",
+            reporter_phone="+1",
+            complaint_type="service",
+            details="Bad",
             status=GrievanceStatus.OPEN,
         )
         mock_repo.count_tickets.return_value = 1
@@ -182,14 +213,20 @@ class TestGrievanceService:
     async def test_add_comment(self, service, mock_repo):
         ticket_id = uuid.uuid4()
         mock_repo.get_ticket.return_value = GrievanceTicket(
-            id=ticket_id, reporter_name="J", reporter_phone="+1",
-            complaint_type="service", details="Bad",
+            id=ticket_id,
+            reporter_name="J",
+            reporter_phone="+1",
+            complaint_type="service",
+            details="Bad",
             status=GrievanceStatus.OPEN,
         )
         comment_id = uuid.uuid4()
         mock_repo.create_comment.return_value = GrievanceComment(
-            id=comment_id, ticket_id=ticket_id, author_id=uuid.uuid4(),
-            body="Thanks", is_internal=False,
+            id=comment_id,
+            ticket_id=ticket_id,
+            author_id=uuid.uuid4(),
+            body="Thanks",
+            is_internal=False,
         )
         payload = CommentCreate(body="Thanks")
         result = await service.add_comment(ticket_id, payload, author_id=uuid.uuid4())
@@ -199,31 +236,44 @@ class TestGrievanceService:
     async def test_add_comment_sets_first_responded_at(self, service, mock_repo):
         ticket_id = uuid.uuid4()
         ticket = GrievanceTicket(
-            id=ticket_id, reporter_name="J", reporter_phone="+1",
-            complaint_type="service", details="Bad",
+            id=ticket_id,
+            reporter_name="J",
+            reporter_phone="+1",
+            complaint_type="service",
+            details="Bad",
             status=GrievanceStatus.OPEN,
         )
         mock_repo.get_ticket.return_value = ticket
         mock_repo.create_comment.return_value = GrievanceComment(
-            id=uuid.uuid4(), ticket_id=ticket_id, author_id=uuid.uuid4(),
-            body="On it", is_internal=True,
+            id=uuid.uuid4(),
+            ticket_id=ticket_id,
+            author_id=uuid.uuid4(),
+            body="On it",
+            is_internal=True,
         )
         assert ticket.first_responded_at is None
-        await service.add_comment(ticket_id, CommentCreate(body="On it", is_internal=True), author_id=uuid.uuid4())
+        await service.add_comment(
+            ticket_id, CommentCreate(body="On it", is_internal=True), author_id=uuid.uuid4()
+        )
         assert ticket.first_responded_at is not None
 
     @pytest.mark.asyncio
     async def test_escalate_ticket(self, service, mock_repo, mock_audit):
         ticket_id = uuid.uuid4()
         ticket = GrievanceTicket(
-            id=ticket_id, reporter_name="J", reporter_phone="+1",
-            complaint_type="service", details="Bad",
-            status=GrievanceStatus.INVESTIGATING, escalation_level=0,
+            id=ticket_id,
+            reporter_name="J",
+            reporter_phone="+1",
+            complaint_type="service",
+            details="Bad",
+            status=GrievanceStatus.INVESTIGATING,
+            escalation_level=0,
         )
         mock_repo.get_ticket.return_value = ticket
         admin_id = uuid.uuid4()
         result = await service.escalate_ticket(
-            ticket_id, GrievanceEscalate(escalated_to_admin_id=admin_id, reason="SLA breach"),
+            ticket_id,
+            GrievanceEscalate(escalated_to_admin_id=admin_id, reason="SLA breach"),
             actor_id=uuid.uuid4(),
         )
         assert result.escalation_level == 1
@@ -234,8 +284,11 @@ class TestGrievanceService:
     async def test_escalate_closed_ticket_rejected(self, service, mock_repo):
         ticket_id = uuid.uuid4()
         mock_repo.get_ticket.return_value = GrievanceTicket(
-            id=ticket_id, reporter_name="J", reporter_phone="+1",
-            complaint_type="service", details="Bad",
+            id=ticket_id,
+            reporter_name="J",
+            reporter_phone="+1",
+            complaint_type="service",
+            details="Bad",
             status=GrievanceStatus.CLOSED,
         )
         with pytest.raises(ValidationFailedError, match="closed ticket"):
@@ -253,13 +306,20 @@ class TestGrievanceService:
     async def test_list_comments(self, service, mock_repo):
         ticket_id = uuid.uuid4()
         mock_repo.get_ticket.return_value = GrievanceTicket(
-            id=ticket_id, reporter_name="J", reporter_phone="+1",
-            complaint_type="service", details="Bad",
+            id=ticket_id,
+            reporter_name="J",
+            reporter_phone="+1",
+            complaint_type="service",
+            details="Bad",
             status=GrievanceStatus.OPEN,
         )
-        mock_repo.list_comments.return_value = [GrievanceComment(
-            id=uuid.uuid4(), ticket_id=ticket_id, body="Comment",
-        )]
+        mock_repo.list_comments.return_value = [
+            GrievanceComment(
+                id=uuid.uuid4(),
+                ticket_id=ticket_id,
+                body="Comment",
+            )
+        ]
         result = await service.list_comments(ticket_id)
         assert len(result) == 1
 
@@ -267,7 +327,9 @@ class TestGrievanceService:
     async def test_submit_feedback(self, service, mock_repo):
         fb_id = uuid.uuid4()
         mock_repo.create_feedback.return_value = ServiceFeedback(
-            id=fb_id, rating=5, comments="Great!",
+            id=fb_id,
+            rating=5,
+            comments="Great!",
         )
         payload = ServiceFeedbackCreate(rating=5)
         result = await service.submit_feedback(payload)
@@ -286,8 +348,11 @@ class TestGrievanceService:
     async def test_soft_delete_ticket(self, service, mock_repo):
         ticket_id = uuid.uuid4()
         mock_repo.get_ticket.return_value = GrievanceTicket(
-            id=ticket_id, reporter_name="J", reporter_phone="+1",
-            complaint_type="service", details="Bad",
+            id=ticket_id,
+            reporter_name="J",
+            reporter_phone="+1",
+            complaint_type="service",
+            details="Bad",
             status=GrievanceStatus.OPEN,
         )
         mock_repo.soft_delete_ticket.return_value = None

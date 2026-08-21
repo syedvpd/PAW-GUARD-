@@ -539,4 +539,3 @@ async def test_vet_sees_doctor_assigned_appointments_without_clinic_filter(
     )
     assert outsider_list.status_code == 200, outsider_list.text
     assert appointment_id not in [row["id"] for row in outsider_list.json()["data"]]
-

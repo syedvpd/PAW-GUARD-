@@ -23,9 +23,7 @@ LOGIN_PAYLOAD = {
 @pytest.mark.asyncio
 class TestStorageAPI:
     async def _auth(self, client: AsyncClient, db_session: AsyncSession) -> dict:
-        return await register_and_auth(
-            client, db_session, email=REGISTER_PAYLOAD["email"]
-        )
+        return await register_and_auth(client, db_session, email=REGISTER_PAYLOAD["email"])
 
     async def test_request_upload_url(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
@@ -56,14 +54,21 @@ class TestStorageAPI:
         assert "object_key" in data
         assert "file_id" in data
 
-    async def test_request_upload_url_validation_error(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_request_upload_url_validation_error(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         headers = await self._auth(client, db_session)
         resp = await client.post("/api/v1/storage/upload-url", json={}, headers=headers)
         assert resp.status_code == 422
 
     async def test_confirm_upload(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
-        payload = {"original_filename": "confirm.jpg", "mime_type": "image/jpeg", "file_size": 204800, "folder": "medical"}
+        payload = {
+            "original_filename": "confirm.jpg",
+            "mime_type": "image/jpeg",
+            "file_size": 204800,
+            "folder": "medical",
+        }
         create_resp = await client.post("/api/v1/storage/upload-url", json=payload, headers=headers)
         file_id = create_resp.json()["data"]["file_id"]
         resp = await client.put(f"/api/v1/storage/{file_id}/confirm", headers=headers)
@@ -72,7 +77,12 @@ class TestStorageAPI:
 
     async def test_get_download_url(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
-        payload = {"original_filename": "download.pdf", "mime_type": "application/pdf", "file_size": 51200, "folder": "documents"}
+        payload = {
+            "original_filename": "download.pdf",
+            "mime_type": "application/pdf",
+            "file_size": 51200,
+            "folder": "documents",
+        }
         create_resp = await client.post("/api/v1/storage/upload-url", json=payload, headers=headers)
         file_id = create_resp.json()["data"]["file_id"]
         await client.put(f"/api/v1/storage/{file_id}/confirm", headers=headers)
@@ -84,7 +94,12 @@ class TestStorageAPI:
 
     async def test_get_file(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
-        payload = {"original_filename": "file.pdf", "mime_type": "application/pdf", "file_size": 1000, "folder": "profiles"}
+        payload = {
+            "original_filename": "file.pdf",
+            "mime_type": "application/pdf",
+            "file_size": 1000,
+            "folder": "profiles",
+        }
         create_resp = await client.post("/api/v1/storage/upload-url", json=payload, headers=headers)
         file_id = create_resp.json()["data"]["file_id"]
         resp = await client.get(f"/api/v1/storage/{file_id}", headers=headers)
@@ -104,14 +119,21 @@ class TestStorageAPI:
         assert "data" in body
         assert "total" in body["meta"]
 
-    async def test_list_files_with_filters(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_list_files_with_filters(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         headers = await self._auth(client, db_session)
         resp = await client.get("/api/v1/storage?folder=dogs", headers=headers)
         assert resp.status_code == 200
 
     async def test_delete_file(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
-        payload = {"original_filename": "delete_me.pdf", "mime_type": "application/pdf", "file_size": 500, "folder": "shelters"}
+        payload = {
+            "original_filename": "delete_me.pdf",
+            "mime_type": "application/pdf",
+            "file_size": 500,
+            "folder": "shelters",
+        }
         create_resp = await client.post("/api/v1/storage/upload-url", json=payload, headers=headers)
         file_id = create_resp.json()["data"]["file_id"]
         resp = await client.delete(f"/api/v1/storage/{file_id}", headers=headers)
@@ -119,12 +141,16 @@ class TestStorageAPI:
         get_resp = await client.get(f"/api/v1/storage/{file_id}", headers=headers)
         assert get_resp.status_code == 404
 
-    async def test_download_url_not_found(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_download_url_not_found(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         headers = await self._auth(client, db_session)
         resp = await client.get(f"/api/v1/storage/{uuid.uuid4()}/download-url", headers=headers)
         assert resp.status_code == 404
 
-    async def test_confirm_upload_not_found(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_confirm_upload_not_found(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         headers = await self._auth(client, db_session)
         resp = await client.put(f"/api/v1/storage/{uuid.uuid4()}/confirm", headers=headers)
         assert resp.status_code == 404
@@ -135,36 +161,61 @@ class TestStorageNonAdminAccess:
     """Regular (non-system-admin) users can manage their own files without 403."""
 
     async def _create_file(self, client: AsyncClient, headers: dict) -> str:
-        payload = {"original_filename": "avatar.jpg", "mime_type": "image/jpeg", "file_size": 500, "folder": "avatars"}
+        payload = {
+            "original_filename": "avatar.jpg",
+            "mime_type": "image/jpeg",
+            "file_size": 500,
+            "folder": "avatars",
+        }
         resp = await client.post("/api/v1/storage/upload-url", json=payload, headers=headers)
         assert resp.status_code == 201
         return resp.json()["data"]["file_id"]
 
-    async def test_regular_user_can_list_own_files(self, client: AsyncClient, db_session: AsyncSession) -> None:
-        headers = await register_and_auth(client, db_session, email="nonadminlist@example.com", role="donor")
+    async def test_regular_user_can_list_own_files(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        headers = await register_and_auth(
+            client, db_session, email="nonadminlist@example.com", role="donor"
+        )
         resp = await client.get("/api/v1/storage", headers=headers)
         assert resp.status_code == 200
 
-    async def test_regular_user_can_delete_own_file(self, client: AsyncClient, db_session: AsyncSession) -> None:
-        headers = await register_and_auth(client, db_session, email="nonadmindelete@example.com", role="donor")
+    async def test_regular_user_can_delete_own_file(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        headers = await register_and_auth(
+            client, db_session, email="nonadmindelete@example.com", role="donor"
+        )
         file_id = await self._create_file(client, headers)
         resp = await client.delete(f"/api/v1/storage/{file_id}", headers=headers)
         assert resp.status_code == 200
         get_resp = await client.get(f"/api/v1/storage/{file_id}", headers=headers)
         assert get_resp.status_code == 404
 
-    async def test_regular_user_can_bulk_delete_own_files(self, client: AsyncClient, db_session: AsyncSession) -> None:
-        headers = await register_and_auth(client, db_session, email="nonadminbulk@example.com", role="donor")
+    async def test_regular_user_can_bulk_delete_own_files(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        headers = await register_and_auth(
+            client, db_session, email="nonadminbulk@example.com", role="donor"
+        )
         file_id = await self._create_file(client, headers)
-        resp = await client.post("/api/v1/storage/bulk/delete", json={"ids": [file_id]}, headers=headers)
+        resp = await client.post(
+            "/api/v1/storage/bulk/delete", json={"ids": [file_id]}, headers=headers
+        )
         assert resp.status_code == 200
         assert resp.json()["data"]["deleted_count"] == 1
 
-    async def test_regular_user_cannot_delete_others_file(self, client: AsyncClient, db_session: AsyncSession) -> None:
-        owner_headers = await register_and_auth(client, db_session, email="fileowner@example.com", role="donor")
+    async def test_regular_user_cannot_delete_others_file(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        owner_headers = await register_and_auth(
+            client, db_session, email="fileowner@example.com", role="donor"
+        )
         file_id = await self._create_file(client, owner_headers)
 
-        other_headers = await register_and_auth(client, db_session, email="fileintruder@example.com", role="donor")
+        other_headers = await register_and_auth(
+            client, db_session, email="fileintruder@example.com", role="donor"
+        )
         resp = await client.delete(f"/api/v1/storage/{file_id}", headers=other_headers)
         assert resp.status_code == 403
 

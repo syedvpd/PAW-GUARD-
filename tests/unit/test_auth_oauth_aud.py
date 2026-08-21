@@ -37,7 +37,9 @@ class TestOAuthAudienceValidation:
             await AuthService._verify_oauth_token_unsafe("google", "any-token")
 
     async def test_google_accepts_token_issued_for_our_client(self, monkeypatch) -> None:
-        monkeypatch.setattr(get_settings(), "google_oauth_client_id", "our-client.apps.googleusercontent.com")
+        monkeypatch.setattr(
+            get_settings(), "google_oauth_client_id", "our-client.apps.googleusercontent.com"
+        )
         self._patch_provider_http(
             monkeypatch,
             {

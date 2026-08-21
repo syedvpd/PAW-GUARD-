@@ -22,7 +22,9 @@ from pawguard.modules.dashboards.service import (
 )
 
 
-def _fake_result(scalar_one_val=None, all_val=None, one_val=None, scalars_all=None, scalar_val=None):
+def _fake_result(
+    scalar_one_val=None, all_val=None, one_val=None, scalars_all=None, scalar_val=None
+):
     r = MagicMock()
     if scalar_one_val is not None:
         r.scalar_one.return_value = scalar_one_val
@@ -258,7 +260,9 @@ class TestDashboards:
 
     async def test_dashboard_cache_hit(self, session):
         fake_redis = AsyncMock()
-        fake_redis.get.return_value = '{"total_calls": 999, "pending": 1, "dispatched": 2, "rescued": 3, "recent_calls": []}'
+        fake_redis.get.return_value = (
+            '{"total_calls": 999, "pending": 1, "dispatched": 2, "rescued": 3, "recent_calls": []}'
+        )
         result = await rescue_dashboard(session, redis=fake_redis)
         assert result["total_calls"] == 999
         session.execute.assert_not_called()
@@ -328,5 +332,3 @@ class TestDashboards:
         assert len(outputs) == 2
         assert "event: snapshot" in outputs[0]
         assert "event: snapshot" in outputs[1]
-
-

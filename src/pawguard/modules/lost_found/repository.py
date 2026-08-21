@@ -3,7 +3,7 @@
 import uuid
 from collections.abc import Sequence
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -89,26 +89,27 @@ class LostFoundRepository:
         stmt = (
             select(ReportMatch)
             .options(
-                selectinload(ReportMatch.lost_report).selectinload(LostReport.user).selectinload(
-                    User.roles
-                ),
-                selectinload(ReportMatch.found_report).selectinload(FoundReport.user).selectinload(
-                    User.roles
-                ),
+                selectinload(ReportMatch.lost_report)
+                .selectinload(LostReport.user)
+                .selectinload(User.roles),
+                selectinload(ReportMatch.found_report)
+                .selectinload(FoundReport.user)
+                .selectinload(User.roles),
             )
             .where(ReportMatch.id == match_id)
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def list_matches_for_lost_report(
-        self, lost_report_id: uuid.UUID,
+        self,
+        lost_report_id: uuid.UUID,
     ) -> Sequence[ReportMatch]:
         stmt = (
             select(ReportMatch)
             .options(
-                selectinload(ReportMatch.found_report).selectinload(FoundReport.user).selectinload(
-                    User.roles
-                )
+                selectinload(ReportMatch.found_report)
+                .selectinload(FoundReport.user)
+                .selectinload(User.roles)
             )
             .where(ReportMatch.lost_report_id == lost_report_id)
             .order_by(ReportMatch.confidence_score.desc())
@@ -116,14 +117,15 @@ class LostFoundRepository:
         return (await self._session.execute(stmt)).scalars().all()
 
     async def list_matches_for_found_report(
-        self, found_report_id: uuid.UUID,
+        self,
+        found_report_id: uuid.UUID,
     ) -> Sequence[ReportMatch]:
         stmt = (
             select(ReportMatch)
             .options(
-                selectinload(ReportMatch.lost_report).selectinload(LostReport.user).selectinload(
-                    User.roles
-                )
+                selectinload(ReportMatch.lost_report)
+                .selectinload(LostReport.user)
+                .selectinload(User.roles)
             )
             .where(ReportMatch.found_report_id == found_report_id)
             .order_by(ReportMatch.confidence_score.desc())
@@ -145,7 +147,9 @@ class LostFoundRepository:
         )
 
         search_filter = build_search_filter(
-            LostReport, search_term, ("pet_name", "breed", "color", "location_address"),
+            LostReport,
+            search_term,
+            ("pet_name", "breed", "color", "location_address"),
         )
         if search_filter is not None:
             stmt = stmt.where(search_filter)
@@ -180,7 +184,9 @@ class LostFoundRepository:
         )
 
         search_filter = build_search_filter(
-            FoundReport, search_term, ("breed_observed", "color_observed", "location_address"),
+            FoundReport,
+            search_term,
+            ("breed_observed", "color_observed", "location_address"),
         )
         if search_filter is not None:
             stmt = stmt.where(search_filter)
@@ -208,12 +214,12 @@ class LostFoundRepository:
         found_report_id: uuid.UUID | None = None,
     ) -> tuple[Sequence[ReportMatch], int]:
         stmt = select(ReportMatch).options(
-            selectinload(ReportMatch.lost_report).selectinload(LostReport.user).selectinload(
-                User.roles
-            ),
-            selectinload(ReportMatch.found_report).selectinload(FoundReport.user).selectinload(
-                User.roles
-            ),
+            selectinload(ReportMatch.lost_report)
+            .selectinload(LostReport.user)
+            .selectinload(User.roles),
+            selectinload(ReportMatch.found_report)
+            .selectinload(FoundReport.user)
+            .selectinload(User.roles),
         )
 
         if lost_report_id is not None:
@@ -233,10 +239,8 @@ class LostFoundRepository:
 
     async def soft_delete_lost_report(self, report_id: uuid.UUID) -> bool:
         from datetime import UTC, datetime
-        stmt = (
-            select(LostReport)
-            .where(LostReport.id == report_id, LostReport.deleted_at.is_(None))
-        )
+
+        stmt = select(LostReport).where(LostReport.id == report_id, LostReport.deleted_at.is_(None))
         report = (await self._session.execute(stmt)).scalar_one_or_none()
         if report is None:
             return False
@@ -246,9 +250,9 @@ class LostFoundRepository:
 
     async def soft_delete_found_report(self, report_id: uuid.UUID) -> bool:
         from datetime import UTC, datetime
-        stmt = (
-            select(FoundReport)
-            .where(FoundReport.id == report_id, FoundReport.deleted_at.is_(None))
+
+        stmt = select(FoundReport).where(
+            FoundReport.id == report_id, FoundReport.deleted_at.is_(None)
         )
         report = (await self._session.execute(stmt)).scalar_one_or_none()
         if report is None:
@@ -259,11 +263,9 @@ class LostFoundRepository:
 
     async def bulk_delete_lost_reports(self, ids: list[uuid.UUID]) -> int:
         from datetime import UTC, datetime
+
         now = datetime.now(UTC)
-        stmt = (
-            select(LostReport)
-            .where(LostReport.id.in_(ids), LostReport.deleted_at.is_(None))
-        )
+        stmt = select(LostReport).where(LostReport.id.in_(ids), LostReport.deleted_at.is_(None))
         reports = (await self._session.execute(stmt)).scalars().all()
         for r in reports:
             r.deleted_at = now
@@ -272,11 +274,9 @@ class LostFoundRepository:
 
     async def bulk_delete_found_reports(self, ids: list[uuid.UUID]) -> int:
         from datetime import UTC, datetime
+
         now = datetime.now(UTC)
-        stmt = (
-            select(FoundReport)
-            .where(FoundReport.id.in_(ids), FoundReport.deleted_at.is_(None))
-        )
+        stmt = select(FoundReport).where(FoundReport.id.in_(ids), FoundReport.deleted_at.is_(None))
         reports = (await self._session.execute(stmt)).scalars().all()
         for r in reports:
             r.deleted_at = now

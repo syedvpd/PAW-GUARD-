@@ -8,12 +8,11 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, mo
 
 # ── Role ─────────────────────────────────────────────────────────────────────
 
+
 class RoleCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=64, examples=["event_coordinator"])
     description: str | None = Field(None, examples=["Plans and runs community adoption events."])
-    permission_codes: list[str] = Field(
-        default=[], examples=[["adoption:read", "public:read"]]
-    )
+    permission_codes: list[str] = Field(default=[], examples=[["adoption:read", "public:read"]])
 
     @field_validator("name")
     @classmethod
@@ -86,6 +85,7 @@ class PermissionResponse(BaseModel):
 
 # ── User (admin) ─────────────────────────────────────────────────────────────
 
+
 class AdminUserCreateRequest(BaseModel):
     email: EmailStr = Field(..., examples=["new.staff@pawguard.com"])
     password: str = Field(min_length=10, examples=["StrongP@ssw0rd"])
@@ -139,9 +139,11 @@ class AdminUserResponse(BaseModel):
 
 # ── User Permission Overrides ────────────────────────────────────────────────
 
+
 class UserPermissionGrantRequest(BaseModel):
     permission_codes: list[str] = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         examples=[["finance:export", "reports:export_pdf"]],
         description="Permission codes to grant directly to the user.",
     )
@@ -149,7 +151,8 @@ class UserPermissionGrantRequest(BaseModel):
 
 class UserPermissionRevokeRequest(BaseModel):
     permission_code: str = Field(
-        ..., examples=["finance:export"],
+        ...,
+        examples=["finance:export"],
         description="Permission code to revoke from the user.",
     )
 

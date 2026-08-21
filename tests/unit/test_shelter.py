@@ -64,11 +64,16 @@ class TestShelterService:
         facility_id = uuid.uuid4()
         mock_repo.get_facility_by_name.return_value = None
         mock_repo.create_facility.return_value = ShelterFacility(
-            id=facility_id, name="Main Shelter", address="123 Street",
-            phone="+1234567890", total_capacity=100,
+            id=facility_id,
+            name="Main Shelter",
+            address="123 Street",
+            phone="+1234567890",
+            total_capacity=100,
         )
         payload = ShelterFacilityCreate(
-            name="Main Shelter", address="123 Street", phone="+1234567890",
+            name="Main Shelter",
+            address="123 Street",
+            phone="+1234567890",
             total_capacity=100,
         )
         result = await service.create_facility(payload, actor_id=uuid.uuid4())
@@ -78,12 +83,18 @@ class TestShelterService:
     async def test_create_section(self, service, mock_repo):
         facility_id = uuid.uuid4()
         mock_repo.get_facility.return_value = ShelterFacility(
-            id=facility_id, name="Main", address="Addr", phone="+1",
+            id=facility_id,
+            name="Main",
+            address="Addr",
+            phone="+1",
             total_capacity=100,
         )
         section_id = uuid.uuid4()
         mock_repo.create_section.return_value = ShelterSection(
-            id=section_id, facility_id=facility_id, name="Quarantine", capacity=10,
+            id=section_id,
+            facility_id=facility_id,
+            name="Quarantine",
+            capacity=10,
         )
         payload = ShelterSectionCreate(name="Quarantine", capacity=10)
         result = await service.create_section(facility_id, payload, actor_id=uuid.uuid4())
@@ -99,12 +110,18 @@ class TestShelterService:
     async def test_create_kennel(self, service, mock_repo):
         section_id = uuid.uuid4()
         mock_repo.get_section.return_value = ShelterSection(
-            id=section_id, facility_id=uuid.uuid4(), name="General", capacity=20,
+            id=section_id,
+            facility_id=uuid.uuid4(),
+            name="General",
+            capacity=20,
         )
         mock_repo.list_kennels_by_section.return_value = []
         kennel_id = uuid.uuid4()
         mock_repo.create_kennel.return_value = Kennel(
-            id=kennel_id, section_id=section_id, identifier="K-01", capacity=2,
+            id=kennel_id,
+            section_id=section_id,
+            identifier="K-01",
+            capacity=2,
             sanitation_state=KennelSanitationState.CLEAN,
         )
         payload = KennelCreate(identifier="K-01", capacity=2)
@@ -115,12 +132,20 @@ class TestShelterService:
     async def test_create_kennel_section_full(self, service, mock_repo):
         section_id = uuid.uuid4()
         mock_repo.get_section.return_value = ShelterSection(
-            id=section_id, facility_id=uuid.uuid4(), name="Gen", capacity=1,
+            id=section_id,
+            facility_id=uuid.uuid4(),
+            name="Gen",
+            capacity=1,
         )
-        mock_repo.list_kennels_by_section.return_value = [Kennel(
-            id=uuid.uuid4(), section_id=section_id, identifier="K-01",
-            capacity=2, sanitation_state=KennelSanitationState.CLEAN,
-        )]
+        mock_repo.list_kennels_by_section.return_value = [
+            Kennel(
+                id=uuid.uuid4(),
+                section_id=section_id,
+                identifier="K-01",
+                capacity=2,
+                sanitation_state=KennelSanitationState.CLEAN,
+            )
+        ]
         with pytest.raises(ConflictError, match="capacity limit"):
             await service.create_kennel(section_id, KennelCreate(identifier="K-02", capacity=1))
 
@@ -131,15 +156,26 @@ class TestShelterService:
         section_id = uuid.uuid4()
         facility_id = uuid.uuid4()
         mock_dog_repo.get_by_id.return_value = DogProfile(
-            id=dog_id, registration_number="DOG-001", name="Rex", breed="Mix",
-            gender="male", status=DogStatus.RESCUED, is_adoptable=False,
+            id=dog_id,
+            registration_number="DOG-001",
+            name="Rex",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.RESCUED,
+            is_adoptable=False,
         )
         mock_repo.get_kennel_for_update.return_value = Kennel(
-            id=kennel_id, section_id=section_id, identifier="K-01", capacity=2,
+            id=kennel_id,
+            section_id=section_id,
+            identifier="K-01",
+            capacity=2,
             sanitation_state=KennelSanitationState.CLEAN,
         )
         mock_repo.get_section.return_value = ShelterSection(
-            id=section_id, facility_id=facility_id, name="Gen", capacity=10,
+            id=section_id,
+            facility_id=facility_id,
+            name="Gen",
+            capacity=10,
         )
         mock_dog_repo.count_by_kennel.return_value = 0
         result = await service.assign_dog_to_kennel(dog_id, kennel_id, actor_id=uuid.uuid4())
@@ -149,11 +185,19 @@ class TestShelterService:
     async def test_assign_dog_to_kennel_unclean(self, service, mock_repo, mock_dog_repo):
         kennel_id = uuid.uuid4()
         mock_dog_repo.get_by_id.return_value = DogProfile(
-            id=uuid.uuid4(), registration_number="DOG-001", name="Rex",
-            breed="Mix", gender="male", status=DogStatus.RESCUED, is_adoptable=False,
+            id=uuid.uuid4(),
+            registration_number="DOG-001",
+            name="Rex",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.RESCUED,
+            is_adoptable=False,
         )
         mock_repo.get_kennel_for_update.return_value = Kennel(
-            id=kennel_id, section_id=uuid.uuid4(), identifier="K-01", capacity=2,
+            id=kennel_id,
+            section_id=uuid.uuid4(),
+            identifier="K-01",
+            capacity=2,
             sanitation_state=KennelSanitationState.NEEDS_CLEANING,
         )
         with pytest.raises(ConflictError, match="Cannot assign"):
@@ -164,11 +208,19 @@ class TestShelterService:
         dog_id = uuid.uuid4()
         kennel_id = uuid.uuid4()
         mock_dog_repo.get_by_id.return_value = DogProfile(
-            id=dog_id, registration_number="DOG-001", name="Rex", breed="Mix",
-            gender="male", status=DogStatus.RESCUED, is_adoptable=False,
+            id=dog_id,
+            registration_number="DOG-001",
+            name="Rex",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.RESCUED,
+            is_adoptable=False,
         )
         mock_repo.get_kennel_for_update.return_value = Kennel(
-            id=kennel_id, section_id=uuid.uuid4(), identifier="K-01", capacity=1,
+            id=kennel_id,
+            section_id=uuid.uuid4(),
+            identifier="K-01",
+            capacity=1,
             sanitation_state=KennelSanitationState.CLEAN,
         )
         mock_dog_repo.count_by_kennel.return_value = 1
@@ -179,12 +231,17 @@ class TestShelterService:
     async def test_update_kennel_sanitation(self, service, mock_repo):
         kennel_id = uuid.uuid4()
         kennel = Kennel(
-            id=kennel_id, section_id=uuid.uuid4(), identifier="K-01", capacity=2,
+            id=kennel_id,
+            section_id=uuid.uuid4(),
+            identifier="K-01",
+            capacity=2,
             sanitation_state=KennelSanitationState.CLEAN,
         )
         mock_repo.get_kennel.return_value = kennel
         result = await service.update_kennel_sanitation(
-            kennel_id, KennelSanitationState.NEEDS_CLEANING, actor_id=uuid.uuid4(),
+            kennel_id,
+            KennelSanitationState.NEEDS_CLEANING,
+            actor_id=uuid.uuid4(),
         )
         assert result.sanitation_state == KennelSanitationState.NEEDS_CLEANING
 
@@ -194,21 +251,33 @@ class TestShelterService:
         from_fac_id = uuid.uuid4()
         to_fac_id = uuid.uuid4()
         mock_dog_repo.get_by_id.return_value = DogProfile(
-            id=dog_id, registration_number="DOG-001", name="Rex", breed="Mix",
-            gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+            id=dog_id,
+            registration_number="DOG-001",
+            name="Rex",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=False,
         )
         mock_repo.get_facility.side_effect = [
-            ShelterFacility(id=from_fac_id, name="From", address="A", phone="+1", total_capacity=50),
+            ShelterFacility(
+                id=from_fac_id, name="From", address="A", phone="+1", total_capacity=50
+            ),
             ShelterFacility(id=to_fac_id, name="To", address="B", phone="+2", total_capacity=50),
         ]
         transfer_id = uuid.uuid4()
         mock_repo.create_transfer.return_value = FacilityTransfer(
-            id=transfer_id, dog_id=dog_id, from_facility_id=from_fac_id,
-            to_facility_id=to_fac_id, transferred_by=uuid.uuid4(),
+            id=transfer_id,
+            dog_id=dog_id,
+            from_facility_id=from_fac_id,
+            to_facility_id=to_fac_id,
+            transferred_by=uuid.uuid4(),
             status=TransferStatus.PENDING,
         )
         payload = FacilityTransferCreate(
-            dog_id=dog_id, from_facility_id=from_fac_id, to_facility_id=to_fac_id,
+            dog_id=dog_id,
+            from_facility_id=from_fac_id,
+            to_facility_id=to_fac_id,
         )
         result = await service.request_transfer(uuid.uuid4(), payload, actor_id=uuid.uuid4())
         assert result.status == TransferStatus.PENDING
@@ -219,14 +288,22 @@ class TestShelterService:
         dog_id = uuid.uuid4()
         to_fac_id = uuid.uuid4()
         transfer = FacilityTransfer(
-            id=transfer_id, dog_id=dog_id, from_facility_id=uuid.uuid4(),
-            to_facility_id=to_fac_id, transferred_by=uuid.uuid4(),
+            id=transfer_id,
+            dog_id=dog_id,
+            from_facility_id=uuid.uuid4(),
+            to_facility_id=to_fac_id,
+            transferred_by=uuid.uuid4(),
             status=TransferStatus.PENDING,
         )
         mock_repo.get_transfer.return_value = transfer
         dog = DogProfile(
-            id=dog_id, registration_number="DOG-001", name="Rex", breed="Mix",
-            gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+            id=dog_id,
+            registration_number="DOG-001",
+            name="Rex",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=False,
         )
         mock_dog_repo.get_by_id.return_value = dog
 
@@ -251,8 +328,11 @@ class TestShelterService:
         transfer_id = uuid.uuid4()
         actor_id = uuid.uuid4()
         transfer = FacilityTransfer(
-            id=transfer_id, dog_id=uuid.uuid4(), from_facility_id=uuid.uuid4(),
-            to_facility_id=uuid.uuid4(), transferred_by=uuid.uuid4(),
+            id=transfer_id,
+            dog_id=uuid.uuid4(),
+            from_facility_id=uuid.uuid4(),
+            to_facility_id=uuid.uuid4(),
+            transferred_by=uuid.uuid4(),
             status=TransferStatus.PENDING,
         )
         mock_repo.get_transfer.return_value = transfer
@@ -263,8 +343,11 @@ class TestShelterService:
     @pytest.mark.asyncio
     async def test_confirm_transfer_already_processed(self, service, mock_repo):
         transfer = FacilityTransfer(
-            id=uuid.uuid4(), dog_id=uuid.uuid4(), from_facility_id=uuid.uuid4(),
-            to_facility_id=uuid.uuid4(), transferred_by=uuid.uuid4(),
+            id=uuid.uuid4(),
+            dog_id=uuid.uuid4(),
+            from_facility_id=uuid.uuid4(),
+            to_facility_id=uuid.uuid4(),
+            transferred_by=uuid.uuid4(),
             status=TransferStatus.COMPLETED,
         )
         mock_repo.get_transfer.return_value = transfer
@@ -275,13 +358,21 @@ class TestShelterService:
     async def test_submit_daily_care_log(self, service, mock_repo, mock_dog_repo):
         dog_id = uuid.uuid4()
         mock_dog_repo.get_by_id.return_value = DogProfile(
-            id=dog_id, registration_number="DOG-001", name="Rex", breed="Mix",
-            gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+            id=dog_id,
+            registration_number="DOG-001",
+            name="Rex",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=False,
         )
         log_id = uuid.uuid4()
         mock_repo.create_care_log.return_value = DailyCareLog(
-            id=log_id, dog_id=dog_id, logged_by=uuid.uuid4(),
-            feed_time=datetime.now(), exercise_hours=1.5,
+            id=log_id,
+            dog_id=dog_id,
+            logged_by=uuid.uuid4(),
+            feed_time=datetime.now(),
+            exercise_hours=1.5,
         )
         payload = DailyCareLogCreate(dog_id=dog_id, exercise_hours=1.5)
         result = await service.submit_daily_care_log(uuid.uuid4(), payload, actor_id=uuid.uuid4())
@@ -299,17 +390,26 @@ class TestShelterService:
         )
         dog_id = uuid.uuid4()
         mock_dog_repo.get_by_id.return_value = DogProfile(
-            id=dog_id, registration_number="DOG-001", name="Rex", breed="Mix",
-            gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+            id=dog_id,
+            registration_number="DOG-001",
+            name="Rex",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=False,
         )
         log_id = uuid.uuid4()
         mock_repo.create_care_log.return_value = DailyCareLog(
-            id=log_id, dog_id=dog_id, logged_by=uuid.uuid4(),
-            feed_time=datetime.now(), exercise_hours=1.5,
+            id=log_id,
+            dog_id=dog_id,
+            logged_by=uuid.uuid4(),
+            feed_time=datetime.now(),
+            exercise_hours=1.5,
         )
         item_id = uuid.uuid4()
         payload = DailyCareLogCreate(
-            dog_id=dog_id, exercise_hours=1.5,
+            dog_id=dog_id,
+            exercise_hours=1.5,
             inventory_consumptions=[{"item_id": item_id, "quantity": 1.0}],
         )
         user_id = uuid.uuid4()
@@ -322,18 +422,29 @@ class TestShelterService:
         assert kwargs["payload"].item_id == item_id
 
     @pytest.mark.asyncio
-    async def test_submit_daily_care_log_no_inventory_service(self, service, mock_repo, mock_dog_repo):
+    async def test_submit_daily_care_log_no_inventory_service(
+        self, service, mock_repo, mock_dog_repo
+    ):
         dog_id = uuid.uuid4()
         mock_dog_repo.get_by_id.return_value = DogProfile(
-            id=dog_id, registration_number="DOG-001", name="Rex", breed="Mix",
-            gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+            id=dog_id,
+            registration_number="DOG-001",
+            name="Rex",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=False,
         )
         mock_repo.create_care_log.return_value = DailyCareLog(
-            id=uuid.uuid4(), dog_id=dog_id, logged_by=uuid.uuid4(),
-            feed_time=datetime.now(), exercise_hours=1.5,
+            id=uuid.uuid4(),
+            dog_id=dog_id,
+            logged_by=uuid.uuid4(),
+            feed_time=datetime.now(),
+            exercise_hours=1.5,
         )
         payload = DailyCareLogCreate(
-            dog_id=dog_id, exercise_hours=1.5,
+            dog_id=dog_id,
+            exercise_hours=1.5,
             inventory_consumptions=[{"item_id": uuid.uuid4(), "quantity": 1.0}],
         )
         result = await service.submit_daily_care_log(uuid.uuid4(), payload, actor_id=uuid.uuid4())
@@ -342,7 +453,11 @@ class TestShelterService:
     @pytest.mark.asyncio
     async def test_list_facilities_paginated(self, service, mock_repo):
         fac = ShelterFacility(
-            id=uuid.uuid4(), name="Main", address="Addr", phone="+1", total_capacity=100,
+            id=uuid.uuid4(),
+            name="Main",
+            address="Addr",
+            phone="+1",
+            total_capacity=100,
         )
         mock_repo.list_facilities_paginated.return_value = ([fac], 1)
         page = PageParams()
@@ -368,7 +483,11 @@ class TestShelterService:
     async def test_update_facility_status(self, service, mock_repo):
         facility_id = uuid.uuid4()
         facility = ShelterFacility(
-            id=facility_id, name="Main", address="Addr", phone="+1", total_capacity=100,
+            id=facility_id,
+            name="Main",
+            address="Addr",
+            phone="+1",
+            total_capacity=100,
             status=FacilityStatus.ACTIVE,
         )
         mock_repo.get_facility.return_value = facility
@@ -379,15 +498,26 @@ class TestShelterService:
     async def test_assign_dog_to_kennel_uses_row_lock(self, service, mock_repo, mock_dog_repo):
         kennel_id = uuid.uuid4()
         mock_dog_repo.get_by_id.return_value = DogProfile(
-            id=uuid.uuid4(), registration_number="DOG-001", name="Rex", breed="Mix",
-            gender="male", status=DogStatus.RESCUED, is_adoptable=False,
+            id=uuid.uuid4(),
+            registration_number="DOG-001",
+            name="Rex",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.RESCUED,
+            is_adoptable=False,
         )
         mock_repo.get_kennel_for_update.return_value = Kennel(
-            id=kennel_id, section_id=uuid.uuid4(), identifier="K-01", capacity=2,
+            id=kennel_id,
+            section_id=uuid.uuid4(),
+            identifier="K-01",
+            capacity=2,
             sanitation_state=KennelSanitationState.CLEAN,
         )
         mock_repo.get_section.return_value = ShelterSection(
-            id=uuid.uuid4(), facility_id=uuid.uuid4(), name="Gen", capacity=10,
+            id=uuid.uuid4(),
+            facility_id=uuid.uuid4(),
+            name="Gen",
+            capacity=10,
         )
         mock_dog_repo.count_by_kennel.return_value = 0
         await service.assign_dog_to_kennel(uuid.uuid4(), kennel_id)
@@ -400,11 +530,19 @@ class TestShelterService:
     ):
         kennel_id = uuid.uuid4()
         mock_dog_repo.get_by_id.return_value = DogProfile(
-            id=uuid.uuid4(), registration_number="DOG-001", name="Rex",
-            breed="Mix", gender="male", status=DogStatus.RESCUED, is_adoptable=False,
+            id=uuid.uuid4(),
+            registration_number="DOG-001",
+            name="Rex",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.RESCUED,
+            is_adoptable=False,
         )
         mock_repo.get_kennel_for_update.return_value = Kennel(
-            id=kennel_id, section_id=uuid.uuid4(), identifier="K-01", capacity=2,
+            id=kennel_id,
+            section_id=uuid.uuid4(),
+            identifier="K-01",
+            capacity=2,
             sanitation_state=KennelSanitationState.DISINFECTING,
         )
         with pytest.raises(ConflictError, match="Cannot assign"):
@@ -417,7 +555,10 @@ class TestShelterService:
     ):
         kennel_id = uuid.uuid4()
         kennel = Kennel(
-            id=kennel_id, section_id=uuid.uuid4(), identifier="K-01", capacity=2,
+            id=kennel_id,
+            section_id=uuid.uuid4(),
+            identifier="K-01",
+            capacity=2,
             sanitation_state=KennelSanitationState.DISINFECTING,
         )
         mock_repo.get_kennel_for_update.return_value = kennel
@@ -445,7 +586,9 @@ class TestShelterService:
     @pytest.mark.asyncio
     async def test_list_cleaning_logs_paginated(self, service, mock_repo):
         log = KennelCleaningLog(
-            id=uuid.uuid4(), kennel_id=uuid.uuid4(), cleaned_by=uuid.uuid4(),
+            id=uuid.uuid4(),
+            kennel_id=uuid.uuid4(),
+            cleaned_by=uuid.uuid4(),
             sanitation_state_after=KennelSanitationState.CLEAN,
         )
         mock_repo.list_cleaning_logs_paginated.return_value = ([log], 1)
@@ -462,8 +605,11 @@ class TestShelterService:
     @pytest.mark.asyncio
     async def test_list_sections_paginated_filters_by_type(self, service, mock_repo):
         section = ShelterSection(
-            id=uuid.uuid4(), facility_id=uuid.uuid4(), name="Q1",
-            section_type=SectionType.QUARANTINE, capacity=5,
+            id=uuid.uuid4(),
+            facility_id=uuid.uuid4(),
+            name="Q1",
+            section_type=SectionType.QUARANTINE,
+            capacity=5,
         )
         mock_repo.list_sections_paginated.return_value = ([section], 1)
         page = PageParams()
@@ -475,7 +621,8 @@ class TestShelterService:
         assert isinstance(result, PaginatedResponse)
         assert result.meta.total == 1
         mock_repo.list_sections_paginated.assert_awaited_once_with(
-            page, sort,
+            page,
+            sort,
             facility_id=facility_id,
             section_type=SectionType.QUARANTINE,
             search_term=None,
@@ -485,12 +632,19 @@ class TestShelterService:
     async def test_create_section_with_type(self, service, mock_repo):
         facility_id = uuid.uuid4()
         mock_repo.get_facility.return_value = ShelterFacility(
-            id=facility_id, name="Main", address="Addr", phone="+1", total_capacity=100,
+            id=facility_id,
+            name="Main",
+            address="Addr",
+            phone="+1",
+            total_capacity=100,
         )
         section_id = uuid.uuid4()
         mock_repo.create_section.return_value = ShelterSection(
-            id=section_id, facility_id=facility_id, name="Quarantine",
-            section_type=SectionType.QUARANTINE, capacity=10,
+            id=section_id,
+            facility_id=facility_id,
+            name="Quarantine",
+            section_type=SectionType.QUARANTINE,
+            capacity=10,
         )
         payload = ShelterSectionCreate(
             name="Quarantine", section_type=SectionType.QUARANTINE, capacity=10

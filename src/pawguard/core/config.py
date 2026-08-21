@@ -40,13 +40,13 @@ class Settings(BaseSettings):
     def normalize_database_url(cls, v: Any) -> Any:
         if not isinstance(v, str) or not v.strip():
             return v
-        
+
         # 1. Normalize protocol to postgresql+asyncpg
         if v.startswith("postgres://"):
-            v = "postgresql+asyncpg://" + v[len("postgres://"):]
+            v = "postgresql+asyncpg://" + v[len("postgres://") :]
         elif v.startswith("postgresql://"):
-            v = "postgresql+asyncpg://" + v[len("postgresql://"):]
-            
+            v = "postgresql+asyncpg://" + v[len("postgresql://") :]
+
         # 2. Ensure database name is postgres if it ends with / or has no path
         parts = v.split("://", 1)
         if len(parts) == 2:
@@ -60,10 +60,10 @@ class Settings(BaseSettings):
                 path_part = rest[slash_idx:]
                 db_name_part = path_part.split("?")[0]
                 if db_name_part == "/" or db_name_part == "":
-                     query = ""
-                     if "?" in path_part:
-                         query = "?" + path_part.split("?", 1)[1]
-                     v = proto + "://" + rest[:slash_idx] + "/postgres" + query
+                    query = ""
+                    if "?" in path_part:
+                        query = "?" + path_part.split("?", 1)[1]
+                    v = proto + "://" + rest[:slash_idx] + "/postgres" + query
         return v
 
     # --- App ---
@@ -72,7 +72,9 @@ class Settings(BaseSettings):
     debug: bool = False
     api_v1_prefix: str = "/api/v1"
     allowed_hosts: str = "*,localhost,127.0.0.1"
-    cors_origins: str = "http://localhost:3000,http://localhost:5173,https://pawguard-web-gamma.vercel.app"
+    cors_origins: str = (
+        "http://localhost:3000,http://localhost:5173,https://pawguard-web-gamma.vercel.app"
+    )
     max_request_body_size: int = 10_485_760  # 10 MB
 
     # --- Database ---
@@ -230,9 +232,7 @@ class Settings(BaseSettings):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def jwt_public_key(self) -> str:
-        return _resolve_key(
-            self.jwt_public_key_pem, self.jwt_public_key_path, "JWT_PUBLIC_KEY_PEM"
-        )
+        return _resolve_key(self.jwt_public_key_pem, self.jwt_public_key_path, "JWT_PUBLIC_KEY_PEM")
 
 
 @lru_cache

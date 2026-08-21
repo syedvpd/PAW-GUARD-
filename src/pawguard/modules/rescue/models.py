@@ -6,7 +6,6 @@ from enum import StrEnum
 from typing import Any
 
 from sqlalchemy import (
-    Any,
     Boolean,
     DateTime,
     ForeignKey,
@@ -98,7 +97,6 @@ class RescueRequest(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Ba
     __tablename__ = "rescue_requests"
     __table_args__ = {"extend_existing": True}
 
-
     ticket_number: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
     reporter_name: Mapped[str] = mapped_column(String(255), nullable=False)
     reporter_phone: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -138,9 +136,7 @@ class RescueRequest(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Ba
     # Explicit urgent flag (PRR 3.1.1): surfaces a case for community
     # assistance / foster placement on the public banner even when its
     # severity label is not CRITICAL/HIGH.
-    is_urgent: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False, index=True
-    )
+    is_urgent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
     rejection_rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Coordinator assigned to oversee this rescue case (PRR 3.2).
     coordinator_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -167,7 +163,6 @@ class RescueDispatch(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "rescue_dispatches"
     __table_args__ = {"extend_existing": True}
 
-
     rescue_request_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("rescue_requests.id", ondelete="CASCADE"),
@@ -175,9 +170,10 @@ class RescueDispatch(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
         unique=True,
     )
     assigned_driver_id: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
-    ,
-        index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     vehicle_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # FK-validated vehicle reference (PRR 3.2 resource assignment). The
@@ -228,7 +224,6 @@ class RescueDispatch(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
         return self.rescue_request.ticket_number
 
 
-
 class RescueDispatchAgent(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     """Association of a rescue dispatch to one of its assigned field agents.
 
@@ -268,16 +263,17 @@ class RescueReport(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "rescue_reports"
     __table_args__ = {"extend_existing": True}
 
-
     rescue_request_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("rescue_requests.id", ondelete="CASCADE"), nullable=False
-    ,
-        index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("rescue_requests.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     agent_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    ,
-        index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     photos: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)  # Store up to 5 URLs

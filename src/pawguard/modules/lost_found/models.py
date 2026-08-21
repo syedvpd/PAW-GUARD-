@@ -72,6 +72,12 @@ class LostReport(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base)
         index=True,
     )
     photo_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # Permanent S3/Supabase object reference for an uploaded pet photo. Stores a
+    # stable object key (NOT a time-limited presigned URL) so the backend can
+    # mint a fresh signed download URL on every read. Mirrors the Emergency
+    # (rescue) media_evidence storage principle. `photo_url` is kept for
+    # backward compatibility with legacy externally-hosted image URLs.
+    photo_object_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
     broadcasted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id], lazy="joined")
@@ -104,6 +110,12 @@ class FoundReport(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base
         String(32), default=ReportStatus.ACTIVE, nullable=False, index=True
     )
     photo_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # Permanent S3/Supabase object reference for an uploaded pet photo. Stores a
+    # stable object key (NOT a time-limited presigned URL) so the backend can
+    # mint a fresh signed download URL on every read. Mirrors the Emergency
+    # (rescue) media_evidence storage principle. `photo_url` is kept for
+    # backward compatibility with legacy externally-hosted image URLs.
+    photo_object_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id], lazy="joined")
 

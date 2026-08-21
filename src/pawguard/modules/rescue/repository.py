@@ -23,8 +23,14 @@ from pawguard.modules.rescue.models import (
 class RescueRepository:
     SEARCH_FIELDS = ("ticket_number", "reporter_name", "reporter_phone", "location_address")
     SORTABLE_FIELDS = {
-        "ticket_number", "reporter_name", "status", "severity", "is_urgent",
-        "created_at", "updated_at", "animal_count",
+        "ticket_number",
+        "reporter_name",
+        "status",
+        "severity",
+        "is_urgent",
+        "created_at",
+        "updated_at",
+        "animal_count",
     }
 
     def __init__(self, session: AsyncSession) -> None:
@@ -34,7 +40,9 @@ class RescueRepository:
         return (
             select(RescueRequest)
             .options(
-                selectinload(RescueRequest.dispatch).selectinload(RescueDispatch.agents).selectinload(RescueDispatchAgent.agent),
+                selectinload(RescueRequest.dispatch)
+                .selectinload(RescueDispatch.agents)
+                .selectinload(RescueDispatchAgent.agent),
                 selectinload(RescueRequest.dispatch).selectinload(RescueDispatch.driver),
                 selectinload(RescueRequest.reports),
                 selectinload(RescueRequest.dog_profile),
@@ -44,6 +52,7 @@ class RescueRepository:
 
     async def user_exists(self, user_id: uuid.UUID) -> bool:
         from pawguard.modules.auth.models import User
+
         stmt = select(exists().where(User.id == user_id, User.deleted_at.is_(None)))
         return bool((await self._session.execute(stmt)).scalar())
 
@@ -139,6 +148,7 @@ class RescueRepository:
         from datetime import UTC, datetime
 
         from sqlalchemy import update
+
         stmt = (
             update(RescueRequest)
             .where(RescueRequest.id.in_(ids), RescueRequest.deleted_at.is_(None))
@@ -161,27 +171,33 @@ class RescueRepository:
         await self._session.flush()
         return dispatch
 
-    async def create_dispatch_agent(
-        self, agent: RescueDispatchAgent
-    ) -> RescueDispatchAgent:
+    async def create_dispatch_agent(self, agent: RescueDispatchAgent) -> RescueDispatchAgent:
         self._session.add(agent)
         await self._session.flush()
         return agent
 
     async def get_dispatch_by_request_id(self, request_id: uuid.UUID) -> RescueDispatch | None:
-        stmt = select(RescueDispatch).options(
-            selectinload(RescueDispatch.agents).selectinload(RescueDispatchAgent.agent),
-            selectinload(RescueDispatch.driver),
-            selectinload(RescueDispatch.rescue_request),
-        ).where(RescueDispatch.rescue_request_id == request_id)
+        stmt = (
+            select(RescueDispatch)
+            .options(
+                selectinload(RescueDispatch.agents).selectinload(RescueDispatchAgent.agent),
+                selectinload(RescueDispatch.driver),
+                selectinload(RescueDispatch.rescue_request),
+            )
+            .where(RescueDispatch.rescue_request_id == request_id)
+        )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def get_dispatch_by_id(self, dispatch_id: uuid.UUID) -> RescueDispatch | None:
-        stmt = select(RescueDispatch).options(
-            selectinload(RescueDispatch.agents).selectinload(RescueDispatchAgent.agent),
-            selectinload(RescueDispatch.driver),
-            selectinload(RescueDispatch.rescue_request),
-        ).where(RescueDispatch.id == dispatch_id)
+        stmt = (
+            select(RescueDispatch)
+            .options(
+                selectinload(RescueDispatch.agents).selectinload(RescueDispatchAgent.agent),
+                selectinload(RescueDispatch.driver),
+                selectinload(RescueDispatch.rescue_request),
+            )
+            .where(RescueDispatch.id == dispatch_id)
+        )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def list_dispatches_paginated(
@@ -195,10 +211,15 @@ class RescueRepository:
             selectinload(RescueDispatch.rescue_request),
         )
 
-
         valid_fields = {
-            "dispatched_at", "located_at", "rescued_at", "admitted_at",
-            "failed_at", "escalation_type", "created_at", "updated_at",
+            "dispatched_at",
+            "located_at",
+            "rescued_at",
+            "admitted_at",
+            "failed_at",
+            "escalation_type",
+            "created_at",
+            "updated_at",
         }
         stmt = apply_sorting(stmt, sort, valid_fields)
 

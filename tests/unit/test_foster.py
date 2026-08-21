@@ -36,8 +36,12 @@ from pawguard.services.audit_service import AuditService
 def _make_foster(**kw):
     now = datetime.now(UTC)
     vals = dict(
-        status=FosterStatus.APPLIED, max_capacity=1, active_count=0,
-        is_available=True, created_at=now, updated_at=now,
+        status=FosterStatus.APPLIED,
+        max_capacity=1,
+        active_count=0,
+        is_available=True,
+        created_at=now,
+        updated_at=now,
     )
     vals.update(kw)
     return FosterProfile(**vals)
@@ -71,8 +75,11 @@ class TestFosterService:
         profile_id = uuid.uuid4()
         mock_repo.create_profile.return_value = None
         mock_repo.get_profile_by_id.return_value = FosterProfile(
-            id=profile_id, user_id=user_id, status=FosterStatus.APPLIED,
-            max_capacity=2, is_available=True,
+            id=profile_id,
+            user_id=user_id,
+            status=FosterStatus.APPLIED,
+            max_capacity=2,
+            is_available=True,
         )
         payload = FosterProfileCreate(max_capacity=2)
         result = await service.apply_to_foster(user_id, payload, actor_id=uuid.uuid4())
@@ -82,7 +89,9 @@ class TestFosterService:
     async def test_apply_to_foster_already_exists(self, service, mock_repo):
         user_id = uuid.uuid4()
         mock_repo.get_profile_by_user_id.return_value = FosterProfile(
-            id=uuid.uuid4(), user_id=user_id, status=FosterStatus.APPLIED,
+            id=uuid.uuid4(),
+            user_id=user_id,
+            status=FosterStatus.APPLIED,
         )
         with pytest.raises(ConflictError, match="already applied"):
             await service.apply_to_foster(user_id, FosterProfileCreate())
@@ -91,8 +100,11 @@ class TestFosterService:
     async def test_update_profile(self, service, mock_repo):
         profile_id = uuid.uuid4()
         profile = FosterProfile(
-            id=profile_id, user_id=uuid.uuid4(), status=FosterStatus.APPROVED,
-            max_capacity=2, is_available=True,
+            id=profile_id,
+            user_id=uuid.uuid4(),
+            status=FosterStatus.APPROVED,
+            max_capacity=2,
+            is_available=True,
         )
         mock_repo.get_profile_by_id.side_effect = [profile, profile]
         payload = FosterProfileUpdate(max_capacity=3)
@@ -110,8 +122,11 @@ class TestFosterService:
         profile_id = uuid.uuid4()
         user_id = uuid.uuid4()
         profile = FosterProfile(
-            id=profile_id, user_id=user_id, status=FosterStatus.APPLIED,
-            max_capacity=2, is_available=True,
+            id=profile_id,
+            user_id=user_id,
+            status=FosterStatus.APPLIED,
+            max_capacity=2,
+            is_available=True,
             background_check_passed=True,
             references_checked=True,
             home_inspection_passed=True,
@@ -123,15 +138,20 @@ class TestFosterService:
             patch.object(service._roles, "get_by_name", AsyncMock(return_value=foster_role)),
             patch.object(service._user_roles, "grant_role", AsyncMock()) as mock_grant,
         ):
-            await service.update_profile(profile_id, FosterProfileUpdate(status=FosterStatus.APPROVED))
+            await service.update_profile(
+                profile_id, FosterProfileUpdate(status=FosterStatus.APPROVED)
+            )
             mock_grant.assert_awaited_once_with(user_id, foster_role.id)
 
     @pytest.mark.asyncio
     async def test_get_profile(self, service, mock_repo):
         profile_id = uuid.uuid4()
         mock_repo.get_profile_by_id.return_value = FosterProfile(
-            id=profile_id, user_id=uuid.uuid4(), status=FosterStatus.APPROVED,
-            max_capacity=2, is_available=True,
+            id=profile_id,
+            user_id=uuid.uuid4(),
+            status=FosterStatus.APPROVED,
+            max_capacity=2,
+            is_available=True,
         )
         result = await service.get_profile(profile_id)
         assert result.id == profile_id
@@ -147,13 +167,22 @@ class TestFosterService:
         foster_id = uuid.uuid4()
         dog_id = uuid.uuid4()
         foster = FosterProfile(
-            id=foster_id, user_id=uuid.uuid4(), status=FosterStatus.APPROVED,
-            max_capacity=2, active_count=0, is_available=True,
+            id=foster_id,
+            user_id=uuid.uuid4(),
+            status=FosterStatus.APPROVED,
+            max_capacity=2,
+            active_count=0,
+            is_available=True,
         )
         mock_repo.get_profile_by_id_for_update.return_value = foster
         mock_dog_repo.get_by_id_for_update.return_value = DogProfile(
-            id=dog_id, registration_number="DOG-001", name="Rex", breed="Mix",
-            gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+            id=dog_id,
+            registration_number="DOG-001",
+            name="Rex",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=False,
         )
         mock_repo.get_active_placement_for_dog.return_value = None
         with patch(
@@ -165,8 +194,11 @@ class TestFosterService:
             # place_dog re-fetches the placement before returning (so the response
             # serializer sees non-expired columns) - configure that mock too.
             mock_repo.get_placement_by_id.return_value = FosterPlacement(
-                id=uuid.uuid4(), foster_id=foster_id, dog_id=dog_id,
-                is_active=True, placed_at=datetime.now(),
+                id=uuid.uuid4(),
+                foster_id=foster_id,
+                dog_id=dog_id,
+                is_active=True,
+                placed_at=datetime.now(),
             )
             payload = FosterPlacementCreate(dog_id=dog_id)
             result = await service.place_dog(foster_id, payload, actor_id=uuid.uuid4())
@@ -176,8 +208,11 @@ class TestFosterService:
     @pytest.mark.asyncio
     async def test_place_dog_not_approved(self, service, mock_repo):
         foster = FosterProfile(
-            id=uuid.uuid4(), user_id=uuid.uuid4(), status=FosterStatus.APPLIED,
-            max_capacity=1, is_available=True,
+            id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            status=FosterStatus.APPLIED,
+            max_capacity=1,
+            is_available=True,
         )
         mock_repo.get_profile_by_id_for_update.return_value = foster
         with pytest.raises(ConflictError, match="must be approved"):
@@ -189,18 +224,30 @@ class TestFosterService:
         foster_id = uuid.uuid4()
         dog_id = uuid.uuid4()
         placement = FosterPlacement(
-            id=placement_id, foster_id=foster_id, dog_id=dog_id,
-            is_active=True, placed_at=datetime.now(),
+            id=placement_id,
+            foster_id=foster_id,
+            dog_id=dog_id,
+            is_active=True,
+            placed_at=datetime.now(),
         )
         mock_repo.get_placement_by_id.return_value = placement
         foster = FosterProfile(
-            id=foster_id, user_id=uuid.uuid4(), status=FosterStatus.APPROVED,
-            max_capacity=2, active_count=1, is_available=False,
+            id=foster_id,
+            user_id=uuid.uuid4(),
+            status=FosterStatus.APPROVED,
+            max_capacity=2,
+            active_count=1,
+            is_available=False,
         )
         mock_repo.get_profile_by_id.return_value = foster
         dog = DogProfile(
-            id=dog_id, registration_number="DOG-001", name="Rex", breed="Mix",
-            gender="male", status=DogStatus.FOSTERED, is_adoptable=False,
+            id=dog_id,
+            registration_number="DOG-001",
+            name="Rex",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.FOSTERED,
+            is_adoptable=False,
         )
         mock_dog_repo.get_by_id.return_value = dog
         result = await service.return_dog(placement_id, notes="Returned", actor_id=uuid.uuid4())
@@ -217,8 +264,11 @@ class TestFosterService:
     @pytest.mark.asyncio
     async def test_return_dog_already_inactive(self, service, mock_repo):
         placement = FosterPlacement(
-            id=uuid.uuid4(), foster_id=uuid.uuid4(), dog_id=uuid.uuid4(),
-            is_active=False, placed_at=datetime.now(),
+            id=uuid.uuid4(),
+            foster_id=uuid.uuid4(),
+            dog_id=uuid.uuid4(),
+            is_active=False,
+            placed_at=datetime.now(),
         )
         mock_repo.get_placement_by_id.return_value = placement
         with pytest.raises(ConflictError, match="already inactive"):
@@ -227,7 +277,9 @@ class TestFosterService:
     @pytest.mark.asyncio
     async def test_list_profiles_paginated(self, service, mock_repo):
         profile = _make_foster(
-            id=uuid.uuid4(), user_id=uuid.uuid4(), status=FosterStatus.APPROVED,
+            id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            status=FosterStatus.APPROVED,
             max_capacity=2,
         )
         mock_repo.paginate_profiles.return_value = ([profile], 1)
@@ -267,14 +319,19 @@ class TestFosterProgressLog:
     async def test_log_progress_success(self, service, mock_repo, mock_audit):
         placement_id = uuid.uuid4()
         placement = FosterPlacement(
-            id=placement_id, foster_id=uuid.uuid4(), dog_id=uuid.uuid4(),
-            is_active=True, placed_at=datetime.now(),
+            id=placement_id,
+            foster_id=uuid.uuid4(),
+            dog_id=uuid.uuid4(),
+            is_active=True,
+            placed_at=datetime.now(),
         )
         mock_repo.get_placement_by_id.return_value = placement
         mock_repo.create_progress_log.return_value = None
         payload = FosterProgressLogCreate(weight_kg=12.5, mood_rating=4)
         result = await service.log_daily_progress(
-            placement_id, payload, actor_id=uuid.uuid4(),
+            placement_id,
+            payload,
+            actor_id=uuid.uuid4(),
         )
         assert result.weight_kg == 12.5
         assert result.mood_rating == 4
@@ -283,13 +340,18 @@ class TestFosterProgressLog:
     async def test_log_progress_placement_not_active(self, service, mock_repo):
         placement_id = uuid.uuid4()
         placement = FosterPlacement(
-            id=placement_id, foster_id=uuid.uuid4(), dog_id=uuid.uuid4(),
-            is_active=False, placed_at=datetime.now(),
+            id=placement_id,
+            foster_id=uuid.uuid4(),
+            dog_id=uuid.uuid4(),
+            is_active=False,
+            placed_at=datetime.now(),
         )
         mock_repo.get_placement_by_id.return_value = placement
         with pytest.raises(ConflictError, match="not active"):
             await service.log_daily_progress(
-                placement_id, FosterProgressLogCreate(), actor_id=uuid.uuid4(),
+                placement_id,
+                FosterProgressLogCreate(),
+                actor_id=uuid.uuid4(),
             )
 
 
@@ -320,23 +382,39 @@ class TestFosterToAdopt:
 
     @pytest.mark.asyncio
     async def test_convert_to_adoption(
-        self, service, mock_repo, mock_dog_repo, mock_adoption_repo,
+        self,
+        service,
+        mock_repo,
+        mock_dog_repo,
+        mock_adoption_repo,
     ):
         placement_id = uuid.uuid4()
         foster_id = uuid.uuid4()
         dog_id = uuid.uuid4()
         user_id = uuid.uuid4()
         dog = DogProfile(
-            id=dog_id, registration_number="DOG-001", name="Rex", breed="Mix",
-            gender="male", status=DogStatus.FOSTERED, is_adoptable=True,
+            id=dog_id,
+            registration_number="DOG-001",
+            name="Rex",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.FOSTERED,
+            is_adoptable=True,
         )
         placement = FosterPlacement(
-            id=placement_id, foster_id=foster_id, dog_id=dog_id,
-            is_active=True, placed_at=datetime.now(),
+            id=placement_id,
+            foster_id=foster_id,
+            dog_id=dog_id,
+            is_active=True,
+            placed_at=datetime.now(),
         )
         foster = FosterProfile(
-            id=foster_id, user_id=user_id, status=FosterStatus.APPROVED,
-            max_capacity=2, active_count=1, is_available=False,
+            id=foster_id,
+            user_id=user_id,
+            status=FosterStatus.APPROVED,
+            max_capacity=2,
+            active_count=1,
+            is_available=False,
         )
         mock_repo.get_placement_by_id.return_value = placement
         mock_repo.get_profile_by_id.return_value = foster
@@ -345,15 +423,19 @@ class TestFosterToAdopt:
         app_id = uuid.uuid4()
         mock_adoption_repo.create.return_value = None
         mock_adoption_repo.get_by_id.return_value = AdoptionApplication(
-            id=app_id, dog_id=dog_id, adopter_id=user_id,
-            residential_status="foster", status=AdoptionStatus.SUBMITTED,
+            id=app_id,
+            dog_id=dog_id,
+            adopter_id=user_id,
+            residential_status="foster",
+            status=AdoptionStatus.SUBMITTED,
         )
         with patch(
             "pawguard.modules.foster.service.MedicalRepository.get_latest_approved_clearance",
             AsyncMock(return_value=SimpleNamespace(id=uuid.uuid4())),
         ):
             result = await service.convert_to_adoption(
-                placement_id, actor_id=uuid.uuid4(),
+                placement_id,
+                actor_id=uuid.uuid4(),
             )
         assert result.id == app_id
         assert result.status == AdoptionStatus.SUBMITTED
@@ -362,23 +444,38 @@ class TestFosterToAdopt:
 
     @pytest.mark.asyncio
     async def test_convert_to_adopt_already_adopted(
-        self, service, mock_repo, mock_dog_repo,
+        self,
+        service,
+        mock_repo,
+        mock_dog_repo,
     ):
         placement_id = uuid.uuid4()
         foster_id = uuid.uuid4()
         dog_id = uuid.uuid4()
         placement = FosterPlacement(
-            id=placement_id, foster_id=foster_id, dog_id=dog_id,
-            is_active=True, placed_at=datetime.now(),
+            id=placement_id,
+            foster_id=foster_id,
+            dog_id=dog_id,
+            is_active=True,
+            placed_at=datetime.now(),
         )
         mock_repo.get_placement_by_id.return_value = placement
         mock_repo.get_profile_by_id.return_value = FosterProfile(
-            id=foster_id, user_id=uuid.uuid4(), status=FosterStatus.APPROVED,
-            max_capacity=2, active_count=1, is_available=False,
+            id=foster_id,
+            user_id=uuid.uuid4(),
+            status=FosterStatus.APPROVED,
+            max_capacity=2,
+            active_count=1,
+            is_available=False,
         )
         dog = DogProfile(
-            id=dog_id, registration_number="DOG-001", name="Rex", breed="Mix",
-            gender="male", status=DogStatus.ADOPTED, is_adoptable=False,
+            id=dog_id,
+            registration_number="DOG-001",
+            name="Rex",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.ADOPTED,
+            is_adoptable=False,
         )
         mock_dog_repo.get_by_id.return_value = dog
         with pytest.raises(ConflictError, match="already been adopted"):
@@ -414,14 +511,19 @@ class TestFosterSupplyDispatch:
     async def test_log_supply_dispatch_success(self, service, mock_repo, mock_audit):
         placement_id = uuid.uuid4()
         placement = FosterPlacement(
-            id=placement_id, foster_id=uuid.uuid4(), dog_id=uuid.uuid4(),
-            is_active=True, placed_at=datetime.now(),
+            id=placement_id,
+            foster_id=uuid.uuid4(),
+            dog_id=uuid.uuid4(),
+            is_active=True,
+            placed_at=datetime.now(),
         )
         mock_repo.get_placement_by_id.return_value = placement
         mock_repo.create_supply_dispatch.return_value = None
         payload = FosterSupplyDispatchCreate(item_type=SupplyItemType.FOOD, quantity=2)
         result = await service.log_supply_dispatch(
-            placement_id, payload, actor_id=uuid.uuid4(),
+            placement_id,
+            payload,
+            actor_id=uuid.uuid4(),
         )
         assert result.item_type == SupplyItemType.FOOD
         assert result.quantity == 2
@@ -431,5 +533,6 @@ class TestFosterSupplyDispatch:
         mock_repo.get_placement_by_id.return_value = None
         with pytest.raises(NotFoundError):
             await service.log_supply_dispatch(
-                uuid.uuid4(), FosterSupplyDispatchCreate(item_type=SupplyItemType.FOOD),
+                uuid.uuid4(),
+                FosterSupplyDispatchCreate(item_type=SupplyItemType.FOOD),
             )

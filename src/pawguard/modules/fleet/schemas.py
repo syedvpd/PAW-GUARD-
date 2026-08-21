@@ -91,7 +91,8 @@ class EquipmentCheckoutCreate(BaseModel):
     assigned_to_agent_id: uuid.UUID | None = None
     assigned_to_vehicle_id: uuid.UUID | None = None
     expected_return_at: datetime | None = Field(
-        None, examples=["2026-08-17T18:00:00Z"],
+        None,
+        examples=["2026-08-17T18:00:00Z"],
         description="When the equipment is due back. Defaults to a checkout window.",
     )
     notes: str | None = Field(None, examples=["Checked out for Sector 4 rescue."])
@@ -122,7 +123,9 @@ class FuelLogCreate(BaseModel):
     cost: float = Field(..., ge=0, examples=[68.25])
     mileage_at_fill: int = Field(..., ge=0, examples=[12750])
     vendor: str | None = Field(None, max_length=255, examples=["Shell Gas Station"])
-    receipt_url: str | None = Field(None, max_length=512, examples=["https://example.com/receipt.jpg"])
+    receipt_url: str | None = Field(
+        None, max_length=512, examples=["https://example.com/receipt.jpg"]
+    )
     notes: str | None = Field(None, examples=["Full tank before long-distance dispatch."])
 
 

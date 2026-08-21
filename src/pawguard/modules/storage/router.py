@@ -186,4 +186,3 @@ async def list_files_by_entity(
         sort=sort,
         folder=folder.value if folder else None,
     )
-

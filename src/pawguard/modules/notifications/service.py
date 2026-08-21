@@ -38,7 +38,8 @@ class NotificationService:
         self._audit = audit_service
 
     async def create_notification(
-        self, payload: NotificationCreate,
+        self,
+        payload: NotificationCreate,
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> Notification:
@@ -62,7 +63,8 @@ class NotificationService:
         return result
 
     async def broadcast(
-        self, payload: BroadcastCreate,
+        self,
+        payload: BroadcastCreate,
         user_ids: list[uuid.UUID],
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
@@ -71,6 +73,7 @@ class NotificationService:
         target_ids = set(user_ids)
         if payload.target_roles:
             from pawguard.modules.auth.repository import UserRepository
+
             user_repo = UserRepository(self._repo._session)
             role_user_ids = await user_repo.get_user_ids_by_roles(payload.target_roles)
             target_ids.update(role_user_ids)
@@ -127,9 +130,7 @@ class NotificationService:
             meta=build_pagination_meta(total=total, params=page),
         )
 
-    async def mark_read(
-        self, notification_id: uuid.UUID, user_id: uuid.UUID
-    ) -> Notification:
+    async def mark_read(self, notification_id: uuid.UUID, user_id: uuid.UUID) -> Notification:
         notification = await self._repo.mark_read(notification_id, user_id)
         if notification is None:
             raise NotFoundError("Notification not found.")
@@ -142,7 +143,8 @@ class NotificationService:
         return await self._repo.count_unread(user_id)
 
     async def delete_notification(
-        self, notification_id: uuid.UUID,
+        self,
+        notification_id: uuid.UUID,
         user_id: uuid.UUID | None = None,
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
@@ -156,14 +158,16 @@ class NotificationService:
             raise NotFoundError("Notification not found.")
 
     async def bulk_delete(
-        self, ids: list[uuid.UUID],
+        self,
+        ids: list[uuid.UUID],
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> int:
         return await self._repo.bulk_soft_delete(ids)
 
     async def send_notification(
-        self, payload: NotificationSend,
+        self,
+        payload: NotificationSend,
         user_email: str | None = None,
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
@@ -174,6 +178,7 @@ class NotificationService:
             from datetime import UTC, datetime
 
             from pawguard.modules.auth.repository import UserRepository
+
             user_repo = UserRepository(self._repo._session)
             role_user_ids = await user_repo.get_user_ids_by_roles(payload.target_roles)
             if not role_user_ids:
@@ -215,8 +220,9 @@ class NotificationService:
         # Single-user notification (legacy path)
         if payload.user_id is None:
             raise ValidationFailedError("Either user_id or target_roles must be provided.")
-        
+
         from datetime import UTC, datetime
+
         notification = Notification(
             user_id=payload.user_id,
             title=payload.title,
@@ -251,6 +257,7 @@ class NotificationService:
                     logger.warning("arq_enqueue_failed_falling_back_to_outbox", error=str(exc))
             if not enqueued:
                 from pawguard.modules.outbox.service import OutboxService
+
                 await OutboxService.enqueue_job(
                     self._repo._session,
                     "send_notification_email_job",
@@ -342,7 +349,9 @@ class NotificationService:
                             in_quiet_hours = start_minutes <= current_minutes < end_minutes
                         else:
                             # Overnight quiet hours (e.g. 22:00 - 07:00)
-                            in_quiet_hours = current_minutes >= start_minutes or current_minutes < end_minutes
+                            in_quiet_hours = (
+                                current_minutes >= start_minutes or current_minutes < end_minutes
+                            )
                         if in_quiet_hours:
                             continue
                     except (ValueError, IndexError):
@@ -358,9 +367,7 @@ class NotificationService:
             return 0
 
         data = {"action_url": action_url} if action_url else None
-        return await send_push_notification_to_users(
-            tokens, title=title, body=body, data=data
-        )
+        return await send_push_notification_to_users(tokens, title=title, body=body, data=data)
 
     async def broadcast_to_all_users(
         self,
@@ -410,9 +417,7 @@ class NotificationPreferenceService:
     def __init__(self, repository: NotificationPreferenceRepository) -> None:
         self._repo = repository
 
-    async def get_preferences(
-        self, user_id: uuid.UUID
-    ) -> NotificationPreference:
+    async def get_preferences(self, user_id: uuid.UUID) -> NotificationPreference:
         prefs = await self._repo.get_by_user(user_id)
         if prefs is None:
             prefs = await self._repo.upsert(user_id=user_id)

@@ -58,14 +58,19 @@ class TestRescueService:
         request_id = uuid.uuid4()
         mock_repo.create_request.return_value = None
         mock_repo.get_request_by_id.return_value = RescueRequest(
-            id=request_id, ticket_number="RES-20260730-1234",
-            reporter_name="John", reporter_phone="+1234567890",
-            location_address="123 Main St", physical_condition=RescuePhysicalCondition.INJURED,
+            id=request_id,
+            ticket_number="RES-20260730-1234",
+            reporter_name="John",
+            reporter_phone="+1234567890",
+            location_address="123 Main St",
+            physical_condition=RescuePhysicalCondition.INJURED,
             status=RescueStatus.REPORTED,
         )
         result = await service.report_incident(
-            reporter_name="John", reporter_phone="+1234567890",
-            location_address="123 Main St", physical_condition=RescuePhysicalCondition.INJURED,
+            reporter_name="John",
+            reporter_phone="+1234567890",
+            location_address="123 Main St",
+            physical_condition=RescuePhysicalCondition.INJURED,
             actor_id=uuid.uuid4(),
         )
         assert result.ticket_number.startswith("RES-")
@@ -78,15 +83,23 @@ class TestRescueService:
         request_id = uuid.uuid4()
         mock_repo.create_request.return_value = None
         mock_repo.get_request_by_id.return_value = RescueRequest(
-            id=request_id, ticket_number="RES-20260730-9999",
-            reporter_name="Anonymous", reporter_phone="+1000000000",
-            location_address="Unknown", physical_condition=RescuePhysicalCondition.INJURED,
-            status=RescueStatus.REPORTED, is_anonymous=True,
+            id=request_id,
+            ticket_number="RES-20260730-9999",
+            reporter_name="Anonymous",
+            reporter_phone="+1000000000",
+            location_address="Unknown",
+            physical_condition=RescuePhysicalCondition.INJURED,
+            status=RescueStatus.REPORTED,
+            is_anonymous=True,
         )
         await service.report_incident(
-            reporter_name="Anonymous", reporter_phone="+1000000000",
-            location_address="Unknown", physical_condition=RescuePhysicalCondition.INJURED,
-            is_anonymous=True, actor_id=None, ip_address="203.0.113.9",
+            reporter_name="Anonymous",
+            reporter_phone="+1000000000",
+            location_address="Unknown",
+            physical_condition=RescuePhysicalCondition.INJURED,
+            is_anonymous=True,
+            actor_id=None,
+            ip_address="203.0.113.9",
         )
         mock_audit.record.assert_awaited_once()
         kwargs = mock_audit.record.call_args.kwargs
@@ -99,8 +112,12 @@ class TestRescueService:
     async def test_verify_request_approve(self, service, mock_repo):
         request_id = uuid.uuid4()
         request = RescueRequest(
-            id=request_id, ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr", physical_condition=RescuePhysicalCondition.UNKNOWN,
+            id=request_id,
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
+            physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.REPORTED,
         )
         mock_repo.get_request_by_id.return_value = request
@@ -111,12 +128,18 @@ class TestRescueService:
     async def test_verify_request_reject(self, service, mock_repo):
         request_id = uuid.uuid4()
         request = RescueRequest(
-            id=request_id, ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr", physical_condition=RescuePhysicalCondition.UNKNOWN,
+            id=request_id,
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
+            physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.REPORTED,
         )
         mock_repo.get_request_by_id.return_value = request
-        result = await service.verify_request(request_id, approve=False, rationale="Duplicate", actor_id=uuid.uuid4())
+        result = await service.verify_request(
+            request_id, approve=False, rationale="Duplicate", actor_id=uuid.uuid4()
+        )
         assert result.status == RescueStatus.REJECTED
         assert result.rejection_rationale == "Duplicate"
 
@@ -124,8 +147,12 @@ class TestRescueService:
     async def test_verify_request_reject_requires_rationale(self, service, mock_repo):
         request_id = uuid.uuid4()
         request = RescueRequest(
-            id=request_id, ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr", physical_condition=RescuePhysicalCondition.UNKNOWN,
+            id=request_id,
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
+            physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.REPORTED,
         )
         mock_repo.get_request_by_id.return_value = request
@@ -141,8 +168,12 @@ class TestRescueService:
     @pytest.mark.asyncio
     async def test_verify_request_wrong_status(self, service, mock_repo):
         request = RescueRequest(
-            id=uuid.uuid4(), ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr", physical_condition=RescuePhysicalCondition.UNKNOWN,
+            id=uuid.uuid4(),
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
+            physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.DISPATCHED,
         )
         mock_repo.get_request_by_id.return_value = request
@@ -153,14 +184,20 @@ class TestRescueService:
     async def test_dispatch_team(self, service, mock_repo):
         request_id = uuid.uuid4()
         request = RescueRequest(
-            id=request_id, ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr", physical_condition=RescuePhysicalCondition.UNKNOWN,
+            id=request_id,
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
+            physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.VERIFIED,
         )
         mock_repo.get_request_by_id.side_effect = [request, request]
         mock_repo.get_dispatch_by_request_id.return_value = None
         mock_repo.create_dispatch.return_value = None
-        result = await service.dispatch_team(request_id, assigned_driver_id=uuid.uuid4(), actor_id=uuid.uuid4())
+        result = await service.dispatch_team(
+            request_id, assigned_driver_id=uuid.uuid4(), actor_id=uuid.uuid4()
+        )
         assert result.status == RescueStatus.DISPATCHED
         # The in-memory relationship must be set so the dispatch endpoint
         # response serializes the dispatch instead of None (identity-map
@@ -173,8 +210,11 @@ class TestRescueService:
         """Escalation Protocol request flows to the dispatch record (M-D)."""
         request_id = uuid.uuid4()
         request = RescueRequest(
-            id=request_id, ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr",
+            id=request_id,
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
             physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.VERIFIED,
         )
@@ -196,8 +236,11 @@ class TestRescueService:
         """Unset escalation stays None on the dispatch record (M-D)."""
         request_id = uuid.uuid4()
         request = RescueRequest(
-            id=request_id, ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr",
+            id=request_id,
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
             physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.VERIFIED,
         )
@@ -211,14 +254,19 @@ class TestRescueService:
 
     @pytest.mark.asyncio
     @patch("pawguard.modules.rescue.service.FleetService")
-    async def test_dispatch_team_auto_checks_out_equipment(self, mock_fleet_cls, service, mock_repo):
+    async def test_dispatch_team_auto_checks_out_equipment(
+        self, mock_fleet_cls, service, mock_repo
+    ):
         """Equipment named on the dispatch is auto-checked-out against the
         dispatch and linked to the assigned driver (PRR 3.3)."""
         request_id = uuid.uuid4()
         driver_id = uuid.uuid4()
         request = RescueRequest(
-            id=request_id, ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr",
+            id=request_id,
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
             physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.VERIFIED,
         )
@@ -245,12 +293,17 @@ class TestRescueService:
 
     @pytest.mark.asyncio
     @patch("pawguard.modules.rescue.service.FleetService")
-    async def test_dispatch_team_no_equipment_skips_checkout(self, mock_fleet_cls, service, mock_repo):
+    async def test_dispatch_team_no_equipment_skips_checkout(
+        self, mock_fleet_cls, service, mock_repo
+    ):
         """A dispatch with no equipment_details creates no checkout rows."""
         request_id = uuid.uuid4()
         request = RescueRequest(
-            id=request_id, ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr",
+            id=request_id,
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
             physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.VERIFIED,
         )
@@ -267,14 +320,20 @@ class TestRescueService:
 
     @pytest.mark.asyncio
     @patch("pawguard.modules.rescue.service.FleetService")
-    async def test_update_dispatch_status_admitted_releases_equipment(self, mock_fleet_cls, service, mock_repo):
+    async def test_update_dispatch_status_admitted_releases_equipment(
+        self, mock_fleet_cls, service, mock_repo
+    ):
         """Marking a rescue ADMITTED releases the dispatched equipment (PRR 3.3)."""
         request_id = uuid.uuid4()
         request = RescueRequest(
-            id=request_id, ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr",
+            id=request_id,
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
             physical_condition=RescuePhysicalCondition.UNKNOWN,
-            status=RescueStatus.RESCUED, reports=[],
+            status=RescueStatus.RESCUED,
+            reports=[],
         )
         dispatch = RescueDispatch(rescue_request_id=request_id)
         mock_repo.get_request_by_id.side_effect = [request, request]
@@ -285,7 +344,9 @@ class TestRescueService:
         mock_fleet_cls.return_value = mock_fleet
 
         result = await service.update_dispatch_status(
-            request_id, status=RescueStatus.ADMITTED, agent_id=uuid.uuid4(),
+            request_id,
+            status=RescueStatus.ADMITTED,
+            agent_id=uuid.uuid4(),
             actor_id=uuid.uuid4(),
         )
         assert result.status == RescueStatus.ADMITTED
@@ -295,12 +356,17 @@ class TestRescueService:
 
     @pytest.mark.asyncio
     @patch("pawguard.modules.rescue.service.FleetService")
-    async def test_update_dispatch_status_failed_releases_equipment(self, mock_fleet_cls, service, mock_repo):
+    async def test_update_dispatch_status_failed_releases_equipment(
+        self, mock_fleet_cls, service, mock_repo
+    ):
         """A failed (REJECTED) rescue releases the dispatched equipment too."""
         request_id = uuid.uuid4()
         request = RescueRequest(
-            id=request_id, ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr",
+            id=request_id,
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
             physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.DISPATCHED,
         )
@@ -312,8 +378,11 @@ class TestRescueService:
         mock_fleet_cls.return_value = mock_fleet
 
         result = await service.update_dispatch_status(
-            request_id, status=RescueStatus.REJECTED, agent_id=uuid.uuid4(),
-            failure_reason="Animal fled", actor_id=uuid.uuid4(),
+            request_id,
+            status=RescueStatus.REJECTED,
+            agent_id=uuid.uuid4(),
+            failure_reason="Animal fled",
+            actor_id=uuid.uuid4(),
         )
         assert result.status == RescueStatus.REJECTED
         mock_fleet.release_equipment_for_dispatch.assert_awaited_once()
@@ -326,23 +395,31 @@ class TestRescueService:
         from pawguard.modules.rescue.service import _parse_equipment_details
 
         assert _parse_equipment_details("Net Gun, Crate\nTrap; Blanket") == [
-            "Net Gun", "Crate", "Trap", "Blanket",
+            "Net Gun",
+            "Crate",
+            "Trap",
+            "Blanket",
         ]
         assert _parse_equipment_details("  Net Gun  ,,  Crate  ") == ["Net Gun", "Crate"]
         assert _parse_equipment_details("") == []
         assert _parse_equipment_details(None) == []
 
-
     @pytest.mark.asyncio
     async def test_dispatch_team_already_dispatched(self, service, mock_repo):
         request_id = uuid.uuid4()
         request = RescueRequest(
-            id=request_id, ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr", physical_condition=RescuePhysicalCondition.UNKNOWN,
+            id=request_id,
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
+            physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.VERIFIED,
         )
         mock_repo.get_request_by_id.return_value = request
-        mock_repo.get_dispatch_by_request_id.return_value = RescueDispatch(rescue_request_id=request_id)
+        mock_repo.get_dispatch_by_request_id.return_value = RescueDispatch(
+            rescue_request_id=request_id
+        )
         with pytest.raises(ConflictError, match="already exists"):
             await service.dispatch_team(request_id)
 
@@ -350,30 +427,44 @@ class TestRescueService:
     async def test_update_dispatch_status_located(self, service, mock_repo):
         request_id = uuid.uuid4()
         request = RescueRequest(
-            id=request_id, ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr", physical_condition=RescuePhysicalCondition.UNKNOWN,
+            id=request_id,
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
+            physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.DISPATCHED,
         )
         dispatch = RescueDispatch(rescue_request_id=request_id)
         mock_repo.get_request_by_id.side_effect = [request, request]
         mock_repo.get_dispatch_by_request_id.return_value = dispatch
-        result = await service.update_dispatch_status(request_id, status=RescueStatus.LOCATED, agent_id=uuid.uuid4())
+        result = await service.update_dispatch_status(
+            request_id, status=RescueStatus.LOCATED, agent_id=uuid.uuid4()
+        )
         assert result.status == RescueStatus.LOCATED
 
     @pytest.mark.asyncio
     async def test_update_dispatch_status_admitted(self, service, mock_repo):
         request_id = uuid.uuid4()
         request = RescueRequest(
-            id=request_id, ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr", physical_condition=RescuePhysicalCondition.UNKNOWN,
-            status=RescueStatus.RESCUED, reports=[],
+            id=request_id,
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
+            physical_condition=RescuePhysicalCondition.UNKNOWN,
+            status=RescueStatus.RESCUED,
+            reports=[],
         )
         dispatch = RescueDispatch(rescue_request_id=request_id)
         mock_repo.get_request_by_id.side_effect = [request, request]
         mock_repo.get_dispatch_by_request_id.return_value = dispatch
         mock_repo.create_report.return_value = None
         result = await service.update_dispatch_status(
-            request_id, status=RescueStatus.ADMITTED, agent_id=uuid.uuid4(), actor_id=uuid.uuid4(),
+            request_id,
+            status=RescueStatus.ADMITTED,
+            agent_id=uuid.uuid4(),
+            actor_id=uuid.uuid4(),
         )
         assert result.status == RescueStatus.ADMITTED
 
@@ -383,16 +474,24 @@ class TestRescueService:
     ):
         request_id = uuid.uuid4()
         request = RescueRequest(
-            id=request_id, ticket_number="RES-20260730-0001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr", physical_condition=RescuePhysicalCondition.UNKNOWN,
-            status=RescueStatus.RESCUED, reports=[],
+            id=request_id,
+            ticket_number="RES-20260730-0001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
+            physical_condition=RescuePhysicalCondition.UNKNOWN,
+            status=RescueStatus.RESCUED,
+            reports=[],
         )
         dispatch = RescueDispatch(rescue_request_id=request_id)
         mock_repo.get_request_by_id.side_effect = [request, request]
         mock_repo.get_dispatch_by_request_id.return_value = dispatch
         mock_repo.create_report.return_value = None
         await service.update_dispatch_status(
-            request_id, status=RescueStatus.ADMITTED, agent_id=uuid.uuid4(), actor_id=uuid.uuid4(),
+            request_id,
+            status=RescueStatus.ADMITTED,
+            agent_id=uuid.uuid4(),
+            actor_id=uuid.uuid4(),
         )
         mock_dog_repo.create.assert_awaited_once()
         created_dog = mock_dog_repo.create.call_args[0][0]
@@ -403,16 +502,23 @@ class TestRescueService:
     async def test_update_dispatch_status_fail(self, service, mock_repo):
         request_id = uuid.uuid4()
         request = RescueRequest(
-            id=request_id, ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr", physical_condition=RescuePhysicalCondition.UNKNOWN,
+            id=request_id,
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
+            physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.DISPATCHED,
         )
         dispatch = RescueDispatch(rescue_request_id=request_id)
         mock_repo.get_request_by_id.side_effect = [request, request]
         mock_repo.get_dispatch_by_request_id.return_value = dispatch
         result = await service.update_dispatch_status(
-            request_id, status=RescueStatus.REJECTED, agent_id=uuid.uuid4(),
-            failure_reason="Animal fled", actor_id=uuid.uuid4(),
+            request_id,
+            status=RescueStatus.REJECTED,
+            agent_id=uuid.uuid4(),
+            failure_reason="Animal fled",
+            actor_id=uuid.uuid4(),
         )
         assert result.status == RescueStatus.REJECTED
         assert dispatch.failed_at is not None
@@ -420,22 +526,27 @@ class TestRescueService:
         assert dispatch.failure_reason == RescueFailureReason.ANIMAL_FLED.value
 
     @pytest.mark.asyncio
-    async def test_update_dispatch_status_fail_normalises_legacy_reason(
-        self, service, mock_repo
-    ):
+    async def test_update_dispatch_status_fail_normalises_legacy_reason(self, service, mock_repo):
         """Legacy free-text reasons map to the canonical outcome code (M-1)."""
         request_id = uuid.uuid4()
         request = RescueRequest(
-            id=request_id, ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr", physical_condition=RescuePhysicalCondition.UNKNOWN,
+            id=request_id,
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
+            physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.DISPATCHED,
         )
         dispatch = RescueDispatch(rescue_request_id=request_id)
         mock_repo.get_request_by_id.side_effect = [request, request]
         mock_repo.get_dispatch_by_request_id.return_value = dispatch
         await service.update_dispatch_status(
-            request_id, status=RescueStatus.REJECTED, agent_id=uuid.uuid4(),
-            failure_reason="Area Inaccessible", actor_id=uuid.uuid4(),
+            request_id,
+            status=RescueStatus.REJECTED,
+            agent_id=uuid.uuid4(),
+            failure_reason="Area Inaccessible",
+            actor_id=uuid.uuid4(),
         )
         assert dispatch.failure_reason == RescueFailureReason.AREA_INACCESSIBLE.value
 
@@ -447,35 +558,47 @@ class TestRescueService:
         log a failed rescue (M-1)."""
         request_id = uuid.uuid4()
         request = RescueRequest(
-            id=request_id, ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr", physical_condition=RescuePhysicalCondition.UNKNOWN,
+            id=request_id,
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
+            physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.DISPATCHED,
         )
         dispatch = RescueDispatch(rescue_request_id=request_id)
         mock_repo.get_request_by_id.side_effect = [request, request]
         mock_repo.get_dispatch_by_request_id.return_value = dispatch
         await service.update_dispatch_status(
-            request_id, status=RescueStatus.REJECTED, agent_id=uuid.uuid4(),
-            failure_reason="Animal not found", actor_id=uuid.uuid4(),
+            request_id,
+            status=RescueStatus.REJECTED,
+            agent_id=uuid.uuid4(),
+            failure_reason="Animal not found",
+            actor_id=uuid.uuid4(),
         )
         assert dispatch.failure_reason == RescueFailureReason.OTHER.value
 
     @pytest.mark.asyncio
-    async def test_update_dispatch_status_fail_defaults_to_other(
-        self, service, mock_repo
-    ):
+    async def test_update_dispatch_status_fail_defaults_to_other(self, service, mock_repo):
         """Missing reason stores OTHER instead of a free-text default (M-1)."""
         request_id = uuid.uuid4()
         request = RescueRequest(
-            id=request_id, ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr", physical_condition=RescuePhysicalCondition.UNKNOWN,
+            id=request_id,
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
+            physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.DISPATCHED,
         )
         dispatch = RescueDispatch(rescue_request_id=request_id)
         mock_repo.get_request_by_id.side_effect = [request, request]
         mock_repo.get_dispatch_by_request_id.return_value = dispatch
         await service.update_dispatch_status(
-            request_id, status=RescueStatus.REJECTED, agent_id=uuid.uuid4(), actor_id=uuid.uuid4(),
+            request_id,
+            status=RescueStatus.REJECTED,
+            agent_id=uuid.uuid4(),
+            actor_id=uuid.uuid4(),
         )
         assert dispatch.failure_reason == RescueFailureReason.OTHER.value
 
@@ -483,8 +606,12 @@ class TestRescueService:
     async def test_get_request_found(self, service, mock_repo):
         request_id = uuid.uuid4()
         mock_repo.get_request_by_id.return_value = RescueRequest(
-            id=request_id, ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr", physical_condition=RescuePhysicalCondition.UNKNOWN,
+            id=request_id,
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
+            physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.REPORTED,
         )
         result = await service.get_request(request_id)
@@ -501,12 +628,17 @@ class TestRescueService:
         """Public case-status lookup returns the reporter's own case (M-E)."""
         now = datetime.now(UTC)
         mock_repo.get_request_by_ticket_and_phone.return_value = RescueRequest(
-            id=uuid.uuid4(), ticket_number="RES-20260730-1234",
-            reporter_name="J", reporter_phone="+1111111111",
-            location_address="A", physical_condition=RescuePhysicalCondition.INJURED,
-            severity=RescueSeverity.HIGH, animal_count=1,
+            id=uuid.uuid4(),
+            ticket_number="RES-20260730-1234",
+            reporter_name="J",
+            reporter_phone="+1111111111",
+            location_address="A",
+            physical_condition=RescuePhysicalCondition.INJURED,
+            severity=RescueSeverity.HIGH,
+            animal_count=1,
             status=RescueStatus.DISPATCHED,
-            created_at=now, updated_at=now,
+            created_at=now,
+            updated_at=now,
         )
         result = await service.lookup_public_status("RES-20260730-1234", "+1111111111")
         assert result.ticket_number == "RES-20260730-1234"
@@ -541,11 +673,19 @@ class TestRescueService:
     async def test_list_requests_paginated(self, service, mock_repo):
         now = datetime.now(UTC)
         req = RescueRequest(
-            id=uuid.uuid4(), ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+12345", location_address="Addr", physical_condition=RescuePhysicalCondition.UNKNOWN,
-            status=RescueStatus.REPORTED, is_anonymous=False, animal_count=1,
-            severity=RescueSeverity.MEDIUM, is_urgent=False,
-            created_at=now, updated_at=now,
+            id=uuid.uuid4(),
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+12345",
+            location_address="Addr",
+            physical_condition=RescuePhysicalCondition.UNKNOWN,
+            status=RescueStatus.REPORTED,
+            is_anonymous=False,
+            animal_count=1,
+            severity=RescueSeverity.MEDIUM,
+            is_urgent=False,
+            created_at=now,
+            updated_at=now,
         )
         mock_repo.list_paginated.return_value = ([req], 1)
         page = PageParams(page=1, page_size=20)
@@ -558,8 +698,12 @@ class TestRescueService:
     async def test_soft_delete_request(self, service, mock_repo):
         request_id = uuid.uuid4()
         request = RescueRequest(
-            id=request_id, ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr", physical_condition=RescuePhysicalCondition.UNKNOWN,
+            id=request_id,
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
+            physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.REPORTED,
         )
         mock_repo.get_request_by_id.return_value = request
@@ -578,8 +722,11 @@ class TestRescueService:
     async def test_bulk_update_status_legal_transition(self, service, mock_repo, mock_audit):
         request_id = uuid.uuid4()
         request = RescueRequest(
-            id=request_id, ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr",
+            id=request_id,
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
             physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.REPORTED,
         )
@@ -596,8 +743,11 @@ class TestRescueService:
         """REPORTED -> ADMITTED must be rejected, not silently applied."""
         request_id = uuid.uuid4()
         request = RescueRequest(
-            id=request_id, ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr",
+            id=request_id,
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
             physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.REPORTED,
         )
@@ -626,10 +776,14 @@ class TestRescueService:
         """Bulk ADMITTED must mirror the single-request side effects."""
         request_id = uuid.uuid4()
         request = RescueRequest(
-            id=request_id, ticket_number="RES-20260730-0001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr",
+            id=request_id,
+            ticket_number="RES-20260730-0001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
             physical_condition=RescuePhysicalCondition.UNKNOWN,
-            status=RescueStatus.RESCUED, reports=[],
+            status=RescueStatus.RESCUED,
+            reports=[],
         )
         dispatch = RescueDispatch(rescue_request_id=request_id)
         request.dispatch = dispatch
@@ -649,14 +803,15 @@ class TestRescueService:
         assert created_dog.registration_number.startswith("DOG-")
 
     @pytest.mark.asyncio
-    async def test_bulk_update_status_dispatch_creates_dispatch_record(
-        self, service, mock_repo
-    ):
+    async def test_bulk_update_status_dispatch_creates_dispatch_record(self, service, mock_repo):
         """Bulk DISPATCHED must create the dispatch row the lifecycle needs."""
         request_id = uuid.uuid4()
         request = RescueRequest(
-            id=request_id, ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr",
+            id=request_id,
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
             physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.VERIFIED,
         )
@@ -687,16 +842,23 @@ class TestRescueService:
         (PRR 3.2 severity prioritization + PRR 3.1.1 banner flag, M-A)."""
         mock_repo.create_request.return_value = None
         mock_repo.get_request_by_id.return_value = RescueRequest(
-            id=uuid.uuid4(), ticket_number="RES-20260730-7777",
-            reporter_name="J", reporter_phone="+1", location_address="A",
+            id=uuid.uuid4(),
+            ticket_number="RES-20260730-7777",
+            reporter_name="J",
+            reporter_phone="+1",
+            location_address="A",
             physical_condition=RescuePhysicalCondition.CRITICAL,
-            severity=RescueSeverity.CRITICAL, is_urgent=True,
+            severity=RescueSeverity.CRITICAL,
+            is_urgent=True,
             status=RescueStatus.REPORTED,
         )
         await service.report_incident(
-            reporter_name="J", reporter_phone="+1", location_address="A",
+            reporter_name="J",
+            reporter_phone="+1",
+            location_address="A",
             physical_condition=RescuePhysicalCondition.CRITICAL,
-            severity=RescueSeverity.CRITICAL, is_urgent=True,
+            severity=RescueSeverity.CRITICAL,
+            is_urgent=True,
         )
         created = mock_repo.create_request.call_args[0][0]
         assert created.severity == RescueSeverity.CRITICAL
@@ -707,13 +869,18 @@ class TestRescueService:
         """Unset severity defaults to MEDIUM on intake (M-A)."""
         mock_repo.create_request.return_value = None
         mock_repo.get_request_by_id.return_value = RescueRequest(
-            id=uuid.uuid4(), ticket_number="RES-20260730-7778",
-            reporter_name="J", reporter_phone="+1", location_address="A",
+            id=uuid.uuid4(),
+            ticket_number="RES-20260730-7778",
+            reporter_name="J",
+            reporter_phone="+1",
+            location_address="A",
             physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.REPORTED,
         )
         await service.report_incident(
-            reporter_name="J", reporter_phone="+1", location_address="A",
+            reporter_name="J",
+            reporter_phone="+1",
+            location_address="A",
             physical_condition=RescuePhysicalCondition.UNKNOWN,
         )
         created = mock_repo.create_request.call_args[0][0]
@@ -725,16 +892,22 @@ class TestRescueService:
         """Coordinators refine severity / urgent flag at verification (M-A)."""
         request_id = uuid.uuid4()
         request = RescueRequest(
-            id=request_id, ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr",
+            id=request_id,
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
             physical_condition=RescuePhysicalCondition.UNKNOWN,
-            severity=RescueSeverity.MEDIUM, is_urgent=False,
+            severity=RescueSeverity.MEDIUM,
+            is_urgent=False,
             status=RescueStatus.REPORTED,
         )
         mock_repo.get_request_by_id.return_value = request
         result = await service.verify_request(
-            request_id, approve=True,
-            severity=RescueSeverity.CRITICAL, is_urgent=True,
+            request_id,
+            approve=True,
+            severity=RescueSeverity.CRITICAL,
+            is_urgent=True,
             actor_id=uuid.uuid4(),
         )
         assert result.severity == RescueSeverity.CRITICAL
@@ -742,23 +915,30 @@ class TestRescueService:
         assert result.status == RescueStatus.VERIFIED
 
     @pytest.mark.asyncio
-    async def test_list_requests_paginated_forwards_severity_filters(
-        self, service, mock_repo
-    ):
+    async def test_list_requests_paginated_forwards_severity_filters(self, service, mock_repo):
         """Severity / urgent filters reach the repository (M-A)."""
         now = datetime.now(UTC)
         req = RescueRequest(
-            id=uuid.uuid4(), ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+12345", location_address="Addr",
+            id=uuid.uuid4(),
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+12345",
+            location_address="Addr",
             physical_condition=RescuePhysicalCondition.UNKNOWN,
-            severity=RescueSeverity.HIGH, is_urgent=True,
-            status=RescueStatus.REPORTED, is_anonymous=False, animal_count=1,
-            created_at=now, updated_at=now,
+            severity=RescueSeverity.HIGH,
+            is_urgent=True,
+            status=RescueStatus.REPORTED,
+            is_anonymous=False,
+            animal_count=1,
+            created_at=now,
+            updated_at=now,
         )
         mock_repo.list_paginated.return_value = ([req], 1)
         result = await service.list_requests_paginated(
-            PageParams(page=1, page_size=20), SortParams(),
-            severity=RescueSeverity.HIGH, urgent_only=True,
+            PageParams(page=1, page_size=20),
+            SortParams(),
+            severity=RescueSeverity.HIGH,
+            urgent_only=True,
         )
         assert result.meta.total == 1
         mock_repo.list_paginated.assert_awaited_once()
@@ -772,13 +952,19 @@ class TestRescueService:
         media = ["rescue/2026/08/photo_1.jpg", "rescue/2026/08/clip_2.mp4"]
         mock_repo.create_request.return_value = None
         mock_repo.get_request_by_id.return_value = RescueRequest(
-            id=uuid.uuid4(), ticket_number="RES-20260730-8888",
-            reporter_name="J", reporter_phone="+1", location_address="A",
+            id=uuid.uuid4(),
+            ticket_number="RES-20260730-8888",
+            reporter_name="J",
+            reporter_phone="+1",
+            location_address="A",
             physical_condition=RescuePhysicalCondition.INJURED,
-            status=RescueStatus.REPORTED, media_evidence=media,
+            status=RescueStatus.REPORTED,
+            media_evidence=media,
         )
         await service.report_incident(
-            reporter_name="J", reporter_phone="+1", location_address="A",
+            reporter_name="J",
+            reporter_phone="+1",
+            location_address="A",
             physical_condition=RescuePhysicalCondition.INJURED,
             media_evidence=media,
         )
@@ -786,44 +972,53 @@ class TestRescueService:
         assert created.media_evidence == media
 
     @pytest.mark.asyncio
-    async def test_report_incident_audit_records_media_count(
-        self, service, mock_repo, mock_audit
-    ):
+    async def test_report_incident_audit_records_media_count(self, service, mock_repo, mock_audit):
         """The intake audit metadata records how many media items were attached (M-B)."""
         mock_repo.create_request.return_value = None
         mock_repo.get_request_by_id.return_value = RescueRequest(
-            id=uuid.uuid4(), ticket_number="RES-20260730-8889",
-            reporter_name="J", reporter_phone="+1", location_address="A",
+            id=uuid.uuid4(),
+            ticket_number="RES-20260730-8889",
+            reporter_name="J",
+            reporter_phone="+1",
+            location_address="A",
             physical_condition=RescuePhysicalCondition.INJURED,
             status=RescueStatus.REPORTED,
         )
         await service.report_incident(
-            reporter_name="J", reporter_phone="+1", location_address="A",
+            reporter_name="J",
+            reporter_phone="+1",
+            location_address="A",
             physical_condition=RescuePhysicalCondition.INJURED,
             media_evidence=["rescue/2026/08/photo_1.jpg"],
-            actor_id=None, ip_address="203.0.113.10",
+            actor_id=None,
+            ip_address="203.0.113.10",
         )
         mock_audit.record.assert_awaited_once()
         assert mock_audit.record.call_args.kwargs["metadata"]["media_count"] == 1
 
     @pytest.mark.asyncio
-    async def test_report_incident_stores_environmental_factors_and_notes(
-        self, service, mock_repo
-    ):
+    async def test_report_incident_stores_environmental_factors_and_notes(self, service, mock_repo):
         """Environmental factors + reporter notes flow through to the created
         request (PRR 3.2 Temporal Tracking, M-C)."""
         mock_repo.create_request.return_value = None
         mock_repo.get_request_by_id.return_value = RescueRequest(
-            id=uuid.uuid4(), ticket_number="RES-20260730-8890",
-            reporter_name="J", reporter_phone="+1", location_address="A",
+            id=uuid.uuid4(),
+            ticket_number="RES-20260730-8890",
+            reporter_name="J",
+            reporter_phone="+1",
+            location_address="A",
             physical_condition=RescuePhysicalCondition.INJURED,
-            environmental_factors="Heavy rain", reporter_notes="Timid dog",
+            environmental_factors="Heavy rain",
+            reporter_notes="Timid dog",
             status=RescueStatus.REPORTED,
         )
         await service.report_incident(
-            reporter_name="J", reporter_phone="+1", location_address="A",
+            reporter_name="J",
+            reporter_phone="+1",
+            location_address="A",
             physical_condition=RescuePhysicalCondition.INJURED,
-            environmental_factors="Heavy rain", reporter_notes="Timid dog",
+            environmental_factors="Heavy rain",
+            reporter_notes="Timid dog",
         )
         created = mock_repo.create_request.call_args[0][0]
         assert created.environmental_factors == "Heavy rain"
@@ -834,13 +1029,18 @@ class TestRescueService:
         request_id = uuid.uuid4()
         mock_repo.create_request.return_value = None
         mock_repo.get_request_by_id.return_value = RescueRequest(
-            id=request_id, ticket_number="RES-20260730-5555",
-            reporter_name="J", reporter_phone="+1", location_address="A",
+            id=request_id,
+            ticket_number="RES-20260730-5555",
+            reporter_name="J",
+            reporter_phone="+1",
+            location_address="A",
             physical_condition=RescuePhysicalCondition.CRITICAL,
             status=RescueStatus.REPORTED,
         )
         result = await service.report_incident(
-            reporter_name="J", reporter_phone="+1", location_address="A",
+            reporter_name="J",
+            reporter_phone="+1",
+            location_address="A",
             physical_condition=RescuePhysicalCondition.CRITICAL,
         )
         assert result.physical_condition == RescuePhysicalCondition.CRITICAL
@@ -852,20 +1052,28 @@ class TestRescueService:
         """A taken ticket is skipped via the fast-path check, then a fresh
         ticket is allocated and the request is created once."""
         existing = RescueRequest(
-            id=uuid.uuid4(), ticket_number="RES-20260730-1234",
-            reporter_name="Old", reporter_phone="+1", location_address="A",
+            id=uuid.uuid4(),
+            ticket_number="RES-20260730-1234",
+            reporter_name="Old",
+            reporter_phone="+1",
+            location_address="A",
             physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.REPORTED,
         )
         mock_repo.get_request_by_ticket.side_effect = [existing, None]
         mock_repo.get_request_by_id.return_value = RescueRequest(
-            id=uuid.uuid4(), ticket_number="RES-20260730-5678",
-            reporter_name="J", reporter_phone="+1", location_address="A",
+            id=uuid.uuid4(),
+            ticket_number="RES-20260730-5678",
+            reporter_name="J",
+            reporter_phone="+1",
+            location_address="A",
             physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.REPORTED,
         )
         result = await service.report_incident(
-            reporter_name="J", reporter_phone="+1", location_address="A",
+            reporter_name="J",
+            reporter_phone="+1",
+            location_address="A",
             physical_condition=RescuePhysicalCondition.UNKNOWN,
         )
         assert result is not None
@@ -884,13 +1092,18 @@ class TestRescueService:
             None,
         ]
         mock_repo.get_request_by_id.return_value = RescueRequest(
-            id=uuid.uuid4(), ticket_number="RES-20260730-9999",
-            reporter_name="J", reporter_phone="+1", location_address="A",
+            id=uuid.uuid4(),
+            ticket_number="RES-20260730-9999",
+            reporter_name="J",
+            reporter_phone="+1",
+            location_address="A",
             physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.REPORTED,
         )
         result = await service.report_incident(
-            reporter_name="J", reporter_phone="+1", location_address="A",
+            reporter_name="J",
+            reporter_phone="+1",
+            location_address="A",
             physical_condition=RescuePhysicalCondition.UNKNOWN,
         )
         assert result is not None
@@ -904,8 +1117,11 @@ class TestRescueService:
         """If every candidate ticket is taken, a clean ConflictError is raised
         instead of a 500, and nothing is persisted."""
         taken = RescueRequest(
-            id=uuid.uuid4(), ticket_number="RES-20260730-0000",
-            reporter_name="Old", reporter_phone="+1", location_address="A",
+            id=uuid.uuid4(),
+            ticket_number="RES-20260730-0000",
+            reporter_name="Old",
+            reporter_phone="+1",
+            location_address="A",
             physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.REPORTED,
         )
@@ -913,11 +1129,12 @@ class TestRescueService:
 
         with pytest.raises(ConflictError, match="unique rescue ticket number"):
             await service.report_incident(
-                reporter_name="J", reporter_phone="+1", location_address="A",
+                reporter_name="J",
+                reporter_phone="+1",
+                location_address="A",
                 physical_condition=RescuePhysicalCondition.UNKNOWN,
             )
         mock_repo.create_request.assert_not_awaited()
-
 
     # --- Multi-agent dispatch (PRR 3.2) ---
 
@@ -930,8 +1147,11 @@ class TestRescueService:
         agent_a = uuid.uuid4()
         agent_b = uuid.uuid4()
         request = RescueRequest(
-            id=request_id, ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr",
+            id=request_id,
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
             physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.VERIFIED,
         )
@@ -947,9 +1167,7 @@ class TestRescueService:
         )
 
         assert mock_repo.create_dispatch_agent.call_count == 3
-        created_agents = [
-            call[0][0] for call in mock_repo.create_dispatch_agent.call_args_list
-        ]
+        created_agents = [call[0][0] for call in mock_repo.create_dispatch_agent.call_args_list]
         agent_ids = {a.agent_id for a in created_agents}
         assert driver_id in agent_ids
         assert agent_a in agent_ids
@@ -962,8 +1180,11 @@ class TestRescueService:
         request_id = uuid.uuid4()
         driver_id = uuid.uuid4()
         request = RescueRequest(
-            id=request_id, ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr",
+            id=request_id,
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
             physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.VERIFIED,
         )
@@ -985,15 +1206,16 @@ class TestRescueService:
 
     @pytest.mark.asyncio
     @patch("pawguard.modules.rescue.service.FleetService")
-    async def test_dispatch_team_rejects_inactive_vehicle(
-        self, mock_fleet_cls, service, mock_repo
-    ):
+    async def test_dispatch_team_rejects_inactive_vehicle(self, mock_fleet_cls, service, mock_repo):
         """Only ACTIVE vehicles can be assigned to a dispatch."""
         request_id = uuid.uuid4()
         vehicle_id = uuid.uuid4()
         request = RescueRequest(
-            id=request_id, ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr",
+            id=request_id,
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
             physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.VERIFIED,
         )
@@ -1002,9 +1224,7 @@ class TestRescueService:
 
         mock_fleet = AsyncMock()
         mock_fleet_cls.return_value = mock_fleet
-        mock_fleet.get_vehicle.return_value = AsyncMock(
-            status=VehicleStatus.IN_MAINTENANCE
-        )
+        mock_fleet.get_vehicle.return_value = AsyncMock(status=VehicleStatus.IN_MAINTENANCE)
 
         with pytest.raises(ValidationFailedError, match="ACTIVE"):
             await service.dispatch_team(
@@ -1015,15 +1235,16 @@ class TestRescueService:
 
     @pytest.mark.asyncio
     @patch("pawguard.modules.rescue.service.FleetService")
-    async def test_dispatch_team_accepts_active_vehicle(
-        self, mock_fleet_cls, service, mock_repo
-    ):
+    async def test_dispatch_team_accepts_active_vehicle(self, mock_fleet_cls, service, mock_repo):
         """An ACTIVE vehicle is accepted and stored on the dispatch."""
         request_id = uuid.uuid4()
         vehicle_id = uuid.uuid4()
         request = RescueRequest(
-            id=request_id, ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr",
+            id=request_id,
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
             physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.VERIFIED,
         )
@@ -1047,26 +1268,33 @@ class TestRescueService:
     # --- assigned_to_me filter ---
 
     @pytest.mark.asyncio
-    async def test_list_requests_paginated_forwards_assigned_to_me(
-        self, service, mock_repo
-    ):
+    async def test_list_requests_paginated_forwards_assigned_to_me(self, service, mock_repo):
         """assigned_to_me reaches the repository so the "my cases" filter
         is applied on the dispatch-agent association and driver column."""
         now = datetime.now(UTC)
         req = RescueRequest(
-            id=uuid.uuid4(), ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+12345", location_address="Addr",
+            id=uuid.uuid4(),
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+12345",
+            location_address="Addr",
             physical_condition=RescuePhysicalCondition.UNKNOWN,
-            status=RescueStatus.REPORTED, is_anonymous=False, animal_count=1,
-            severity=RescueSeverity.MEDIUM, is_urgent=False,
-            created_at=now, updated_at=now,
+            status=RescueStatus.REPORTED,
+            is_anonymous=False,
+            animal_count=1,
+            severity=RescueSeverity.MEDIUM,
+            is_urgent=False,
+            created_at=now,
+            updated_at=now,
         )
         mock_repo.list_paginated.return_value = ([req], 1)
         page = PageParams(page=1, page_size=20)
         sort = SortParams()
         user_id = uuid.uuid4()
         result = await service.list_requests_paginated(
-            page, sort, assigned_to_me=user_id,
+            page,
+            sort,
+            assigned_to_me=user_id,
         )
         assert result.meta.total == 1
         mock_repo.list_paginated.assert_awaited_once()
@@ -1080,8 +1308,11 @@ class TestRescueService:
         """Escalation type and notes are written to the dispatch record."""
         request_id = uuid.uuid4()
         request = RescueRequest(
-            id=request_id, ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr",
+            id=request_id,
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
             physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.DISPATCHED,
         )
@@ -1117,8 +1348,11 @@ class TestRescueService:
     async def test_escalate_not_found_dispatch(self, service, mock_repo):
         request_id = uuid.uuid4()
         request = RescueRequest(
-            id=request_id, ticket_number="RES-001", reporter_name="A",
-            reporter_phone="+1", location_address="Addr",
+            id=request_id,
+            ticket_number="RES-001",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
             physical_condition=RescuePhysicalCondition.UNKNOWN,
             status=RescueStatus.REPORTED,
         )
@@ -1138,21 +1372,27 @@ class TestRescueRequestCreateSchema:
 
     def test_legacy_label_normalised(self) -> None:
         payload = RescueRequestCreate(
-            reporter_name="J", reporter_phone="+1", location_address="A",
+            reporter_name="J",
+            reporter_phone="+1",
+            location_address="A",
             physical_condition="Injured/Fractured",
         )
         assert payload.physical_condition == RescuePhysicalCondition.INJURED
 
     def test_legacy_stray_label_normalised(self) -> None:
         payload = RescueRequestCreate(
-            reporter_name="J", reporter_phone="+1", location_address="A",
+            reporter_name="J",
+            reporter_phone="+1",
+            location_address="A",
             physical_condition="Stray",
         )
         assert payload.physical_condition == RescuePhysicalCondition.ABANDONED
 
     def test_canonical_value_accepted(self) -> None:
         payload = RescueRequestCreate(
-            reporter_name="J", reporter_phone="+1", location_address="A",
+            reporter_name="J",
+            reporter_phone="+1",
+            location_address="A",
             physical_condition="fractured_injured",
         )
         assert payload.physical_condition == RescuePhysicalCondition.INJURED
@@ -1160,22 +1400,29 @@ class TestRescueRequestCreateSchema:
     def test_unknown_value_rejected(self) -> None:
         with pytest.raises(ValidationError):
             RescueRequestCreate(
-                reporter_name="J", reporter_phone="+1", location_address="A",
+                reporter_name="J",
+                reporter_phone="+1",
+                location_address="A",
                 physical_condition="Sparkly Unicorn",
             )
 
     def test_environmental_factors_and_notes_accepted(self) -> None:
         payload = RescueRequestCreate(
-            reporter_name="J", reporter_phone="+1", location_address="A",
+            reporter_name="J",
+            reporter_phone="+1",
+            location_address="A",
             physical_condition="injured",
-            environmental_factors="Flooding", reporter_notes="Friendly dog",
+            environmental_factors="Flooding",
+            reporter_notes="Friendly dog",
         )
         assert payload.environmental_factors == "Flooding"
         assert payload.reporter_notes == "Friendly dog"
 
     def test_environmental_factors_and_notes_none_by_default(self) -> None:
         payload = RescueRequestCreate(
-            reporter_name="J", reporter_phone="+1", location_address="A",
+            reporter_name="J",
+            reporter_phone="+1",
+            location_address="A",
             physical_condition="injured",
         )
         assert payload.environmental_factors is None
@@ -1183,7 +1430,9 @@ class TestRescueRequestCreateSchema:
 
     def test_media_evidence_up_to_five_accepted(self) -> None:
         payload = RescueRequestCreate(
-            reporter_name="J", reporter_phone="+1", location_address="A",
+            reporter_name="J",
+            reporter_phone="+1",
+            location_address="A",
             physical_condition="injured",
             media_evidence=[f"rescue/2026/08/p{i}.jpg" for i in range(5)],
         )
@@ -1192,7 +1441,9 @@ class TestRescueRequestCreateSchema:
     def test_media_evidence_over_five_rejected(self) -> None:
         with pytest.raises(ValidationError, match="at most 5 items"):
             RescueRequestCreate(
-                reporter_name="J", reporter_phone="+1", location_address="A",
+                reporter_name="J",
+                reporter_phone="+1",
+                location_address="A",
                 physical_condition="injured",
                 media_evidence=[f"rescue/2026/08/p{i}.jpg" for i in range(6)],
             )
@@ -1200,13 +1451,18 @@ class TestRescueRequestCreateSchema:
     def test_media_evidence_empty_key_rejected(self) -> None:
         with pytest.raises(ValidationError, match="cannot be empty"):
             RescueRequestCreate(
-                reporter_name="J", reporter_phone="+1", location_address="A",
-                physical_condition="injured", media_evidence=["   "],
+                reporter_name="J",
+                reporter_phone="+1",
+                location_address="A",
+                physical_condition="injured",
+                media_evidence=["   "],
             )
 
     def test_media_evidence_none_accepted(self) -> None:
         payload = RescueRequestCreate(
-            reporter_name="J", reporter_phone="+1", location_address="A",
+            reporter_name="J",
+            reporter_phone="+1",
+            location_address="A",
             physical_condition="injured",
         )
         assert payload.media_evidence is None

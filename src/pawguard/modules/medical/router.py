@@ -51,7 +51,8 @@ router = APIRouter(prefix="/medical", tags=["medical"])
 
 
 def get_medical_service(
-    db: AsyncSession = Depends(get_db), audit: AuditService = Depends(get_audit_service),
+    db: AsyncSession = Depends(get_db),
+    audit: AuditService = Depends(get_audit_service),
 ) -> MedicalService:
     repo = MedicalRepository(db)
     dog_repo = DogRepository(db)
@@ -73,7 +74,10 @@ async def perform_clinical_exam(
 ) -> ApiResponse[ClinicalExamResponse]:
     ip = request.client.host if request.client else None
     exam = await service.perform_clinical_exam(
-        current_user.user.id, payload, actor_id=current_user.id, ip_address=ip,
+        current_user.user.id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
     )
     return ApiResponse(
         data=ClinicalExamResponse.model_validate(exam),
@@ -95,7 +99,10 @@ async def record_treatment(
 ) -> ApiResponse[MedicalTreatmentResponse]:
     ip = request.client.host if request.client else None
     treatment = await service.record_treatment(
-        current_user.user.id, payload, actor_id=current_user.id, ip_address=ip,
+        current_user.user.id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
     )
     return ApiResponse(
         data=MedicalTreatmentResponse.model_validate(treatment),
@@ -117,7 +124,10 @@ async def administer_vaccine(
 ) -> ApiResponse[VaccinationRecordResponse]:
     ip = request.client.host if request.client else None
     rec = await service.administer_vaccine(
-        current_user.user.id, payload, actor_id=current_user.id, ip_address=ip,
+        current_user.user.id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
     )
     return ApiResponse(
         data=VaccinationRecordResponse.model_validate(rec),
@@ -139,7 +149,10 @@ async def prescribe_medication(
 ) -> ApiResponse[PrescriptionResponse]:
     ip = request.client.host if request.client else None
     prescription = await service.prescribe_medication(
-        current_user.user.id, payload, actor_id=current_user.id, ip_address=ip,
+        current_user.user.id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
     )
     return ApiResponse(
         data=PrescriptionResponse.model_validate(prescription),
@@ -167,7 +180,11 @@ async def authorize_adoption_clearance(
         roles.update(r.name for r in current_user.user.roles)
     ip = request.client.host if request.client else None
     success = await service.authorize_adoption_clearance(
-        dog_id, roles, actor_id=current_user.id, ip_address=ip, payload=payload,
+        dog_id,
+        roles,
+        actor_id=current_user.id,
+        ip_address=ip,
+        payload=payload,
     )
     return ApiResponse(
         data=success,
@@ -204,7 +221,10 @@ async def log_medication_administration(
 ) -> ApiResponse[MedicationAdministrationResponse]:
     ip = request.client.host if request.client else None
     log = await service.log_medication_administration(
-        current_user.user.id, payload, actor_id=current_user.id, ip_address=ip,
+        current_user.user.id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
     )
     return ApiResponse(
         data=MedicationAdministrationResponse.model_validate(log),
@@ -256,7 +276,9 @@ async def create_vaccine_protocol(
 ) -> ApiResponse[VaccineProtocolResponse]:
     ip = request.client.host if request.client else None
     protocol = await service.create_vaccine_protocol(
-        payload, actor_id=current_user.id, ip_address=ip,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
     )
     return ApiResponse(
         data=VaccineProtocolResponse.model_validate(protocol),
@@ -315,7 +337,11 @@ async def list_exams(
     service: MedicalService = Depends(get_medical_service),
 ) -> PaginatedResponse[ClinicalExamResponse]:
     return await service.list_exams_paginated(
-        page=page, sort=sort, search_term=search, dog_id=dog_id, vet_id=vet_id,
+        page=page,
+        sort=sort,
+        search_term=search,
+        dog_id=dog_id,
+        vet_id=vet_id,
     )
 
 
@@ -333,7 +359,11 @@ async def list_treatments(
     service: MedicalService = Depends(get_medical_service),
 ) -> PaginatedResponse[MedicalTreatmentResponse]:
     return await service.list_treatments_paginated(
-        page=page, sort=sort, search_term=search, dog_id=dog_id, vet_id=vet_id,
+        page=page,
+        sort=sort,
+        search_term=search,
+        dog_id=dog_id,
+        vet_id=vet_id,
     )
 
 
@@ -351,7 +381,11 @@ async def list_vaccinations(
     service: MedicalService = Depends(get_medical_service),
 ) -> PaginatedResponse[VaccinationRecordResponse]:
     return await service.list_vaccinations_paginated(
-        page=page, sort=sort, search_term=search, dog_id=dog_id, vet_id=vet_id,
+        page=page,
+        sort=sort,
+        search_term=search,
+        dog_id=dog_id,
+        vet_id=vet_id,
     )
 
 
@@ -369,7 +403,11 @@ async def list_prescriptions(
     service: MedicalService = Depends(get_medical_service),
 ) -> PaginatedResponse[PrescriptionResponse]:
     return await service.list_prescriptions_paginated(
-        page=page, sort=sort, search_term=search, dog_id=dog_id, vet_id=vet_id,
+        page=page,
+        sort=sort,
+        search_term=search,
+        dog_id=dog_id,
+        vet_id=vet_id,
     )
 
 
@@ -387,7 +425,10 @@ async def update_prescription(
 ) -> ApiResponse[PrescriptionResponse]:
     ip = request.client.host if request.client else None
     prescription = await service.update_prescription(
-        prescription_id, payload, actor_id=current_user.id, ip_address=ip,
+        prescription_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
     )
     return ApiResponse(
         data=PrescriptionResponse.model_validate(prescription),
@@ -409,7 +450,10 @@ async def update_prescription_status(
 ) -> ApiResponse[PrescriptionResponse]:
     ip = request.client.host if request.client else None
     prescription = await service.update_prescription_status(
-        prescription_id, payload.is_active, actor_id=current_user.id, ip_address=ip,
+        prescription_id,
+        payload.is_active,
+        actor_id=current_user.id,
+        ip_address=ip,
     )
     return ApiResponse(
         data=PrescriptionResponse.model_validate(prescription),
@@ -457,7 +501,10 @@ async def bulk_update_prescription_status(
     is_active = payload.status.lower() == "active"
     ip = request.client.host if request.client else None
     updated = await service.bulk_update_prescription_status(
-        payload.ids, is_active, actor_id=current_user.id, ip_address=ip,
+        payload.ids,
+        is_active,
+        actor_id=current_user.id,
+        ip_address=ip,
     )
     return ApiResponse(
         data=BulkStatusUpdateResponse(
@@ -480,7 +527,10 @@ async def bulk_delete_entities(
 ) -> ApiResponse[BulkDeleteResponse]:
     ip = request.client.host if request.client else None
     deleted = await service.bulk_soft_delete(
-        payload.ids, "prescriptions", actor_id=current_user.id, ip_address=ip,
+        payload.ids,
+        "prescriptions",
+        actor_id=current_user.id,
+        ip_address=ip,
     )
     return ApiResponse(
         data=BulkDeleteResponse(

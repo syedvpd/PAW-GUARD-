@@ -4,19 +4,20 @@ Every file upload endpoint MUST call the appropriate verification functions
 before persisting the file.
 """
 
-
 from io import BytesIO
 
 import magic  # type: ignore[import-untyped]
-from PIL import Image, ImageOps, UnidentifiedImageError
+from PIL import Image, ImageOps
 
-ALLOWED_MIME_TYPES: frozenset[str] = frozenset({
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-    "application/pdf",
-    "video/mp4",
-})
+ALLOWED_MIME_TYPES: frozenset[str] = frozenset(
+    {
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "application/pdf",
+        "video/mp4",
+    }
+)
 
 MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB
 
@@ -32,7 +33,7 @@ class UploadError(Exception):
 def verify_file_size(content: bytes) -> None:
     if len(content) > MAX_FILE_SIZE_BYTES:
         raise UploadError(
-            f"File exceeds maximum size of {MAX_FILE_SIZE_BYTES // (1024*1024)} MB."
+            f"File exceeds maximum size of {MAX_FILE_SIZE_BYTES // (1024 * 1024)} MB."
         )
 
 
@@ -54,7 +55,7 @@ def verify_batch_size(sizes: list[int]) -> None:
     if total > MAX_BATCH_SIZE_BYTES:
         raise UploadError(
             f"Combined batch size of {total} bytes exceeds the "
-            f"{MAX_BATCH_SIZE_BYTES // (1024*1024)} MB limit."
+            f"{MAX_BATCH_SIZE_BYTES // (1024 * 1024)} MB limit."
         )
 
 

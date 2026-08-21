@@ -46,9 +46,7 @@ class TestEmailJobRetry:
     @pytest.mark.asyncio
     async def test_success_does_not_raise(self) -> None:
         with patch("pawguard.workers.jobs.email_jobs.EmailService") as mock_svc:
-            await send_notification_email_job(
-                {"job_try": 1}, to="a@b.com", subject="s", body="b"
-            )
+            await send_notification_email_job({"job_try": 1}, to="a@b.com", subject="s", body="b")
             mock_svc.return_value.send.assert_called_once()
 
 

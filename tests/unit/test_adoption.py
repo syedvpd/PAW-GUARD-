@@ -36,9 +36,13 @@ from pawguard.services.storage_service import StorageService
 def _make_app(**kw):
     now = datetime.now(UTC)
     vals = dict(
-        residential_status="owned", status=AdoptionStatus.SUBMITTED,
-        has_landlord_approval=False, has_yard_fence=False,
-        household_members_count=1, created_at=now, updated_at=now,
+        residential_status="owned",
+        status=AdoptionStatus.SUBMITTED,
+        has_landlord_approval=False,
+        has_yard_fence=False,
+        household_members_count=1,
+        created_at=now,
+        updated_at=now,
     )
     vals.update(kw)
     return AdoptionApplication(**vals)
@@ -69,22 +73,33 @@ class TestAdoptionService:
     async def test_apply_for_adoption_success(self, service, mock_repo, mock_dog_repo, mock_audit):
         dog_id = uuid.uuid4()
         mock_dog_repo.get_by_id.return_value = DogProfile(
-            id=dog_id, registration_number="DOG-001", name="Buddy", breed="Lab",
-            gender="male", status=DogStatus.SHELTER, is_adoptable=True,
+            id=dog_id,
+            registration_number="DOG-001",
+            name="Buddy",
+            breed="Lab",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=True,
         )
         mock_repo.get_approved_application_for_dog.return_value = None
         mock_repo.get_application_by_adopter_and_dog.return_value = None
         mock_repo.create.return_value = None
         app_id = uuid.uuid4()
         mock_repo.get_by_id.return_value = AdoptionApplication(
-            id=app_id, dog_id=dog_id, adopter_id=uuid.uuid4(),
-            status=AdoptionStatus.SUBMITTED, residential_status="owned",
-            has_landlord_approval=True, has_yard_fence=True,
+            id=app_id,
+            dog_id=dog_id,
+            adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.SUBMITTED,
+            residential_status="owned",
+            has_landlord_approval=True,
+            has_yard_fence=True,
             household_members_count=2,
         )
         payload = AdoptionApplicationCreate(
-            dog_id=dog_id, residential_status="owned",
-            has_landlord_approval=True, has_yard_fence=True,
+            dog_id=dog_id,
+            residential_status="owned",
+            has_landlord_approval=True,
+            has_yard_fence=True,
         )
         result = await service.apply_for_adoption(uuid.uuid4(), payload, actor_id=uuid.uuid4())
         assert result.status == AdoptionStatus.SUBMITTED
@@ -100,8 +115,13 @@ class TestAdoptionService:
     async def test_apply_for_adoption_not_adoptable(self, service, mock_dog_repo):
         dog_id = uuid.uuid4()
         mock_dog_repo.get_by_id.return_value = DogProfile(
-            id=dog_id, registration_number="DOG-001", name="B", breed="Mix",
-            gender="female", status=DogStatus.SHELTER, is_adoptable=False,
+            id=dog_id,
+            registration_number="DOG-001",
+            name="B",
+            breed="Mix",
+            gender="female",
+            status=DogStatus.SHELTER,
+            is_adoptable=False,
         )
         payload = AdoptionApplicationCreate(dog_id=dog_id, residential_status="owned")
         with pytest.raises(ConflictError, match="not currently cleared"):
@@ -111,12 +131,20 @@ class TestAdoptionService:
     async def test_apply_for_adoption_already_approved(self, service, mock_dog_repo, mock_repo):
         dog_id = uuid.uuid4()
         mock_dog_repo.get_by_id.return_value = DogProfile(
-            id=dog_id, registration_number="DOG-001", name="B", breed="Mix",
-            gender="female", status=DogStatus.SHELTER, is_adoptable=True,
+            id=dog_id,
+            registration_number="DOG-001",
+            name="B",
+            breed="Mix",
+            gender="female",
+            status=DogStatus.SHELTER,
+            is_adoptable=True,
         )
         mock_repo.get_approved_application_for_dog.return_value = AdoptionApplication(
-            id=uuid.uuid4(), dog_id=dog_id, adopter_id=uuid.uuid4(),
-            status=AdoptionStatus.APPROVED, residential_status="owned",
+            id=uuid.uuid4(),
+            dog_id=dog_id,
+            adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.APPROVED,
+            residential_status="owned",
         )
         payload = AdoptionApplicationCreate(dog_id=dog_id, residential_status="owned")
         with pytest.raises(ConflictError, match="already under an approved"):
@@ -130,13 +158,21 @@ class TestAdoptionService:
         rejected with 409 Conflict (PRR 3.7 one-active-application rule)."""
         dog_id = uuid.uuid4()
         mock_dog_repo.get_by_id.return_value = DogProfile(
-            id=dog_id, registration_number="DOG-001", name="B", breed="Mix",
-            gender="female", status=DogStatus.SHELTER, is_adoptable=True,
+            id=dog_id,
+            registration_number="DOG-001",
+            name="B",
+            breed="Mix",
+            gender="female",
+            status=DogStatus.SHELTER,
+            is_adoptable=True,
         )
         mock_repo.get_approved_application_for_dog.return_value = None
         mock_repo.get_application_by_adopter_and_dog.return_value = AdoptionApplication(
-            id=uuid.uuid4(), dog_id=dog_id, adopter_id=uuid.uuid4(),
-            status=AdoptionStatus.SUBMITTED, residential_status="owned",
+            id=uuid.uuid4(),
+            dog_id=dog_id,
+            adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.SUBMITTED,
+            residential_status="owned",
         )
         payload = AdoptionApplicationCreate(dog_id=dog_id, residential_status="owned")
         with pytest.raises(ConflictError, match="already submitted"):
@@ -148,9 +184,13 @@ class TestAdoptionService:
     async def test_update_application(self, service, mock_repo):
         app_id = uuid.uuid4()
         app = AdoptionApplication(
-            id=app_id, dog_id=uuid.uuid4(), adopter_id=uuid.uuid4(),
-            status=AdoptionStatus.SCREENING, residential_status="owned",
-            has_landlord_approval=True, has_yard_fence=True,
+            id=app_id,
+            dog_id=uuid.uuid4(),
+            adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.SCREENING,
+            residential_status="owned",
+            has_landlord_approval=True,
+            has_yard_fence=True,
         )
         mock_repo.get_by_id.return_value = app
         payload = AdoptionApplicationUpdate(vetting_officer_notes="Looks good")
@@ -163,18 +203,28 @@ class TestAdoptionService:
         app_id = uuid.uuid4()
         dog_id = uuid.uuid4()
         app = AdoptionApplication(
-            id=app_id, dog_id=dog_id, adopter_id=uuid.uuid4(),
-            status=AdoptionStatus.HOME_CHECK, residential_status="owned",
+            id=app_id,
+            dog_id=dog_id,
+            adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.HOME_CHECK,
+            residential_status="owned",
         )
         mock_repo.get_by_id.side_effect = [app, app, app]
         mock_repo.get_approved_application_for_dog.return_value = None
         dog = DogProfile(
-            id=dog_id, registration_number="DOG-001", name="B", breed="Mix",
-            gender="female", status=DogStatus.SHELTER, is_adoptable=True,
+            id=dog_id,
+            registration_number="DOG-001",
+            name="B",
+            breed="Mix",
+            gender="female",
+            status=DogStatus.SHELTER,
+            is_adoptable=True,
         )
         mock_dog_repo.get_by_id.return_value = dog
         mock_dog_repo.get_by_id_for_update.return_value = dog
-        result = await service.update_application_status(app_id, AdoptionStatus.APPROVED, actor_id=uuid.uuid4())
+        result = await service.update_application_status(
+            app_id, AdoptionStatus.APPROVED, actor_id=uuid.uuid4()
+        )
         assert result.status == AdoptionStatus.APPROVED
         mock_dog_repo.get_by_id_for_update.assert_awaited_once_with(dog_id)
 
@@ -182,8 +232,11 @@ class TestAdoptionService:
     async def test_update_application_status_invalid_transition(self, service, mock_repo):
         app_id = uuid.uuid4()
         app = AdoptionApplication(
-            id=app_id, dog_id=uuid.uuid4(), adopter_id=uuid.uuid4(),
-            status=AdoptionStatus.SUBMITTED, residential_status="owned",
+            id=app_id,
+            dog_id=uuid.uuid4(),
+            adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.SUBMITTED,
+            residential_status="owned",
         )
         mock_repo.get_by_id.return_value = app
         with pytest.raises(ValidationFailedError, match="Cannot transition"):
@@ -196,14 +249,22 @@ class TestAdoptionService:
         app_id = uuid.uuid4()
         dog_id = uuid.uuid4()
         app = AdoptionApplication(
-            id=app_id, dog_id=dog_id, adopter_id=uuid.uuid4(),
-            status=AdoptionStatus.INTERVIEW, residential_status="owned",
+            id=app_id,
+            dog_id=dog_id,
+            adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.INTERVIEW,
+            residential_status="owned",
         )
         mock_repo.get_by_id.side_effect = [app, app, app]
         mock_repo.get_approved_application_for_dog.return_value = None
         dog = DogProfile(
-            id=dog_id, registration_number="DOG-001", name="B", breed="Mix",
-            gender="female", status=DogStatus.SHELTER, is_adoptable=True,
+            id=dog_id,
+            registration_number="DOG-001",
+            name="B",
+            breed="Mix",
+            gender="female",
+            status=DogStatus.SHELTER,
+            is_adoptable=True,
         )
         mock_dog_repo.get_by_id.return_value = dog
         mock_dog_repo.get_by_id_for_update.return_value = dog
@@ -218,12 +279,18 @@ class TestAdoptionService:
         app_id = uuid.uuid4()
         dog_id = uuid.uuid4()
         app = AdoptionApplication(
-            id=app_id, dog_id=dog_id, adopter_id=uuid.uuid4(),
-            status=AdoptionStatus.INTERVIEW, residential_status="owned",
+            id=app_id,
+            dog_id=dog_id,
+            adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.INTERVIEW,
+            residential_status="owned",
         )
         other_app = AdoptionApplication(
-            id=uuid.uuid4(), dog_id=dog_id, adopter_id=uuid.uuid4(),
-            status=AdoptionStatus.HOME_CHECK, residential_status="owned",
+            id=uuid.uuid4(),
+            dog_id=dog_id,
+            adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.HOME_CHECK,
+            residential_status="owned",
         )
         mock_repo.get_by_id.return_value = app
         mock_repo.get_approved_application_for_dog.return_value = other_app
@@ -234,8 +301,11 @@ class TestAdoptionService:
     async def test_get_application(self, service, mock_repo):
         app_id = uuid.uuid4()
         mock_repo.get_by_id.return_value = AdoptionApplication(
-            id=app_id, dog_id=uuid.uuid4(), adopter_id=uuid.uuid4(),
-            status=AdoptionStatus.SUBMITTED, residential_status="owned",
+            id=app_id,
+            dog_id=uuid.uuid4(),
+            adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.SUBMITTED,
+            residential_status="owned",
         )
         result = await service.get_application(app_id)
         assert result.id == app_id
@@ -249,7 +319,9 @@ class TestAdoptionService:
     @pytest.mark.asyncio
     async def test_list_applications_paginated(self, service, mock_repo):
         app = _make_app(
-            id=uuid.uuid4(), dog_id=uuid.uuid4(), adopter_id=uuid.uuid4(),
+            id=uuid.uuid4(),
+            dog_id=uuid.uuid4(),
+            adopter_id=uuid.uuid4(),
         )
         mock_repo.list_paginated.return_value = ([app], 1)
         page = PageParams(page=1, page_size=20)
@@ -262,8 +334,11 @@ class TestAdoptionService:
     async def test_soft_delete_application(self, service, mock_repo):
         app_id = uuid.uuid4()
         app = AdoptionApplication(
-            id=app_id, dog_id=uuid.uuid4(), adopter_id=uuid.uuid4(),
-            status=AdoptionStatus.SUBMITTED, residential_status="owned",
+            id=app_id,
+            dog_id=uuid.uuid4(),
+            adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.SUBMITTED,
+            residential_status="owned",
         )
         mock_repo.get_by_id.return_value = app
         await service.soft_delete_application(app_id, actor_id=uuid.uuid4())
@@ -282,14 +357,22 @@ class TestAdoptionService:
         adopter_id = uuid.uuid4()
         adopter = User(id=adopter_id, full_name="Jane Doe", email="jane@example.com")
         dog = DogProfile(
-            id=dog_id, registration_number="DOG-001", name="Buddy",
-            breed="Lab", gender="male", status=DogStatus.SHELTER,
+            id=dog_id,
+            registration_number="DOG-001",
+            name="Buddy",
+            breed="Lab",
+            gender="male",
+            status=DogStatus.SHELTER,
             is_adoptable=True,
         )
         app = AdoptionApplication(
-            id=app_id, dog_id=dog_id, adopter_id=adopter_id,
-            dog=dog, adopter=adopter,
-            status=AdoptionStatus.HOME_CHECK, residential_status="owned",
+            id=app_id,
+            dog_id=dog_id,
+            adopter_id=adopter_id,
+            dog=dog,
+            adopter=adopter,
+            status=AdoptionStatus.HOME_CHECK,
+            residential_status="owned",
         )
         mock_repo.get_by_id.side_effect = [app, app, app]
         mock_repo.get_approved_application_for_dog.return_value = None
@@ -301,11 +384,15 @@ class TestAdoptionService:
         mock_storage.build_object_key.return_value = "documents/agreement_test.pdf"
 
         svc = AdoptionService(
-            mock_repo, mock_dog_repo, audit_service=mock_audit,
+            mock_repo,
+            mock_dog_repo,
+            audit_service=mock_audit,
             storage_service=mock_storage,
         )
         result = await svc.update_application_status(
-            app_id, AdoptionStatus.APPROVED, actor_id=uuid.uuid4(),
+            app_id,
+            AdoptionStatus.APPROVED,
+            actor_id=uuid.uuid4(),
         )
         assert result.adoption_agreement_url == "documents/agreement_test.pdf"
         mock_storage.put_object.assert_called_once()
@@ -331,19 +418,30 @@ class TestAdoptionService:
                 app_id = uuid.uuid4()
                 dog_id = uuid.uuid4()
                 app = AdoptionApplication(
-                    id=app_id, dog_id=dog_id, adopter_id=uuid.uuid4(),
-                    status=start_status, residential_status="owned",
+                    id=app_id,
+                    dog_id=dog_id,
+                    adopter_id=uuid.uuid4(),
+                    status=start_status,
+                    residential_status="owned",
                 )
                 mock_repo.get_by_id.return_value = app
                 mock_repo.get_approved_application_for_dog.return_value = None
                 mock_dog_repo.get_by_id.return_value = DogProfile(
-                    id=dog_id, registration_number="DOG-001", name="B",
-                    breed="Mix", gender="female", status=DogStatus.SHELTER,
+                    id=dog_id,
+                    registration_number="DOG-001",
+                    name="B",
+                    breed="Mix",
+                    gender="female",
+                    status=DogStatus.SHELTER,
                     is_adoptable=True,
                 )
-                mock_dog_repo.get_by_id_for_update.return_value = mock_dog_repo.get_by_id.return_value
+                mock_dog_repo.get_by_id_for_update.return_value = (
+                    mock_dog_repo.get_by_id.return_value
+                )
                 result = await service.update_application_status(
-                    app_id, end_status, actor_id=uuid.uuid4(),
+                    app_id,
+                    end_status,
+                    actor_id=uuid.uuid4(),
                 )
                 assert result.status == end_status
 
@@ -352,13 +450,18 @@ class TestAdoptionService:
                     continue
                 app_id = uuid.uuid4()
                 app = AdoptionApplication(
-                    id=app_id, dog_id=uuid.uuid4(), adopter_id=uuid.uuid4(),
-                    status=start_status, residential_status="owned",
+                    id=app_id,
+                    dog_id=uuid.uuid4(),
+                    adopter_id=uuid.uuid4(),
+                    status=start_status,
+                    residential_status="owned",
                 )
                 mock_repo.get_by_id.return_value = app
                 with pytest.raises(ValidationFailedError, match="Cannot transition"):
                     await service.update_application_status(
-                        app_id, end_status, actor_id=uuid.uuid4(),
+                        app_id,
+                        end_status,
+                        actor_id=uuid.uuid4(),
                     )
 
     @pytest.mark.asyncio
@@ -371,14 +474,22 @@ class TestAdoptionService:
         adopter_id = uuid.uuid4()
         adopter = User(id=adopter_id, full_name="Jane Doe", email="jane@example.com")
         dog = DogProfile(
-            id=dog_id, registration_number="DOG-001", name="Buddy",
-            breed="Lab", gender="male", status=DogStatus.SHELTER,
+            id=dog_id,
+            registration_number="DOG-001",
+            name="Buddy",
+            breed="Lab",
+            gender="male",
+            status=DogStatus.SHELTER,
             is_adoptable=True,
         )
         app = AdoptionApplication(
-            id=app_id, dog_id=dog_id, adopter_id=adopter_id,
-            dog=dog, adopter=adopter,
-            status=AdoptionStatus.HOME_CHECK, residential_status="owned",
+            id=app_id,
+            dog_id=dog_id,
+            adopter_id=adopter_id,
+            dog=dog,
+            adopter=adopter,
+            status=AdoptionStatus.HOME_CHECK,
+            residential_status="owned",
             fee_amount=Decimal("250.00"),
         )
         mock_repo.get_by_id.side_effect = [app, app, app]
@@ -390,16 +501,18 @@ class TestAdoptionService:
         mock_storage = AsyncMock(spec=StorageService)
         mock_storage.build_object_key.return_value = "documents/agreement_test.pdf"
 
-        with patch(
-            "pawguard.modules.adoption.service.generate_adoption_agreement"
-        ) as mock_gen:
+        with patch("pawguard.modules.adoption.service.generate_adoption_agreement") as mock_gen:
             mock_gen.return_value = b"%PDF-1.4 fake pdf"
             svc = AdoptionService(
-                mock_repo, mock_dog_repo, audit_service=mock_audit,
+                mock_repo,
+                mock_dog_repo,
+                audit_service=mock_audit,
                 storage_service=mock_storage,
             )
             await svc.update_application_status(
-                app_id, AdoptionStatus.APPROVED, actor_id=uuid.uuid4(),
+                app_id,
+                AdoptionStatus.APPROVED,
+                actor_id=uuid.uuid4(),
             )
             mock_gen.assert_called_once()
             call_kwargs = mock_gen.call_args.kwargs
@@ -409,8 +522,10 @@ class TestAdoptionService:
     async def test_record_followup_proof(self, service, mock_repo):
         follow_up_id = uuid.uuid4()
         follow_up = AdoptionFollowUp(
-            id=follow_up_id, adoption_application_id=uuid.uuid4(),
-            due_day=30, due_at=datetime.now(UTC),
+            id=follow_up_id,
+            adoption_application_id=uuid.uuid4(),
+            due_day=30,
+            due_at=datetime.now(UTC),
             status=FollowUpStatus.PENDING,
         )
         mock_repo.get_follow_up_by_id.return_value = follow_up
@@ -431,8 +546,10 @@ class TestAdoptionService:
     async def test_record_followup_proof_already_submitted(self, service, mock_repo):
         follow_up_id = uuid.uuid4()
         follow_up = AdoptionFollowUp(
-            id=follow_up_id, adoption_application_id=uuid.uuid4(),
-            due_day=30, due_at=datetime.now(UTC),
+            id=follow_up_id,
+            adoption_application_id=uuid.uuid4(),
+            due_day=30,
+            due_at=datetime.now(UTC),
             status=FollowUpStatus.SUBMITTED,
         )
         mock_repo.get_follow_up_by_id.return_value = follow_up
@@ -449,7 +566,9 @@ class TestAdoptionService:
         app_id = uuid.uuid4()
         completed_at = datetime.now(UTC) - timedelta(days=45)
         app = AdoptionApplication(
-            id=app_id, dog_id=uuid.uuid4(), adopter_id=uuid.uuid4(),
+            id=app_id,
+            dog_id=uuid.uuid4(),
+            adopter_id=uuid.uuid4(),
             status=AdoptionStatus.COMPLETED,
             completed_at=completed_at,
             residential_status="owned",
@@ -466,14 +585,19 @@ class TestAdoptionService:
     async def test_update_adoption_fee(self, service, mock_repo):
         app_id = uuid.uuid4()
         app = AdoptionApplication(
-            id=app_id, dog_id=uuid.uuid4(), adopter_id=uuid.uuid4(),
-            status=AdoptionStatus.SUBMITTED, residential_status="owned",
+            id=app_id,
+            dog_id=uuid.uuid4(),
+            adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.SUBMITTED,
+            residential_status="owned",
             fee_amount=Decimal("0.00"),
         )
         mock_repo.get_by_id.side_effect = [app, app, app]
 
         result = await service.update_adoption_fee(
-            app_id, Decimal("150.00"), actor_id=uuid.uuid4(),
+            app_id,
+            Decimal("150.00"),
+            actor_id=uuid.uuid4(),
         )
         assert result.fee_amount == Decimal("150.00")
 
@@ -481,8 +605,11 @@ class TestAdoptionService:
     async def test_update_adoption_fee_after_completed_raises(self, service, mock_repo):
         app_id = uuid.uuid4()
         app = AdoptionApplication(
-            id=app_id, dog_id=uuid.uuid4(), adopter_id=uuid.uuid4(),
-            status=AdoptionStatus.COMPLETED, residential_status="owned",
+            id=app_id,
+            dog_id=uuid.uuid4(),
+            adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.COMPLETED,
+            residential_status="owned",
             fee_amount=Decimal("0.00"),
         )
         mock_repo.get_by_id.return_value = app
@@ -508,23 +635,46 @@ class TestNearbyShelters(TestAdoptionService):
         near_id = uuid.uuid4()
         far_id = uuid.uuid4()
         near_dog = DogProfile(
-            id=uuid.uuid4(), registration_number="DOG-001", name="Rex",
-            breed="Indie Mix", breed_classification="mix", gender="male",
-            is_spayed_neutered=False, is_adoptable=True, is_quarantine_passed=True,
-            shelter_facility_id=near_id, created_at=now, updated_at=now,
+            id=uuid.uuid4(),
+            registration_number="DOG-001",
+            name="Rex",
+            breed="Indie Mix",
+            breed_classification="mix",
+            gender="male",
+            is_spayed_neutered=False,
+            is_adoptable=True,
+            is_quarantine_passed=True,
+            shelter_facility_id=near_id,
+            created_at=now,
+            updated_at=now,
             status=DogStatus.SHELTER,
         )
         near_facility = ShelterFacility(
-            id=near_id, name="Near Shelter", address="Near St", phone="+1",
-            latitude=28.6, longitude=77.2, total_capacity=50,
-            facility_type=FacilityType.SHELTER, status=FacilityStatus.ACTIVE,
-            created_at=now, updated_at=now,
+            id=near_id,
+            name="Near Shelter",
+            address="Near St",
+            phone="+1",
+            latitude=28.6,
+            longitude=77.2,
+            total_capacity=50,
+            facility_type=FacilityType.SHELTER,
+            status=FacilityStatus.ACTIVE,
+            created_at=now,
+            updated_at=now,
         )
         far_facility = ShelterFacility(
-            id=far_id, name="Far Shelter", address="Far St", phone="+2",
-            latitude=29.0, longitude=78.0, total_capacity=50,
-            facility_type=FacilityType.SHELTER, status=FacilityStatus.ACTIVE,
-            created_at=now, updated_at=now, deleted_at=None,
+            id=far_id,
+            name="Far Shelter",
+            address="Far St",
+            phone="+2",
+            latitude=29.0,
+            longitude=78.0,
+            total_capacity=50,
+            facility_type=FacilityType.SHELTER,
+            status=FacilityStatus.ACTIVE,
+            created_at=now,
+            updated_at=now,
+            deleted_at=None,
         )
         mock_shelter_repo.find_nearby_facilities.return_value = [
             (near_facility, 1.5),
@@ -578,8 +728,11 @@ class TestAdoptionScores:
         app_id = uuid.uuid4()
         actor_id = uuid.uuid4()
         mock_repo.get_by_id.return_value = AdoptionApplication(
-            id=app_id, dog_id=uuid.uuid4(), adopter_id=uuid.uuid4(),
-            status=AdoptionStatus.SUBMITTED, residential_status="owned",
+            id=app_id,
+            dog_id=uuid.uuid4(),
+            adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.SUBMITTED,
+            residential_status="owned",
         )
 
         def _capture_score(score):
@@ -606,8 +759,11 @@ class TestAdoptionScores:
     async def test_get_scores_empty(self, service, mock_repo):
         app_id = uuid.uuid4()
         mock_repo.get_by_id.return_value = AdoptionApplication(
-            id=app_id, dog_id=uuid.uuid4(), adopter_id=uuid.uuid4(),
-            status=AdoptionStatus.SUBMITTED, residential_status="owned",
+            id=app_id,
+            dog_id=uuid.uuid4(),
+            adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.SUBMITTED,
+            residential_status="owned",
         )
         mock_repo.get_scores_for_application.return_value = []
         result = await service.get_scores(app_id)

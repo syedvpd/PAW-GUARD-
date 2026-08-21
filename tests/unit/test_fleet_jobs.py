@@ -52,7 +52,9 @@ class TestFleetScheduledJobs:
     @pytest.mark.asyncio
     @patch("pawguard.workers.jobs.fleet_jobs.AsyncSessionLocal")
     @patch("pawguard.workers.jobs.fleet_jobs.NotificationService")
-    async def test_check_fleet_maintenance_due_nothing_due(self, mock_notif_cls, mock_session_factory):
+    async def test_check_fleet_maintenance_due_nothing_due(
+        self, mock_notif_cls, mock_session_factory
+    ):
         """No maintenance within the window -> no notifications."""
         empty_result = MagicMock()
         empty_result.scalars.return_value.all.return_value = []
@@ -188,7 +190,9 @@ class TestFleetScheduledJobs:
     @pytest.mark.asyncio
     @patch("pawguard.workers.jobs.fleet_jobs.AsyncSessionLocal")
     @patch("pawguard.workers.jobs.fleet_jobs.NotificationService")
-    async def test_check_vehicle_insurance_expiry_none_expiring(self, mock_notif_cls, mock_session_factory):
+    async def test_check_vehicle_insurance_expiry_none_expiring(
+        self, mock_notif_cls, mock_session_factory
+    ):
         """No expiring insurance -> no notifications."""
         empty_result = MagicMock()
         empty_result.scalars.return_value.all.return_value = []
@@ -207,7 +211,9 @@ class TestFleetScheduledJobs:
     @pytest.mark.asyncio
     @patch("pawguard.workers.jobs.fleet_jobs.AsyncSessionLocal")
     @patch("pawguard.workers.jobs.fleet_jobs.NotificationService")
-    async def test_check_vehicle_insurance_expiry_overdue(self, mock_notif_cls, mock_session_factory):
+    async def test_check_vehicle_insurance_expiry_overdue(
+        self, mock_notif_cls, mock_session_factory
+    ):
         """Already-expired insurance should trigger alerts."""
         vehicle = MagicMock()
         vehicle.license_plate = "AMB-99"
@@ -263,7 +269,9 @@ class TestFleetScheduledJobs:
     @pytest.mark.asyncio
     @patch("pawguard.workers.jobs.fleet_jobs.AsyncSessionLocal")
     @patch("pawguard.workers.jobs.fleet_jobs.NotificationService")
-    async def test_check_vehicle_insurance_expiry_commits(self, mock_notif_cls, mock_session_factory):
+    async def test_check_vehicle_insurance_expiry_commits(
+        self, mock_notif_cls, mock_session_factory
+    ):
         """Job should commit the session after sending notifications."""
         vehicle = MagicMock()
         vehicle.license_plate = "RESCUE-01"
@@ -323,7 +331,9 @@ class TestFleetScheduledJobs:
     @pytest.mark.asyncio
     @patch("pawguard.workers.jobs.fleet_jobs.AsyncSessionLocal")
     @patch("pawguard.workers.jobs.fleet_jobs.NotificationService")
-    async def test_check_equipment_checkout_expiry_none_overdue(self, mock_notif_cls, mock_session_factory):
+    async def test_check_equipment_checkout_expiry_none_overdue(
+        self, mock_notif_cls, mock_session_factory
+    ):
         """No overdue checkouts -> no notifications."""
         empty_result = MagicMock()
         empty_result.scalars.return_value.all.return_value = []
@@ -342,7 +352,9 @@ class TestFleetScheduledJobs:
     @pytest.mark.asyncio
     @patch("pawguard.workers.jobs.fleet_jobs.AsyncSessionLocal")
     @patch("pawguard.workers.jobs.fleet_jobs.NotificationService")
-    async def test_check_equipment_checkout_expiry_due_today(self, mock_notif_cls, mock_session_factory):
+    async def test_check_equipment_checkout_expiry_due_today(
+        self, mock_notif_cls, mock_session_factory
+    ):
         """Equipment due today (expected_return_at == now) should be flagged."""
         checkout = MagicMock()
         checkout.equipment_name = "Crate"
@@ -420,7 +432,9 @@ class TestFleetScheduledJobs:
     @pytest.mark.asyncio
     @patch("pawguard.workers.jobs.fleet_jobs.AsyncSessionLocal")
     @patch("pawguard.workers.jobs.fleet_jobs.NotificationService")
-    async def test_check_equipment_checkout_expiry_commits(self, mock_notif_cls, mock_session_factory):
+    async def test_check_equipment_checkout_expiry_commits(
+        self, mock_notif_cls, mock_session_factory
+    ):
         """Job should commit the session after sending notifications."""
         checkout = MagicMock()
         checkout.equipment_name = "Net Gun"

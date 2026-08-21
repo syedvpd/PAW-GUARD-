@@ -33,7 +33,11 @@ def _get_firebase_app() -> Any:
         from firebase_admin import credentials  # type: ignore[import-untyped]
 
         if fcm_credentials_json:
-            cred_dict = json.loads(fcm_credentials_json) if isinstance(fcm_credentials_json, str) else fcm_credentials_json
+            cred_dict = (
+                json.loads(fcm_credentials_json)
+                if isinstance(fcm_credentials_json, str)
+                else fcm_credentials_json
+            )
             cred = credentials.Certificate(cred_dict)
         else:
             cred = credentials.Certificate(fcm_credentials_path)
@@ -75,9 +79,7 @@ async def send_push_notification(
             token=fcm_token,
             android=messaging.AndroidConfig(priority="high"),
             apns=messaging.APNSConfig(
-                payload=messaging.APNSPayload(
-                    aps=messaging.Aps(sound="default", badge=1)
-                )
+                payload=messaging.APNSPayload(aps=messaging.Aps(sound="default", badge=1))
             ),
         )
         response = await asyncio.to_thread(messaging.send, message, app=app)
@@ -121,9 +123,7 @@ async def send_push_notification_to_users(
 
     async def _send_one(uid: uuid.UUID, tok: str) -> bool:
         async with sem:
-            return await send_push_notification(
-                tok, title=title, body=body, data=data, user_id=uid
-            )
+            return await send_push_notification(tok, title=title, body=body, data=data, user_id=uid)
 
     results = await asyncio.gather(
         *[_send_one(uid, tok) for uid, tok in valid_tokens],

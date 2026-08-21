@@ -36,9 +36,7 @@ LOGIN_PAYLOAD = {
 class TestPublicAccess:
     async def _auth(self, client: AsyncClient, db_session: AsyncSession) -> dict:
         """Register, promote to super_admin, complete MFA, return auth headers."""
-        return await register_and_auth(
-            client, db_session, email=REGISTER_PAYLOAD["email"]
-        )
+        return await register_and_auth(client, db_session, email=REGISTER_PAYLOAD["email"])
 
     async def _auth_as_role(
         self,
@@ -47,9 +45,7 @@ class TestPublicAccess:
         role_name: str,
         email: str,
     ) -> dict:
-        return await register_and_auth(
-            client, db_session, email=email, role=role_name
-        )
+        return await register_and_auth(client, db_session, email=email, role=role_name)
 
     # ── 1. Anonymous public directory reads ────────────────────────────────
 
@@ -61,25 +57,31 @@ class TestPublicAccess:
         # Adoptable dog (is_adoptable is normally granted only via vet
         # clearance; set it directly here to isolate the directory view).
         payload = {
-            "name": "AdoptableRex", "breed": "Labrador", "gender": "male",
-            "estimated_age": "3 years", "weight": 25.5, "color": "black",
+            "name": "AdoptableRex",
+            "breed": "Labrador",
+            "gender": "male",
+            "estimated_age": "3 years",
+            "weight": 25.5,
+            "color": "black",
             "temperament": "friendly",
         }
         resp = await client.post("/api/v1/dogs", json=payload, headers=headers)
         assert resp.status_code == 201
         adoptable_id = resp.json()["data"]["id"]
         dog = (
-            await db_session.execute(
-                select(DogProfile).where(DogProfile.id == adoptable_id)
-            )
+            await db_session.execute(select(DogProfile).where(DogProfile.id == adoptable_id))
         ).scalar_one()
         dog.is_adoptable = True
         await db_session.commit()
 
         # Internal (non-adoptable) dog must not surface publicly.
         payload2 = {
-            "name": "InternalDog", "breed": "Indie", "gender": "female",
-            "estimated_age": "2 years", "weight": 18.0, "color": "brown",
+            "name": "InternalDog",
+            "breed": "Indie",
+            "gender": "female",
+            "estimated_age": "2 years",
+            "weight": 18.0,
+            "color": "brown",
             "temperament": "timid_fearful",
         }
         resp2 = await client.post("/api/v1/dogs", json=payload2, headers=headers)
@@ -107,9 +109,12 @@ class TestPublicAccess:
     ) -> None:
         headers = await self._auth(client, db_session)
         lost_payload = {
-            "pet_name": "Max", "breed": "Beagle Mix", "color": "Brown/Black",
+            "pet_name": "Max",
+            "breed": "Beagle Mix",
+            "color": "Brown/Black",
             "location_address": "Road No 5, Jubilee Hills",
-            "latitude": 17.4285, "longitude": 78.4020,
+            "latitude": 17.4285,
+            "longitude": 78.4020,
             "lost_at": "2026-07-28T10:00:00Z",
         }
         resp = await client.post("/api/v1/lost-found/lost", json=lost_payload, headers=headers)
@@ -177,8 +182,10 @@ class TestPublicAccess:
             client, db_session, "rescue_agent", "agent@public.test.com"
         )
         report_payload = {
-            "reporter_name": "Jane Public", "reporter_phone": "+9876543210",
-            "location_address": "Street 5, Block B", "physical_condition": "Injured",
+            "reporter_name": "Jane Public",
+            "reporter_phone": "+9876543210",
+            "location_address": "Street 5, Block B",
+            "physical_condition": "Injured",
         }
         r = await client.post("/api/v1/public/rescue/report", json=report_payload)
         assert r.status_code == 201
@@ -196,8 +203,10 @@ class TestPublicAccess:
     ) -> None:
         headers = await self._auth(client, db_session)  # super_admin
         report_payload = {
-            "reporter_name": "Jane Public", "reporter_phone": "+9876543210",
-            "location_address": "Street 5, Block B", "physical_condition": "Injured",
+            "reporter_name": "Jane Public",
+            "reporter_phone": "+9876543210",
+            "location_address": "Street 5, Block B",
+            "physical_condition": "Injured",
         }
         r = await client.post("/api/v1/public/rescue/report", json=report_payload)
         case_id = r.json()["data"]["id"]
@@ -216,8 +225,10 @@ class TestPublicAccess:
         masking policy must hold for every verb, not just GET."""
         admin_headers = await self._auth(client, db_session)
         report_payload = {
-            "reporter_name": "Jane Public", "reporter_phone": "+9876543210",
-            "location_address": "Street 5, Block B", "physical_condition": "Injured",
+            "reporter_name": "Jane Public",
+            "reporter_phone": "+9876543210",
+            "location_address": "Street 5, Block B",
+            "physical_condition": "Injured",
         }
         r = await client.post("/api/v1/public/rescue/report", json=report_payload)
         case_id = r.json()["data"]["id"]
@@ -229,10 +240,10 @@ class TestPublicAccess:
             headers=admin_headers,
         )
         user_id = (
-            await db_session.execute(
-                select(User).where(User.email == REGISTER_PAYLOAD["email"])
-            )
-        ).scalar_one().id
+            (await db_session.execute(select(User).where(User.email == REGISTER_PAYLOAD["email"])))
+            .scalar_one()
+            .id
+        )
         await client.post(
             f"/api/v1/rescue/{case_id}/dispatch",
             json={"assigned_driver_id": str(user_id), "vehicle_id": "VAN-009"},
@@ -256,8 +267,10 @@ class TestPublicAccess:
     ) -> None:
         headers = await self._auth(client, db_session)
         payload = {
-            "reporter_name": "Spam", "reporter_phone": "+1000000",
-            "location_address": "Spam Rd", "physical_condition": "Injured",
+            "reporter_name": "Spam",
+            "reporter_phone": "+1000000",
+            "location_address": "Spam Rd",
+            "physical_condition": "Injured",
         }
         statuses = []
         for _ in range(6):
@@ -276,9 +289,7 @@ class TestPublicAccess:
         payload = {"question": "Rate limit test?", "answer": "Yes."}
         statuses = []
         for _ in range(31):
-            resp = await client.post(
-                "/api/v1/portal/admin/faq", json=payload, headers=headers
-            )
+            resp = await client.post("/api/v1/portal/admin/faq", json=payload, headers=headers)
             statuses.append(resp.status_code)
         # Limit is 30 per 60s; the 31st request must be rejected with 429.
         assert statuses[:30] == [201] * 30
@@ -293,23 +304,23 @@ class TestPublicAccess:
         headers = await self._auth(client, db_session)
 
         published = {
-            "slug": "terms-of-service", "title": "Terms of Service",
-            "body": "1. Acceptance of Terms.", "document_type": "terms",
+            "slug": "terms-of-service",
+            "title": "Terms of Service",
+            "body": "1. Acceptance of Terms.",
+            "document_type": "terms",
             "status": "published",
         }
-        resp = await client.post(
-            "/api/v1/portal/admin/legal", json=published, headers=headers
-        )
+        resp = await client.post("/api/v1/portal/admin/legal", json=published, headers=headers)
         assert resp.status_code == 201
 
         draft = {
-            "slug": "privacy-policy", "title": "Privacy Policy",
-            "body": "We respect your privacy.", "document_type": "privacy",
+            "slug": "privacy-policy",
+            "title": "Privacy Policy",
+            "body": "We respect your privacy.",
+            "document_type": "privacy",
             "status": "draft",
         }
-        resp = await client.post(
-            "/api/v1/portal/admin/legal", json=draft, headers=headers
-        )
+        resp = await client.post("/api/v1/portal/admin/legal", json=draft, headers=headers)
         assert resp.status_code == 201
 
         # Anonymous list: published only.
@@ -331,12 +342,12 @@ class TestPublicAccess:
     ) -> None:
         headers = await self._auth(client, db_session)
         payload = {
-            "slug": "adoption-contract", "title": "Adoption Contract",
-            "body": "Parties agree to the following...", "document_type": "adoption",
+            "slug": "adoption-contract",
+            "title": "Adoption Contract",
+            "body": "Parties agree to the following...",
+            "document_type": "adoption",
         }
-        resp = await client.post(
-            "/api/v1/portal/admin/legal", json=payload, headers=headers
-        )
+        resp = await client.post("/api/v1/portal/admin/legal", json=payload, headers=headers)
         assert resp.status_code == 201
         doc_id = resp.json()["data"]["id"]
 
@@ -347,9 +358,7 @@ class TestPublicAccess:
         assert doc_id in ids
 
         # Duplicate slug → 409.
-        resp = await client.post(
-            "/api/v1/portal/admin/legal", json=payload, headers=headers
-        )
+        resp = await client.post("/api/v1/portal/admin/legal", json=payload, headers=headers)
         assert resp.status_code == 409
 
         # Update to published + rename.
@@ -367,9 +376,7 @@ class TestPublicAccess:
         assert resp.json()["data"]["title"] == "Adoption Contract v2"
 
         # Soft delete → public detail 404.
-        resp = await client.delete(
-            f"/api/v1/portal/admin/legal/{doc_id}", headers=headers
-        )
+        resp = await client.delete(f"/api/v1/portal/admin/legal/{doc_id}", headers=headers)
         assert resp.status_code == 200
         resp = await client.get("/api/v1/portal/legal/adoption-contract")
         assert resp.status_code == 404
@@ -379,15 +386,13 @@ class TestPublicAccess:
     ) -> None:
         """A non-admin (no roles) must not be able to write legal docs."""
         payload = {
-            "email": "plainuser@public.test.com", "password": "StrongP@ss99",
-            "full_name": "Plain User", "phone": "+1234567890",
+            "email": "plainuser@public.test.com",
+            "password": "StrongP@ss99",
+            "full_name": "Plain User",
+            "phone": "+1234567890",
         }
         await client.post("/api/v1/auth/register", json=payload)
-        stmt = (
-            select(User)
-            .options(selectinload(User.roles))
-            .where(User.email == payload["email"])
-        )
+        stmt = select(User).options(selectinload(User.roles)).where(User.email == payload["email"])
         user = (await db_session.execute(stmt)).scalar_one()
         user.is_verified = True
         await db_session.commit()
@@ -399,12 +404,12 @@ class TestPublicAccess:
         headers = {"Authorization": f"Bearer {token}"}
 
         body = {
-            "slug": "terms-of-service", "title": "Terms",
-            "body": "Body", "document_type": "terms",
+            "slug": "terms-of-service",
+            "title": "Terms",
+            "body": "Body",
+            "document_type": "terms",
         }
-        resp = await client.post(
-            "/api/v1/portal/admin/legal", json=body, headers=headers
-        )
+        resp = await client.post("/api/v1/portal/admin/legal", json=body, headers=headers)
         assert resp.status_code == 403
 
     async def test_public_urgent_alerts_window_filtering(
@@ -418,8 +423,10 @@ class TestPublicAccess:
         resp = await client.post(
             "/api/v1/portal/admin/urgent-alerts",
             json={
-                "title": "Flood Warning", "message": "Roads flooded.",
-                "severity": "critical", "is_active": True,
+                "title": "Flood Warning",
+                "message": "Roads flooded.",
+                "severity": "critical",
+                "is_active": True,
                 "starts_at": (now - timedelta(days=1)).isoformat(),
                 "ends_at": (now + timedelta(days=1)).isoformat(),
             },
@@ -431,8 +438,10 @@ class TestPublicAccess:
         resp = await client.post(
             "/api/v1/portal/admin/urgent-alerts",
             json={
-                "title": "Inactive Alert", "message": "hidden",
-                "severity": "info", "is_active": False,
+                "title": "Inactive Alert",
+                "message": "hidden",
+                "severity": "info",
+                "is_active": False,
             },
             headers=headers,
         )
@@ -442,8 +451,10 @@ class TestPublicAccess:
         resp = await client.post(
             "/api/v1/portal/admin/urgent-alerts",
             json={
-                "title": "Expired Alert", "message": "past",
-                "severity": "info", "is_active": True,
+                "title": "Expired Alert",
+                "message": "past",
+                "severity": "info",
+                "is_active": True,
                 "ends_at": (now - timedelta(days=1)).isoformat(),
             },
             headers=headers,
@@ -464,7 +475,8 @@ class TestPublicAccess:
         resp = await client.post(
             "/api/v1/portal/admin/urgent-alerts",
             json={
-                "title": "Heat Advisory", "message": "Stay hydrated.",
+                "title": "Heat Advisory",
+                "message": "Stay hydrated.",
                 "severity": "warning",
             },
             headers=headers,
@@ -493,8 +505,13 @@ class TestPublicAccess:
         assert resp.status_code == 200
         data = resp.json()["data"]
         for field in (
-            "total_funds_raised", "total_donations", "total_rescues_completed",
-            "successful_adoptions", "active_volunteers", "active_foster_homes",
-            "veterinary_partners", "dogs_in_care",
+            "total_funds_raised",
+            "total_donations",
+            "total_rescues_completed",
+            "successful_adoptions",
+            "active_volunteers",
+            "active_foster_homes",
+            "veterinary_partners",
+            "dogs_in_care",
         ):
             assert field in data

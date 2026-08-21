@@ -77,14 +77,10 @@ class EmailService:
                 status = resp.status
         except urllib.error.HTTPError as exc:
             body = exc.read().decode(errors="replace")[:300]
-            logger.error(
-                "brevo_api_error", to=to, subject=subject, status=exc.code, body=body
-            )
+            logger.error("brevo_api_error", to=to, subject=subject, status=exc.code, body=body)
             raise
         except urllib.error.URLError as exc:
-            logger.error(
-                "brevo_api_network_error", to=to, subject=subject, error=str(exc.reason)
-            )
+            logger.error("brevo_api_network_error", to=to, subject=subject, error=str(exc.reason))
             raise
 
         logger.info("email_sent", to=to, subject=subject, method="brevo_api", status=status)
@@ -112,9 +108,7 @@ class EmailService:
                     timeout=10,
                 ) as smtp_ssl:
                     if self._settings.mail_username:
-                        smtp_ssl.login(
-                            self._settings.mail_username, self._settings.mail_password
-                        )
+                        smtp_ssl.login(self._settings.mail_username, self._settings.mail_password)
                     smtp_ssl.send_message(message)
             else:
                 if self._settings.mail_use_tls:

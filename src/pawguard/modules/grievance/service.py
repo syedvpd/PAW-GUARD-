@@ -4,6 +4,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 from pawguard.core.exceptions import NotFoundError, ValidationFailedError
+from pawguard.core.logging import get_logger
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginationMeta
 from pawguard.modules.auth.models import AuthAuditEventType
@@ -24,6 +25,8 @@ from pawguard.modules.grievance.schemas import (
     ServiceFeedbackCreate,
 )
 from pawguard.services.audit_service import AuditService
+
+logger = get_logger(__name__)
 
 VALID_TRANSITIONS: dict[GrievanceStatus, set[GrievanceStatus]] = {
     GrievanceStatus.OPEN: {GrievanceStatus.INVESTIGATING, GrievanceStatus.CLOSED},
@@ -57,7 +60,10 @@ class GrievanceService:
             GrievanceTicket(**payload.model_dump(), sla_due_at=sla_due_at)
         )
         try:
-            from pawguard.modules.notifications.governance_service import dispatch_governed_notification
+            from pawguard.modules.notifications.governance_service import (
+                dispatch_governed_notification,
+            )
+
             await dispatch_governed_notification(
                 self._repo._session,
                 trigger_code="grievance_submitted",
@@ -123,14 +129,10 @@ class GrievanceService:
         if ticket is None:
             raise NotFoundError("Grievance ticket not found.")
 
-        if (
-            new_status != ticket.status
-            and new_status
-            not in VALID_TRANSITIONS.get(ticket.status, set())
+        if new_status != ticket.status and new_status not in VALID_TRANSITIONS.get(
+            ticket.status, set()
         ):
-            raise ValidationFailedError(
-                f"Cannot transition from {ticket.status} to {new_status}."
-            )
+            raise ValidationFailedError(f"Cannot transition from {ticket.status} to {new_status}.")
 
         ticket.status = new_status
         await self._repo._session.flush()
@@ -148,16 +150,20 @@ class GrievanceService:
                 },
             )
 
-        if ticket.complainant_user_id:
+        complainant_id = getattr(ticket, "complainant_user_id", None)
+        if complainant_id:
             try:
-                from pawguard.modules.notifications.governance_service import dispatch_governed_notification
+                from pawguard.modules.notifications.governance_service import (
+                    dispatch_governed_notification,
+                )
+
                 await dispatch_governed_notification(
                     self._repo._session,
                     trigger_code="grievance_status_updated",
                     module_name="grievance",
                     title=f"Grievance Ticket Status: {new_status.value.upper()}",
                     body=f"Your grievance ticket #{ticket.ticket_number or ticket.id} has been updated to {new_status.value}.",
-                    target_user_ids=[ticket.complainant_user_id],
+                    target_user_ids=[complainant_id],
                     action_url=f"/grievances/my/{ticket.id}",
                 )
             except Exception as exc:
@@ -196,6 +202,7 @@ class GrievanceService:
             )
         except Exception as exc:
             import logging
+
             logging.getLogger(__name__).warning(
                 "Failed to send assignment push for ticket %s: %s", ticket_id, exc
             )
@@ -262,6 +269,7 @@ class GrievanceService:
             )
         except Exception as notif_exc:
             import logging
+
             logging.getLogger(__name__).warning(
                 "Failed to send notification for grievance escalation on ticket %s: %s",
                 ticket.id,

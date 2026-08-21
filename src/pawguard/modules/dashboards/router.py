@@ -129,7 +129,6 @@ async def stream_rescue_dashboard(
     )
 
 
-
 @router.get(
     "/shelter",
     response_model=ApiResponse[dict[str, Any]],
@@ -294,4 +293,3 @@ async def get_operations_dashboard(
 ) -> ApiResponse[dict[str, Any]]:
     data = await dasvc.operations_dashboard(db, redis=redis)
     return ApiResponse(data=data)
-

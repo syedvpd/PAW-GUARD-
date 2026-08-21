@@ -24,14 +24,18 @@ LOGIN_PAYLOAD = {
 class TestNewModules:
     async def _auth(self, client: AsyncClient, db_session: AsyncSession) -> dict:
         """Register, promote to super_admin, complete MFA, return auth headers."""
-        return await register_and_auth(
-            client, db_session, email=REGISTER_PAYLOAD["email"]
-        )
+        return await register_and_auth(client, db_session, email=REGISTER_PAYLOAD["email"])
 
     async def test_inventory_flow(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
 
-        item_payload = {"name": "Test Med Kit", "category": "pharmaceutical", "quantity": 100, "unit": "units", "reorder_threshold": 10}
+        item_payload = {
+            "name": "Test Med Kit",
+            "category": "pharmaceutical",
+            "quantity": 100,
+            "unit": "units",
+            "reorder_threshold": 10,
+        }
         resp = await client.post("/api/v1/inventory/items", json=item_payload, headers=headers)
         assert resp.status_code == 201
         item_id = resp.json()["data"]["id"]
@@ -39,12 +43,19 @@ class TestNewModules:
         resp = await client.get("/api/v1/inventory/items", headers=headers)
         assert resp.status_code == 200
 
-        mov_payload = {"item_id": str(item_id), "movement_type": "check_in", "quantity": 50, "notes": "restock"}
+        mov_payload = {
+            "item_id": str(item_id),
+            "movement_type": "check_in",
+            "quantity": 50,
+            "notes": "restock",
+        }
         resp = await client.post("/api/v1/inventory/movements", json=mov_payload, headers=headers)
         assert resp.status_code == 201
 
         req_payload = {"item_id": str(item_id), "quantity": 5}
-        resp = await client.post("/api/v1/inventory/requisitions", json=req_payload, headers=headers)
+        resp = await client.post(
+            "/api/v1/inventory/requisitions", json=req_payload, headers=headers
+        )
         assert resp.status_code == 201
         req_id = resp.json()["data"]["id"]
 
@@ -58,37 +69,70 @@ class TestNewModules:
     async def test_shelter_flow(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
 
-        fac_payload = {"name": "Test Shelter", "address": "123 Test St", "phone": "+1234", "total_capacity": 50}
+        fac_payload = {
+            "name": "Test Shelter",
+            "address": "123 Test St",
+            "phone": "+1234",
+            "total_capacity": 50,
+        }
         resp = await client.post("/api/v1/shelter/facilities", json=fac_payload, headers=headers)
         assert resp.status_code == 201
         fac_id = resp.json()["data"]["id"]
 
         sec_payload = {"name": "Quarantine", "capacity": 10}
-        resp = await client.post(f"/api/v1/shelter/facilities/{fac_id}/sections", json=sec_payload, headers=headers)
+        resp = await client.post(
+            f"/api/v1/shelter/facilities/{fac_id}/sections", json=sec_payload, headers=headers
+        )
         assert resp.status_code == 201
         sec_id = resp.json()["data"]["id"]
 
         ken_payload = {"identifier": "K-01", "capacity": 2}
-        resp = await client.post(f"/api/v1/shelter/sections/{sec_id}/kennels", json=ken_payload, headers=headers)
+        resp = await client.post(
+            f"/api/v1/shelter/sections/{sec_id}/kennels", json=ken_payload, headers=headers
+        )
         assert resp.status_code == 201
 
     async def test_medical_flow(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
 
-        dog_payload = {"name": "MedDog", "breed": "Lab", "gender": "male", "estimated_age": "3y", "weight": 20, "color": "black", "temperament": "friendly"}
+        dog_payload = {
+            "name": "MedDog",
+            "breed": "Lab",
+            "gender": "male",
+            "estimated_age": "3y",
+            "weight": 20,
+            "color": "black",
+            "temperament": "friendly",
+        }
         resp = await client.post("/api/v1/dogs", json=dog_payload, headers=headers)
         assert resp.status_code == 201
         dog_id = resp.json()["data"]["id"]
 
-        exam_payload = {"dog_id": str(dog_id), "exam_date": "2026-07-29T10:00:00Z", "body_condition_score": 5, "triage_diagnosis": "Healthy"}
+        exam_payload = {
+            "dog_id": str(dog_id),
+            "exam_date": "2026-07-29T10:00:00Z",
+            "body_condition_score": 5,
+            "triage_diagnosis": "Healthy",
+        }
         resp = await client.post("/api/v1/medical/exams", json=exam_payload, headers=headers)
         assert resp.status_code == 201
 
-        vac_payload = {"dog_id": str(dog_id), "vaccine_name": "Rabies", "administered_at": "2026-07-29T10:00:00Z"}
+        vac_payload = {
+            "dog_id": str(dog_id),
+            "vaccine_name": "Rabies",
+            "administered_at": "2026-07-29T10:00:00Z",
+        }
         resp = await client.post("/api/v1/medical/vaccinations", json=vac_payload, headers=headers)
         assert resp.status_code == 201
 
-        rx_payload = {"dog_id": str(dog_id), "drug_name": "Amoxicillin", "dosage": "500mg", "route": "oral", "start_at": "2026-07-29T10:00:00Z", "end_at": "2026-08-05T10:00:00Z"}
+        rx_payload = {
+            "dog_id": str(dog_id),
+            "drug_name": "Amoxicillin",
+            "dosage": "500mg",
+            "route": "oral",
+            "start_at": "2026-07-29T10:00:00Z",
+            "end_at": "2026-08-05T10:00:00Z",
+        }
         resp = await client.post("/api/v1/medical/prescriptions", json=rx_payload, headers=headers)
         assert resp.status_code == 201
 
@@ -101,28 +145,64 @@ class TestNewModules:
     async def test_portal_cms_flow(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
 
-        story_payload = {"title": "Saved Barnaby", "summary": "A happy tail", "body": "Full story here", "status": "published"}
-        resp = await client.post("/api/v1/portal/admin/success-stories", json=story_payload, headers=headers)
+        story_payload = {
+            "title": "Saved Barnaby",
+            "summary": "A happy tail",
+            "body": "Full story here",
+            "status": "published",
+        }
+        resp = await client.post(
+            "/api/v1/portal/admin/success-stories", json=story_payload, headers=headers
+        )
         assert resp.status_code == 201
 
-        blog_payload = {"title": "Awareness Post", "slug": "awareness-1", "excerpt": "Excerpt", "body": "Full body", "status": "published", "category": "awareness"}
+        blog_payload = {
+            "title": "Awareness Post",
+            "slug": "awareness-1",
+            "excerpt": "Excerpt",
+            "body": "Full body",
+            "status": "published",
+            "category": "awareness",
+        }
         resp = await client.post("/api/v1/portal/admin/blog", json=blog_payload, headers=headers)
         assert resp.status_code == 201
 
-        faq_payload = {"question": "How to adopt?", "answer": "Apply online", "category": "adoption", "is_published": True}
+        faq_payload = {
+            "question": "How to adopt?",
+            "answer": "Apply online",
+            "category": "adoption",
+            "is_published": True,
+        }
         resp = await client.post("/api/v1/portal/admin/faq", json=faq_payload, headers=headers)
         assert resp.status_code == 201
 
-        vet_payload = {"name": "City Vet", "address": "456 Vet St", "phone": "+5678", "is_emergency": True, "is_active": True}
-        resp = await client.post("/api/v1/portal/admin/veterinary-network", json=vet_payload, headers=headers)
+        vet_payload = {
+            "name": "City Vet",
+            "address": "456 Vet St",
+            "phone": "+5678",
+            "is_emergency": True,
+            "is_active": True,
+        }
+        resp = await client.post(
+            "/api/v1/portal/admin/veterinary-network", json=vet_payload, headers=headers
+        )
         assert resp.status_code == 201
 
-        contact_payload = {"name": "Main Shelter", "address": "789 Shelter Ave", "phone": "+9012", "operating_hours": "9-5 M-F"}
-        resp = await client.post("/api/v1/portal/admin/contact", json=contact_payload, headers=headers)
+        contact_payload = {
+            "name": "Main Shelter",
+            "address": "789 Shelter Ave",
+            "phone": "+9012",
+            "operating_hours": "9-5 M-F",
+        }
+        resp = await client.post(
+            "/api/v1/portal/admin/contact", json=contact_payload, headers=headers
+        )
         assert resp.status_code == 201
 
         setting_payload = {"value": "PawGuard Network", "description": "Org name"}
-        resp = await client.put("/api/v1/portal/admin/settings/org_name", json=setting_payload, headers=headers)
+        resp = await client.put(
+            "/api/v1/portal/admin/settings/org_name", json=setting_payload, headers=headers
+        )
         assert resp.status_code == 200
 
         resp = await client.get("/api/v1/portal/stats")
@@ -146,19 +226,34 @@ class TestNewModules:
     async def test_fleet_flow(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
 
-        veh_payload = {"make_model": "Toyota Hiace", "license_plate": f"AB-{uuid.uuid4().hex[:4].upper()}", "mileage": 1000, "status": "active"}
+        veh_payload = {
+            "make_model": "Toyota Hiace",
+            "license_plate": f"AB-{uuid.uuid4().hex[:4].upper()}",
+            "mileage": 1000,
+            "status": "active",
+        }
         resp = await client.post("/api/v1/fleet/vehicles", json=veh_payload, headers=headers)
         assert resp.status_code == 201
         veh_id = resp.json()["data"]["id"]
 
-        maint_payload = {"vehicle_id": str(veh_id), "service_date": "2026-07-01", "description": "Oil change", "cost": 150.00}
+        maint_payload = {
+            "vehicle_id": str(veh_id),
+            "service_date": "2026-07-01",
+            "description": "Oil change",
+            "cost": 150.00,
+        }
         resp = await client.post("/api/v1/fleet/maintenance", json=maint_payload, headers=headers)
         assert resp.status_code == 201
 
     async def test_grievance_flow(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
 
-        complaint_payload = {"reporter_name": "Public User", "reporter_phone": "+112233", "complaint_type": "service_delay", "details": "Rescue took too long"}
+        complaint_payload = {
+            "reporter_name": "Public User",
+            "reporter_phone": "+112233",
+            "complaint_type": "service_delay",
+            "details": "Rescue took too long",
+        }
         resp = await client.post("/api/v1/grievance", json=complaint_payload)
         assert resp.status_code == 201
         ticket_id = resp.json()["data"]["id"]
@@ -167,7 +262,9 @@ class TestNewModules:
         assert resp.status_code == 200
 
         update_payload = {"status": "investigating", "resolution_notes": "Looking into it"}
-        resp = await client.put(f"/api/v1/grievance/{ticket_id}", json=update_payload, headers=headers)
+        resp = await client.put(
+            f"/api/v1/grievance/{ticket_id}", json=update_payload, headers=headers
+        )
         assert resp.status_code == 200
 
         fb_payload = {"rating": 5, "comments": "Great service"}
@@ -195,7 +292,9 @@ class TestNewModules:
     async def test_profile_update(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
 
-        resp = await client.put("/api/v1/auth/me", json={"full_name": "Updated Name", "phone": "+999"}, headers=headers)
+        resp = await client.put(
+            "/api/v1/auth/me", json={"full_name": "Updated Name", "phone": "+999"}, headers=headers
+        )
         assert resp.status_code == 200
         assert resp.json()["data"]["full_name"] == "Updated Name"
 
@@ -217,7 +316,9 @@ class TestNewModules:
         resp = await client.get("/api/v1/admin/dashboard/shelter-stats", headers=headers)
         assert resp.status_code == 200
 
-    async def test_dashboard_inventory_alerts(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_dashboard_inventory_alerts(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         headers = await self._auth(client, db_session)
 
         resp = await client.get("/api/v1/admin/dashboard/inventory-alerts", headers=headers)
@@ -318,13 +419,19 @@ class TestNewModules:
         resp = await client.get("/api/v1/settings/business-rules", headers=headers)
         assert resp.status_code == 200
 
-        resp = await client.get("/api/v1/settings/business-rules/rescue.max_distance_km", headers=headers)
+        resp = await client.get(
+            "/api/v1/settings/business-rules/rescue.max_distance_km", headers=headers
+        )
         assert resp.status_code == 200
 
-        delete_resp = await client.delete(f"/api/v1/settings/business-rules/{rule_id}", headers=headers)
+        delete_resp = await client.delete(
+            f"/api/v1/settings/business-rules/{rule_id}", headers=headers
+        )
         assert delete_resp.status_code == 204
 
-    async def test_notification_preferences(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_notification_preferences(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         headers = await self._auth(client, db_session)
 
         resp = await client.get("/api/v1/notifications/preferences", headers=headers)
@@ -339,7 +446,9 @@ class TestNewModules:
         assert resp.json()["data"]["enable_sms"] is True
         assert resp.json()["data"]["enable_push"] is False
 
-    async def test_notification_mark_read(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_notification_mark_read(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         headers = await self._auth(client, db_session)
 
         resp = await client.put("/api/v1/notifications/read-all", headers=headers)
@@ -348,10 +457,17 @@ class TestNewModules:
         resp = await client.get("/api/v1/notifications/unread-count", headers=headers)
         assert resp.status_code == 200
 
-    async def test_finance_chart_of_accounts_flow(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_finance_chart_of_accounts_flow(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         headers = await self._auth(client, db_session)
 
-        payload = {"account_code": "1010", "account_name": "Cash", "account_type": "asset", "category": "cash"}
+        payload = {
+            "account_code": "1010",
+            "account_name": "Cash",
+            "account_type": "asset",
+            "category": "cash",
+        }
         resp = await client.post("/api/v1/finance/accounts", json=payload, headers=headers)
         assert resp.status_code == 201
         acct_id = resp.json()["data"]["id"]
@@ -364,25 +480,52 @@ class TestNewModules:
         data = resp.json()["data"]
         assert len(data) >= 1
 
-        resp = await client.put(f"/api/v1/finance/accounts/{acct_id}", json={"account_name": "Petty Cash"}, headers=headers)
+        resp = await client.put(
+            f"/api/v1/finance/accounts/{acct_id}",
+            json={"account_name": "Petty Cash"},
+            headers=headers,
+        )
         assert resp.status_code == 200
         assert resp.json()["data"]["account_name"] == "Petty Cash"
 
         resp = await client.delete(f"/api/v1/finance/accounts/{acct_id}", headers=headers)
         assert resp.status_code == 200
 
-    async def test_finance_transaction_flow(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_finance_transaction_flow(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         headers = await self._auth(client, db_session)
 
-        debit = await client.post("/api/v1/finance/accounts", json={"account_code": "5010", "account_name": "Expense A", "account_type": "expense", "category": "supplies_expense"}, headers=headers)
+        debit = await client.post(
+            "/api/v1/finance/accounts",
+            json={
+                "account_code": "5010",
+                "account_name": "Expense A",
+                "account_type": "expense",
+                "category": "supplies_expense",
+            },
+            headers=headers,
+        )
         assert debit.status_code == 201
         debit_id = debit.json()["data"]["id"]
-        credit = await client.post("/api/v1/finance/accounts", json={"account_code": "1011", "account_name": "Bank", "account_type": "asset", "category": "bank"}, headers=headers)
+        credit = await client.post(
+            "/api/v1/finance/accounts",
+            json={
+                "account_code": "1011",
+                "account_name": "Bank",
+                "account_type": "asset",
+                "category": "bank",
+            },
+            headers=headers,
+        )
         credit_id = credit.json()["data"]["id"]
 
         tx_payload = {
-            "transaction_type": "expense", "transaction_date": "2026-07-30",
-            "amount": 500.00, "debit_account_id": debit_id, "credit_account_id": credit_id,
+            "transaction_type": "expense",
+            "transaction_date": "2026-07-30",
+            "amount": 500.00,
+            "debit_account_id": debit_id,
+            "credit_account_id": credit_id,
         }
         resp = await client.post("/api/v1/finance/transactions", json=tx_payload, headers=headers)
         assert resp.status_code == 201
@@ -398,19 +541,37 @@ class TestNewModules:
         resp = await client.get("/api/v1/finance/account-balances", headers=headers)
         assert resp.status_code == 200
 
-        resp = await client.get("/api/v1/finance/summary?period_start=2026-01-01&period_end=2026-12-31", headers=headers)
+        resp = await client.get(
+            "/api/v1/finance/summary?period_start=2026-01-01&period_end=2026-12-31", headers=headers
+        )
         assert resp.status_code == 200
 
-        resp = await client.get("/api/v1/finance/pnl?period_start=2026-01-01&period_end=2026-12-31", headers=headers)
+        resp = await client.get(
+            "/api/v1/finance/pnl?period_start=2026-01-01&period_end=2026-12-31", headers=headers
+        )
         assert resp.status_code == 200
 
     async def test_finance_budget_flow(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
 
-        acct = await client.post("/api/v1/finance/accounts", json={"account_code": "6010", "account_name": "Supplies", "account_type": "expense", "category": "supplies_expense"}, headers=headers)
+        acct = await client.post(
+            "/api/v1/finance/accounts",
+            json={
+                "account_code": "6010",
+                "account_name": "Supplies",
+                "account_type": "expense",
+                "category": "supplies_expense",
+            },
+            headers=headers,
+        )
         acct_id = acct.json()["data"]["id"]
 
-        budget_payload = {"name": "Annual 2026", "fiscal_year": 2026, "start_date": "2026-01-01", "end_date": "2026-12-31"}
+        budget_payload = {
+            "name": "Annual 2026",
+            "fiscal_year": 2026,
+            "start_date": "2026-01-01",
+            "end_date": "2026-12-31",
+        }
         resp = await client.post("/api/v1/finance/budgets", json=budget_payload, headers=headers)
         assert resp.status_code == 201
         budget_id = resp.json()["data"]["id"]
@@ -419,7 +580,9 @@ class TestNewModules:
         assert resp.status_code == 200
 
         item_payload = {"account_id": acct_id, "allocated_amount": 10000}
-        resp = await client.post(f"/api/v1/finance/budgets/{budget_id}/items", json=item_payload, headers=headers)
+        resp = await client.post(
+            f"/api/v1/finance/budgets/{budget_id}/items", json=item_payload, headers=headers
+        )
         assert resp.status_code == 201
 
         resp = await client.get("/api/v1/finance/budgets", headers=headers)
@@ -428,15 +591,38 @@ class TestNewModules:
         resp = await client.delete(f"/api/v1/finance/budgets/{budget_id}", headers=headers)
         assert resp.status_code == 200
 
-    async def test_finance_recurring_flow(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_finance_recurring_flow(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         headers = await self._auth(client, db_session)
 
-        debit = await client.post("/api/v1/finance/accounts", json={"account_code": "7010", "account_name": "Rent Exp", "account_type": "expense", "category": "supplies_expense"}, headers=headers)
-        credit = await client.post("/api/v1/finance/accounts", json={"account_code": "1012", "account_name": "Bank B", "account_type": "asset", "category": "bank"}, headers=headers)
+        debit = await client.post(
+            "/api/v1/finance/accounts",
+            json={
+                "account_code": "7010",
+                "account_name": "Rent Exp",
+                "account_type": "expense",
+                "category": "supplies_expense",
+            },
+            headers=headers,
+        )
+        credit = await client.post(
+            "/api/v1/finance/accounts",
+            json={
+                "account_code": "1012",
+                "account_name": "Bank B",
+                "account_type": "asset",
+                "category": "bank",
+            },
+            headers=headers,
+        )
 
         payload = {
-            "name": "Monthly Rent", "transaction_type": "expense", "amount": 2000.00,
-            "interval": "monthly", "start_date": "2026-01-01",
+            "name": "Monthly Rent",
+            "transaction_type": "expense",
+            "amount": 2000.00,
+            "interval": "monthly",
+            "start_date": "2026-01-01",
             "debit_account_id": debit.json()["data"]["id"],
             "credit_account_id": credit.json()["data"]["id"],
         }
@@ -446,7 +632,9 @@ class TestNewModules:
         resp = await client.get("/api/v1/finance/recurring", headers=headers)
         assert resp.status_code == 200
 
-    async def test_reports_generate_flow(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_reports_generate_flow(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         headers = await self._auth(client, db_session)
 
         resp = await client.get("/api/v1/reports/types", headers=headers)
@@ -468,7 +656,9 @@ class TestNewModules:
         resp = await client.get(f"/api/v1/reports/download/{filename}", headers=headers)
         assert resp.status_code == 200
 
-    async def test_reports_multiple_formats(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_reports_multiple_formats(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         headers = await self._auth(client, db_session)
 
         for report_type in ["adoption", "rescue"]:
@@ -478,7 +668,9 @@ class TestNewModules:
                 assert resp.status_code == 200, f"{report_type}/{fmt} failed: {resp.text}"
                 assert resp.json()["data"]["format"] == fmt
 
-    async def test_reports_with_period_filter(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_reports_with_period_filter(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         headers = await self._auth(client, db_session)
 
         payload = {
@@ -490,7 +682,9 @@ class TestNewModules:
         resp = await client.post("/api/v1/reports/generate", json=payload, headers=headers)
         assert resp.status_code == 200
 
-    async def test_dashboards_all_role_endpoints(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_dashboards_all_role_endpoints(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         headers = await self._auth(client, db_session)
 
         endpoints = [

@@ -1,28 +1,33 @@
 import uuid
-from typing import Any, Dict, Optional
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine, async_sessionmaker
+from typing import Any
+
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+
 
 class ShardRegistry:
     """Registry to keep track of engine connections for different database shards.
-    
+
     Demonstrates design pattern to scale database boundaries horizontally (PRR 3.33).
     """
+
     def __init__(self) -> None:
-        self._engines: Dict[str, AsyncEngine] = {}
-        self._sessionmakers: Dict[str, async_sessionmaker[AsyncSession]] = {}
+        self._engines: dict[str, AsyncEngine] = {}
+        self._sessionmakers: dict[str, async_sessionmaker[AsyncSession]] = {}
 
     def register_shard(self, shard_key: str, database_url: str, **engine_kwargs: Any) -> None:
         """Register a database engine connection for a specific shard key (e.g., 'us-east', 'eu-west')."""
         engine = create_async_engine(database_url, **engine_kwargs)
         self._engines[shard_key] = engine
         self._sessionmakers[shard_key] = async_sessionmaker(
-            bind=engine,
-            class_=AsyncSession,
-            expire_on_commit=False,
-            autoflush=False
+            bind=engine, class_=AsyncSession, expire_on_commit=False, autoflush=False
         )
 
-    def get_sessionmaker(self, shard_key: str) -> Optional[async_sessionmaker[AsyncSession]]:
+    def get_sessionmaker(self, shard_key: str) -> async_sessionmaker[AsyncSession] | None:
         return self._sessionmakers.get(shard_key)
 
     async def close_all(self) -> None:
@@ -32,6 +37,7 @@ class ShardRegistry:
 
 class ShardedSessionManager:
     """Manager that resolves the appropriate database session based on a routing shard key."""
+
     def __init__(self, registry: ShardRegistry) -> None:
         self.registry = registry
 

@@ -73,9 +73,7 @@ def _parse_equipment_details(equipment_details: str | None) -> list[str]:
     if not equipment_details:
         return []
     return [
-        name.strip()
-        for name in re.split(r"[,;\n]+", equipment_details)
-        if name and name.strip()
+        name.strip() for name in re.split(r"[,;\n]+", equipment_details) if name and name.strip()
     ]
 
 
@@ -158,7 +156,6 @@ class RescueService:
             with contextlib.suppress(Exception):
                 await self._redis.publish("dispatch:events", "updated")
 
-
     def _fleet_service(self) -> FleetService:
         """Cross-domain delegation (fleet) sharing this request's session.
 
@@ -235,9 +232,7 @@ class RescueService:
             break
 
         if request is None:
-            raise ConflictError(
-                "Unable to allocate a unique rescue ticket number. Please retry."
-            )
+            raise ConflictError("Unable to allocate a unique rescue ticket number. Please retry.")
 
         res = await self._repo.get_request_by_id(request.id)
         if res is None:
@@ -265,6 +260,7 @@ class RescueService:
         # Push notification to rescue coordinators about new incident
         try:
             from pawguard.modules.auth.repository import UserRepository
+
             user_repo = UserRepository(self._repo._session)
             coordinator_ids = await user_repo.get_user_ids_by_roles(["rescue_coordinator"])
             if coordinator_ids:
@@ -290,7 +286,6 @@ class RescueService:
                 ),
             )
         return res
-
 
     async def verify_request(
         self,
@@ -333,7 +328,8 @@ class RescueService:
 
         if self._audit and actor_id:
             event = (
-                AuthAuditEventType.RESCUE_VERIFIED if approve
+                AuthAuditEventType.RESCUE_VERIFIED
+                if approve
                 else AuthAuditEventType.RESCUE_REJECTED
             )
             await self._audit.record(
@@ -352,7 +348,6 @@ class RescueService:
 
         await self._publish_dispatch_event()
         return request
-
 
     async def dispatch_team(
         self,
@@ -549,7 +544,6 @@ class RescueService:
 
         await self._repo.delete_dispatch(dispatch)
 
-
     async def escalate(
         self,
         request_id: uuid.UUID,
@@ -591,8 +585,11 @@ class RescueService:
         # Push notification to admins about escalation
         try:
             from pawguard.modules.auth.repository import UserRepository
+
             user_repo = UserRepository(self._repo._session)
-            admin_ids = await user_repo.get_user_ids_by_roles(["rescue_centre_admin", "super_admin"])
+            admin_ids = await user_repo.get_user_ids_by_roles(
+                ["rescue_centre_admin", "super_admin"]
+            )
             if admin_ids:
                 await self._send_push(
                     admin_ids,
@@ -629,7 +626,7 @@ class RescueService:
                 if agent.agent_id == agent_id:
                     is_assigned = True
                     break
-        
+
         if not is_assigned:
             raise ConflictError("Agent is not assigned to this dispatch.")
 
@@ -758,6 +755,7 @@ class RescueService:
             # Push notification to veterinarians about new intake
             try:
                 from pawguard.modules.auth.repository import UserRepository
+
                 user_repo = UserRepository(self._repo._session)
                 vet_ids = await user_repo.get_user_ids_by_roles(["veterinarian"])
                 if vet_ids:
@@ -813,7 +811,6 @@ class RescueService:
 
         await self._publish_dispatch_event()
         return res
-
 
     async def _create_dog_profile_for_admitted(
         self,
@@ -899,6 +896,7 @@ class RescueService:
         from sqlalchemy import select as sa_select
 
         from pawguard.modules.auth.models import User
+
         user = await self._repo._session.scalar(
             sa_select(User.id).where(
                 User.id == coordinator_id,
@@ -941,9 +939,7 @@ class RescueService:
         router can return HTTP 200 with an empty payload — matching the
         documented contract.
         """
-        request = await self._repo.get_request_by_ticket_and_phone(
-            ticket_number, phone
-        )
+        request = await self._repo.get_request_by_ticket_and_phone(ticket_number, phone)
         if request is None:
             return None
         return PublicRescueStatusResponse(
@@ -961,9 +957,7 @@ class RescueService:
     async def list_dispatches_paginated(
         self, page: PageParams, sort: SortParams
     ) -> PaginatedResponse[RescueDispatchResponse]:
-        dispatches, total = await self._repo.list_dispatches_paginated(
-            page=page, sort=sort
-        )
+        dispatches, total = await self._repo.list_dispatches_paginated(page=page, sort=sort)
         return PaginatedResponse(
             data=[RescueDispatchResponse.model_validate(d) for d in dispatches],
             meta=build_pagination_meta(total=total, params=page),
@@ -980,8 +974,12 @@ class RescueService:
         assigned_to_me: uuid.UUID | None = None,
     ) -> PaginatedResponse[RescueRequestResponse]:
         results, total = await self._repo.list_paginated(
-            page=page, sort=sort, search_term=search_term, status=status,
-            severity=severity, urgent_only=urgent_only,
+            page=page,
+            sort=sort,
+            search_term=search_term,
+            status=status,
+            severity=severity,
+            urgent_only=urgent_only,
             assigned_to_me=assigned_to_me,
         )
         return PaginatedResponse(
@@ -1040,9 +1038,7 @@ class RescueService:
             )
         allowed_sources = _BULK_TRANSITION_SOURCES.get(status)
         if allowed_sources is None:
-            raise ValidationFailedError(
-                f"Bulk status '{status.value}' is not supported."
-            )
+            raise ValidationFailedError(f"Bulk status '{status.value}' is not supported.")
 
         requests = await self._repo.list_by_ids(ids)
         if not requests:
@@ -1068,16 +1064,13 @@ class RescueService:
                 existing = request.dispatch
                 if existing is None:
                     await self._repo.create_dispatch(
-                        RescueDispatch(
-                            rescue_request_id=request.id, dispatched_at=now
-                        )
+                        RescueDispatch(rescue_request_id=request.id, dispatched_at=now)
                     )
             elif status in (RescueStatus.LOCATED, RescueStatus.RESCUED, RescueStatus.ADMITTED):
                 dispatch = request.dispatch
                 if dispatch is None:
                     raise NotFoundError(
-                        f"Dispatch record not found for request "
-                        f"{request.ticket_number}."
+                        f"Dispatch record not found for request {request.ticket_number}."
                     )
                 if status == RescueStatus.LOCATED:
                     dispatch.located_at = now
@@ -1085,9 +1078,7 @@ class RescueService:
                     dispatch.rescued_at = now
                 elif status == RescueStatus.ADMITTED:
                     dispatch.admitted_at = now
-                    report = RescueReport(
-                        rescue_request_id=request.id, agent_id=actor_id
-                    )
+                    report = RescueReport(rescue_request_id=request.id, agent_id=actor_id)
                     await self._repo.create_report(report)
                     request.reports.append(report)
                     await self._create_dog_profile_for_admitted(
@@ -1149,9 +1140,7 @@ class RescueService:
         await self._redis.set(active_key, "1", ex=300)
         # 3. Store timestamp for location retrieval endpoints
         with contextlib.suppress(Exception):
-            await self._redis.set(
-                f"rescue:agent_ts:{agent_id}", datetime.now(UTC).isoformat()
-            )
+            await self._redis.set(f"rescue:agent_ts:{agent_id}", datetime.now(UTC).isoformat())
 
     async def get_nearest_agents(
         self,
@@ -1191,7 +1180,7 @@ class RescueService:
                 member_id_str, dist, coord = res[0], res[1], res[2]
             else:
                 continue
-            
+
             try:
                 member_uuid = uuid.UUID(member_id_str)
             except ValueError:
@@ -1210,6 +1199,7 @@ class RescueService:
         # surfacing non-rescue users (finance, vets, etc.) in suggestions.
         if agent_geo_data:
             from pawguard.modules.auth.models import Role, UserRole
+
             stmt = (
                 select(User)
                 .options(selectinload(User.roles))
@@ -1226,21 +1216,24 @@ class RescueService:
             users = (await self._repo._session.execute(stmt)).scalars().all()
             for user in users:
                 geo = agent_geo_data[user.id]
-                nearby_agents.append({
-                    "agent_id": user.id,
-                    "name": user.full_name,
-                    "email": user.email,
-                    "phone": user.phone,
-                    "distance_km": geo["distance_km"],
-                    "latitude": geo["latitude"],
-                    "longitude": geo["longitude"],
-                })
+                nearby_agents.append(
+                    {
+                        "agent_id": user.id,
+                        "name": user.full_name,
+                        "email": user.email,
+                        "phone": user.phone,
+                        "distance_km": geo["distance_km"],
+                        "latitude": geo["latitude"],
+                        "longitude": geo["longitude"],
+                    }
+                )
             # Sort by distance
             nearby_agents.sort(key=lambda x: x["distance_km"] or 0.0)
 
         # Fallback: if no active agents found in Redis, list all active rescue agents from DB
         if not nearby_agents:
             from pawguard.modules.auth.models import Role, UserRole
+
             stmt = (
                 select(User)
                 .options(selectinload(User.roles))
@@ -1255,15 +1248,17 @@ class RescueService:
             )
             fallback_users = (await self._repo._session.execute(stmt)).scalars().all()
             for user in fallback_users:
-                nearby_agents.append({
-                    "agent_id": user.id,
-                    "name": user.full_name,
-                    "email": user.email,
-                    "phone": user.phone,
-                    "distance_km": None,
-                    "latitude": None,
-                    "longitude": None,
-                })
+                nearby_agents.append(
+                    {
+                        "agent_id": user.id,
+                        "name": user.full_name,
+                        "email": user.email,
+                        "phone": user.phone,
+                        "distance_km": None,
+                        "latitude": None,
+                        "longitude": None,
+                    }
+                )
 
         return nearby_agents
 
@@ -1273,7 +1268,9 @@ class RescueService:
         """List rescue agents with dynamic availability derived from active dispatches."""
         session = self._repo._session
         active_statuses = [
-            RescueStatus.DISPATCHED, RescueStatus.LOCATED, RescueStatus.RESCUED,
+            RescueStatus.DISPATCHED,
+            RescueStatus.LOCATED,
+            RescueStatus.RESCUED,
         ]
         # Agents currently on an in-progress dispatch are "busy".
         busy_stmt = (
@@ -1314,22 +1311,26 @@ class RescueService:
                         lng, lat = float(geo[0][0]), float(geo[0][1])
                     hb = await self._redis.get(f"rescue:agent_active:{agent.id}")
                     heartbeat = "active" if hb else None
-            result.append({
-                "agent_id": agent.id,
-                "name": agent.full_name,
-                "status": "busy" if is_busy else "available",
-                "active_dispatch_id": busy_map.get(agent.id),
-                "last_heartbeat": heartbeat,
-                "latitude": lat,
-                "longitude": lng,
-            })
+            result.append(
+                {
+                    "agent_id": agent.id,
+                    "name": agent.full_name,
+                    "status": "busy" if is_busy else "available",
+                    "active_dispatch_id": busy_map.get(agent.id),
+                    "last_heartbeat": heartbeat,
+                    "latitude": lat,
+                    "longitude": lng,
+                }
+            )
         return result
 
     async def get_vehicle_availability(self) -> list[dict[str, Any]]:
         """List fleet vehicles with availability derived from active dispatches."""
         session = self._repo._session
         active_statuses = [
-            RescueStatus.DISPATCHED, RescueStatus.LOCATED, RescueStatus.RESCUED,
+            RescueStatus.DISPATCHED,
+            RescueStatus.LOCATED,
+            RescueStatus.RESCUED,
         ]
         # Vehicles currently assigned to an in-progress dispatch.
         assigned_stmt = (
@@ -1361,14 +1362,16 @@ class RescueService:
                 availability = "assigned"
             else:
                 availability = "available"
-            result.append({
-                "vehicle_id": v.id,
-                "license_plate": v.license_plate,
-                "vehicle_type": v.vehicle_type.value if v.vehicle_type else None,
-                "operational_status": v.status.value,
-                "availability": availability,
-                "active_dispatch_id": assigned_map.get(v.id),
-            })
+            result.append(
+                {
+                    "vehicle_id": v.id,
+                    "license_plate": v.license_plate,
+                    "vehicle_type": v.vehicle_type.value if v.vehicle_type else None,
+                    "operational_status": v.status.value,
+                    "availability": availability,
+                    "active_dispatch_id": assigned_map.get(v.id),
+                }
+            )
         return result
 
     # ── GPS Tracking Lifecycle (PRR 3.2) ──────────────────────────────────
@@ -1385,15 +1388,11 @@ class RescueService:
                 return data
         return default
 
-    async def _set_tracking_state(
-        self, request_id: uuid.UUID, state: dict[str, Any]
-    ) -> None:
+    async def _set_tracking_state(self, request_id: uuid.UUID, state: dict[str, Any]) -> None:
         if self._redis is None:
             return
         with contextlib.suppress(Exception):
-            await self._redis.set(
-                f"rescue:tracking:{request_id}", json.dumps(state)
-            )
+            await self._redis.set(f"rescue:tracking:{request_id}", json.dumps(state))
 
     async def start_tracking(
         self,
@@ -1449,14 +1448,10 @@ class RescueService:
             )
         return state
 
-    async def get_tracking_status(
-        self, request_id: uuid.UUID
-    ) -> dict[str, Any]:
+    async def get_tracking_status(self, request_id: uuid.UUID) -> dict[str, Any]:
         return await self._get_tracking_state(request_id)
 
-    async def get_rescue_location(
-        self, request_id: uuid.UUID
-    ) -> dict[str, Any]:
+    async def get_rescue_location(self, request_id: uuid.UUID) -> dict[str, Any]:
         """Return latest GPS positions for all agents assigned to a rescue dispatch."""
         dispatch = await self._repo.get_dispatch_by_request_id(request_id)
         if dispatch is None:
@@ -1479,13 +1474,15 @@ class RescueService:
                     heartbeat = "active" if hb else None
                     ts_raw = await self._redis.get(f"rescue:agent_ts:{aid}")
                     ts = ts_raw if isinstance(ts_raw, str) else None
-            agents_out.append({
-                "agent_id": aid,
-                "latitude": lat,
-                "longitude": lng,
-                "last_heartbeat": heartbeat,
-                "updated_at": ts,
-            })
+            agents_out.append(
+                {
+                    "agent_id": aid,
+                    "latitude": lat,
+                    "longitude": lng,
+                    "last_heartbeat": heartbeat,
+                    "updated_at": ts,
+                }
+            )
             if ts and (updated_at is None or ts > updated_at):
                 updated_at = ts
 
@@ -1532,4 +1529,3 @@ class RescueService:
             data=data,
             meta=build_pagination_meta(total=total, params=page),
         )
-

@@ -100,9 +100,7 @@ async def get_my_foster_placements(
     service: FosterService = Depends(get_foster_service),
 ) -> ApiResponse[list[FosterPlacementResponse]]:
     placements = await service.get_my_placements(current_user.user.id)
-    return ApiResponse(
-        data=[FosterPlacementResponse.model_validate(p) for p in placements]
-    )
+    return ApiResponse(data=[FosterPlacementResponse.model_validate(p) for p in placements])
 
 
 @router.put(
@@ -194,9 +192,7 @@ async def list_foster_placements(
 ) -> ApiResponse[list[FosterPlacementResponse]]:
     """Coordinator/admin view of the dogs assigned to a specific foster."""
     placements = await service.get_placements_for_profile(profile_id)
-    return ApiResponse(
-        data=[FosterPlacementResponse.model_validate(p) for p in placements]
-    )
+    return ApiResponse(data=[FosterPlacementResponse.model_validate(p) for p in placements])
 
 
 @router.post(

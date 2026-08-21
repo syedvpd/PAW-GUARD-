@@ -227,9 +227,7 @@ async def add_comment(
     current_user: CurrentUser = Depends(get_current_user),
     service: GrievanceService = Depends(get_grievance_service),
 ) -> ApiResponse[CommentResponse]:
-    comment = await service.add_comment(
-        ticket_id, payload, author_id=current_user.id
-    )
+    comment = await service.add_comment(ticket_id, payload, author_id=current_user.id)
     return ApiResponse(
         data=CommentResponse.model_validate(comment),
         message="Comment added.",

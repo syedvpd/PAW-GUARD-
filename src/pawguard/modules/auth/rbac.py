@@ -88,7 +88,9 @@ class RequirePermission:
             role_codes = sorted(await get_role_permission_codes(current.db, current.claims.roles))
             await cache.set(role_cache_key, role_codes, ttl_seconds=PERMISSIONS_CACHE_TTL_SECONDS)
 
-        if any(code in role_codes or "system:admin" in role_codes for code in self.permission_codes):
+        if any(
+            code in role_codes or "system:admin" in role_codes for code in self.permission_codes
+        ):
             return current
 
         # Check user-level direct permission overrides (cached)
@@ -102,9 +104,7 @@ class RequirePermission:
             return current
 
         req_str = ", ".join(self.permission_codes)
-        raise InsufficientPermissionsError(
-            f"Missing required permission: {req_str}"
-        )
+        raise InsufficientPermissionsError(f"Missing required permission: {req_str}")
 
 
 def require_permission(*permission_codes: str) -> RequirePermission:
@@ -127,12 +127,9 @@ class RequireRole:
 
         if not (self.role_names & user_roles):
             req_str = ", ".join(self.role_names)
-            raise InsufficientPermissionsError(
-                f"Missing required role: {req_str}"
-            )
+            raise InsufficientPermissionsError(f"Missing required role: {req_str}")
         return current
 
 
 def require_role(*role_names: str) -> RequireRole:
     return RequireRole(*role_names)
-

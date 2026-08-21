@@ -169,9 +169,7 @@ class TestVolunteerFosterScoping:
     async def test_non_owner_foster_cannot_read_placement_progress(
         self, client: AsyncClient, db_session: AsyncSession, foster_role: Role
     ) -> None:
-        await self._register_and_auth(
-            client, db_session, "ownerfos@scoping.test.com", foster_role
-        )
+        await self._register_and_auth(client, db_session, "ownerfos@scoping.test.com", foster_role)
         placement_id = await self._create_owned_placement_with_log(
             client, db_session, "ownerfos@scoping.test.com"
         )
@@ -201,15 +199,11 @@ class TestVolunteerFosterScoping:
     async def test_staff_can_read_any_placement_progress(
         self, client: AsyncClient, db_session: AsyncSession, foster_role: Role
     ) -> None:
-        await self._register_and_auth(
-            client, db_session, "ownerfos3@scoping.test.com", foster_role
-        )
+        await self._register_and_auth(client, db_session, "ownerfos3@scoping.test.com", foster_role)
         placement_id = await self._create_owned_placement_with_log(
             client, db_session, "ownerfos3@scoping.test.com"
         )
-        headers = await self._make_staff_headers(
-            client, db_session, "stafffos3@scoping.test.com"
-        )
+        headers = await self._make_staff_headers(client, db_session, "stafffos3@scoping.test.com")
         resp = await client.get(
             f"/api/v1/fosters/placements/{placement_id}/progress", headers=headers
         )
@@ -218,9 +212,7 @@ class TestVolunteerFosterScoping:
     async def test_non_owner_foster_cannot_read_supplies(
         self, client: AsyncClient, db_session: AsyncSession, foster_role: Role
     ) -> None:
-        await self._register_and_auth(
-            client, db_session, "ownersup@scoping.test.com", foster_role
-        )
+        await self._register_and_auth(client, db_session, "ownersup@scoping.test.com", foster_role)
         placement_id = await self._create_owned_placement_with_log(
             client, db_session, "ownersup@scoping.test.com"
         )
@@ -257,18 +249,14 @@ class TestVolunteerRosterSeedNoSelfServiceAccess:
     ) -> None:
         role = (
             await db_session.execute(
-                select(Role)
-                .options(selectinload(Role.permissions))
-                .where(Role.name == "volunteer")
+                select(Role).options(selectinload(Role.permissions)).where(Role.name == "volunteer")
             )
         ).scalar_one_or_none()
         if role is not None:
             assert "volunteer:update" not in {p.code for p in role.permissions}
             assert "volunteer:read" in {p.code for p in role.permissions}
 
-    async def test_seeded_foster_family_role_lacks_update(
-        self, db_session: AsyncSession
-    ) -> None:
+    async def test_seeded_foster_family_role_lacks_update(self, db_session: AsyncSession) -> None:
         role = (
             await db_session.execute(
                 select(Role)

@@ -82,7 +82,9 @@ class TestFinanceService:
     async def test_get_account_found(self, service, mock_repo):
         account_id = uuid.uuid4()
         mock_repo.get_account_by_id.return_value = ChartOfAccounts(
-            id=account_id, account_code="1010", account_name="Cash",
+            id=account_id,
+            account_code="1010",
+            account_name="Cash",
         )
         result = await service.get_account(account_id)
         assert result.id == account_id
@@ -148,7 +150,8 @@ class TestFinanceService:
     async def test_get_transaction(self, service, mock_repo):
         tx_id = uuid.uuid4()
         mock_repo.get_transaction_by_id.return_value = FinancialTransaction(
-            id=tx_id, transaction_number="TXN-001",
+            id=tx_id,
+            transaction_number="TXN-001",
         )
         result = await service.get_transaction(tx_id)
         assert result.id == tx_id
@@ -163,7 +166,9 @@ class TestFinanceService:
     async def test_update_transaction_status(self, service, mock_repo):
         tx_id = uuid.uuid4()
         mock_repo.get_transaction_by_id.return_value = FinancialTransaction(
-            id=tx_id, transaction_number="TXN-001", status=TransactionStatus.PENDING,
+            id=tx_id,
+            transaction_number="TXN-001",
+            status=TransactionStatus.PENDING,
         )
         result = await service.update_transaction_status(tx_id, TransactionStatus.POSTED)
         assert result.status == TransactionStatus.POSTED
@@ -190,9 +195,7 @@ class TestFinanceService:
         assert result["total_income"] == 1000
 
     @pytest.mark.asyncio
-    async def test_get_finance_summary_counts_unreconciled_donation_income(
-        self, mock_repo
-    ):
+    async def test_get_finance_summary_counts_unreconciled_donation_income(self, mock_repo):
         """Successful donations not yet posted to the ledger must count as
         income, otherwise the dashboard shows 0 despite existing data."""
         from pawguard.modules.finance.repository import FinanceRepository
@@ -210,16 +213,12 @@ class TestFinanceService:
         ]
         from datetime import date
 
-        result = await repo.get_finance_summary(
-            date(2026, 1, 1), date(2026, 12, 31)
-        )
+        result = await repo.get_finance_summary(date(2026, 1, 1), date(2026, 12, 31))
         assert result["total_income"] == 1500.0
         assert result["net_balance"] == 1500.0
 
     @pytest.mark.asyncio
-    async def test_get_finance_summary_counts_reconciled_donation_tx(
-        self, mock_repo
-    ):
+    async def test_get_finance_summary_counts_reconciled_donation_tx(self, mock_repo):
         """RECONCILIATION-type transactions created by reconcile flows must
         count toward total_income."""
         from pawguard.modules.finance.repository import FinanceRepository
@@ -237,9 +236,7 @@ class TestFinanceService:
         ]
         from datetime import date
 
-        result = await repo.get_finance_summary(
-            date(2026, 1, 1), date(2026, 12, 31)
-        )
+        result = await repo.get_finance_summary(date(2026, 1, 1), date(2026, 12, 31))
         assert result["total_income"] == 750.0
         assert result["total_donations_reconciled"] == 750.0
 
@@ -259,7 +256,9 @@ class TestFinanceService:
     async def test_soft_delete_account(self, service, mock_repo):
         account_id = uuid.uuid4()
         mock_repo.get_account_by_id.return_value = ChartOfAccounts(
-            id=account_id, account_code="1010", account_name="Cash",
+            id=account_id,
+            account_code="1010",
+            account_name="Cash",
         )
         await service.soft_delete_account(account_id)
         assert mock_repo.get_account_by_id.await_count >= 1
@@ -274,7 +273,8 @@ class TestFinanceService:
     async def test_soft_delete_transaction(self, service, mock_repo):
         tx_id = uuid.uuid4()
         mock_repo.get_transaction_by_id.return_value = FinancialTransaction(
-            id=tx_id, transaction_number="TXN-001",
+            id=tx_id,
+            transaction_number="TXN-001",
         )
         await service.soft_delete_transaction(tx_id)
         assert mock_repo.get_transaction_by_id.await_count >= 1
@@ -294,9 +294,13 @@ class TestFinanceService:
             end_date="2026-12-31",
         )
         mock_repo.get_budget_by_id.return_value = Budget(
-            id=uuid.uuid4(), name="Annual 2026", fiscal_year=2026,
-            start_date="2026-01-01", end_date="2026-12-31",
-            total_budget=0, total_spent=0,
+            id=uuid.uuid4(),
+            name="Annual 2026",
+            fiscal_year=2026,
+            start_date="2026-01-01",
+            end_date="2026-12-31",
+            total_budget=0,
+            total_spent=0,
         )
         result = await service.create_budget(payload)
         assert result.name == "Annual 2026"
@@ -332,7 +336,8 @@ class TestFinanceService:
         budget_id = uuid.uuid4()
         mock_repo.get_budget_by_id.return_value = Budget(id=budget_id, name="Budget", items=[])
         mock_repo.get_account_by_id.return_value = ChartOfAccounts(
-            id=uuid.uuid4(), account_code="1010",
+            id=uuid.uuid4(),
+            account_code="1010",
         )
         payload = type("Payload", (), {"account_id": uuid.uuid4(), "allocated_amount": 5000})()
         result = await service.add_budget_item(budget_id, payload)
@@ -411,7 +416,8 @@ class TestFinanceService:
     async def test_soft_delete_recurring(self, service, mock_repo):
         rtx_id = uuid.uuid4()
         mock_repo.get_recurring_by_id.return_value = RecurringTransaction(
-            id=rtx_id, name="Rent",
+            id=rtx_id,
+            name="Rent",
         )
         await service.soft_delete_recurring(rtx_id)
 
@@ -442,9 +448,7 @@ class TestFinanceService:
         assert result["reconciled"] == 0
 
     @pytest.mark.asyncio
-    async def test_reconcile_donations_consumes_sequence_per_donation(
-        self, service, mock_repo
-    ):
+    async def test_reconcile_donations_consumes_sequence_per_donation(self, service, mock_repo):
         """Each reconciled donation atomically consumes its own sequence value
         instead of deriving from a base, so a concurrent create_transaction
         cannot collide on the UNIQUE transaction_number column."""
@@ -458,8 +462,7 @@ class TestFinanceService:
         assert result["reconciled"] == 3
         assert result["total_amount"] == Decimal("600.00")
         numbers = [
-            call.args[0].transaction_number
-            for call in mock_repo.create_transaction.await_args_list
+            call.args[0].transaction_number for call in mock_repo.create_transaction.await_args_list
         ]
         assert len(numbers) == 3
         assert numbers[0].endswith("-00101")

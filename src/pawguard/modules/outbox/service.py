@@ -1,11 +1,11 @@
 """Service logic for coordinating transactional outbox events."""
 
 import logging
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Any
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.dialects.postgresql import insert
 
 from pawguard.modules.outbox.models import OutboxEvent
 
@@ -34,7 +34,9 @@ class OutboxService:
         return event
 
     @staticmethod
-    async def process_pending_events(session: AsyncSession, arq_pool: Any, batch_size: int = 50) -> int:
+    async def process_pending_events(
+        session: AsyncSession, arq_pool: Any, batch_size: int = 50
+    ) -> int:
         """Polls for pending outbox events using a concurrency-safe locking pattern.
 
         Enqueues each locked event to the target ARQ Redis queue.
@@ -49,28 +51,30 @@ class OutboxService:
             .limit(batch_size)
             .with_for_update(skip_locked=True)
         )
-        
+
         result = await session.execute(stmt)
         events = result.scalars().all()
-        
+
         if not events:
             return 0
 
         logger.info(f"Outbox processing batch of {len(events)} events.")
-        
+
         processed_count = 0
         for event in events:
             # Transition state to processing
             event.status = "processing"
             await session.flush()
-            
+
             try:
                 # Dispatch the job to ARQ (Redis)
                 if arq_pool:
                     await arq_pool.enqueue_job(event.job_name, **event.payload)
                 else:
-                    logger.warning(f"No ARQ pool available. Dropping outbox event: {event.job_name}")
-                
+                    logger.warning(
+                        f"No ARQ pool available. Dropping outbox event: {event.job_name}"
+                    )
+
                 # Update status on success
                 event.status = "completed"
                 event.processed_at = datetime.now(UTC)
@@ -82,11 +86,15 @@ class OutboxService:
                 # Keep as pending for retry if below threshold, otherwise mark as failed
                 if event.retry_count >= 5:
                     event.status = "failed"
-                    logger.error(f"Outbox event {event.id} ({event.job_name}) failed permanently: {e}")
+                    logger.error(
+                        f"Outbox event {event.id} ({event.job_name}) failed permanently: {e}"
+                    )
                 else:
                     event.status = "pending"
-                    logger.warning(f"Outbox event {event.id} ({event.job_name}) failed transiently. Retry count: {event.retry_count}. Error: {e}")
-            
+                    logger.warning(
+                        f"Outbox event {event.id} ({event.job_name}) failed transiently. Retry count: {event.retry_count}. Error: {e}"
+                    )
+
             await session.flush()
-            
+
         return processed_count

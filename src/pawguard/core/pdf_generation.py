@@ -29,9 +29,12 @@ def generate_tax_receipt(
 ) -> bytes:
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
-        buf, pagesize=A4,
-        leftMargin=0.75 * inch, rightMargin=0.75 * inch,
-        topMargin=0.75 * inch, bottomMargin=0.75 * inch,
+        buf,
+        pagesize=A4,
+        leftMargin=0.75 * inch,
+        rightMargin=0.75 * inch,
+        topMargin=0.75 * inch,
+        bottomMargin=0.75 * inch,
     )
     styles = getSampleStyleSheet()
     elements = []
@@ -50,13 +53,17 @@ def generate_tax_receipt(
         ["Date:", donation_date.strftime("%B %d, %Y")],
     ]
     table = Table(receipt_data, colWidths=[2 * inch, 3.5 * inch])
-    table.setStyle(TableStyle([
-        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-        ("FONTNAME", (1, 0), (1, -1), "Helvetica"),
-        ("FONTSIZE", (0, 0), (-1, -1), 11),
-        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-    ]))
+    table.setStyle(
+        TableStyle(
+            [
+                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                ("FONTNAME", (1, 0), (1, -1), "Helvetica"),
+                ("FONTSIZE", (0, 0), (-1, -1), 11),
+                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ]
+        )
+    )
     elements.append(table)
     elements.append(Spacer(1, 0.3 * inch))
 
@@ -90,9 +97,12 @@ def generate_adoption_agreement(
 ) -> bytes:
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
-        buf, pagesize=A4,
-        leftMargin=0.75 * inch, rightMargin=0.75 * inch,
-        topMargin=0.75 * inch, bottomMargin=0.75 * inch,
+        buf,
+        pagesize=A4,
+        leftMargin=0.75 * inch,
+        rightMargin=0.75 * inch,
+        topMargin=0.75 * inch,
+        bottomMargin=0.75 * inch,
     )
     styles = getSampleStyleSheet()
     elements = []
@@ -112,13 +122,17 @@ def generate_adoption_agreement(
         ["Adoption Fee:", f"{fee_amount:,.2f}"],
     ]
     table = Table(agreement_data, colWidths=[2 * inch, 3.5 * inch])
-    table.setStyle(TableStyle([
-        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-        ("FONTNAME", (1, 0), (1, -1), "Helvetica"),
-        ("FONTSIZE", (0, 0), (-1, -1), 11),
-        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-    ]))
+    table.setStyle(
+        TableStyle(
+            [
+                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                ("FONTNAME", (1, 0), (1, -1), "Helvetica"),
+                ("FONTSIZE", (0, 0), (-1, -1), 11),
+                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ]
+        )
+    )
     elements.append(table)
     elements.append(Spacer(1, 0.3 * inch))
 
@@ -167,9 +181,12 @@ def generate_volunteer_certificate(
     served, issued to the volunteer for the covered service period."""
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
-        buf, pagesize=A4,
-        leftMargin=0.75 * inch, rightMargin=0.75 * inch,
-        topMargin=0.75 * inch, bottomMargin=0.75 * inch,
+        buf,
+        pagesize=A4,
+        leftMargin=0.75 * inch,
+        rightMargin=0.75 * inch,
+        topMargin=0.75 * inch,
+        bottomMargin=0.75 * inch,
     )
     styles = getSampleStyleSheet()
     elements = []
@@ -195,24 +212,31 @@ def generate_volunteer_certificate(
         [
             ["Total Service Hours", f"{total_hours:,.1f} hours"],
             ["Shifts Served", str(shifts_count)],
-            ["Period", (
-                f"{period_start.strftime('%B %d, %Y')} – "
-                f"{period_end.strftime('%B %d, %Y')}"
-                if period_start and period_end else "Ongoing"
-            )],
+            [
+                "Period",
+                (
+                    f"{period_start.strftime('%B %d, %Y')} – {period_end.strftime('%B %d, %Y')}"
+                    if period_start and period_end
+                    else "Ongoing"
+                ),
+            ],
             ["Areas of Service", role_summary or "General volunteer service"],
         ],
         colWidths=[2.5 * inch, 3 * inch],
     )
-    details.setStyle(TableStyle([
-        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-        ("FONTNAME", (1, 0), (1, -1), "Helvetica"),
-        ("FONTSIZE", (0, 0), (-1, -1), 11),
-        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
-        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#F2F2F2")),
-    ]))
+    details.setStyle(
+        TableStyle(
+            [
+                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                ("FONTNAME", (1, 0), (1, -1), "Helvetica"),
+                ("FONTSIZE", (0, 0), (-1, -1), 11),
+                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
+                ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#F2F2F2")),
+            ]
+        )
+    )
     elements.append(details)
     elements.append(Spacer(1, 0.4 * inch))
 
@@ -249,9 +273,12 @@ def generate_80g_certificate(
 ) -> bytes:
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
-        buf, pagesize=A4,
-        leftMargin=0.75 * inch, rightMargin=0.75 * inch,
-        topMargin=0.75 * inch, bottomMargin=0.75 * inch,
+        buf,
+        pagesize=A4,
+        leftMargin=0.75 * inch,
+        rightMargin=0.75 * inch,
+        topMargin=0.75 * inch,
+        bottomMargin=0.75 * inch,
     )
     styles = getSampleStyleSheet()
     elements = []
@@ -274,13 +301,17 @@ def generate_80g_certificate(
     if address:
         cert_data.insert(3, ["Address:", address])
     table = Table(cert_data, colWidths=[2 * inch, 3.5 * inch])
-    table.setStyle(TableStyle([
-        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-        ("FONTNAME", (1, 0), (1, -1), "Helvetica"),
-        ("FONTSIZE", (0, 0), (-1, -1), 11),
-        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-    ]))
+    table.setStyle(
+        TableStyle(
+            [
+                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                ("FONTNAME", (1, 0), (1, -1), "Helvetica"),
+                ("FONTSIZE", (0, 0), (-1, -1), 11),
+                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+            ]
+        )
+    )
     elements.append(table)
     elements.append(Spacer(1, 0.3 * inch))
 
@@ -331,9 +362,12 @@ def generate_finance_report_pdf(
 ) -> bytes:
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
-        buf, pagesize=A4,
-        leftMargin=0.75 * inch, rightMargin=0.75 * inch,
-        topMargin=0.75 * inch, bottomMargin=0.75 * inch,
+        buf,
+        pagesize=A4,
+        leftMargin=0.75 * inch,
+        rightMargin=0.75 * inch,
+        topMargin=0.75 * inch,
+        bottomMargin=0.75 * inch,
     )
     styles = getSampleStyleSheet()
     elements = []
@@ -350,14 +384,18 @@ def generate_finance_report_pdf(
         ["Total Income:", f"{summary_data.get('total_income', 0):,.2f}"],
         ["Total Expenses:", f"{summary_data.get('total_expenses', 0):,.2f}"],
         ["Net Balance:", f"{summary_data.get('net_balance', 0):,.2f}"],
-        ["Pending Transactions:", str(summary_data.get('pending_transactions', 0))],
+        ["Pending Transactions:", str(summary_data.get("pending_transactions", 0))],
     ]
     summary_table = Table(summary_table_data, colWidths=[2.5 * inch, 3 * inch])
-    summary_table.setStyle(TableStyle([
-        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 11),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-    ]))
+    summary_table.setStyle(
+        TableStyle(
+            [
+                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 11),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
     elements.append(summary_table)
     elements.append(Spacer(1, 0.3 * inch))
 
@@ -367,12 +405,16 @@ def generate_finance_report_pdf(
         for row in income_rows:
             income_table_data.append([row.get("account_name", ""), f"{row.get('amount', 0):,.2f}"])
         income_table = Table(income_table_data, colWidths=[3.5 * inch, 2 * inch])
-        income_table.setStyle(TableStyle([
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, -1), 10),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F2F2F2")),
-        ]))
+        income_table.setStyle(
+            TableStyle(
+                [
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 10),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F2F2F2")),
+                ]
+            )
+        )
         elements.append(income_table)
         elements.append(Spacer(1, 0.2 * inch))
 
@@ -382,12 +424,16 @@ def generate_finance_report_pdf(
         for row in expense_rows:
             expense_table_data.append([row.get("account_name", ""), f"{row.get('amount', 0):,.2f}"])
         expense_table = Table(expense_table_data, colWidths=[3.5 * inch, 2 * inch])
-        expense_table.setStyle(TableStyle([
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, -1), 10),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F2F2F2")),
-        ]))
+        expense_table.setStyle(
+            TableStyle(
+                [
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 10),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F2F2F2")),
+                ]
+            )
+        )
         elements.append(expense_table)
 
     elements.append(Spacer(1, 0.3 * inch))

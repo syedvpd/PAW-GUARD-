@@ -168,9 +168,7 @@ class MedicalService:
         await self.schedule_next_dose(rec)
         return rec
 
-    async def schedule_next_dose(
-        self, record: VaccinationRecord
-    ) -> VaccinationRecord | None:
+    async def schedule_next_dose(self, record: VaccinationRecord) -> VaccinationRecord | None:
         """Auto-create the next protocol-driven vaccination dose (PRR 3.5).
 
         Looks up the matching ``VaccineProtocol`` by normalized vaccine name.
@@ -256,9 +254,7 @@ class MedicalService:
         payload: MedicalClearanceCreate | None = None,
     ) -> bool:
         if not ("veterinarian" in roles or "super_admin" in roles or "system:admin" in roles):
-            raise ForbiddenError(
-                "Adoption medical clearances require a veterinarian's authority."
-            )
+            raise ForbiddenError("Adoption medical clearances require a veterinarian's authority.")
 
         dog = await self._dog_repo.get_by_id(dog_id)
         if dog is None:
@@ -357,9 +353,7 @@ class MedicalService:
     ) -> VaccineProtocol:
         existing = await self._repo.get_vaccine_protocol_by_name(payload.name)
         if existing is not None:
-            raise ConflictError(
-                f"Vaccine protocol '{payload.name}' already exists."
-            )
+            raise ConflictError(f"Vaccine protocol '{payload.name}' already exists.")
         protocol = VaccineProtocol(
             name=payload.name,
             default_interval_days=payload.default_interval_days,
@@ -400,7 +394,11 @@ class MedicalService:
         vet_id: uuid.UUID | None = None,
     ) -> PaginatedResponse[ClinicalExamResponse]:
         results, total = await self._repo.list_exams_paginated(
-            page=page, sort=sort, search_term=search_term, dog_id=dog_id, vet_id=vet_id,
+            page=page,
+            sort=sort,
+            search_term=search_term,
+            dog_id=dog_id,
+            vet_id=vet_id,
         )
         return PaginatedResponse(
             data=[ClinicalExamResponse.model_validate(r) for r in results],
@@ -416,7 +414,11 @@ class MedicalService:
         vet_id: uuid.UUID | None = None,
     ) -> PaginatedResponse[MedicalTreatmentResponse]:
         results, total = await self._repo.list_treatments_paginated(
-            page=page, sort=sort, search_term=search_term, dog_id=dog_id, vet_id=vet_id,
+            page=page,
+            sort=sort,
+            search_term=search_term,
+            dog_id=dog_id,
+            vet_id=vet_id,
         )
         return PaginatedResponse(
             data=[MedicalTreatmentResponse.model_validate(r) for r in results],
@@ -432,7 +434,11 @@ class MedicalService:
         vet_id: uuid.UUID | None = None,
     ) -> PaginatedResponse[VaccinationRecordResponse]:
         results, total = await self._repo.list_vaccinations_paginated(
-            page=page, sort=sort, search_term=search_term, dog_id=dog_id, vet_id=vet_id,
+            page=page,
+            sort=sort,
+            search_term=search_term,
+            dog_id=dog_id,
+            vet_id=vet_id,
         )
         return PaginatedResponse(
             data=[VaccinationRecordResponse.model_validate(r) for r in results],
@@ -448,7 +454,11 @@ class MedicalService:
         vet_id: uuid.UUID | None = None,
     ) -> PaginatedResponse[PrescriptionResponse]:
         results, total = await self._repo.list_prescriptions_paginated(
-            page=page, sort=sort, search_term=search_term, dog_id=dog_id, vet_id=vet_id,
+            page=page,
+            sort=sort,
+            search_term=search_term,
+            dog_id=dog_id,
+            vet_id=vet_id,
         )
         return PaginatedResponse(
             data=[PrescriptionResponse.model_validate(r) for r in results],
@@ -624,44 +634,32 @@ class MedicalService:
             )
         return count
 
-    async def _get_exam_by_id(
-        self, exam_id: uuid.UUID
-    ) -> ClinicalExam | None:
+    async def _get_exam_by_id(self, exam_id: uuid.UUID) -> ClinicalExam | None:
         from sqlalchemy import select
 
         stmt = select(ClinicalExam).where(
             ClinicalExam.id == exam_id,
             ClinicalExam.deleted_at.is_(None),
         )
-        return (
-            await self._repo._session.execute(stmt)
-        ).scalar_one_or_none()
+        return (await self._repo._session.execute(stmt)).scalar_one_or_none()
 
-    async def _get_treatment_by_id(
-        self, treatment_id: uuid.UUID
-    ) -> MedicalTreatment | None:
+    async def _get_treatment_by_id(self, treatment_id: uuid.UUID) -> MedicalTreatment | None:
         from sqlalchemy import select
 
         stmt = select(MedicalTreatment).where(
             MedicalTreatment.id == treatment_id,
             MedicalTreatment.deleted_at.is_(None),
         )
-        return (
-            await self._repo._session.execute(stmt)
-        ).scalar_one_or_none()
+        return (await self._repo._session.execute(stmt)).scalar_one_or_none()
 
-    async def _get_vaccination_by_id(
-        self, vaccination_id: uuid.UUID
-    ) -> VaccinationRecord | None:
+    async def _get_vaccination_by_id(self, vaccination_id: uuid.UUID) -> VaccinationRecord | None:
         from sqlalchemy import select
 
         stmt = select(VaccinationRecord).where(
             VaccinationRecord.id == vaccination_id,
             VaccinationRecord.deleted_at.is_(None),
         )
-        return (
-            await self._repo._session.execute(stmt)
-        ).scalar_one_or_none()
+        return (await self._repo._session.execute(stmt)).scalar_one_or_none()
 
     async def _record_inventory_consumptions(
         self,

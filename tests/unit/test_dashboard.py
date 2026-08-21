@@ -79,7 +79,7 @@ class TestDashboardRepository:
         mock_result = MagicMock()
         mock_result.scalar_one.return_value = 0
         mock_result.scalar_one_or_none.return_value = None
-        mock_result.one.return_value = (0, 0)
+        mock_result.one.side_effect = [(0,) * 11] + [(0, 0)] * 10
         mock_result.all.return_value = []
         mock_result.scalars.return_value.all.return_value = []
         mock_session.execute.return_value = mock_result

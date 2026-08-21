@@ -40,9 +40,7 @@ async def _get_role_with_permissions(session: AsyncSession, name: str) -> Role |
 
 @pytest.mark.asyncio
 class TestRoleReconciliation:
-    async def test_new_role_is_created_with_all_permissions(
-        self, db_session: AsyncSession
-    ) -> None:
+    async def test_new_role_is_created_with_all_permissions(self, db_session: AsyncSession) -> None:
         definitions = [
             (TEST_ROLE, "Test role", False, [TEST_PERM_A, TEST_PERM_B]),
         ]
@@ -65,7 +63,10 @@ class TestRoleReconciliation:
         await db_session.flush()
 
         role = Role(
-            id=uuid.uuid4(), name=TEST_ROLE, description="Pre-existing", is_system=False,
+            id=uuid.uuid4(),
+            name=TEST_ROLE,
+            description="Pre-existing",
+            is_system=False,
             permissions=[perm_a],
         )
         db_session.add(role)
@@ -83,9 +84,7 @@ class TestRoleReconciliation:
         assert refreshed is not None
         assert {p.code for p in refreshed.permissions} == {TEST_PERM_A, TEST_PERM_B}
 
-    async def test_reconciliation_is_additive_never_revokes(
-        self, db_session: AsyncSession
-    ) -> None:
+    async def test_reconciliation_is_additive_never_revokes(self, db_session: AsyncSession) -> None:
         """A permission granted out-of-band (or since removed from the code
         definition) must survive reconciliation - only additions, no
         revocations, so this can never silently strip access."""
@@ -95,7 +94,10 @@ class TestRoleReconciliation:
         await db_session.flush()
 
         role = Role(
-            id=uuid.uuid4(), name=TEST_ROLE, description="Pre-existing", is_system=False,
+            id=uuid.uuid4(),
+            name=TEST_ROLE,
+            description="Pre-existing",
+            is_system=False,
             permissions=[perm_a, perm_c],
         )
         db_session.add(role)

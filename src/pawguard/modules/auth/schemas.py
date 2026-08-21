@@ -81,7 +81,9 @@ class RegisterRequest(BaseModel):
             if not val:
                 return None
             if val.startswith("+91") and not INDIAN_PHONE_REGEX.match(val):
-                raise ValueError("Indian mobile number (+91) must have exactly 10 digits without special characters.")
+                raise ValueError(
+                    "Indian mobile number (+91) must have exactly 10 digits without special characters."
+                )
             if not PHONE_REGEX.match(val):
                 raise ValueError("Invalid phone number format.")
             return val
@@ -175,23 +177,21 @@ class MFALoginVerifyRequest(BaseModel):
 
 class MFADisableRequest(BaseModel):
     password: str | None = Field(None, examples=["CurrentP@ssw0rd"])
-    totp_code: str | None = Field(
-        None, min_length=6, max_length=6, examples=["482913"]
-    )
+    totp_code: str | None = Field(None, min_length=6, max_length=6, examples=["482913"])
 
     @model_validator(mode="after")
     def at_least_one_credential(self) -> "MFADisableRequest":
         if self.password is None and self.totp_code is None:
-            raise ValueError(
-                "Provide either your current password or a valid TOTP code."
-            )
+            raise ValueError("Provide either your current password or a valid TOTP code.")
         return self
 
 
 class UserProfileUpdate(BaseModel):
     full_name: str | None = Field(None, examples=["Jane Doe"])
     phone: str | None = Field(None, examples=["+1-555-0100"])
-    profile_picture_url: str | None = Field(None, alias="avatar_url", examples=["https://example.com/avatar.jpg"])
+    profile_picture_url: str | None = Field(
+        None, alias="avatar_url", examples=["https://example.com/avatar.jpg"]
+    )
     date_of_birth: date | str | None = Field(None, alias="dob", examples=["1995-05-15"])
     gender: str | None = Field(None, examples=["female"])
     address_line: str | None = Field(None, alias="address", examples=["123 Rescue Way"])
@@ -199,7 +199,9 @@ class UserProfileUpdate(BaseModel):
     state: str | None = Field(None, examples=["Telangana"])
     country: str | None = Field(None, examples=["India"])
     postal_code: str | None = Field(None, alias="pin_code", examples=["500081"])
-    push_notifications_enabled: bool | None = Field(None, alias="push_notifications", examples=[True])
+    push_notifications_enabled: bool | None = Field(
+        None, alias="push_notifications", examples=[True]
+    )
     fcm_token: str | None = Field(
         None,
         description="FCM device token for push notifications.",

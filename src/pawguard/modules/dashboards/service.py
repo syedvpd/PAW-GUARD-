@@ -62,14 +62,11 @@ async def _set_cache(
         await redis.set(key, json.dumps(data), ex=ttl)
 
 
-
 def _ts_range(days: int) -> datetime:
     return datetime.now(UTC) - timedelta(days=days)
 
 
-async def rescue_dashboard(
-    session: AsyncSession, redis: Any | None = None
-) -> dict[str, Any]:
+async def rescue_dashboard(session: AsyncSession, redis: Any | None = None) -> dict[str, Any]:
     cache_key = "cache:dashboard:rescue"
     cached = await _get_cached(redis, cache_key)
     if cached is not None:
@@ -88,13 +85,9 @@ async def rescue_dashboard(
             )
         ),
         session.execute(
-            select(func.count(RescueRequest.id)).where(
-                RescueRequest.status == RescueStatus.RESCUED
-            )
+            select(func.count(RescueRequest.id)).where(RescueRequest.status == RescueStatus.RESCUED)
         ),
-        session.execute(
-            select(RescueRequest).order_by(RescueRequest.created_at.desc()).limit(10)
-        ),
+        session.execute(select(RescueRequest).order_by(RescueRequest.created_at.desc()).limit(10)),
     )
     recent_list = [
         {
@@ -128,7 +121,9 @@ async def rescue_operations_dashboard(
         return cached
 
     active_statuses = [
-        RescueStatus.DISPATCHED, RescueStatus.LOCATED, RescueStatus.RESCUED,
+        RescueStatus.DISPATCHED,
+        RescueStatus.LOCATED,
+        RescueStatus.RESCUED,
     ]
 
     (
@@ -186,9 +181,7 @@ async def rescue_operations_dashboard(
                 RescueRequest.deleted_at.is_(None),
             )
         ),
-        session.execute(
-            select(func.count(Vehicle.id)).where(Vehicle.deleted_at.is_(None))
-        ),
+        session.execute(select(func.count(Vehicle.id)).where(Vehicle.deleted_at.is_(None))),
     )
 
     by_status: dict[str, int] = {str(row[0]): row[1] for row in status_res.all()}
@@ -221,9 +214,7 @@ async def rescue_operations_dashboard(
     return result
 
 
-async def shelter_dashboard(
-    session: AsyncSession, redis: Any | None = None
-) -> dict[str, Any]:
+async def shelter_dashboard(session: AsyncSession, redis: Any | None = None) -> dict[str, Any]:
     cache_key = "cache:dashboard:shelter"
     cached = await _get_cached(redis, cache_key)
     if cached is not None:
@@ -241,9 +232,7 @@ async def shelter_dashboard(
         session.execute(select(func.count(ShelterFacility.id))),
         session.execute(select(func.count(DogProfile.id))),
         session.execute(
-            select(func.count(DogProfile.id)).where(
-                DogProfile.status == DogStatus.SHELTER
-            )
+            select(func.count(DogProfile.id)).where(DogProfile.status == DogStatus.SHELTER)
         ),
         session.execute(select(func.count(Kennel.id))),
         session.execute(
@@ -273,9 +262,7 @@ async def shelter_dashboard(
         "total_dogs": total_dogs,
         "adoptable_dogs": adoptable_res.scalar_one(),
         "total_kennels": total_kennels,
-        "occupancy_rate": (
-            round(total_dogs / total_kennels * 100, 1) if total_kennels > 0 else 0
-        ),
+        "occupancy_rate": (round(total_dogs / total_kennels * 100, 1) if total_kennels > 0 else 0),
         "pending_transfers": transfers_res.scalar_one(),
         "isolation_count": isolation_res.scalar_one(),
         "pending_cleaning": cleaning_res.scalar_one(),
@@ -284,9 +271,7 @@ async def shelter_dashboard(
     return result
 
 
-async def medical_dashboard(
-    session: AsyncSession, redis: Any | None = None
-) -> dict[str, Any]:
+async def medical_dashboard(session: AsyncSession, redis: Any | None = None) -> dict[str, Any]:
     cache_key = "cache:dashboard:medical"
     cached = await _get_cached(redis, cache_key)
     if cached is not None:
@@ -294,14 +279,10 @@ async def medical_dashboard(
 
     recent = _ts_range(30)
     exams = await session.execute(
-        select(func.count(ClinicalExam.id)).where(
-            ClinicalExam.exam_date >= recent
-        )
+        select(func.count(ClinicalExam.id)).where(ClinicalExam.exam_date >= recent)
     )
     treatments = await session.execute(
-        select(func.count(MedicalTreatment.id)).where(
-            MedicalTreatment.treatment_date >= recent
-        )
+        select(func.count(MedicalTreatment.id)).where(MedicalTreatment.treatment_date >= recent)
     )
     result = {
         "exams_last_30d": exams.scalar_one(),
@@ -311,9 +292,7 @@ async def medical_dashboard(
     return result
 
 
-async def adoption_dashboard(
-    session: AsyncSession, redis: Any | None = None
-) -> dict[str, Any]:
+async def adoption_dashboard(session: AsyncSession, redis: Any | None = None) -> dict[str, Any]:
     cache_key = "cache:dashboard:adoption"
     cached = await _get_cached(redis, cache_key)
     if cached is not None:
@@ -345,9 +324,7 @@ async def adoption_dashboard(
     return result
 
 
-async def foster_dashboard(
-    session: AsyncSession, redis: Any | None = None
-) -> dict[str, Any]:
+async def foster_dashboard(session: AsyncSession, redis: Any | None = None) -> dict[str, Any]:
     cache_key = "cache:dashboard:foster"
     cached = await _get_cached(redis, cache_key)
     if cached is not None:
@@ -355,9 +332,7 @@ async def foster_dashboard(
 
     total = await session.execute(select(func.count(FosterPlacement.id)))
     active = await session.execute(
-        select(func.count(FosterPlacement.id)).where(
-            FosterPlacement.is_active.is_(True)
-        )
+        select(func.count(FosterPlacement.id)).where(FosterPlacement.is_active.is_(True))
     )
     result = {
         "total_placements": total.scalar_one(),
@@ -367,9 +342,7 @@ async def foster_dashboard(
     return result
 
 
-async def volunteer_dashboard(
-    session: AsyncSession, redis: Any | None = None
-) -> dict[str, Any]:
+async def volunteer_dashboard(session: AsyncSession, redis: Any | None = None) -> dict[str, Any]:
     cache_key = "cache:dashboard:volunteer"
     cached = await _get_cached(redis, cache_key)
     if cached is not None:
@@ -389,9 +362,7 @@ async def volunteer_dashboard(
     return result
 
 
-async def inventory_dashboard(
-    session: AsyncSession, redis: Any | None = None
-) -> dict[str, Any]:
+async def inventory_dashboard(session: AsyncSession, redis: Any | None = None) -> dict[str, Any]:
     cache_key = "cache:dashboard:inventory"
     cached = await _get_cached(redis, cache_key)
     if cached is not None:
@@ -438,9 +409,7 @@ async def inventory_dashboard(
     return result
 
 
-async def finance_dashboard(
-    session: AsyncSession, redis: Any | None = None
-) -> dict[str, Any]:
+async def finance_dashboard(session: AsyncSession, redis: Any | None = None) -> dict[str, Any]:
     cache_key = "cache:dashboard:finance"
     cached = await _get_cached(redis, cache_key)
     if cached is not None:
@@ -501,9 +470,7 @@ async def finance_dashboard(
     return result
 
 
-async def donor_dashboard(
-    session: AsyncSession, redis: Any | None = None
-) -> dict[str, Any]:
+async def donor_dashboard(session: AsyncSession, redis: Any | None = None) -> dict[str, Any]:
     cache_key = "cache:dashboard:donor"
     cached = await _get_cached(redis, cache_key)
     if cached is not None:
@@ -518,10 +485,13 @@ async def donor_dashboard(
     total_count, total_amount = total.one()
     recent = _ts_range(30)
     recent_donations = await session.execute(
-        select(Donation).where(
+        select(Donation)
+        .where(
             Donation.created_at >= recent,
             Donation.status == DonationStatus.SUCCESS,
-        ).order_by(Donation.created_at.desc()).limit(10)
+        )
+        .order_by(Donation.created_at.desc())
+        .limit(10)
     )
     result = {
         "total_donations": total_count,
@@ -541,9 +511,7 @@ async def donor_dashboard(
     return result
 
 
-async def staff_dashboard(
-    session: AsyncSession, redis: Any | None = None
-) -> dict[str, Any]:
+async def staff_dashboard(session: AsyncSession, redis: Any | None = None) -> dict[str, Any]:
     cache_key = "cache:dashboard:staff"
     cached = await _get_cached(redis, cache_key)
     if cached is not None:
@@ -563,9 +531,7 @@ async def staff_dashboard(
     return result
 
 
-async def executive_dashboard(
-    session: AsyncSession, redis: Any | None = None
-) -> dict[str, Any]:
+async def executive_dashboard(session: AsyncSession, redis: Any | None = None) -> dict[str, Any]:
     cache_key = "cache:dashboard:executive"
     cached = await _get_cached(redis, cache_key)
     if cached is not None:
@@ -593,23 +559,17 @@ async def executive_dashboard(
     return result
 
 
-async def public_dashboard(
-    session: AsyncSession, redis: Any | None = None
-) -> dict[str, Any]:
+async def public_dashboard(session: AsyncSession, redis: Any | None = None) -> dict[str, Any]:
     cache_key = "cache:dashboard:public"
     cached = await _get_cached(redis, cache_key)
     if cached is not None:
         return cached
 
     adoptable = await session.execute(
-        select(func.count(DogProfile.id)).where(
-            DogProfile.status == DogStatus.SHELTER
-        )
+        select(func.count(DogProfile.id)).where(DogProfile.status == DogStatus.SHELTER)
     )
     rescued = await session.execute(
-        select(func.count(RescueRequest.id)).where(
-            RescueRequest.status == RescueStatus.RESCUED
-        )
+        select(func.count(RescueRequest.id)).where(RescueRequest.status == RescueStatus.RESCUED)
     )
     result = {
         "adoptable_dogs": adoptable.scalar_one(),
@@ -619,9 +579,7 @@ async def public_dashboard(
     return result
 
 
-async def operations_dashboard(
-    session: AsyncSession, redis: Any | None = None
-) -> dict[str, Any]:
+async def operations_dashboard(session: AsyncSession, redis: Any | None = None) -> dict[str, Any]:
     cache_key = "cache:dashboard:operations"
     cached = await _get_cached(redis, cache_key)
     if cached is not None:
@@ -645,4 +603,3 @@ async def operations_dashboard(
     }
     await _set_cache(redis, cache_key, result)
     return result
-

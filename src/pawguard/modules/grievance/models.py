@@ -35,9 +35,10 @@ class GrievanceTicket(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, 
         String(32), default=GrievanceStatus.OPEN, nullable=False, index=True
     )
     assigned_to_admin_id: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
-    ,
-        index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     resolution_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -49,9 +50,10 @@ class GrievanceTicket(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, 
     escalation_level: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     escalated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     escalated_to_admin_id: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
-    ,
-        index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
 
 
@@ -65,9 +67,10 @@ class GrievanceComment(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
         index=True,
     )
     author_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
-    ,
-        index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     body: Mapped[str] = mapped_column(Text, nullable=False)
     is_internal: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -77,16 +80,16 @@ class ServiceFeedback(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, 
     __tablename__ = "service_feedbacks"
 
     rescue_case_id: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("rescue_requests.id", ondelete="SET NULL"), nullable=True
-    ,
-        index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("rescue_requests.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     adoption_application_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("adoption_applications.id", ondelete="SET NULL"),
         nullable=True,
-    
-        index=True
+        index=True,
     )
     rating: Mapped[int] = mapped_column(Integer, nullable=False)
     comments: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -17,7 +17,6 @@ if TYPE_CHECKING:
     from pawguard.modules.companion_pet.models import SafetyTag
 
 
-
 class DogStatus(StrEnum):
     RESCUED = "rescued"
     CLINIC = "clinic"
@@ -102,9 +101,10 @@ class DogProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base)
         String(64), unique=True, nullable=False, index=True
     )
     rescue_case_id: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("rescue_requests.id", ondelete="SET NULL"), nullable=True
-    ,
-        index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("rescue_requests.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     microchip_id: Mapped[str | None] = mapped_column(
         String(64), unique=True, nullable=True, index=True
@@ -127,9 +127,7 @@ class DogProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base)
     age_months: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     weight: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)  # in kg
     color: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    temperament: Mapped[DogTemperament | None] = mapped_column(
-        String(64), nullable=True
-    )
+    temperament: Mapped[DogTemperament | None] = mapped_column(String(64), nullable=True)
 
     # Visual attributes (PRR 3.4): primary identification markers, ear shape,
     # tail type help adopters recognize a dog from its gallery photos.
@@ -151,36 +149,33 @@ class DogProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base)
         PG_UUID(as_uuid=True),
         ForeignKey("shelter_facilities.id", ondelete="SET NULL"),
         nullable=True,
-    
-        index=True
+        index=True,
     )
     section_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("shelter_sections.id", ondelete="SET NULL"),
         nullable=True,
-    
-        index=True
+        index=True,
     )
     kennel_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("kennels.id", ondelete="SET NULL"),
         nullable=True,
-    
-        index=True
+        index=True,
     )
     foster_home_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("foster_profiles.id", ondelete="SET NULL"),
         nullable=True,
-    
-        index=True
+        index=True,
     )
 
     is_adoptable: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_quarantine_passed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
-    safety_tags: Mapped[list["SafetyTag"]] = relationship("SafetyTag", back_populates="dog", cascade="all, delete-orphan")
-
+    safety_tags: Mapped[list["SafetyTag"]] = relationship(
+        "SafetyTag", back_populates="dog", cascade="all, delete-orphan"
+    )
 
 
 class DogWeightLog(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
@@ -199,9 +194,10 @@ class DogWeightLog(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
         index=True,
     )
     measured_by: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
-    ,
-        index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     weight: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False)  # in kg
     measured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -231,8 +227,6 @@ class DogActivityLog(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
         nullable=True,
         index=True,
     )
-    event_type: Mapped[DogActivityEventType] = mapped_column(
-        String(64), nullable=False, index=True
-    )
+    event_type: Mapped[DogActivityEventType] = mapped_column(String(64), nullable=False, index=True)
     message: Mapped[str] = mapped_column(String(512), nullable=False)
     event_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)

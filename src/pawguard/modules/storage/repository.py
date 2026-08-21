@@ -17,8 +17,12 @@ from pawguard.modules.storage.models import StoredFile
 class StorageRepository:
     SEARCH_FIELDS = ("original_filename", "folder", "mime_type")
     SORTABLE_FIELDS = {
-        "created_at", "updated_at", "uploaded_at",
-        "original_filename", "file_size", "folder",
+        "created_at",
+        "updated_at",
+        "uploaded_at",
+        "original_filename",
+        "file_size",
+        "folder",
     }
 
     def __init__(self, session: AsyncSession) -> None:
@@ -101,9 +105,7 @@ class StorageRepository:
         return results, total
 
     async def list_by_ids(self, ids: list[uuid.UUID]) -> Sequence[StoredFile]:
-        stmt = select(StoredFile).where(
-            StoredFile.id.in_(ids), StoredFile.deleted_at.is_(None)
-        )
+        stmt = select(StoredFile).where(StoredFile.id.in_(ids), StoredFile.deleted_at.is_(None))
         return (await self._session.execute(stmt)).scalars().all()
 
     async def soft_delete(self, file_id: uuid.UUID) -> StoredFile | None:
@@ -111,12 +113,14 @@ class StorageRepository:
         if file is None:
             return None
         from datetime import UTC, datetime
+
         file.deleted_at = datetime.now(UTC)
         await self._session.flush()
         return file
 
     async def bulk_soft_delete(self, ids: list[uuid.UUID]) -> int:
         from datetime import UTC, datetime
+
         stmt = (
             update(StoredFile)
             .where(StoredFile.id.in_(ids), StoredFile.deleted_at.is_(None))

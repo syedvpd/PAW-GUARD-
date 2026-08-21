@@ -15,9 +15,7 @@ from pydantic import (
 
 
 class SystemSettingCreate(BaseModel):
-    key: str = Field(
-        ..., min_length=1, max_length=255, examples=["max_rescue_dispatch_radius_km"]
-    )
+    key: str = Field(..., min_length=1, max_length=255, examples=["max_rescue_dispatch_radius_km"])
     value: str = Field(..., min_length=0, examples=["25"])
     category: str = Field(default="general", max_length=64, examples=["rescue"])
     description: str | None = Field(
@@ -37,9 +35,7 @@ class SystemSettingCreate(BaseModel):
 
 
 class SystemSettingUpdate(BaseModel):
-    value: StrictStr = Field(
-        ..., min_length=1, max_length=4096, examples=["30"]
-    )
+    value: StrictStr = Field(..., min_length=1, max_length=4096, examples=["30"])
     description: str | None = Field(None, examples=["Updated description."])
     is_encrypted: bool | None = Field(None, examples=[False])
     is_editable: bool | None = Field(None, examples=[True])
@@ -103,9 +99,7 @@ class PasswordPolicyUpdate(BaseModel):
             self.is_active,
         )
         if all(field is None for field in fields):
-            raise ValueError(
-                "At least one password policy field must be provided for update."
-            )
+            raise ValueError("At least one password policy field must be provided for update.")
         return self
 
 
@@ -184,10 +178,14 @@ class PublicContentResponse(BaseModel):
 
 class PublicContentUpdate(BaseModel):
     about_us: StrictStr = Field(
-        ..., min_length=1, max_length=20000,
+        ...,
+        min_length=1,
+        max_length=20000,
         examples=["PawGuard rescues, rehabilitates and rehomes street dogs."],
     )
     mission: StrictStr = Field(
-        ..., min_length=1, max_length=20000,
+        ...,
+        min_length=1,
+        max_length=20000,
         examples=["To give every stray dog a safe home and a second chance."],
     )

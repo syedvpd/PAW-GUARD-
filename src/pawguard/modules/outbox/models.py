@@ -1,13 +1,13 @@
 """Outbox event model for transactional message guarantee."""
 
-import uuid
 from datetime import datetime
-from sqlalchemy import String, Integer, Text, DateTime
+
+from sqlalchemy import DateTime, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from pawguard.db.base import Base
-from pawguard.db.mixins import UUIDPkMixin, TimestampMixin
+from pawguard.db.mixins import TimestampMixin, UUIDPkMixin
 
 
 class OutboxEvent(UUIDPkMixin, TimestampMixin, Base):
@@ -20,7 +20,9 @@ class OutboxEvent(UUIDPkMixin, TimestampMixin, Base):
 
     job_name: Mapped[str] = mapped_column(String(255), nullable=False)
     payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False, index=True)  # pending, processing, completed, failed
+    status: Mapped[str] = mapped_column(
+        String(32), default="pending", nullable=False, index=True
+    )  # pending, processing, completed, failed
     retry_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

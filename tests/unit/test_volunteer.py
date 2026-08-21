@@ -54,11 +54,15 @@ class TestVolunteerService:
         application_id = uuid.uuid4()
         mock_repo.create_application.return_value = None
         mock_repo.get_application_by_id.return_value = VolunteerApplication(
-            id=application_id, user_id=user_id, status=ApplicationStatus.SUBMITTED,
-            emergency_contact_name="Jane", emergency_contact_phone="+123",
+            id=application_id,
+            user_id=user_id,
+            status=ApplicationStatus.SUBMITTED,
+            emergency_contact_name="Jane",
+            emergency_contact_phone="+123",
         )
         payload = VolunteerProfileCreate(
-            emergency_contact_name="Jane", emergency_contact_phone="+123",
+            emergency_contact_name="Jane",
+            emergency_contact_phone="+123",
         )
         result = await service.apply_to_volunteer(user_id, payload)
         assert result.status == ApplicationStatus.SUBMITTED
@@ -75,14 +79,21 @@ class TestVolunteerService:
         mock_repo.get_profile_by_user_id.return_value = None
         mock_repo.create_application.return_value = None
         mock_repo.get_application_by_id.return_value = VolunteerApplication(
-            id=uuid.uuid4(), user_id=user_id, status=ApplicationStatus.SUBMITTED,
-            emergency_contact_name="Jane", emergency_contact_phone="+123",
+            id=uuid.uuid4(),
+            user_id=user_id,
+            status=ApplicationStatus.SUBMITTED,
+            emergency_contact_name="Jane",
+            emergency_contact_phone="+123",
         )
         payload = VolunteerProfileCreate(
-            emergency_contact_name="Jane", emergency_contact_phone="+123",
+            emergency_contact_name="Jane",
+            emergency_contact_phone="+123",
         )
         await svc.apply_to_volunteer(
-            user_id, payload, actor_id=actor_id, ip_address="203.0.113.9",
+            user_id,
+            payload,
+            actor_id=actor_id,
+            ip_address="203.0.113.9",
         )
         mock_audit.record.assert_awaited_once()
         kwargs = mock_audit.record.call_args.kwargs
@@ -94,20 +105,30 @@ class TestVolunteerService:
     async def test_apply_to_volunteer_already_exists(self, service, mock_repo):
         user_id = uuid.uuid4()
         mock_repo.get_application_by_user_id.return_value = VolunteerApplication(
-            id=uuid.uuid4(), user_id=user_id, status=ApplicationStatus.SUBMITTED,
-            emergency_contact_name="Jane", emergency_contact_phone="+123",
+            id=uuid.uuid4(),
+            user_id=user_id,
+            status=ApplicationStatus.SUBMITTED,
+            emergency_contact_name="Jane",
+            emergency_contact_phone="+123",
         )
         with pytest.raises(ConflictError, match="already applied"):
-            await service.apply_to_volunteer(user_id, VolunteerProfileCreate(
-                emergency_contact_name="Jane", emergency_contact_phone="+123",
-            ))
+            await service.apply_to_volunteer(
+                user_id,
+                VolunteerProfileCreate(
+                    emergency_contact_name="Jane",
+                    emergency_contact_phone="+123",
+                ),
+            )
 
     @pytest.mark.asyncio
     async def test_update_profile(self, service, mock_repo):
         profile_id = uuid.uuid4()
         profile = VolunteerProfile(
-            id=profile_id, user_id=uuid.uuid4(), status=VolunteerStatus.ACTIVE,
-            emergency_contact_name="Old", emergency_contact_phone="+1",
+            id=profile_id,
+            user_id=uuid.uuid4(),
+            status=VolunteerStatus.ACTIVE,
+            emergency_contact_name="Old",
+            emergency_contact_phone="+1",
         )
         mock_repo.get_profile_by_id.side_effect = [profile, profile]
         payload = VolunteerProfileUpdate(skills="Grooming")
@@ -125,8 +146,11 @@ class TestVolunteerService:
         profile_id = uuid.uuid4()
         user_id = uuid.uuid4()
         profile = VolunteerProfile(
-            id=profile_id, user_id=user_id, status=VolunteerStatus.APPLIED,
-            emergency_contact_name="A", emergency_contact_phone="+1",
+            id=profile_id,
+            user_id=user_id,
+            status=VolunteerStatus.APPLIED,
+            emergency_contact_name="A",
+            emergency_contact_phone="+1",
             background_check_completed=True,
         )
         mock_repo.get_profile_by_id.side_effect = [profile, profile]
@@ -136,15 +160,22 @@ class TestVolunteerService:
             patch.object(service._roles, "get_by_name", AsyncMock(return_value=volunteer_role)),
             patch.object(service._user_roles, "grant_role", AsyncMock()) as mock_grant,
         ):
-            await service.update_profile(profile_id, VolunteerProfileUpdate(status=VolunteerStatus.ACTIVE))
+            await service.update_profile(
+                profile_id, VolunteerProfileUpdate(status=VolunteerStatus.ACTIVE)
+            )
             mock_grant.assert_awaited_once_with(user_id, volunteer_role.id)
 
     @pytest.mark.asyncio
-    async def test_updating_profile_without_activating_does_not_grant_role(self, service, mock_repo):
+    async def test_updating_profile_without_activating_does_not_grant_role(
+        self, service, mock_repo
+    ):
         profile_id = uuid.uuid4()
         profile = VolunteerProfile(
-            id=profile_id, user_id=uuid.uuid4(), status=VolunteerStatus.APPLIED,
-            emergency_contact_name="A", emergency_contact_phone="+1",
+            id=profile_id,
+            user_id=uuid.uuid4(),
+            status=VolunteerStatus.APPLIED,
+            emergency_contact_name="A",
+            emergency_contact_phone="+1",
         )
         mock_repo.get_profile_by_id.side_effect = [profile, profile]
 
@@ -156,8 +187,11 @@ class TestVolunteerService:
     async def test_get_profile(self, service, mock_repo):
         profile_id = uuid.uuid4()
         mock_repo.get_profile_by_id.return_value = VolunteerProfile(
-            id=profile_id, user_id=uuid.uuid4(), status=VolunteerStatus.ACTIVE,
-            emergency_contact_name="J", emergency_contact_phone="+1",
+            id=profile_id,
+            user_id=uuid.uuid4(),
+            status=VolunteerStatus.ACTIVE,
+            emergency_contact_name="J",
+            emergency_contact_phone="+1",
         )
         result = await service.get_profile(profile_id)
         assert result.id == profile_id
@@ -172,8 +206,11 @@ class TestVolunteerService:
     async def test_get_profile_by_user(self, service, mock_repo):
         user_id = uuid.uuid4()
         mock_repo.get_profile_by_user_id.return_value = VolunteerProfile(
-            id=uuid.uuid4(), user_id=user_id, status=VolunteerStatus.ACTIVE,
-            emergency_contact_name="J", emergency_contact_phone="+1",
+            id=uuid.uuid4(),
+            user_id=user_id,
+            status=VolunteerStatus.ACTIVE,
+            emergency_contact_name="J",
+            emergency_contact_phone="+1",
         )
         result = await service.get_profile_by_user(user_id)
         assert result.user_id == user_id
@@ -189,11 +226,18 @@ class TestVolunteerService:
         shift_id = uuid.uuid4()
         now = datetime.now(UTC)
         mock_repo.create_shift.return_value = VolunteerShift(
-            id=shift_id, shelter_facility_id=uuid.uuid4(), role_name="Feeding",
-            start_at=now, end_at=now, capacity=5,
+            id=shift_id,
+            shelter_facility_id=uuid.uuid4(),
+            role_name="Feeding",
+            start_at=now,
+            end_at=now,
+            capacity=5,
         )
         payload = VolunteerShiftCreate(
-            role_name="Feeding", start_at=now, end_at=now, capacity=5,
+            role_name="Feeding",
+            start_at=now,
+            end_at=now,
+            capacity=5,
         )
         result = await service.create_shift(payload)
         assert result.role_name == "Feeding"
@@ -204,16 +248,24 @@ class TestVolunteerService:
         volunteer_id = uuid.uuid4()
         now = datetime.now(UTC)
         mock_repo.get_profile_by_id.return_value = VolunteerProfile(
-            id=volunteer_id, user_id=uuid.uuid4(), status=VolunteerStatus.ACTIVE,
+            id=volunteer_id,
+            user_id=uuid.uuid4(),
+            status=VolunteerStatus.ACTIVE,
         )
         mock_repo.get_shift_by_id_for_update.return_value = VolunteerShift(
-            id=shift_id, role_name="Walking", start_at=now, end_at=now, capacity=5,
+            id=shift_id,
+            role_name="Walking",
+            start_at=now,
+            end_at=now,
+            capacity=5,
         )
         mock_repo.get_attendance_by_shift_and_volunteer.return_value = None
         mock_repo.list_attendance_for_shift.return_value = []
         att_id = uuid.uuid4()
         mock_repo.create_attendance.return_value = ShiftAttendance(
-            id=att_id, shift_id=shift_id, volunteer_id=uuid.uuid4(),
+            id=att_id,
+            shift_id=shift_id,
+            volunteer_id=uuid.uuid4(),
         )
         result = await service.join_shift(shift_id, volunteer_id)
         assert result.shift_id == shift_id
@@ -223,7 +275,9 @@ class TestVolunteerService:
         shift_id = uuid.uuid4()
         volunteer_id = uuid.uuid4()
         mock_repo.get_profile_by_id.return_value = VolunteerProfile(
-            id=volunteer_id, user_id=uuid.uuid4(), status=VolunteerStatus.APPLIED,
+            id=volunteer_id,
+            user_id=uuid.uuid4(),
+            status=VolunteerStatus.APPLIED,
         )
         with pytest.raises(ForbiddenError, match="approved by a coordinator"):
             await service.join_shift(shift_id, volunteer_id)
@@ -234,15 +288,25 @@ class TestVolunteerService:
         volunteer_id = uuid.uuid4()
         now = datetime.now(UTC)
         mock_repo.get_profile_by_id.return_value = VolunteerProfile(
-            id=volunteer_id, user_id=uuid.uuid4(), status=VolunteerStatus.ACTIVE,
+            id=volunteer_id,
+            user_id=uuid.uuid4(),
+            status=VolunteerStatus.ACTIVE,
         )
         mock_repo.get_shift_by_id_for_update.return_value = VolunteerShift(
-            id=shift_id, role_name="Walking", start_at=now, end_at=now, capacity=1,
+            id=shift_id,
+            role_name="Walking",
+            start_at=now,
+            end_at=now,
+            capacity=1,
         )
         mock_repo.get_attendance_by_shift_and_volunteer.return_value = None
-        mock_repo.list_attendance_for_shift.return_value = [ShiftAttendance(
-            id=uuid.uuid4(), shift_id=shift_id, volunteer_id=uuid.uuid4(),
-        )]
+        mock_repo.list_attendance_for_shift.return_value = [
+            ShiftAttendance(
+                id=uuid.uuid4(),
+                shift_id=shift_id,
+                volunteer_id=uuid.uuid4(),
+            )
+        ]
         with pytest.raises(ConflictError, match="maximum volunteer capacity"):
             await service.join_shift(shift_id, volunteer_id)
 
@@ -252,13 +316,21 @@ class TestVolunteerService:
         volunteer_id = uuid.uuid4()
         now = datetime.now(UTC)
         mock_repo.get_profile_by_id.return_value = VolunteerProfile(
-            id=volunteer_id, user_id=uuid.uuid4(), status=VolunteerStatus.ACTIVE,
+            id=volunteer_id,
+            user_id=uuid.uuid4(),
+            status=VolunteerStatus.ACTIVE,
         )
         mock_repo.get_shift_by_id_for_update.return_value = VolunteerShift(
-            id=shift_id, role_name="Walking", start_at=now, end_at=now, capacity=5,
+            id=shift_id,
+            role_name="Walking",
+            start_at=now,
+            end_at=now,
+            capacity=5,
         )
         mock_repo.get_attendance_by_shift_and_volunteer.return_value = ShiftAttendance(
-            id=uuid.uuid4(), shift_id=shift_id, volunteer_id=volunteer_id,
+            id=uuid.uuid4(),
+            shift_id=shift_id,
+            volunteer_id=volunteer_id,
         )
         with pytest.raises(ConflictError, match="already joined"):
             await service.join_shift(shift_id, volunteer_id)
@@ -271,7 +343,9 @@ class TestVolunteerService:
         attendance = ShiftAttendance(id=att_id, shift_id=uuid.uuid4(), volunteer_id=volunteer_id)
         mock_repo.get_attendance_by_id.return_value = attendance
         mock_repo.get_profile_by_user_id.return_value = VolunteerProfile(
-            id=volunteer_id, user_id=user_id, status=VolunteerStatus.ACTIVE,
+            id=volunteer_id,
+            user_id=user_id,
+            status=VolunteerStatus.ACTIVE,
         )
         result = await service.check_in(att_id, user_id)
         assert result.check_in_at is not None
@@ -283,7 +357,9 @@ class TestVolunteerService:
         attendance = ShiftAttendance(id=att_id, shift_id=uuid.uuid4(), volunteer_id=uuid.uuid4())
         mock_repo.get_attendance_by_id.return_value = attendance
         mock_repo.get_profile_by_user_id.return_value = VolunteerProfile(
-            id=uuid.uuid4(), user_id=user_id, status=VolunteerStatus.ACTIVE,
+            id=uuid.uuid4(),
+            user_id=user_id,
+            status=VolunteerStatus.ACTIVE,
         )
         with pytest.raises(ForbiddenError):
             await service.check_in(att_id, user_id)
@@ -293,12 +369,16 @@ class TestVolunteerService:
         user_id = uuid.uuid4()
         volunteer_id = uuid.uuid4()
         attendance = ShiftAttendance(
-            id=uuid.uuid4(), shift_id=uuid.uuid4(), volunteer_id=volunteer_id,
+            id=uuid.uuid4(),
+            shift_id=uuid.uuid4(),
+            volunteer_id=volunteer_id,
             check_in_at=datetime.now(UTC),
         )
         mock_repo.get_attendance_by_id.return_value = attendance
         mock_repo.get_profile_by_user_id.return_value = VolunteerProfile(
-            id=volunteer_id, user_id=user_id, status=VolunteerStatus.ACTIVE,
+            id=volunteer_id,
+            user_id=user_id,
+            status=VolunteerStatus.ACTIVE,
         )
         with pytest.raises(ConflictError, match="Already checked in"):
             await service.check_in(uuid.uuid4(), user_id)
@@ -310,12 +390,16 @@ class TestVolunteerService:
         volunteer_id = uuid.uuid4()
         check_in = datetime.now(UTC)
         attendance = ShiftAttendance(
-            id=att_id, shift_id=uuid.uuid4(), volunteer_id=volunteer_id,
+            id=att_id,
+            shift_id=uuid.uuid4(),
+            volunteer_id=volunteer_id,
             check_in_at=check_in,
         )
         mock_repo.get_attendance_by_id.return_value = attendance
         mock_repo.get_profile_by_user_id.return_value = VolunteerProfile(
-            id=volunteer_id, user_id=user_id, status=VolunteerStatus.ACTIVE,
+            id=volunteer_id,
+            user_id=user_id,
+            status=VolunteerStatus.ACTIVE,
         )
         result = await service.check_out(att_id, user_id)
         assert result.check_out_at is not None
@@ -326,11 +410,15 @@ class TestVolunteerService:
         user_id = uuid.uuid4()
         volunteer_id = uuid.uuid4()
         attendance = ShiftAttendance(
-            id=uuid.uuid4(), shift_id=uuid.uuid4(), volunteer_id=volunteer_id,
+            id=uuid.uuid4(),
+            shift_id=uuid.uuid4(),
+            volunteer_id=volunteer_id,
         )
         mock_repo.get_attendance_by_id.return_value = attendance
         mock_repo.get_profile_by_user_id.return_value = VolunteerProfile(
-            id=volunteer_id, user_id=user_id, status=VolunteerStatus.ACTIVE,
+            id=volunteer_id,
+            user_id=user_id,
+            status=VolunteerStatus.ACTIVE,
         )
         with pytest.raises(ConflictError, match="check in before"):
             await service.check_out(uuid.uuid4(), user_id)
@@ -340,12 +428,17 @@ class TestVolunteerService:
         user_id = uuid.uuid4()
         volunteer_id = uuid.uuid4()
         attendance = ShiftAttendance(
-            id=uuid.uuid4(), shift_id=uuid.uuid4(), volunteer_id=volunteer_id,
-            check_in_at=datetime.now(UTC), check_out_at=datetime.now(UTC),
+            id=uuid.uuid4(),
+            shift_id=uuid.uuid4(),
+            volunteer_id=volunteer_id,
+            check_in_at=datetime.now(UTC),
+            check_out_at=datetime.now(UTC),
         )
         mock_repo.get_attendance_by_id.return_value = attendance
         mock_repo.get_profile_by_user_id.return_value = VolunteerProfile(
-            id=volunteer_id, user_id=user_id, status=VolunteerStatus.ACTIVE,
+            id=volunteer_id,
+            user_id=user_id,
+            status=VolunteerStatus.ACTIVE,
         )
         with pytest.raises(ConflictError, match="Already checked out"):
             await service.check_out(uuid.uuid4(), user_id)
@@ -354,8 +447,11 @@ class TestVolunteerService:
     async def test_soft_delete_profile(self, service, mock_repo):
         profile_id = uuid.uuid4()
         mock_repo.get_profile_by_id.return_value = VolunteerProfile(
-            id=profile_id, user_id=uuid.uuid4(), status=VolunteerStatus.ACTIVE,
-            emergency_contact_name="J", emergency_contact_phone="+1",
+            id=profile_id,
+            user_id=uuid.uuid4(),
+            status=VolunteerStatus.ACTIVE,
+            emergency_contact_name="J",
+            emergency_contact_phone="+1",
         )
         mock_repo.soft_delete_profile.return_value = None
         await service.soft_delete_profile(profile_id)
@@ -370,8 +466,11 @@ class TestVolunteerService:
     @pytest.mark.asyncio
     async def test_list_profiles(self, service, mock_repo):
         profile = VolunteerProfile(
-            id=uuid.uuid4(), user_id=uuid.uuid4(), status=VolunteerStatus.ACTIVE,
-            emergency_contact_name="J", emergency_contact_phone="+1",
+            id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            status=VolunteerStatus.ACTIVE,
+            emergency_contact_name="J",
+            emergency_contact_phone="+1",
         )
         mock_repo.count_profiles.return_value = 1
         mock_repo.list_profiles.return_value = [profile]
@@ -383,7 +482,11 @@ class TestVolunteerService:
     async def test_list_shifts(self, service, mock_repo):
         now = datetime.now(UTC)
         shift = VolunteerShift(
-            id=uuid.uuid4(), role_name="Feeding", start_at=now, end_at=now, capacity=5,
+            id=uuid.uuid4(),
+            role_name="Feeding",
+            start_at=now,
+            end_at=now,
+            capacity=5,
         )
         mock_repo.count_shifts.return_value = 1
         mock_repo.list_shifts.return_value = [shift]
@@ -419,10 +522,14 @@ class TestServiceCertificate:
 
     def _profile(self, **kw):
         vals = dict(
-            id=uuid.uuid4(), user_id=uuid.uuid4(), status=VolunteerStatus.ACTIVE,
-            emergency_contact_name="Jane", emergency_contact_phone="+1",
-            user=User(id=kw.get("user_id", uuid.uuid4()), full_name="Jane Doe",
-                      email="jane@example.com"),
+            id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            status=VolunteerStatus.ACTIVE,
+            emergency_contact_name="Jane",
+            emergency_contact_phone="+1",
+            user=User(
+                id=kw.get("user_id", uuid.uuid4()), full_name="Jane Doe", email="jane@example.com"
+            ),
         )
         vals.update(kw)
         return VolunteerProfile(**vals)
@@ -430,8 +537,12 @@ class TestServiceCertificate:
     def _attendance(self, volunteer_id, hours, role="Walking", **kw):
         now = datetime.now(UTC)
         return ShiftAttendance(
-            id=uuid.uuid4(), shift_id=uuid.uuid4(), volunteer_id=volunteer_id,
-            check_in_at=now, check_out_at=now, hours_logged=hours,
+            id=uuid.uuid4(),
+            shift_id=uuid.uuid4(),
+            volunteer_id=volunteer_id,
+            check_in_at=now,
+            check_out_at=now,
+            hours_logged=hours,
             shift=VolunteerShift(id=uuid.uuid4(), role_name=role, start_at=now, end_at=now),
             **kw,
         )

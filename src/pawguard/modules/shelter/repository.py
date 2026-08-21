@@ -36,9 +36,8 @@ class ShelterRepository:
         return facility
 
     async def get_facility(self, facility_id: uuid.UUID) -> ShelterFacility | None:
-        stmt = (
-            select(ShelterFacility)
-            .where(ShelterFacility.id == facility_id, ShelterFacility.deleted_at.is_(None))
+        stmt = select(ShelterFacility).where(
+            ShelterFacility.id == facility_id, ShelterFacility.deleted_at.is_(None)
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
@@ -75,13 +74,10 @@ class ShelterRepository:
 
         dlat = lat2 - lat1
         dlng = lng2 - lng1
-        a_expr = (
-            func.pow(func.sin(dlat / 2), 2)
-            + func.cos(lat1) * func.cos(lat2) * func.pow(func.sin(dlng / 2), 2)
+        a_expr = func.pow(func.sin(dlat / 2), 2) + func.cos(lat1) * func.cos(lat2) * func.pow(
+            func.sin(dlng / 2), 2
         )
-        distance_km = (2 * sa_literal(6371.0) * func.asin(func.sqrt(a_expr))).label(
-            "distance_km"
-        )
+        distance_km = (2 * sa_literal(6371.0) * func.asin(func.sqrt(a_expr))).label("distance_km")
 
         stmt = (
             select(ShelterFacility, distance_km)
@@ -154,9 +150,7 @@ class ShelterRepository:
 
     async def list_kennels_by_section(self, section_id: uuid.UUID) -> Sequence[Kennel]:
         stmt = (
-            select(Kennel)
-            .where(Kennel.section_id == section_id)
-            .order_by(Kennel.identifier.asc())
+            select(Kennel).where(Kennel.section_id == section_id).order_by(Kennel.identifier.asc())
         )
         return (await self._session.execute(stmt)).scalars().all()
 
@@ -232,8 +226,12 @@ class ShelterRepository:
         total = (await self._session.execute(count_stmt)).scalar_one()
 
         valid_fields = {
-            "name", "total_capacity", "status",
-            "facility_type", "created_at", "updated_at",
+            "name",
+            "total_capacity",
+            "status",
+            "facility_type",
+            "created_at",
+            "updated_at",
         }
         stmt = apply_sorting(stmt, sort, valid_fields)
         stmt = stmt.offset(page_params.offset).limit(page_params.limit)
@@ -294,9 +292,9 @@ class ShelterRepository:
 
     async def soft_delete_facility(self, facility_id: uuid.UUID) -> bool:
         from datetime import UTC, datetime
-        stmt = (
-            select(ShelterFacility)
-            .where(ShelterFacility.id == facility_id, ShelterFacility.deleted_at.is_(None))
+
+        stmt = select(ShelterFacility).where(
+            ShelterFacility.id == facility_id, ShelterFacility.deleted_at.is_(None)
         )
         facility = (await self._session.execute(stmt)).scalar_one_or_none()
         if facility is None:
@@ -307,10 +305,10 @@ class ShelterRepository:
 
     async def bulk_delete_facilities(self, ids: list[uuid.UUID]) -> int:
         from datetime import UTC, datetime
+
         now = datetime.now(UTC)
-        stmt = (
-            select(ShelterFacility)
-            .where(ShelterFacility.id.in_(ids), ShelterFacility.deleted_at.is_(None))
+        stmt = select(ShelterFacility).where(
+            ShelterFacility.id.in_(ids), ShelterFacility.deleted_at.is_(None)
         )
         facilities = (await self._session.execute(stmt)).scalars().all()
         for f in facilities:

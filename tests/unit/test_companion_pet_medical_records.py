@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from pawguard.core.exceptions import ConflictError, ForbiddenError, NotFoundError
+from pawguard.core.exceptions import ForbiddenError, NotFoundError
 from pawguard.modules.companion_pet.models import CompanionPet, PetMedicalRecord
 from pawguard.modules.companion_pet.repository import CompanionPetRepository
 from pawguard.modules.companion_pet.schemas import MedicalRecordUpdate
@@ -159,7 +159,7 @@ async def test_update_medical_record_file_validation_not_owned() -> None:
     repo = AsyncMock(spec=CompanionPetRepository)
     repo.get_pet.return_value = pet
     repo.get_medical_record.return_value = record
-    
+
     stored_file = StoredFile(
         id=uuid.uuid4(),
         entity_type="companion_pet",
@@ -167,7 +167,7 @@ async def test_update_medical_record_file_validation_not_owned() -> None:
     )
     storage = AsyncMock(spec=StorageService)
     storage.get_file.return_value = stored_file
-    
+
     service = CompanionPetService(repo, AsyncMock(), storage=storage)
 
     payload = MedicalRecordUpdate(stored_file_id=stored_file.id)
@@ -188,7 +188,7 @@ async def test_get_medical_file_download_url_success() -> None:
 
     repo = AsyncMock(spec=CompanionPetRepository)
     repo.get_pet.return_value = pet
-    
+
     storage = AsyncMock(spec=StorageService)
     storage.get_file.return_value = stored_file
     storage.get_download_url.return_value = DownloadUrlResponse(
@@ -216,7 +216,7 @@ async def test_get_medical_file_download_url_forbidden() -> None:
 
     repo = AsyncMock(spec=CompanionPetRepository)
     repo.get_pet.return_value = pet
-    
+
     storage = AsyncMock(spec=StorageService)
     storage.get_file.return_value = stored_file
 

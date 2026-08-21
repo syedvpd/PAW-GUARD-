@@ -80,16 +80,13 @@ def get_rescue_service(
     )
 
 
-
 # Roles allowed to see unmasked reporter PII on rescue cases. Per PRR §6.1
 # reporter identity/contact is masked in general system views and unmasked
 # only for coordinators and administrators.
 _UNMASKED_RESCUE_PII_PERMISSIONS = {"rescue:verify", "rescue:dispatch", "system:admin"}
 
 
-def _enforce_agent_assignment(
-    request_obj: RescueRequest, current_user: CurrentUser | None
-) -> None:
+def _enforce_agent_assignment(request_obj: RescueRequest, current_user: CurrentUser | None) -> None:
     """Enforce that Rescue Agents can only view/act on cases they are assigned to (DS-12)."""
     if current_user is None:
         return
@@ -98,13 +95,16 @@ def _enforce_agent_assignment(
     if not is_coordinator_or_admin and "rescue:execute" in user_permissions:
         is_assigned = False
         if request_obj.dispatch is not None:
-            if request_obj.dispatch.assigned_driver_id == current_user.id or any(agent.agent_id == current_user.id for agent in request_obj.dispatch.agents):
+            if request_obj.dispatch.assigned_driver_id == current_user.id or any(
+                agent.agent_id == current_user.id for agent in request_obj.dispatch.agents
+            ):
                 is_assigned = True
         if not is_assigned:
             from fastapi import HTTPException
+
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access to this rescue case is restricted to assigned agents."
+                detail="Access to this rescue case is restricted to assigned agents.",
             )
 
 
@@ -127,7 +127,6 @@ def _mask_reporter_pii(
     )
 
 
-
 def _masked_rescue_response(
     rescue: RescueRequest,
     current_user: CurrentUser,
@@ -137,9 +136,7 @@ def _masked_rescue_response(
     """Build the standard rescue response with reporter PII masked per the
     caller's role - used by EVERY handler that returns a rescue request so
     the §6.1 masking policy can't be bypassed by switching HTTP verbs."""
-    data = _mask_reporter_pii(
-        RescueRequestResponse.model_validate(rescue), current_user
-    )
+    data = _mask_reporter_pii(RescueRequestResponse.model_validate(rescue), current_user)
     return ApiResponse(data=data, message=message)
 
 
@@ -609,7 +606,9 @@ async def get_public_status(
 ) -> ApiResponse[PublicRescueStatusResponse | None]:
     status = await service.lookup_public_status(ticket_number, phone)
     if status is None:
-        return ApiResponse(data=None, message="No rescue case found matching the provided ticket and phone.")
+        return ApiResponse(
+            data=None, message="No rescue case found matching the provided ticket and phone."
+        )
     return ApiResponse(data=status, message="Rescue case status retrieved.")
 
 
@@ -638,9 +637,7 @@ async def get_request(
 ) -> ApiResponse[RescueRequestResponse]:
     request = await service.get_request(request_id)
     _enforce_agent_assignment(request, current_user)
-    data = _mask_reporter_pii(
-        RescueRequestResponse.model_validate(request), current_user
-    )
+    data = _mask_reporter_pii(RescueRequestResponse.model_validate(request), current_user)
     return ApiResponse(data=data)
 
 
@@ -666,13 +663,16 @@ async def list_requests(
     service: RescueService = Depends(get_rescue_service),
 ) -> PaginatedResponse[RescueRequestResponse]:
     result = await service.list_requests_paginated(
-        page=page, sort=sort, search_term=search, status=status,
-        severity=severity, urgent_only=urgent_only,
+        page=page,
+        sort=sort,
+        search_term=search,
+        status=status,
+        severity=severity,
+        urgent_only=urgent_only,
         assigned_to_me=current_user.id if (assigned_to_me and current_user) else None,
     )
     data = [_mask_reporter_pii(item, current_user) for item in result.data]
     return PaginatedResponse(data=data, meta=result.meta)
-
 
 
 @router.delete(
@@ -912,4 +912,3 @@ async def list_rescue_events(
     rescue_req = await service.get_request(request_id)
     _enforce_agent_assignment(rescue_req, current_user)
     return await service.get_rescue_events(request_id, page=page)
-

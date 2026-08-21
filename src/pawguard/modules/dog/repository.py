@@ -25,8 +25,14 @@ from pawguard.modules.shelter.models import ShelterFacility
 class DogRepository:
     SEARCH_FIELDS = ("name", "breed", "registration_number", "microchip_id", "color")
     SORTABLE_FIELDS = {
-        "name", "breed", "status", "created_at", "updated_at", "estimated_age",
-        "age_months", "weight",
+        "name",
+        "breed",
+        "status",
+        "created_at",
+        "updated_at",
+        "estimated_age",
+        "age_months",
+        "weight",
     }
 
     def __init__(self, session: AsyncSession) -> None:
@@ -59,9 +65,7 @@ class DogRepository:
         from pawguard.core.config import get_settings
         from pawguard.core.constants import Environment
 
-        stmt = select(DogProfile).where(
-            DogProfile.id == dog_id, DogProfile.deleted_at.is_(None)
-        )
+        stmt = select(DogProfile).where(DogProfile.id == dog_id, DogProfile.deleted_at.is_(None))
         if get_settings().environment != Environment.TEST:
             stmt = stmt.with_for_update()
 
@@ -117,8 +121,10 @@ class DogRepository:
     async def count_by_kennel(
         self, kennel_id: uuid.UUID, exclude_dog_id: uuid.UUID | None = None
     ) -> int:
-        stmt = select(func.count()).select_from(DogProfile).where(
-            DogProfile.kennel_id == kennel_id, DogProfile.deleted_at.is_(None)
+        stmt = (
+            select(func.count())
+            .select_from(DogProfile)
+            .where(DogProfile.kennel_id == kennel_id, DogProfile.deleted_at.is_(None))
         )
         if exclude_dog_id is not None:
             stmt = stmt.where(DogProfile.id != exclude_dog_id)
@@ -204,14 +210,17 @@ class DogRepository:
         return (await self._session.execute(stmt)).scalars().all()
 
     async def count_by_status(self) -> dict[str, int]:
-        stmt = select(DogProfile.status, func.count()).where(
-            DogProfile.deleted_at.is_(None)
-        ).group_by(DogProfile.status)
+        stmt = (
+            select(DogProfile.status, func.count())
+            .where(DogProfile.deleted_at.is_(None))
+            .group_by(DogProfile.status)
+        )
         rows = (await self._session.execute(stmt)).all()
         return {row[0]: row[1] for row in rows}
 
     async def bulk_update_status(self, ids: list[uuid.UUID], status: DogStatus) -> int:
         from sqlalchemy import update
+
         stmt = (
             update(DogProfile)
             .where(DogProfile.id.in_(ids), DogProfile.deleted_at.is_(None))
@@ -224,6 +233,7 @@ class DogRepository:
         from datetime import UTC, datetime
 
         from sqlalchemy import update
+
         stmt = (
             update(DogProfile)
             .where(DogProfile.id.in_(ids), DogProfile.deleted_at.is_(None))
@@ -239,9 +249,7 @@ class DogRepository:
         await self._session.flush()
         return log
 
-    async def list_activity_by_dog(
-        self, dog_id: uuid.UUID
-    ) -> Sequence[DogActivityLog]:
+    async def list_activity_by_dog(self, dog_id: uuid.UUID) -> Sequence[DogActivityLog]:
         stmt = (
             select(DogActivityLog)
             .where(DogActivityLog.dog_id == dog_id)
@@ -256,9 +264,7 @@ class DogRepository:
         await self._session.flush()
         return log
 
-    async def list_weight_logs(
-        self, dog_id: uuid.UUID
-    ) -> Sequence[DogWeightLog]:
+    async def list_weight_logs(self, dog_id: uuid.UUID) -> Sequence[DogWeightLog]:
         stmt = (
             select(DogWeightLog)
             .where(DogWeightLog.dog_id == dog_id)

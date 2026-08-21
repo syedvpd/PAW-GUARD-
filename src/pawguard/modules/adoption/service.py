@@ -81,8 +81,6 @@ class AdoptionService:
         self._shelter_repo = shelter_repo
         self._notification_svc = notification_service
 
-
-
     async def _notify_adopter(
         self,
         application: AdoptionApplication,
@@ -96,7 +94,10 @@ class AdoptionService:
         if application.adopter is None:
             return
         try:
-            from pawguard.modules.notifications.governance_service import dispatch_governed_notification
+            from pawguard.modules.notifications.governance_service import (
+                dispatch_governed_notification,
+            )
+
             await dispatch_governed_notification(
                 self._repo._session,
                 trigger_code=notification_type,
@@ -114,16 +115,11 @@ class AdoptionService:
                 exc_info=True,
             )
 
-
     async def _generate_agreement(self, application: AdoptionApplication) -> None:
         if self._storage is None:
             return
         try:
-            adopter_name = (
-                application.adopter.full_name
-                if application.adopter
-                else "Adopter"
-            )
+            adopter_name = application.adopter.full_name if application.adopter else "Adopter"
             dog = application.dog
             settings = get_settings()
             pdf_bytes = await asyncio.to_thread(
@@ -285,7 +281,6 @@ class AdoptionService:
             if lock_acquired and cache_svc is not None:
                 await cache_svc.release_lock(f"lock:dog:{payload.dog_id}", lock_token)
 
-
     async def update_application(
         self,
         app_id: uuid.UUID,
@@ -305,7 +300,9 @@ class AdoptionService:
             self._check_transition(app.status, new_status)
 
             if new_status in (
-                AdoptionStatus.HOME_CHECK, AdoptionStatus.APPROVED, AdoptionStatus.COMPLETED,
+                AdoptionStatus.HOME_CHECK,
+                AdoptionStatus.APPROVED,
+                AdoptionStatus.COMPLETED,
             ):
                 lock_token = str(uuid.uuid4())
                 lock_acquired = False
@@ -325,7 +322,9 @@ class AdoptionService:
                     # for the same dog so the check-then-act below can't race.
                     dog = await self._dog_repo.get_by_id_for_update(app.dog_id)
 
-                    existing_approved = await self._repo.get_approved_application_for_dog(app.dog_id)
+                    existing_approved = await self._repo.get_approved_application_for_dog(
+                        app.dog_id
+                    )
                     if existing_approved is not None and existing_approved.id != app_id:
                         raise ConflictError(
                             "Another application has already reached home inspection or "
@@ -342,7 +341,6 @@ class AdoptionService:
 
             if new_status == AdoptionStatus.COMPLETED:
                 app.completed_at = datetime.now(UTC)
-
 
         for key, value in update_data.items():
             setattr(app, key, value)
@@ -417,7 +415,6 @@ class AdoptionService:
             finally:
                 if lock_acquired and cache_svc is not None:
                     await cache_svc.release_lock(f"lock:dog:{app.dog_id}", lock_token)
-
 
         if status == AdoptionStatus.COMPLETED:
             app.completed_at = datetime.now(UTC)
@@ -573,9 +570,7 @@ class AdoptionService:
 
         return follow_up
 
-    async def find_due_follow_ups(
-        self, now: datetime | None = None
-    ) -> list[AdoptionFollowUp]:
+    async def find_due_follow_ups(self, now: datetime | None = None) -> list[AdoptionFollowUp]:
         """Ensure every completed adoption has 30/90/180-day check-ins, mark
         due-but-unsubmitted ones OVERDUE, and return everything now due."""
         now = now or datetime.now(UTC)
@@ -722,9 +717,7 @@ class AdoptionService:
                     name=facility.name,
                     address=facility.address,
                     phone=facility.phone,
-                    latitude=(
-                        float(facility.latitude) if facility.latitude is not None else None
-                    ),
+                    latitude=(float(facility.latitude) if facility.latitude is not None else None),
                     longitude=(
                         float(facility.longitude) if facility.longitude is not None else None
                     ),

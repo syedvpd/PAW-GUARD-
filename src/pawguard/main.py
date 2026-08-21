@@ -6,14 +6,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import ORJSONResponse, RedirectResponse, Response
+from fastapi.responses import RedirectResponse, Response
 from sqlalchemy import text
 
 from pawguard.api.v1.router import api_v1_router
 from pawguard.core.config import get_settings
 from pawguard.core.exceptions import register_exception_handlers
-from pawguard.core.logging import configure_logging, get_logger
 from pawguard.core.idempotency import IdempotencyMiddleware
+from pawguard.core.logging import configure_logging, get_logger
 from pawguard.core.middleware import (
     RequestBodySizeMiddleware,
     RequestIDMiddleware,
@@ -121,6 +121,7 @@ def create_app() -> FastAPI:
         if app.openapi_schema:
             return app.openapi_schema
         from fastapi.openapi.utils import get_openapi
+
         openapi_schema = get_openapi(
             title=app.title,
             version=app.version,

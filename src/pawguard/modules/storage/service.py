@@ -58,9 +58,7 @@ async def _cleanup_s3_async(s3_client: S3StorageService, object_key: str) -> Non
 
 
 class StorageService:
-    def __init__(
-        self, repository: StorageRepository, s3: S3StorageService
-    ) -> None:
+    def __init__(self, repository: StorageRepository, s3: S3StorageService) -> None:
         self._repo = repository
         self._s3 = s3
 
@@ -71,9 +69,7 @@ class StorageService:
         user_id: uuid.UUID | None = None,
     ) -> UploadUrlResponse:
         folder_str = (
-            payload.folder.value
-            if hasattr(payload.folder, "value")
-            else str(payload.folder)
+            payload.folder.value if hasattr(payload.folder, "value") else str(payload.folder)
         )
         stored: StoredFile | None = None
         try:
@@ -108,11 +104,7 @@ class StorageService:
                     await self._repo._session.flush()
                 except Exception:  # noqa: BLE001 - orphan cleanup must not mask the original error
                     logger.error("request_upload_url_cleanup_failed", exc_info=True)
-            raise ValidationFailedError(
-                "Failed to prepare an upload. Please try again."
-            ) from exc
-
-
+            raise ValidationFailedError("Failed to prepare an upload. Please try again.") from exc
 
     async def confirm_upload(
         self, file_id: uuid.UUID, batch_file_ids: list[uuid.UUID] | None = None
@@ -161,7 +153,9 @@ class StorageService:
             if isinstance(exc, UploadError):
                 message = str(exc)
             elif isinstance(exc, (BotoClientError, BotoCoreError)):
-                message = "Upload verification failed — file not found in storage or storage unavailable."
+                message = (
+                    "Upload verification failed — file not found in storage or storage unavailable."
+                )
             else:
                 logger.error("storage_confirm_upload_failed", file_id=str(file_id), exc_info=exc)
                 message = "Upload verification failed — could not verify file in storage."
@@ -185,9 +179,7 @@ class StorageService:
         the stored file simply keeps ``thumbnail_object_key`` unset.
         """
         try:
-            content = await asyncio.to_thread(
-                self._s3.get_object, object_key=stored.object_key
-            )
+            content = await asyncio.to_thread(self._s3.get_object, object_key=stored.object_key)
             thumbnail = await asyncio.to_thread(create_thumbnail, content, max_size=400)
             if thumbnail is None:
                 return
@@ -219,9 +211,7 @@ class StorageService:
         stored = await self._repo.get_by_id(file_id)
         if stored is None:
             raise NotFoundError("Stored file not found.")
-        download_url = self._s3.generate_presigned_download_url(
-            object_key=stored.object_key
-        )
+        download_url = self._s3.generate_presigned_download_url(object_key=stored.object_key)
         return DownloadUrlResponse(
             download_url=download_url,
             object_key=stored.object_key,
@@ -278,9 +268,7 @@ class StorageService:
         if stored is None:
             raise NotFoundError("Stored file not found.")
         if not is_admin_role(current_user.claims) and stored.user_id != current_user.id:
-            raise InsufficientPermissionsError(
-                "You do not have permission to delete this file."
-            )
+            raise InsufficientPermissionsError("You do not have permission to delete this file.")
         stored.deleted_at = datetime.now(UTC)
         await self._repo._session.flush()
 

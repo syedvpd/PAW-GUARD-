@@ -70,9 +70,7 @@ def _regular_user(**kw: object) -> User:
 
 
 def _device_context() -> DeviceContext:
-    return DeviceContext(
-        device_id="device-1", device_name="pytest", device_type=DeviceType.IOS
-    )
+    return DeviceContext(device_id="device-1", device_name="pytest", device_type=DeviceType.IOS)
 
 
 def _ctx() -> RequestContext:
@@ -118,9 +116,7 @@ class TestAdminMfaLoginEnforcement:
     @pytest.mark.asyncio
     @patch("pawguard.modules.auth.service.verify_password", return_value=True)
     @patch("pawguard.modules.auth.service.needs_rehash", return_value=False)
-    async def test_login_admin_with_mfa_requires_mfa_step(
-        self, mock_needs_rehash, mock_verify
-    ):
+    async def test_login_admin_with_mfa_requires_mfa_step(self, mock_needs_rehash, mock_verify):
         admin = _admin_user(mfa_enabled=True)
         user_repo = AsyncMock()
         user_repo.get_by_email.return_value = admin
@@ -176,9 +172,7 @@ class TestAdminMfaLoginEnforcement:
         session_repo.get_by_id.return_value = session
         mfa_repo = AsyncMock()
         mfa_repo.get_for_user.return_value = None
-        svc = _make_service(
-            user_repo=user_repo, session_repo=session_repo, mfa_repo=mfa_repo
-        )
+        svc = _make_service(user_repo=user_repo, session_repo=session_repo, mfa_repo=mfa_repo)
         pre_token = create_pre_auth_token(user_id=admin.id, session_id=session.id)
 
         with pytest.raises(MFARequiredError, match="enroll in MFA"):

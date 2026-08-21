@@ -4,7 +4,6 @@ Every test runs inside a transaction that is rolled back on teardown, so no data
 persists between tests. Redis and ARQ are replaced with in-memory fakes.
 """
 
-
 import pyotp
 import pytest
 from httpx import AsyncClient
@@ -50,12 +49,16 @@ class TestRegistration:
     ) -> None:
         await client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
         events = (
-            await db_session.execute(
-                select(OutboxEvent).where(
-                    OutboxEvent.job_name == "send_email_verification_email_job"
+            (
+                await db_session.execute(
+                    select(OutboxEvent).where(
+                        OutboxEvent.job_name == "send_email_verification_email_job"
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         matching = [e for e in events if e.payload.get("to") == REGISTER_PAYLOAD["email"]]
         assert matching, "expected a verification email outbox event"
         verify_url = matching[-1].payload["verify_url"]
@@ -71,12 +74,16 @@ class TestRegistration:
             headers={CLIENT_TYPE_HEADER: ClientType.MOBILE.value},
         )
         events = (
-            await db_session.execute(
-                select(OutboxEvent).where(
-                    OutboxEvent.job_name == "send_email_verification_email_job"
+            (
+                await db_session.execute(
+                    select(OutboxEvent).where(
+                        OutboxEvent.job_name == "send_email_verification_email_job"
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         matching = [e for e in events if e.payload.get("to") == REGISTER_PAYLOAD["email"]]
         assert matching, "expected a verification email outbox event"
         verify_url = matching[-1].payload["verify_url"]
@@ -98,19 +105,19 @@ class TestRegistration:
     ) -> None:
         await client.post("/api/v1/auth/register", json=REGISTER_PAYLOAD)
         user = (
-            await db_session.execute(
-                select(User).where(User.email == REGISTER_PAYLOAD["email"])
-            )
+            await db_session.execute(select(User).where(User.email == REGISTER_PAYLOAD["email"]))
         ).scalar_one_or_none()
         assert user is not None
 
         tokens = (
-            await db_session.execute(
-                select(EmailVerificationToken).where(
-                    EmailVerificationToken.user_id == user.id
+            (
+                await db_session.execute(
+                    select(EmailVerificationToken).where(EmailVerificationToken.user_id == user.id)
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         assert len(tokens) == 1
         assert tokens[0].used_at is None
 
@@ -189,9 +196,7 @@ class TestRefresh:
         login_resp = await client.post("/api/v1/auth/login", json=LOGIN_PAYLOAD)
         refresh_token = login_resp.json()["data"]["refresh_token"]
 
-        resp = await client.post(
-            "/api/v1/auth/refresh", json={"refresh_token": refresh_token}
-        )
+        resp = await client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token})
         assert resp.status_code == 200
         body = resp.json()
         assert body["data"]["access_token"] is not None
@@ -205,16 +210,12 @@ class TestRefresh:
         # Use it once (consumes it via rotation)
         await client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token})
         # Reuse the same token = breach detection
-        resp = await client.post(
-            "/api/v1/auth/refresh", json={"refresh_token": refresh_token}
-        )
+        resp = await client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token})
         assert resp.status_code == 401
         assert resp.json()["error"]["code"] == "REFRESH_TOKEN_REUSE_DETECTED"
 
     async def test_refresh_invalid_token(self, client: AsyncClient) -> None:
-        resp = await client.post(
-            "/api/v1/auth/refresh", json={"refresh_token": "totally-invalid"}
-        )
+        resp = await client.post("/api/v1/auth/refresh", json={"refresh_token": "totally-invalid"})
         assert resp.status_code == 401
 
 
@@ -305,9 +306,7 @@ class TestPasswordReset:
         )
         assert resp.status_code == 200
 
-    async def test_request_password_reset_nonexistent_email(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_request_password_reset_nonexistent_email(self, client: AsyncClient) -> None:
         resp = await client.post(
             "/api/v1/auth/password/reset/request",
             json={"email": "nobody@example.com"},
@@ -325,9 +324,7 @@ class TestPasswordReset:
         )
 
         user = (
-            await db_session.execute(
-                select(User).where(User.email == REGISTER_PAYLOAD["email"])
-            )
+            await db_session.execute(select(User).where(User.email == REGISTER_PAYLOAD["email"]))
         ).scalar_one_or_none()
         assert user is not None
 
@@ -388,9 +385,7 @@ class TestMFADisableReauth:
         )
         assert confirm.status_code == 200
 
-    async def test_disable_without_credentials_returns_422(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_disable_without_credentials_returns_422(self, client: AsyncClient) -> None:
         token = await self._register_and_login(client)
         await self._enable_mfa(client, token)
 
@@ -416,9 +411,7 @@ class TestMFADisableReauth:
         assert resp.json()["error"]["code"] == "INVALID_CREDENTIALS"
 
         user = (
-            await db_session.execute(
-                select(User).where(User.email == REGISTER_PAYLOAD["email"])
-            )
+            await db_session.execute(select(User).where(User.email == REGISTER_PAYLOAD["email"]))
         ).scalar_one()
         assert user.mfa_enabled is True
 
@@ -436,9 +429,7 @@ class TestMFADisableReauth:
         assert resp.status_code == 200
 
         user = (
-            await db_session.execute(
-                select(User).where(User.email == REGISTER_PAYLOAD["email"])
-            )
+            await db_session.execute(select(User).where(User.email == REGISTER_PAYLOAD["email"]))
         ).scalar_one()
         assert user.mfa_enabled is False
 

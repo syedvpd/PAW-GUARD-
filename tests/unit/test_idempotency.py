@@ -1,15 +1,11 @@
 """Unit tests for the IdempotencyMiddleware."""
 
-import asyncio
-import uuid
 import pytest
-from fastapi import FastAPI, Depends, status
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from pawguard.core.idempotency import IdempotencyMiddleware
 from pawguard.redis.client import get_redis
-from tests.conftest import FakeRedis
 
 # A mock counter to track execution attempts of mutating endpoints
 MUTATE_EXECUTION_COUNT = 0
@@ -32,11 +28,11 @@ def test_app(fake_redis) -> FastAPI:
     async def mutate_endpoint(payload: dict):
         global MUTATE_EXECUTION_COUNT
         MUTATE_EXECUTION_COUNT += 1
-        
+
         # If payload specifies raise_error, raise exception
         if payload.get("raise_error"):
             raise ValueError("Intentional execution failure")
-            
+
         return {"attempt": MUTATE_EXECUTION_COUNT, "data": payload.get("value")}
 
     @app.get("/test-query")
@@ -127,7 +123,10 @@ async def test_idempotency_in_flight_processing(test_app, fake_redis):
 
         # Manually lock the key in FakeRedis to simulate in-flight execution
         # Key namespace is 'idempotency:{key}:{user_id}' (using anonymous for testing)
-        await fake_redis.set("idempotency:valid-idempotency-key-string:anonymous", '{"status": "processing", "request_hash": "dummy"}')
+        await fake_redis.set(
+            "idempotency:valid-idempotency-key-string:anonymous",
+            '{"status": "processing", "request_hash": "dummy"}',
+        )
 
         r = await client.post("/test-mutate", json={"value": "test"}, headers=headers)
         assert r.status_code == 409

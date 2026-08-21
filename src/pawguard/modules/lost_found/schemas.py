@@ -3,10 +3,13 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from pawguard.core.logging import get_logger
 from pawguard.modules.auth.schemas import UserProfile
 from pawguard.modules.lost_found.models import MatchStatus, ReportStatus, Species
+
+logger = get_logger(__name__)
 
 
 class LostReportCreate(BaseModel):
@@ -23,7 +26,54 @@ class LostReportCreate(BaseModel):
     longitude: float | None = Field(None, ge=-180.0, le=180.0, examples=[78.4071])
     lost_at: datetime = Field(..., examples=["2026-07-25T14:30:00Z"])
     photo_url: str | None = Field(None, max_length=512, examples=["https://example.com/buddy.jpg"])
+    # Permanent S3/Supabase object reference returned by
+    # POST /api/v1/lost-found/photo-upload-url. Stores a stable object key (NOT a
+    # presigned URL) so the backend can mint a fresh signed download URL on read.
+    # Legacy externally-hosted URLs may still be supplied via ``photo_url``.
+    photo_object_key: str | None = Field(
+        None,
+        max_length=512,
+        examples=["lost-found/00000000-0000-0000-0000-000000000000.jpg"],
+    )
     companion_pet_id: uuid.UUID | None = Field(None, description="Optional companion pet ID")
+
+    @field_validator("photo_object_key")
+    @classmethod
+    def _validate_photo_object_key(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        if not value.startswith("lost-found/"):
+            raise ValueError(
+                "photo_object_key must reference a lost-found upload "
+                "(expected prefix 'lost-found/')."
+            )
+        return value
+
+
+class LostFoundPhotoUploadUrlRequest(BaseModel):
+    """Request metadata for a presigned S3/Supabase photo upload.
+
+    Mirrors the Emergency (rescue) ``RescueMediaUploadUrlRequest`` contract: the
+    client sends file metadata, the backend returns a presigned PUT URL and the
+    permanent object key. The client uploads bytes directly to storage, then
+    submits the object key on report creation.
+    """
+
+    filename: str = Field(..., examples=["buddy.jpg"])
+    mime_type: str = Field(..., examples=["image/jpeg"])
+    file_size: int = Field(
+        ...,
+        ge=1,
+        le=52428800,
+        description="Uploaded file size in bytes. Max 50MB.",
+    )
+
+
+class LostFoundPhotoUploadUrlResponse(BaseModel):
+    """Presigned upload URL and permanent object key for a lost/found photo."""
+
+    upload_url: str
+    object_key: str
 
 
 class LostReportResponse(BaseModel):
@@ -44,10 +94,37 @@ class LostReportResponse(BaseModel):
     status: ReportStatus
     companion_pet_id: uuid.UUID | None = None
     photo_url: str | None
+    # Stable storage object key (excluded from the API response; the backend
+    # resolves it to a fresh signed download URL in ``photo_url`` on every read).
+    photo_object_key: str | None = Field(None, exclude=True)
     created_at: datetime
     user: UserProfile | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def _resolve_photo_url(self) -> "LostReportResponse":
+        """Mint a fresh signed download URL from the stored object key.
+
+        Backward compatible: legacy reports that only carry an externally
+        hosted ``photo_url`` are returned unchanged.
+        """
+        if self.photo_object_key:
+            try:
+                from pawguard.services.storage_service import get_storage_service
+
+                self.photo_url = get_storage_service().generate_presigned_download_url(
+                    object_key=self.photo_object_key
+                )
+            except Exception:
+                # Never fail report retrieval because storage signing is down;
+                # fall back to any legacy URL already present.
+                logger.warning(
+                    "lost_report_photo_url_resolution_failed",
+                    object_key=self.photo_object_key,
+                    exc_info=True,
+                )
+        return self
 
 
 class FoundReportCreate(BaseModel):
@@ -62,6 +139,27 @@ class FoundReportCreate(BaseModel):
     longitude: float | None = Field(None, ge=-180.0, le=180.0, examples=[78.4055])
     found_at: datetime = Field(..., examples=["2026-07-26T09:15:00Z"])
     photo_url: str | None = Field(None, max_length=512, examples=["https://example.com/found.jpg"])
+    # Permanent S3/Supabase object reference returned by
+    # POST /api/v1/lost-found/photo-upload-url. Stores a stable object key (NOT a
+    # presigned URL) so the backend can mint a fresh signed download URL on read.
+    # Legacy externally-hosted URLs may still be supplied via ``photo_url``.
+    photo_object_key: str | None = Field(
+        None,
+        max_length=512,
+        examples=["lost-found/00000000-0000-0000-0000-000000000000.jpg"],
+    )
+
+    @field_validator("photo_object_key")
+    @classmethod
+    def _validate_photo_object_key(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        if not value.startswith("lost-found/"):
+            raise ValueError(
+                "photo_object_key must reference a lost-found upload "
+                "(expected prefix 'lost-found/')."
+            )
+        return value
 
 
 class FoundReportResponse(BaseModel):
@@ -79,10 +177,37 @@ class FoundReportResponse(BaseModel):
     found_at: datetime
     status: ReportStatus
     photo_url: str | None
+    # Stable storage object key (excluded from the API response; the backend
+    # resolves it to a fresh signed download URL in ``photo_url`` on every read).
+    photo_object_key: str | None = Field(None, exclude=True)
     created_at: datetime
     user: UserProfile | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def _resolve_photo_url(self) -> "FoundReportResponse":
+        """Mint a fresh signed download URL from the stored object key.
+
+        Backward compatible: legacy reports that only carry an externally
+        hosted ``photo_url`` are returned unchanged.
+        """
+        if self.photo_object_key:
+            try:
+                from pawguard.services.storage_service import get_storage_service
+
+                self.photo_url = get_storage_service().generate_presigned_download_url(
+                    object_key=self.photo_object_key
+                )
+            except Exception:
+                # Never fail report retrieval because storage signing is down;
+                # fall back to any legacy URL already present.
+                logger.warning(
+                    "found_report_photo_url_resolution_failed",
+                    object_key=self.photo_object_key,
+                    exc_info=True,
+                )
+        return self
 
 
 class ReportMatchResponse(BaseModel):
@@ -144,8 +269,12 @@ class PetSightingCreate(BaseModel):
     finder_address: str | None = Field(None, max_length=1000)
     latitude: float | None = Field(None, ge=-90.0, le=90.0, examples=[17.4326])
     longitude: float | None = Field(None, ge=-180.0, le=180.0, examples=[78.4071])
-    location_address: str = Field(..., min_length=1, max_length=1000, examples=["Corner of 5th Ave and Main St"])
-    message: str | None = Field(None, max_length=4000, examples=["Pet is safe with me, call me ASAP!"])
+    location_address: str = Field(
+        ..., min_length=1, max_length=1000, examples=["Corner of 5th Ave and Main St"]
+    )
+    message: str | None = Field(
+        None, max_length=4000, examples=["Pet is safe with me, call me ASAP!"]
+    )
 
 
 class PetSightingResponse(BaseModel):

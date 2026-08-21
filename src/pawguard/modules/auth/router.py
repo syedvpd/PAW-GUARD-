@@ -164,8 +164,12 @@ def _clear_auth_cookies(response: Response) -> None:
     samesite_mode = "none" if settings.cookie_secure else "lax"
     is_secure = settings.cookie_secure
 
-    response.delete_cookie(ACCESS_TOKEN_COOKIE_NAME, domain=domain, secure=is_secure, samesite=samesite_mode)
-    response.delete_cookie(REFRESH_TOKEN_COOKIE_NAME, domain=domain, secure=is_secure, samesite=samesite_mode)
+    response.delete_cookie(
+        ACCESS_TOKEN_COOKIE_NAME, domain=domain, secure=is_secure, samesite=samesite_mode
+    )
+    response.delete_cookie(
+        REFRESH_TOKEN_COOKIE_NAME, domain=domain, secure=is_secure, samesite=samesite_mode
+    )
 
 
 def _to_login_response(
@@ -242,7 +246,9 @@ async def login(
         _set_auth_cookies(
             response, access_token=result.access_token, refresh_token=result.refresh_token
         )
-    return ApiResponse(data=_to_login_response(result, include_refresh_in_body=not is_web, is_web=is_web))
+    return ApiResponse(
+        data=_to_login_response(result, include_refresh_in_body=not is_web, is_web=is_web)
+    )
 
 
 @router.post(
@@ -268,7 +274,9 @@ async def verify_mfa_login(
         _set_auth_cookies(
             response, access_token=tokens.access_token, refresh_token=tokens.refresh_token
         )
-    return ApiResponse(data=_to_login_response(tokens, include_refresh_in_body=not is_web, is_web=is_web))
+    return ApiResponse(
+        data=_to_login_response(tokens, include_refresh_in_body=not is_web, is_web=is_web)
+    )
 
 
 @router.post(
@@ -338,9 +346,7 @@ async def logout_all(
 
 @router.get("/me", response_model=ApiResponse[UserProfile])
 async def get_me(current: CurrentUser = Depends(get_current_user)) -> ApiResponse[UserProfile]:
-    return ApiResponse(
-        data=UserProfile.model_validate(current.user)
-    )
+    return ApiResponse(data=UserProfile.model_validate(current.user))
 
 
 @router.put("/me", response_model=ApiResponse[UserProfile])
@@ -599,7 +605,9 @@ async def oauth_login(
         _set_auth_cookies(
             response, access_token=tokens.access_token, refresh_token=tokens.refresh_token
         )
-    return ApiResponse(data=_to_login_response(tokens, include_refresh_in_body=not is_web, is_web=is_web))
+    return ApiResponse(
+        data=_to_login_response(tokens, include_refresh_in_body=not is_web, is_web=is_web)
+    )
 
 
 @router.get("/oauth/accounts", response_model=ApiResponse[list[OAuthAccountInfo]])

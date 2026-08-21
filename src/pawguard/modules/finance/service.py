@@ -71,9 +71,7 @@ class FinanceService:
     ) -> ChartOfAccounts:
         existing = await self._repo.get_account_by_code(payload.account_code)
         if existing:
-            raise ConflictError(
-                f"Account code '{payload.account_code}' already exists."
-            )
+            raise ConflictError(f"Account code '{payload.account_code}' already exists.")
         account = ChartOfAccounts(
             account_code=payload.account_code,
             account_name=payload.account_name,
@@ -157,20 +155,14 @@ class FinanceService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> FinancialTransaction:
-        debit_account = await self._repo.get_account_by_id(
-            payload.debit_account_id
-        )
+        debit_account = await self._repo.get_account_by_id(payload.debit_account_id)
         if not debit_account:
             raise NotFoundError("Debit account not found.")
-        credit_account = await self._repo.get_account_by_id(
-            payload.credit_account_id
-        )
+        credit_account = await self._repo.get_account_by_id(payload.credit_account_id)
         if not credit_account:
             raise NotFoundError("Credit account not found.")
         sequence = await self._repo.next_transaction_sequence()
-        tx_number = (
-            f"TXN-{datetime.now(UTC).strftime('%Y%m%d')}-{sequence:05d}"
-        )
+        tx_number = f"TXN-{datetime.now(UTC).strftime('%Y%m%d')}-{sequence:05d}"
         tx = FinancialTransaction(
             transaction_number=tx_number,
             transaction_type=payload.transaction_type,
@@ -218,9 +210,7 @@ class FinanceService:
             )
         return tx
 
-    async def get_transaction(
-        self, tx_id: uuid.UUID
-    ) -> FinancialTransaction:
+    async def get_transaction(self, tx_id: uuid.UUID) -> FinancialTransaction:
         tx = await self._repo.get_transaction_by_id(tx_id)
         if not tx:
             raise NotFoundError("Transaction not found.")
@@ -270,21 +260,14 @@ class FinanceService:
             page, sort, search_term, transaction_type, status, date_from, date_to
         )
         return PaginatedResponse(
-            data=[
-                FinancialTransactionResponse.model_validate(t)
-                for t in results
-            ],
+            data=[FinancialTransactionResponse.model_validate(t) for t in results],
             meta=build_pagination_meta(total=total, params=page),
         )
 
-    async def get_finance_summary(
-        self, period_start: date, period_end: date
-    ) -> dict[str, Any]:
+    async def get_finance_summary(self, period_start: date, period_end: date) -> dict[str, Any]:
         return await self._repo.get_finance_summary(period_start, period_end)
 
-    async def get_pnl(
-        self, period_start: date, period_end: date
-    ) -> dict[str, Any]:
+    async def get_pnl(self, period_start: date, period_end: date) -> dict[str, Any]:
         return await self._repo.get_pnl(period_start, period_end)
 
     async def post_donation_to_ledger(
@@ -337,17 +320,11 @@ class FinanceService:
                 seen.add(donation_id)
                 donation = await self._repo.get_donation_by_id(donation_id)
                 if donation is None:
-                    raise NotFoundError(
-                        f"Donation record not found for id: {donation_id}."
-                    )
+                    raise NotFoundError(f"Donation record not found for id: {donation_id}.")
                 if donation.status != DonationStatus.SUCCESS:
-                    raise ValidationFailedError(
-                        "Only successful donations can be reconciled."
-                    )
+                    raise ValidationFailedError("Only successful donations can be reconciled.")
                 if await self._repo.is_donation_reconciled(donation_id):
-                    raise ConflictError(
-                        f"Donation {donation_id} is already reconciled."
-                    )
+                    raise ConflictError(f"Donation {donation_id} is already reconciled.")
                 unreconciled.append(donation)
         else:
             unreconciled = await self._repo.get_unreconciled_donations()
@@ -367,9 +344,7 @@ class FinanceService:
         for i, donation in enumerate(unreconciled):
             seq = sequences[i]
             tx = FinancialTransaction(
-                transaction_number=(
-                    f"DR-{datetime.now(UTC).strftime('%Y%m%d')}-{seq:05d}"
-                ),
+                transaction_number=(f"DR-{datetime.now(UTC).strftime('%Y%m%d')}-{seq:05d}"),
                 transaction_type=TransactionType.RECONCILIATION,
                 transaction_date=datetime.now(UTC).date(),
                 amount=donation.amount,
@@ -388,9 +363,7 @@ class FinanceService:
                     debit_amount=donation.amount,
                     credit_amount=0,
                     entry_date=datetime.now(UTC).date(),
-                    description=(
-                        f"Donation {donation.id} reconciliation"
-                    ),
+                    description=(f"Donation {donation.id} reconciliation"),
                 )
                 await self._repo.create_ledger_entry(entry1)
 
@@ -400,9 +373,7 @@ class FinanceService:
                     debit_amount=0,
                     credit_amount=donation.amount,
                     entry_date=datetime.now(UTC).date(),
-                    description=(
-                        f"Donation {donation.id} reconciliation"
-                    ),
+                    description=(f"Donation {donation.id} reconciliation"),
                 )
                 await self._repo.create_ledger_entry(entry2)
 
@@ -437,9 +408,7 @@ class FinanceService:
         if donation is None:
             raise NotFoundError("Donation record not found.")
         if donation.status != DonationStatus.SUCCESS:
-            raise ValidationFailedError(
-                "Only successful donations can be reconciled."
-            )
+            raise ValidationFailedError("Only successful donations can be reconciled.")
         if await self._repo.is_donation_reconciled(donation_id):
             raise ConflictError("Donation is already reconciled.")
 
@@ -463,20 +432,24 @@ class FinanceService:
     ) -> tuple[ChartOfAccounts | None, ChartOfAccounts | None]:
         income_account = (
             await self._repo._session.execute(
-                sa.select(ChartOfAccounts).where(
+                sa.select(ChartOfAccounts)
+                .where(
                     ChartOfAccounts.account_type == AccountType.INCOME,
                     ChartOfAccounts.category == AccountCategory.DONATION_INCOME,
                     ChartOfAccounts.deleted_at.is_(None),
-                ).limit(1)
+                )
+                .limit(1)
             )
         ).scalar_one_or_none()
         cash_account = (
             await self._repo._session.execute(
-                sa.select(ChartOfAccounts).where(
+                sa.select(ChartOfAccounts)
+                .where(
                     ChartOfAccounts.account_type == AccountType.ASSET,
                     ChartOfAccounts.category.in_([AccountCategory.CASH, AccountCategory.BANK]),
                     ChartOfAccounts.deleted_at.is_(None),
-                ).limit(1)
+                )
+                .limit(1)
             )
         ).scalar_one_or_none()
         return income_account, cash_account
@@ -492,9 +465,7 @@ class FinanceService:
         Shared by the bulk and single-donation reconcile flows."""
         sequence = await self._repo.next_transaction_sequence()
         tx = FinancialTransaction(
-            transaction_number=(
-                f"DR-{datetime.now(UTC).strftime('%Y%m%d')}-{sequence:05d}"
-            ),
+            transaction_number=(f"DR-{datetime.now(UTC).strftime('%Y%m%d')}-{sequence:05d}"),
             transaction_type=TransactionType.RECONCILIATION,
             transaction_date=datetime.now(UTC).date(),
             amount=donation.amount,
@@ -512,9 +483,7 @@ class FinanceService:
                 debit_amount=donation.amount,
                 credit_amount=0,
                 entry_date=datetime.now(UTC).date(),
-                description=(
-                    f"Donation {donation.id} reconciliation"
-                ),
+                description=(f"Donation {donation.id} reconciliation"),
             )
             await self._repo.create_ledger_entry(entry1)
             entry2 = GeneralLedgerEntry(
@@ -523,9 +492,7 @@ class FinanceService:
                 debit_amount=0,
                 credit_amount=donation.amount,
                 entry_date=datetime.now(UTC).date(),
-                description=(
-                    f"Donation {donation.id} reconciliation"
-                ),
+                description=(f"Donation {donation.id} reconciliation"),
             )
             await self._repo.create_ledger_entry(entry2)
 
@@ -635,8 +602,7 @@ class FinanceService:
         )
         await self._repo.create_budget_item(item)
         budget.total_budget = (
-            sum(i.allocated_amount for i in budget.items)
-            + payload.allocated_amount
+            sum(i.allocated_amount for i in budget.items) + payload.allocated_amount
         )
         await self._repo._session.flush()
         saved_budget = await self._repo.get_budget_by_id(budget_id)
@@ -681,9 +647,7 @@ class FinanceService:
         debit = await self._repo.get_account_by_id(payload.debit_account_id)
         if not debit:
             raise NotFoundError("Debit account not found.")
-        credit = await self._repo.get_account_by_id(
-            payload.credit_account_id
-        )
+        credit = await self._repo.get_account_by_id(payload.credit_account_id)
         if not credit:
             raise NotFoundError("Credit account not found.")
         rtx = RecurringTransaction(**payload.model_dump())
@@ -709,10 +673,7 @@ class FinanceService:
             page, sort, search_term, is_active
         )
         return PaginatedResponse(
-            data=[
-                RecurringTransactionResponse.model_validate(r)
-                for r in results
-            ],
+            data=[RecurringTransactionResponse.model_validate(r) for r in results],
             meta=build_pagination_meta(total=total, params=page),
         )
 
@@ -829,9 +790,7 @@ class FinanceService:
         if not expense:
             raise NotFoundError("Expense not found.")
         if expense.status not in (ExpenseStatus.DRAFT, ExpenseStatus.SUBMITTED):
-            raise ValidationFailedError(
-                "Only draft or submitted expenses can be edited."
-            )
+            raise ValidationFailedError("Only draft or submitted expenses can be edited.")
         update_data = payload.model_dump(exclude_unset=True, exclude_none=True)
         if "account_id" in update_data and update_data["account_id"]:
             account = await self._repo.get_account_by_id(update_data["account_id"])
@@ -883,9 +842,7 @@ class FinanceService:
         if not expense:
             raise NotFoundError("Expense not found.")
         if expense.status not in (ExpenseStatus.DRAFT, ExpenseStatus.SUBMITTED):
-            raise ValidationFailedError(
-                "Only draft or submitted expenses can be approved."
-            )
+            raise ValidationFailedError("Only draft or submitted expenses can be approved.")
         expense.status = ExpenseStatus.APPROVED
         expense.approved_by = actor_id
         expense.approved_at = datetime.now(UTC)
@@ -916,9 +873,7 @@ class FinanceService:
         if not expense:
             raise NotFoundError("Expense not found.")
         if expense.status not in (ExpenseStatus.DRAFT, ExpenseStatus.SUBMITTED):
-            raise ValidationFailedError(
-                "Only draft or submitted expenses can be rejected."
-            )
+            raise ValidationFailedError("Only draft or submitted expenses can be rejected.")
         expense.status = ExpenseStatus.REJECTED
         expense.rejection_reason = reason
         await self._repo._session.flush()
@@ -983,11 +938,13 @@ class FinanceService:
             expense_account = await self._repo.get_account_by_id(expense.account_id)
             cash_account = (
                 await self._repo._session.execute(
-                    sa.select(ChartOfAccounts).where(
+                    sa.select(ChartOfAccounts)
+                    .where(
                         ChartOfAccounts.account_type == AccountType.ASSET,
                         ChartOfAccounts.category.in_([AccountCategory.CASH, AccountCategory.BANK]),
                         ChartOfAccounts.deleted_at.is_(None),
-                    ).limit(1)
+                    )
+                    .limit(1)
                 )
             ).scalar_one_or_none()
             tx = FinancialTransaction(
@@ -1034,7 +991,9 @@ class FinanceService:
                 metadata={
                     "expense_id": str(expense_id),
                     "action": "paid",
-                    "transaction_id": str(expense.transaction_id) if expense.transaction_id else None,
+                    "transaction_id": str(expense.transaction_id)
+                    if expense.transaction_id
+                    else None,
                 },
             )
         return expense
@@ -1077,11 +1036,11 @@ class FinanceService:
         if donation.status == DonationStatus.REFUNDED:
             raise ConflictError("This donation has already been refunded.")
         if donation.status != DonationStatus.SUCCESS:
-            raise ValidationFailedError(
-                "Only successful donations can be refunded."
-            )
+            raise ValidationFailedError("Only successful donations can be refunded.")
         original_amount = Decimal(str(donation.amount))
-        actual_refund = refund_amount if refund_amount and refund_amount <= original_amount else original_amount
+        actual_refund = (
+            refund_amount if refund_amount and refund_amount <= original_amount else original_amount
+        )
         if actual_refund <= 0:
             raise ValidationFailedError("Refund amount must be greater than zero.")
         sequence = await self._repo.next_transaction_sequence()
@@ -1176,14 +1135,14 @@ class FinanceService:
                 "Please update the donor profile with PAN and eligibility details."
             )
         if not donor.pan_number:
-            raise ValidationFailedError(
-                "PAN number is required for 80G certificate generation."
-            )
-        donor_name = donor.full_name_for_80g or (
-            donor.user.full_name if donor.user else "Donor"
-        )
+            raise ValidationFailedError("PAN number is required for 80G certificate generation.")
+        donor_name = donor.full_name_for_80g or (donor.user.full_name if donor.user else "Donor")
         receipt_number = f"80G-{donation.id.hex[:12].upper()}"
-        donation_date = donation.created_at.date() if hasattr(donation.created_at, 'date') else donation.created_at
+        donation_date = (
+            donation.created_at.date()
+            if hasattr(donation.created_at, "date")
+            else donation.created_at
+        )
         try:
             pdf_bytes = await self._generate_80g_pdf(
                 donor_name=donor_name,
@@ -1199,6 +1158,7 @@ class FinanceService:
                 folder="documents", filename=f"80g_{donation.id}.pdf"
             )
             import asyncio
+
             await asyncio.to_thread(
                 storage.put_object,
                 object_key=object_key,
@@ -1272,20 +1232,22 @@ class FinanceService:
         if not donation:
             raise NotFoundError("Donation not found.")
         if donation.status != DonationStatus.SUCCESS:
-            raise ValidationFailedError(
-                "Receipts can only be generated for successful donations."
-            )
+            raise ValidationFailedError("Receipts can only be generated for successful donations.")
         if donation.receipt_file_key:
             return donation.receipt_file_key
         from pawguard.modules.dog.repository import DogRepository
         from pawguard.modules.donation.repository import DonationRepository
         from pawguard.modules.donation.service import DonationService
         from pawguard.services.storage_service import StorageService
+
         donation_repo = DonationRepository(self._repo._session)
         dog_repo = DogRepository(self._repo._session)
         storage = StorageService()
         temp_service = DonationService(
-            donation_repo, dog_repo, storage_service=storage, audit_service=self._audit,
+            donation_repo,
+            dog_repo,
+            storage_service=storage,
+            audit_service=self._audit,
         )
         refreshed = await donation_repo.get_donation_by_id(donation_id)
         if not refreshed:

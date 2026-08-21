@@ -18,7 +18,9 @@ def app():
         raise IntegrityError(
             statement="INSERT INTO test",
             params={},
-            orig=Exception("duplicate key value violates unique constraint 'users_email_key'\nKey (email)=(test@example.com) already exists."),
+            orig=Exception(
+                "duplicate key value violates unique constraint 'users_email_key'\nKey (email)=(test@example.com) already exists."
+            ),
         )
 
     @test_app.get("/test-check-integrity")
@@ -26,7 +28,9 @@ def app():
         raise IntegrityError(
             statement="INSERT INTO test",
             params={},
-            orig=Exception("new row for relation 'dog_sponsorships' violates check constraint 'ck_dog_sponsorships_monthly_amount_positive'"),
+            orig=Exception(
+                "new row for relation 'dog_sponsorships' violates check constraint 'ck_dog_sponsorships_monthly_amount_positive'"
+            ),
         )
 
     @test_app.get("/test-data-error")

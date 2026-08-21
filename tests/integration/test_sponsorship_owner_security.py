@@ -142,9 +142,7 @@ class TestSponsorshipAccessControl:
         sponsorship_id = await self._create_owned_sponsorship(
             client, db_session, "ownersponsor@sponsor.test.com"
         )
-        resp = await client.get(
-            f"/api/v1/donations/sponsorships/{sponsorship_id}", headers=headers
-        )
+        resp = await client.get(f"/api/v1/donations/sponsorships/{sponsorship_id}", headers=headers)
         assert resp.status_code == 200
         assert resp.json()["data"]["id"] == str(sponsorship_id)
 

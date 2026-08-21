@@ -182,9 +182,7 @@ class MedicalClearanceCreate(BaseModel):
         max_length=64,
         examples=["adoption_surgery"],
     )
-    status: Literal["approved", "denied", "pending"] = Field(
-        "approved", examples=["approved"]
-    )
+    status: Literal["approved", "denied", "pending"] = Field("approved", examples=["approved"])
     decision_notes: str | None = Field(None, examples=["Healthy, cleared for adoption."])
     expires_at: datetime | None = Field(None, examples=["2026-08-03T00:00:00Z"])
 

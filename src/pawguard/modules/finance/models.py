@@ -77,24 +77,17 @@ class RecurringInterval(StrEnum):
 class ChartOfAccounts(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "chart_of_accounts"
 
-    account_code: Mapped[str] = mapped_column(
-        String(32), unique=True, nullable=False, index=True
-    )
+    account_code: Mapped[str] = mapped_column(String(32), unique=True, nullable=False, index=True)
     account_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    account_type: Mapped[AccountType] = mapped_column(
-        String(32), nullable=False, index=True
-    )
-    category: Mapped[AccountCategory] = mapped_column(
-        String(64), nullable=False, index=True
-    )
+    account_type: Mapped[AccountType] = mapped_column(String(32), nullable=False, index=True)
+    category: Mapped[AccountCategory] = mapped_column(String(64), nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     parent_account_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("chart_of_accounts.id", ondelete="SET NULL"),
         nullable=True,
-    
-        index=True
+        index=True,
     )
     opening_balance: Mapped[Decimal] = mapped_column(
         Numeric(14, 2), default=Decimal("0.00"), nullable=False
@@ -104,7 +97,9 @@ class ChartOfAccounts(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, 
     )
 
     children: Mapped[list["ChartOfAccounts"]] = relationship(
-        "ChartOfAccounts", backref="parent", remote_side="ChartOfAccounts.id",
+        "ChartOfAccounts",
+        backref="parent",
+        remote_side="ChartOfAccounts.id",
         lazy="selectin",
     )
 
@@ -119,12 +114,14 @@ class GeneralLedgerEntry(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     account_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("chart_of_accounts.id", ondelete="RESTRICT"),
-        nullable=False, index=True,
+        nullable=False,
+        index=True,
     )
     transaction_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("financial_transactions.id", ondelete="RESTRICT"),
-        nullable=False, index=True,
+        nullable=False,
+        index=True,
     )
     debit_amount: Mapped[Decimal] = mapped_column(
         Numeric(14, 2), default=Decimal("0.00"), nullable=False
@@ -135,9 +132,7 @@ class GeneralLedgerEntry(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     entry_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    account: Mapped["ChartOfAccounts"] = relationship(
-        "ChartOfAccounts", lazy="joined"
-    )
+    account: Mapped["ChartOfAccounts"] = relationship("ChartOfAccounts", lazy="joined")
     transaction: Mapped["FinancialTransaction"] = relationship(
         "FinancialTransaction", lazy="joined"
     )
@@ -157,44 +152,36 @@ class FinancialTransaction(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMi
         String(32), nullable=False, index=True
     )
     status: Mapped[TransactionStatus] = mapped_column(
-        String(32), nullable=False,
-        default=TransactionStatus.PENDING, index=True,
+        String(32),
+        nullable=False,
+        default=TransactionStatus.PENDING,
+        index=True,
     )
-    transaction_date: Mapped[date] = mapped_column(
-        Date, nullable=False, index=True
-    )
+    transaction_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
-    currency: Mapped[str] = mapped_column(
-        String(3), default="USD", nullable=False
-    )
+    currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    reference_type: Mapped[str | None] = mapped_column(
-        String(64), nullable=True
-    )
-    reference_id: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True), nullable=True
-    )
+    reference_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    reference_id: Mapped[uuid.UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
     donation_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("donations.id", ondelete="SET NULL"),
         nullable=True,
-    
-        index=True
+        index=True,
     )
-    reconciled_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    reconciled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     reconciled_by: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
-    
-        index=True
+        index=True,
     )
 
     entries: Mapped[list["GeneralLedgerEntry"]] = relationship(
-        "GeneralLedgerEntry", back_populates="transaction",
-        cascade="all, delete-orphan", lazy="selectin",
+        "GeneralLedgerEntry",
+        back_populates="transaction",
+        cascade="all, delete-orphan",
+        lazy="selectin",
     )
 
 
@@ -203,16 +190,10 @@ class RecurringTransaction(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMi
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    transaction_type: Mapped[TransactionType] = mapped_column(
-        String(32), nullable=False
-    )
+    transaction_type: Mapped[TransactionType] = mapped_column(String(32), nullable=False)
     amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
-    currency: Mapped[str] = mapped_column(
-        String(3), default="USD", nullable=False
-    )
-    interval: Mapped[RecurringInterval] = mapped_column(
-        String(32), nullable=False
-    )
+    currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
+    interval: Mapped[RecurringInterval] = mapped_column(String(32), nullable=False)
     day_of_month: Mapped[int | None] = mapped_column(Integer, nullable=True)
     day_of_week: Mapped[int | None] = mapped_column(Integer, nullable=True)
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
@@ -221,19 +202,15 @@ class RecurringTransaction(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMi
         PG_UUID(as_uuid=True),
         ForeignKey("chart_of_accounts.id", ondelete="RESTRICT"),
         nullable=False,
-    
-        index=True
+        index=True,
     )
     credit_account_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("chart_of_accounts.id", ondelete="RESTRICT"),
         nullable=False,
-    
-        index=True
+        index=True,
     )
-    is_active: Mapped[bool] = mapped_column(
-        Boolean, default=True, nullable=False
-    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     last_generated: Mapped[date | None] = mapped_column(Date, nullable=True)
 
 
@@ -241,9 +218,7 @@ class Budget(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "budgets"
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    fiscal_year: Mapped[int] = mapped_column(
-        Integer, nullable=False, index=True
-    )
+    fiscal_year: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     end_date: Mapped[date] = mapped_column(Date, nullable=False)
     total_budget: Mapped[Decimal] = mapped_column(
@@ -253,13 +228,13 @@ class Budget(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
         Numeric(14, 2), default=Decimal("0.00"), nullable=False
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    is_active: Mapped[bool] = mapped_column(
-        Boolean, default=True, nullable=False
-    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     items: Mapped[list["BudgetItem"]] = relationship(
-        "BudgetItem", back_populates="budget",
-        cascade="all, delete-orphan", lazy="selectin",
+        "BudgetItem",
+        back_populates="budget",
+        cascade="all, delete-orphan",
+        lazy="selectin",
     )
 
 
@@ -269,28 +244,22 @@ class BudgetItem(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     budget_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("budgets.id", ondelete="CASCADE"),
-        nullable=False, index=True,
+        nullable=False,
+        index=True,
     )
     account_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("chart_of_accounts.id", ondelete="RESTRICT"),
         nullable=False,
-    
-        index=True
+        index=True,
     )
-    allocated_amount: Mapped[Decimal] = mapped_column(
-        Numeric(14, 2), nullable=False
-    )
+    allocated_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     spent_amount: Mapped[Decimal] = mapped_column(
         Numeric(14, 2), default=Decimal("0.00"), nullable=False
     )
 
-    budget: Mapped["Budget"] = relationship(
-        "Budget", back_populates="items", lazy="joined"
-    )
-    account: Mapped["ChartOfAccounts"] = relationship(
-        "ChartOfAccounts", lazy="joined"
-    )
+    budget: Mapped["Budget"] = relationship("Budget", back_populates="items", lazy="joined")
+    account: Mapped["ChartOfAccounts"] = relationship("ChartOfAccounts", lazy="joined")
 
 
 class ExpenseStatus(StrEnum):
@@ -326,22 +295,14 @@ class PaymentMethod(StrEnum):
 class FinanceExpense(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "finance_expenses"
 
-    __table_args__ = (
-        CheckConstraint("amount > 0", name="ck_finance_expenses_amount_positive"),
-    )
+    __table_args__ = (CheckConstraint("amount > 0", name="ck_finance_expenses_amount_positive"),)
 
-    expense_number: Mapped[str] = mapped_column(
-        String(64), unique=True, nullable=False, index=True
-    )
+    expense_number: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
-    currency: Mapped[str] = mapped_column(
-        String(3), default="USD", nullable=False
-    )
-    category: Mapped[ExpenseCategory] = mapped_column(
-        String(64), nullable=False, index=True
-    )
+    currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
+    category: Mapped[ExpenseCategory] = mapped_column(String(64), nullable=False, index=True)
     vendor_name: Mapped[str] = mapped_column(String(255), nullable=False)
     vendor_contact: Mapped[str | None] = mapped_column(String(255), nullable=True)
     vendor_gstin: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -349,9 +310,7 @@ class FinanceExpense(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, B
     payment_method: Mapped[PaymentMethod] = mapped_column(
         String(32), nullable=False, default=PaymentMethod.CASH
     )
-    payment_reference: Mapped[str | None] = mapped_column(
-        String(255), nullable=True
-    )
+    payment_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
     invoice_number: Mapped[str | None] = mapped_column(String(128), nullable=True)
     status: Mapped[ExpenseStatus] = mapped_column(
         String(32), nullable=False, default=ExpenseStatus.DRAFT, index=True
@@ -361,9 +320,7 @@ class FinanceExpense(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, B
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
-    approved_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     account_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
@@ -378,9 +335,7 @@ class FinanceExpense(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, B
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    account: Mapped["ChartOfAccounts | None"] = relationship(
-        "ChartOfAccounts", lazy="joined"
-    )
+    account: Mapped["ChartOfAccounts | None"] = relationship("ChartOfAccounts", lazy="joined")
     transaction: Mapped["FinancialTransaction | None"] = relationship(
         "FinancialTransaction", lazy="joined"
     )

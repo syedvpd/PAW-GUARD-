@@ -32,15 +32,11 @@ class AdoptionApplicationUpdate(BaseModel):
     vetting_officer_notes: str | None = Field(
         None, examples=["Phone interview completed, applicant is a strong candidate."]
     )
-    home_inspection_scheduled_at: datetime | None = Field(
-        None, examples=["2026-08-15T14:00:00Z"]
-    )
+    home_inspection_scheduled_at: datetime | None = Field(None, examples=["2026-08-15T14:00:00Z"])
     home_inspection_notes: str | None = Field(
         None, examples=["Yard is securely fenced, home is clean and pet-ready."]
     )
-    adoption_agreement_url: str | None = Field(
-        None, examples=["documents/agreement_1a2b3c.pdf"]
-    )
+    adoption_agreement_url: str | None = Field(None, examples=["documents/agreement_1a2b3c.pdf"])
 
 
 class AdoptionStatusUpdate(BaseModel):
@@ -118,9 +114,7 @@ class AdoptionApplicationListQueryParams(BaseModel):
 class AdoptionFeeUpdate(BaseModel):
     """Staff-only payload for setting the adoption fee before approval."""
 
-    fee_amount: Decimal = Field(
-        ..., ge=0, description="Adoption fee amount", examples=[250.00]
-    )
+    fee_amount: Decimal = Field(..., ge=0, description="Adoption fee amount", examples=[250.00])
 
 
 class FollowUpProofCreate(BaseModel):
@@ -154,6 +148,4 @@ class AdoptionFollowUpResponse(BaseModel):
 class AdoptionFollowUpCreate(BaseModel):
     """Create a post-adoption follow-up milestone."""
 
-    due_day: int = Field(
-        ..., ge=30, le=180, examples=[30], description="Days after completion"
-    )
+    due_day: int = Field(..., ge=30, le=180, examples=[30], description="Days after completion")

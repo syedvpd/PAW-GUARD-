@@ -39,9 +39,10 @@ class Vehicle(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     )
     mileage: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     primary_driver_id: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
-    ,
-        index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
 
     insurance_provider: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -54,9 +55,10 @@ class FleetMaintenance(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "fleet_maintenances"
 
     vehicle_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("vehicles.id", ondelete="CASCADE"), nullable=False
-    ,
-        index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("vehicles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     service_date: Mapped[date] = mapped_column(Date, nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
@@ -70,14 +72,16 @@ class EquipmentCheckout(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     # Net Gun, Trap, Crate, etc.
     equipment_name: Mapped[str] = mapped_column(String(255), nullable=False)
     assigned_to_agent_id: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
-    ,
-        index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     assigned_to_vehicle_id: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("vehicles.id", ondelete="SET NULL"), nullable=True
-    ,
-        index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("vehicles.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     # Populated when the checkout was auto-created for a rescue dispatch
     # (PRR 3.3): links the equipment to the dispatch and lets the fleet module
@@ -103,14 +107,16 @@ class FuelLog(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "fuel_logs"
 
     vehicle_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("vehicles.id", ondelete="CASCADE"), nullable=False
-    ,
-        index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("vehicles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     filled_by_id: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
-    ,
-        index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     fuel_type: Mapped[str] = mapped_column(String(32), nullable=False)
     volume_litres: Mapped[float] = mapped_column(Numeric(8, 2), nullable=False)

@@ -89,4 +89,3 @@ async def test_locks_fail_closed_without_redis() -> None:
     # Distributed lock must fail closed when Redis is unavailable to prevent race conditions
     assert await cache.acquire_lock("my_lock", "token") is False
     assert await cache.release_lock("my_lock", "token") is False
-

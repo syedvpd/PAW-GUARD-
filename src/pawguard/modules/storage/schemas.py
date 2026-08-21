@@ -55,7 +55,6 @@ class StoredFileCreate(BaseModel):
         return value
 
 
-
 class StoredFileUpdate(BaseModel):
     is_uploaded: bool = True
 

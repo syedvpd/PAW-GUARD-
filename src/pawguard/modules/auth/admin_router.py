@@ -56,6 +56,7 @@ def _get_admin_service(
 
 # ── Role CRUD ────────────────────────────────────────────────────────────────
 
+
 @admin_router.get(
     "/roles",
     response_model=ApiResponse[list[RoleResponse]],
@@ -149,6 +150,7 @@ async def delete_role(
 
 # ── Permission CRUD ──────────────────────────────────────────────────────────
 
+
 @admin_router.get(
     "/permissions",
     response_model=ApiResponse[list[PermissionResponse]],
@@ -162,6 +164,7 @@ async def list_permissions(
 
 
 # ── User provisioning ────────────────────────────────────────────────────────
+
 
 @admin_router.get(
     "/users",
@@ -348,4 +351,6 @@ async def revoke_user_direct_permission(
         actor_id=current_user.id,
         ip_address=resolve_client_ip(request),
     )
-    return ApiResponse(data=revoked, message="Permission revoked." if revoked else "Permission not found.")
+    return ApiResponse(
+        data=revoked, message="Permission revoked." if revoked else "Permission not found."
+    )

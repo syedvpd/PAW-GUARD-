@@ -46,15 +46,21 @@ class InventoryItem(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Ba
     name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     category: Mapped[ItemCategory] = mapped_column(String(64), nullable=False, index=True)
     quantity: Mapped[float] = mapped_column(
-        Numeric(10, 2, asdecimal=False), default=0.0, nullable=False,
+        Numeric(10, 2, asdecimal=False),
+        default=0.0,
+        nullable=False,
     )
     unit: Mapped[str] = mapped_column(String(32), nullable=False)  # vial, kg, pack, etc.
     reorder_threshold: Mapped[float] = mapped_column(
-        Numeric(10, 2, asdecimal=False), default=10.0, nullable=False,
+        Numeric(10, 2, asdecimal=False),
+        default=10.0,
+        nullable=False,
     )
     expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     unit_cost: Mapped[float] = mapped_column(
-        Numeric(10, 2, asdecimal=False), default=0.0, nullable=False,
+        Numeric(10, 2, asdecimal=False),
+        default=0.0,
+        nullable=False,
     )
 
 
@@ -62,14 +68,16 @@ class InventoryMovement(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "inventory_movements"
 
     item_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("inventory_items.id", ondelete="CASCADE"), nullable=False
-    ,
-        index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("inventory_items.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     moved_by: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    ,
-        index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     movement_type: Mapped[MovementType] = mapped_column(String(32), nullable=False)
     quantity: Mapped[float] = mapped_column(Numeric(10, 2, asdecimal=False), nullable=False)
@@ -82,14 +90,16 @@ class RequisitionOrder(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "requisition_orders"
 
     item_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("inventory_items.id", ondelete="CASCADE"), nullable=False
-    ,
-        index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("inventory_items.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     requester_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    ,
-        index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     quantity: Mapped[float] = mapped_column(Numeric(10, 2, asdecimal=False), nullable=False)
     status: Mapped[RequisitionStatus] = mapped_column(
@@ -117,15 +127,20 @@ class InventoryItemSupplier(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "inventory_item_suppliers"
 
     item_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("inventory_items.id", ondelete="CASCADE"),
-        nullable=False, index=True,
+        PG_UUID(as_uuid=True),
+        ForeignKey("inventory_items.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     supplier_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("suppliers.id", ondelete="CASCADE"),
-        nullable=False, index=True,
+        PG_UUID(as_uuid=True),
+        ForeignKey("suppliers.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     unit_cost: Mapped[float] = mapped_column(
-        Numeric(10, 2, asdecimal=False), nullable=False,
+        Numeric(10, 2, asdecimal=False),
+        nullable=False,
     )
     lead_time_days: Mapped[int | None] = mapped_column(nullable=True)
     is_preferred: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

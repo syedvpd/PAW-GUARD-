@@ -78,7 +78,6 @@ class DogProfileCreate(BaseModel):
     )
 
 
-
 class DogProfileUpdate(BaseModel):
     microchip_id: str | None = Field(None, examples=["985141002345678"])
     name: str | None = Field(None, examples=["Barnaby"])
@@ -97,9 +96,7 @@ class DogProfileUpdate(BaseModel):
     temperament: DogTemperament | None = Field(None, examples=["friendly"])
     ear_shape: DogEarShape | None = Field(None, examples=["floppy"])
     tail_type: DogTailType | None = Field(None, examples=["curled"])
-    distinctive_markers: str | None = Field(
-        None, max_length=512, examples=["White patch on chest"]
-    )
+    distinctive_markers: str | None = Field(None, max_length=512, examples=["White patch on chest"])
     status: DogStatus | None = Field(None, examples=["shelter"])
     shelter_facility_id: uuid.UUID | None = None
     section_id: uuid.UUID | None = None
@@ -207,9 +204,7 @@ class DogWeightLogCreate(BaseModel):
     """One weight measurement for a dog (PRR 3.4 Weight History)."""
 
     weight: float = Field(..., gt=0, le=2000, description="Weight in kg", examples=[16.4])
-    measured_at: datetime | None = Field(
-        None, description="Defaults to now when omitted."
-    )
+    measured_at: datetime | None = Field(None, description="Defaults to now when omitted.")
     notes: str | None = Field(None, max_length=512, examples=["Post-surgery weigh-in"])
 
 
@@ -259,4 +254,3 @@ class DogSafetyTagProvisionResponse(DogSafetyTagResponse):
     """Response when a Safety Tag is provisioned; exposes raw_token ONLY once."""
 
     raw_token: str
-

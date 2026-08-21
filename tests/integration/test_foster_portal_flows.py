@@ -54,9 +54,7 @@ class TestFosterPortalFlows:
         # 4. Approve the foster profile & assign a dog placement
         user = (await db_session.execute(select(User).where(User.email == email))).scalar_one()
         foster_prof = (
-            await db_session.execute(
-                select(FosterProfile).where(FosterProfile.user_id == user.id)
-            )
+            await db_session.execute(select(FosterProfile).where(FosterProfile.user_id == user.id))
         ).scalar_one()
         foster_prof.status = FosterStatus.APPROVED
         foster_prof.is_available = True
@@ -108,9 +106,7 @@ class TestFosterPortalFlows:
         )
         user = (await db_session.execute(select(User).where(User.email == email))).scalar_one()
         foster_prof = (
-            await db_session.execute(
-                select(FosterProfile).where(FosterProfile.user_id == user.id)
-            )
+            await db_session.execute(select(FosterProfile).where(FosterProfile.user_id == user.id))
         ).scalar_one()
         foster_prof.status = FosterStatus.APPROVED
 
@@ -175,9 +171,7 @@ class TestFosterPortalFlows:
         )
         user = (await db_session.execute(select(User).where(User.email == email))).scalar_one()
         foster_prof = (
-            await db_session.execute(
-                select(FosterProfile).where(FosterProfile.user_id == user.id)
-            )
+            await db_session.execute(select(FosterProfile).where(FosterProfile.user_id == user.id))
         ).scalar_one()
         foster_prof.status = FosterStatus.APPROVED
 
@@ -229,33 +223,61 @@ class TestFosterPortalFlows:
         email_a = f"foster_a_{uuid.uuid4().hex[:6]}@example.com"
         email_b = f"foster_b_{uuid.uuid4().hex[:6]}@example.com"
 
-        headers_a = await register_and_auth(client, db_session, email=email_a, role="general_public")
-        headers_b = await register_and_auth(client, db_session, email=email_b, role="general_public")
+        headers_a = await register_and_auth(
+            client, db_session, email=email_a, role="general_public"
+        )
+        headers_b = await register_and_auth(
+            client, db_session, email=email_b, role="general_public"
+        )
 
         # Setup Foster A and Placement A
         await client.post("/api/v1/fosters/apply", json={"max_capacity": 1}, headers=headers_a)
         user_a = (await db_session.execute(select(User).where(User.email == email_a))).scalar_one()
-        prof_a = (await db_session.execute(select(FosterProfile).where(FosterProfile.user_id == user_a.id))).scalar_one()
+        prof_a = (
+            await db_session.execute(
+                select(FosterProfile).where(FosterProfile.user_id == user_a.id)
+            )
+        ).scalar_one()
         prof_a.status = FosterStatus.APPROVED
 
-        dog_a = DogProfile(registration_number=f"DOG-{uuid.uuid4().hex[:6]}", name="Dog A", breed="Lab", status=DogStatus.FOSTERED, is_adoptable=True)
+        dog_a = DogProfile(
+            registration_number=f"DOG-{uuid.uuid4().hex[:6]}",
+            name="Dog A",
+            breed="Lab",
+            status=DogStatus.FOSTERED,
+            is_adoptable=True,
+        )
         db_session.add(dog_a)
         await db_session.commit()
 
-        placement_a = FosterPlacement(foster_id=prof_a.id, dog_id=dog_a.id, placed_at=datetime.now(UTC), is_active=True)
+        placement_a = FosterPlacement(
+            foster_id=prof_a.id, dog_id=dog_a.id, placed_at=datetime.now(UTC), is_active=True
+        )
         db_session.add(placement_a)
 
         # Setup Foster B and Placement B
         await client.post("/api/v1/fosters/apply", json={"max_capacity": 1}, headers=headers_b)
         user_b = (await db_session.execute(select(User).where(User.email == email_b))).scalar_one()
-        prof_b = (await db_session.execute(select(FosterProfile).where(FosterProfile.user_id == user_b.id))).scalar_one()
+        prof_b = (
+            await db_session.execute(
+                select(FosterProfile).where(FosterProfile.user_id == user_b.id)
+            )
+        ).scalar_one()
         prof_b.status = FosterStatus.APPROVED
 
-        dog_b = DogProfile(registration_number=f"DOG-{uuid.uuid4().hex[:6]}", name="Dog B", breed="Poodle", status=DogStatus.FOSTERED, is_adoptable=True)
+        dog_b = DogProfile(
+            registration_number=f"DOG-{uuid.uuid4().hex[:6]}",
+            name="Dog B",
+            breed="Poodle",
+            status=DogStatus.FOSTERED,
+            is_adoptable=True,
+        )
         db_session.add(dog_b)
         await db_session.commit()
 
-        placement_b = FosterPlacement(foster_id=prof_b.id, dog_id=dog_b.id, placed_at=datetime.now(UTC), is_active=True)
+        placement_b = FosterPlacement(
+            foster_id=prof_b.id, dog_id=dog_b.id, placed_at=datetime.now(UTC), is_active=True
+        )
         db_session.add(placement_b)
         await db_session.commit()
 
@@ -311,15 +333,25 @@ class TestFosterPortalFlows:
 
         await client.post("/api/v1/fosters/apply", json={"max_capacity": 1}, headers=headers)
         user = (await db_session.execute(select(User).where(User.email == email))).scalar_one()
-        prof = (await db_session.execute(select(FosterProfile).where(FosterProfile.user_id == user.id))).scalar_one()
+        prof = (
+            await db_session.execute(select(FosterProfile).where(FosterProfile.user_id == user.id))
+        ).scalar_one()
         prof.status = FosterStatus.APPROVED
 
-        dog = DogProfile(registration_number=f"DOG-{uuid.uuid4().hex[:6]}", name="Old Dog", breed="Boxer", status=DogStatus.SHELTER, is_adoptable=True)
+        dog = DogProfile(
+            registration_number=f"DOG-{uuid.uuid4().hex[:6]}",
+            name="Old Dog",
+            breed="Boxer",
+            status=DogStatus.SHELTER,
+            is_adoptable=True,
+        )
         db_session.add(dog)
         await db_session.commit()
 
         # Inactive placement
-        placement = FosterPlacement(foster_id=prof.id, dog_id=dog.id, placed_at=datetime.now(UTC), is_active=False)
+        placement = FosterPlacement(
+            foster_id=prof.id, dog_id=dog.id, placed_at=datetime.now(UTC), is_active=False
+        )
         db_session.add(placement)
         await db_session.commit()
 
@@ -345,15 +377,29 @@ class TestFosterPortalFlows:
 
         # Setup foster profile & placement
         await client.post("/api/v1/fosters/apply", json={"max_capacity": 1}, headers=foster_headers)
-        user_foster = (await db_session.execute(select(User).where(User.email == email_foster))).scalar_one()
-        prof = (await db_session.execute(select(FosterProfile).where(FosterProfile.user_id == user_foster.id))).scalar_one()
+        user_foster = (
+            await db_session.execute(select(User).where(User.email == email_foster))
+        ).scalar_one()
+        prof = (
+            await db_session.execute(
+                select(FosterProfile).where(FosterProfile.user_id == user_foster.id)
+            )
+        ).scalar_one()
         prof.status = FosterStatus.APPROVED
 
-        dog = DogProfile(registration_number=f"DOG-{uuid.uuid4().hex[:6]}", name="Staff Dog", breed="Husky", status=DogStatus.FOSTERED, is_adoptable=True)
+        dog = DogProfile(
+            registration_number=f"DOG-{uuid.uuid4().hex[:6]}",
+            name="Staff Dog",
+            breed="Husky",
+            status=DogStatus.FOSTERED,
+            is_adoptable=True,
+        )
         db_session.add(dog)
         await db_session.commit()
 
-        placement = FosterPlacement(foster_id=prof.id, dog_id=dog.id, placed_at=datetime.now(UTC), is_active=True)
+        placement = FosterPlacement(
+            foster_id=prof.id, dog_id=dog.id, placed_at=datetime.now(UTC), is_active=True
+        )
         db_session.add(placement)
         await db_session.commit()
 
@@ -376,11 +422,17 @@ class TestFosterPortalFlows:
         email_foster = f"foster_vetting_{uuid.uuid4().hex[:6]}@example.com"
         email_staff = f"staff_vetter_{uuid.uuid4().hex[:6]}@example.com"
 
-        foster_headers = await register_and_auth(client, db_session, email=email_foster, role="general_public")
-        staff_headers = await register_and_auth(client, db_session, email=email_staff, role="super_admin")
+        foster_headers = await register_and_auth(
+            client, db_session, email=email_foster, role="general_public"
+        )
+        staff_headers = await register_and_auth(
+            client, db_session, email=email_staff, role="super_admin"
+        )
 
         # Foster applies
-        apply_resp = await client.post("/api/v1/fosters/apply", json={"max_capacity": 2}, headers=foster_headers)
+        apply_resp = await client.post(
+            "/api/v1/fosters/apply", json={"max_capacity": 2}, headers=foster_headers
+        )
         assert apply_resp.status_code == 201
         foster_id = apply_resp.json()["data"]["id"]
 
@@ -394,7 +446,9 @@ class TestFosterPortalFlows:
             "home_inspection_notes": "6ft fenced backyard, no hazards.",
             "home_inspection_address": "100 Rescue Avenue, Paw City",
         }
-        update_resp = await client.put(f"/api/v1/fosters/{foster_id}", json=update_payload, headers=staff_headers)
+        update_resp = await client.put(
+            f"/api/v1/fosters/{foster_id}", json=update_payload, headers=staff_headers
+        )
         assert update_resp.status_code == 200
         data = update_resp.json()["data"]
         assert data["background_check_passed"] is True

@@ -77,10 +77,13 @@ select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC", "S"]
 # B008: FastAPI's `Depends(...)` in argument defaults is the idiomatic DI pattern, not a bug.
 # S105: triggers on non-secret string literals like token_type="bearer".
 # E501: line-length formatting handled by formatter.
-ignore = ["S101", "B008", "S105", "E501"]
+# S110: explicit pass in optional fallback try-except blocks.
+# S311: pseudo-random numbers used for jitter/backoff, not crypto.
+# SIM102: nested if blocks for schema field migrations.
+ignore = ["S101", "B008", "S105", "E501", "S110", "S311", "SIM102"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "S105", "S106", "E501"]
+"tests/**" = ["S101", "S105", "S106", "E501", "E402"]
 
 [tool.mypy]
 python_version = "3.13"

@@ -38,9 +38,7 @@ from pawguard.workers.jobs.retry import retry_defer
 logger = get_logger(__name__)
 
 
-def _notification_service(
-    session: AsyncSession, ctx: dict[str, object]
-) -> NotificationService:
+def _notification_service(session: AsyncSession, ctx: dict[str, object]) -> NotificationService:
     """NotificationService wired to the worker's ARQ pool so `send_email=True`
     notifications actually enqueue email jobs. The ARQ worker puts its Redis
     pool on ctx['redis']; absent (e.g. in tests) it degrades to in-app only."""
@@ -48,9 +46,7 @@ def _notification_service(
     return NotificationService(repository=NotificationRepository(session), arq_pool=pool)
 
 
-async def _staff_user_ids(
-    session: AsyncSession, *permission_codes: str
-) -> list[uuid.UUID]:
+async def _staff_user_ids(session: AsyncSession, *permission_codes: str) -> list[uuid.UUID]:
     """Ids of active, non-deleted users holding any of the given permissions.
 
     Notifications require a concrete recipient (Notification.user_id is NOT
@@ -149,10 +145,7 @@ async def check_inventory_expiry(ctx: dict[str, object]) -> None:
                 payload = NotificationCreate(
                     user_id=user_id,
                     title="Inventory Expiry Warning",
-                    body=(
-                        f"{item.name} expires in {days_left} day(s) "
-                        f"(on {item.expiry_date})."
-                    ),
+                    body=(f"{item.name} expires in {days_left} day(s) (on {item.expiry_date})."),
                     notification_type="expiry_alert",
                 )
                 await notification_svc.create_notification(payload=payload)
@@ -349,9 +342,7 @@ async def _process_single_sponsorship(sp: Any, ctx: dict[str, object]) -> None:
             if order is not None:
                 donation.payment_provider = order.provider
                 donation.gateway_order_id = order.order_id
-                donation.notes = (
-                    "Monthly sponsorship charge initiated; awaiting payment."
-                )
+                donation.notes = "Monthly sponsorship charge initiated; awaiting payment."
 
         await donation_repo.create_donation(donation)
         next_date = _next_month_clamped(sp.next_charge_date)
@@ -378,7 +369,9 @@ async def _process_single_sponsorship(sp: Any, ctx: dict[str, object]) -> None:
                 )
                 await session.commit()
             except Exception as exc:
-                logger.warning("sponsorship_notification_failed", sponsorship_id=str(sp.id), error=str(exc))
+                logger.warning(
+                    "sponsorship_notification_failed", sponsorship_id=str(sp.id), error=str(exc)
+                )
 
 
 async def check_grievance_sla_escalation(ctx: dict[str, object]) -> None:
@@ -561,7 +554,9 @@ async def send_post_service_feedback_surveys(ctx: dict[str, object]) -> None:
                         ServiceFeedback.adoption_application_id.in_(adoption_ids)
                     )
                 )
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
         )
 
         prior_urls = list(
@@ -574,7 +569,9 @@ async def send_post_service_feedback_surveys(ctx: dict[str, object]) -> None:
                         )
                     )
                 )
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
         )
         surveyed_ids = {
             prior_id
@@ -593,10 +590,7 @@ async def send_post_service_feedback_surveys(ctx: dict[str, object]) -> None:
                     f"Please take a moment to rate your experience."
                 ),
                 notification_type="feedback_survey",
-                action_url=(
-                    f"/api/v1/grievance/feedback?"
-                    f"adoption_application_id={adoption.id}"
-                ),
+                action_url=(f"/api/v1/grievance/feedback?adoption_application_id={adoption.id}"),
                 send_email=True,
             )
             await notification_svc.send_notification(

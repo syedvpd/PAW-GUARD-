@@ -32,8 +32,12 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
     """Assigns request_id, trace_id, and span_id, binding context for structured logging and distributed tracing."""
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        request_id = request.headers.get("x-request-id", request.headers.get(REQUEST_ID_HEADER, str(uuid.uuid4())))
-        trace_id = request.headers.get("x-trace-id", request.headers.get("traceparent", str(uuid.uuid4().hex)))
+        request_id = request.headers.get(
+            "x-request-id", request.headers.get(REQUEST_ID_HEADER, str(uuid.uuid4()))
+        )
+        trace_id = request.headers.get(
+            "x-trace-id", request.headers.get("traceparent", str(uuid.uuid4().hex))
+        )
         span_id = request.headers.get("x-span-id", str(uuid.uuid4().hex[:16]))
 
         request.state.request_id = request_id
@@ -184,6 +188,7 @@ class RequestBodySizeMiddleware(BaseHTTPMiddleware):
             max_size = get_settings().max_request_body_size
             if size > max_size:
                 from starlette.responses import JSONResponse
+
                 return JSONResponse(
                     status_code=413,
                     content={"success": False, "error": "Request body too large."},

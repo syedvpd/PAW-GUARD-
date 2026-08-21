@@ -45,7 +45,10 @@ class TestTrackFailures:
     @pytest.mark.asyncio
     async def test_failing_job_logs_structured_error(self) -> None:
         wrapped = _track_failures(_boom_job)
-        with patch("pawguard.workers.arq_worker.logger.error") as mock_error, pytest.raises(RuntimeError):
+        with (
+            patch("pawguard.workers.arq_worker.logger.error") as mock_error,
+            pytest.raises(RuntimeError),
+        ):
             await wrapped({"job_id": "abc123", "job_try": 1})
         mock_error.assert_called_once()
         kwargs = mock_error.call_args.kwargs

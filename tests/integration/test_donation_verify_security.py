@@ -121,7 +121,10 @@ class TestDonationVerifyAccessControl:
             headers=headers,
         )
         assert resp.status_code == 422
-        assert any(msg in resp.json()["error"]["message"] for msg in ("not configured", "Signature Verification Failed", "verification failed"))
+        assert any(
+            msg in resp.json()["error"]["message"]
+            for msg in ("not configured", "Signature Verification Failed", "verification failed")
+        )
 
     async def test_non_owner_is_blocked(
         self, client: AsyncClient, db_session: AsyncSession, donor_role: Role

@@ -54,9 +54,7 @@ class TestDonationUpdatePermission:
         """A synthetic staff role holding ONLY donation:update, so tests isolate
         the update permission without relying on a real role."""
         perm = (
-            await db_session.execute(
-                select(Permission).where(Permission.code == "donation:update")
-            )
+            await db_session.execute(select(Permission).where(Permission.code == "donation:update"))
         ).scalar_one_or_none()
         if perm is None:
             perm = Permission(code="donation:update", description="donation:update")
@@ -146,9 +144,7 @@ class TestDonationUpdatePermission:
         await db_session.commit()
         return donation.id
 
-    async def test_permission_code_is_defined(
-        self, db_session: AsyncSession
-    ) -> None:
+    async def test_permission_code_is_defined(self, db_session: AsyncSession) -> None:
         """The code the router depends on must exist in the registry AND as a
         permission row after reconciliation, or require_permission 403s
         everyone (there is no superuser bypass)."""
@@ -163,9 +159,7 @@ class TestDonationUpdatePermission:
 
         await self._reconcile(db_session)
         perm = (
-            await db_session.execute(
-                select(Permission).where(Permission.code == "donation:update")
-            )
+            await db_session.execute(select(Permission).where(Permission.code == "donation:update"))
         ).scalar_one_or_none()
         assert perm is not None, (
             "donation:update must exist as a permission row (seed reconciliation "
@@ -189,9 +183,7 @@ class TestDonationUpdatePermission:
             assert role is not None
             assert "donation:update" in {p.code for p in role.permissions}
 
-    async def test_public_donor_role_has_no_donation_update(
-        self, db_session: AsyncSession
-    ) -> None:
+    async def test_public_donor_role_has_no_donation_update(self, db_session: AsyncSession) -> None:
         """The donor must NOT be able to mutate donation records."""
         await self._reconcile(db_session)
         definitions = _role_definitions()

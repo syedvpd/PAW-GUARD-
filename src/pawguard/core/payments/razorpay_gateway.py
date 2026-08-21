@@ -70,9 +70,7 @@ class RazorpayGateway(PaymentGateway):
             return PaymentVerificationResult(
                 verified=False, order_id=order_id, failure_reason=str(exc)
             )
-        return PaymentVerificationResult(
-            verified=True, payment_id=payment_id, order_id=order_id
-        )
+        return PaymentVerificationResult(verified=True, payment_id=payment_id, order_id=order_id)
 
     def parse_webhook(self, *, payload: bytes, signature: str) -> WebhookEvent:
         if not self._webhook_secret:

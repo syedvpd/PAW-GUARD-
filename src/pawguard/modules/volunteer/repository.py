@@ -261,9 +261,8 @@ class VolunteerRepository:
 
     async def soft_delete_profile(self, profile_id: uuid.UUID) -> None:
         now = datetime.now(UTC)
-        stmt = (
-            select(VolunteerProfile)
-            .where(VolunteerProfile.id == profile_id, VolunteerProfile.deleted_at.is_(None))
+        stmt = select(VolunteerProfile).where(
+            VolunteerProfile.id == profile_id, VolunteerProfile.deleted_at.is_(None)
         )
         profile = (await self._session.execute(stmt)).scalar_one_or_none()
         if profile:
@@ -271,9 +270,8 @@ class VolunteerRepository:
 
     async def bulk_soft_delete_profiles(self, ids: list[uuid.UUID]) -> int:
         now = datetime.now(UTC)
-        stmt = (
-            select(VolunteerProfile)
-            .where(VolunteerProfile.id.in_(ids), VolunteerProfile.deleted_at.is_(None))
+        stmt = select(VolunteerProfile).where(
+            VolunteerProfile.id.in_(ids), VolunteerProfile.deleted_at.is_(None)
         )
         profiles = (await self._session.execute(stmt)).scalars().all()
         for p in profiles:
@@ -283,9 +281,8 @@ class VolunteerRepository:
     async def bulk_update_profile_status(
         self, ids: list[uuid.UUID], status: VolunteerStatus
     ) -> int:
-        stmt = (
-            select(VolunteerProfile)
-            .where(VolunteerProfile.id.in_(ids), VolunteerProfile.deleted_at.is_(None))
+        stmt = select(VolunteerProfile).where(
+            VolunteerProfile.id.in_(ids), VolunteerProfile.deleted_at.is_(None)
         )
         profiles = (await self._session.execute(stmt)).scalars().all()
         for p in profiles:

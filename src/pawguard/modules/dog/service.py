@@ -4,7 +4,9 @@ import re
 import secrets
 import uuid
 from contextlib import suppress
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from decimal import Decimal
+from enum import Enum
 from io import BytesIO
 from typing import Any
 from urllib.parse import urlsplit
@@ -23,7 +25,6 @@ from pawguard.core.metrics import increment_counter
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
-from pawguard.services.storage_service import StorageService
 from pawguard.modules.auth.models import AuthAuditEventType
 from pawguard.modules.dog.models import (
     DogActivityEventType,
@@ -42,6 +43,7 @@ from pawguard.modules.dog.schemas import (
 )
 from pawguard.redis.client import RedisClient
 from pawguard.services.audit_service import AuditService
+from pawguard.services.storage_service import StorageService
 
 # DOG-YYYY-NNNN leaves only 10,000 numbers per year, so collisions are
 # possible under concurrent intake; retry a bounded number of times before
@@ -106,10 +108,6 @@ def _parse_age_months(estimated_age: str | None) -> int | None:
         return number
     return None
 
-
-from datetime import date, datetime
-from decimal import Decimal
-from enum import Enum
 
 def _jsonable(value: Any) -> Any:
     """Recursively coerce values into JSON-safe primitives for JSONB columns.
@@ -256,8 +254,7 @@ class DogService:
                 name=payload.name,
                 breed=payload.breed,
                 breed_classification=(
-                    payload.breed_classification
-                    or _infer_breed_classification(payload.breed)
+                    payload.breed_classification or _infer_breed_classification(payload.breed)
                 ),
                 gender=payload.gender,
                 is_spayed_neutered=payload.is_spayed_neutered,
@@ -278,7 +275,9 @@ class DogService:
                 section_id=payload.section_id,
                 kennel_id=payload.kennel_id,
                 foster_home_id=payload.foster_home_id,
-                is_adoptable=(payload.status == DogStatus.AVAILABLE_FOR_ADOPTION) if payload.status else False,
+                is_adoptable=(payload.status == DogStatus.AVAILABLE_FOR_ADOPTION)
+                if payload.status
+                else False,
                 is_quarantine_passed=payload.is_quarantine_passed,
             )
             try:
@@ -425,9 +424,7 @@ class DogService:
                     update_data.get("breed", dog.breed)
                 )
         elif "breed" in update_data:
-            update_data["breed_classification"] = _infer_breed_classification(
-                update_data["breed"]
-            )
+            update_data["breed_classification"] = _infer_breed_classification(update_data["breed"])
 
         # age_months stays consistent with estimated_age: an explicit null
         # means "re-derive", and an age-only edit re-derives the numeric value
@@ -438,9 +435,7 @@ class DogService:
                     update_data.get("estimated_age", dog.estimated_age)
                 )
         elif "estimated_age" in update_data:
-            update_data["age_months"] = _parse_age_months(
-                update_data["estimated_age"]
-            )
+            update_data["age_months"] = _parse_age_months(update_data["estimated_age"])
 
         original_weight = dog.weight
         for key, value in update_data.items():
@@ -619,7 +614,9 @@ class DogService:
                 metadata={"status": status.value},
             )
 
-        increment_counter("pawguard_dogs_status_changed_total", {"status": status.value}, value=updated)
+        increment_counter(
+            "pawguard_dogs_status_changed_total", {"status": status.value}, value=updated
+        )
         await self._invalidate_caches()
 
         if self._audit and actor_id:
@@ -742,9 +739,7 @@ class DogService:
 
         return log
 
-    async def get_weight_history(
-        self, dog_id: uuid.UUID
-    ) -> list[DogWeightLog]:
+    async def get_weight_history(self, dog_id: uuid.UUID) -> list[DogWeightLog]:
         """Chronological weight measurements for a dog (PRR 3.4)."""
         dog = await self.get_dog(dog_id)
         logs = await self._repo.list_weight_logs(dog.id)

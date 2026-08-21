@@ -42,6 +42,7 @@ class TestSystemSettingService:
     async def test_get_setting_not_found(self, service, mock_repo):
         mock_repo.get_by_key.return_value = None
         from pawguard.core.exceptions import NotFoundError
+
         with pytest.raises(NotFoundError):
             await service.get_setting("nonexistent")
 
@@ -55,6 +56,7 @@ class TestSystemSettingService:
     async def test_create_setting_duplicate(self, service, mock_repo):
         mock_repo.get_by_key.return_value = SystemSetting(key="dup", value="val", category="test")
         from pawguard.core.exceptions import ConflictError
+
         with pytest.raises(ConflictError):
             await service.create_setting(SystemSettingCreate(key="dup", value="val"))
 
@@ -67,6 +69,7 @@ class TestSystemSettingService:
     async def test_update_setting_not_found(self, service, mock_repo):
         mock_repo.get_by_key.return_value = None
         from pawguard.core.exceptions import NotFoundError
+
         with pytest.raises(NotFoundError):
             await service.update_setting("nope", SystemSettingUpdate(value="x"))
 

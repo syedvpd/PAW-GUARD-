@@ -18,6 +18,7 @@ from pawguard.core.config import get_settings
 
 if TYPE_CHECKING:
     from redis.asyncio import Redis as _Redis
+
     RedisClient = _Redis[str]
 else:
     RedisClient = Redis
@@ -66,7 +67,7 @@ class _NullRedis:
         await asyncio.sleep(0)
         return False
 
-    async def scan_iter(self, match: str = "", count: int | None = None) -> AsyncGenerator[Any, None]:
+    async def scan_iter(self, match: str = "", count: int | None = None) -> AsyncGenerator[Any]:
         """No-op async generator mirroring redis-py's scan_iter protocol."""
         if False:
             yield None
@@ -80,9 +81,8 @@ class _NullRedis:
         return []
 
 
-
-
 _redis_available: bool | None = None
+
 
 async def _ensure_client() -> RedisClient:
     global _pool, _client, _redis_available

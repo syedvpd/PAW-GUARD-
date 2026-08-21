@@ -26,9 +26,7 @@ LOGIN_PAYLOAD = {
 @pytest.mark.asyncio
 class TestNotificationAPI:
     async def _auth(self, client: AsyncClient, db_session: AsyncSession) -> dict:
-        return await register_and_auth(
-            client, db_session, email=REGISTER_PAYLOAD["email"]
-        )
+        return await register_and_auth(client, db_session, email=REGISTER_PAYLOAD["email"])
 
     async def test_list_notifications(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
@@ -38,7 +36,9 @@ class TestNotificationAPI:
         assert "data" in body
         assert "total" in body["meta"]
 
-    async def test_list_notifications_with_filters(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_list_notifications_with_filters(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         headers = await self._auth(client, db_session)
         resp = await client.get("/api/v1/notifications?is_read=false", headers=headers)
         assert resp.status_code == 200
@@ -51,24 +51,34 @@ class TestNotificationAPI:
         assert "count" in data
         assert isinstance(data["count"], int)
 
-    async def test_mark_notification_read_not_found(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_mark_notification_read_not_found(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         headers = await self._auth(client, db_session)
         resp = await client.put(f"/api/v1/notifications/{uuid.uuid4()}/read", headers=headers)
         assert resp.status_code == 404
 
-    async def test_read_all_notifications(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_read_all_notifications(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         headers = await self._auth(client, db_session)
         resp = await client.put("/api/v1/notifications/read-all", headers=headers)
         assert resp.status_code == 200
 
-    async def test_delete_notification_not_found(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_delete_notification_not_found(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         headers = await self._auth(client, db_session)
         resp = await client.delete(f"/api/v1/notifications/{uuid.uuid4()}", headers=headers)
         assert resp.status_code == 404
 
     async def test_send_notification(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
-        user_id = (await db_session.execute(select(User).where(User.email == REGISTER_PAYLOAD["email"]))).scalar_one().id
+        user_id = (
+            (await db_session.execute(select(User).where(User.email == REGISTER_PAYLOAD["email"])))
+            .scalar_one()
+            .id
+        )
         payload = {
             "user_id": str(user_id),
             "title": "Test Notification",
@@ -81,9 +91,15 @@ class TestNotificationAPI:
         assert data["title"] == "Test Notification"
         assert data["user_id"] == str(user_id)
 
-    async def test_send_notification_with_email(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_send_notification_with_email(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         headers = await self._auth(client, db_session)
-        user_id = (await db_session.execute(select(User).where(User.email == REGISTER_PAYLOAD["email"]))).scalar_one().id
+        user_id = (
+            (await db_session.execute(select(User).where(User.email == REGISTER_PAYLOAD["email"])))
+            .scalar_one()
+            .id
+        )
         payload = {
             "user_id": str(user_id),
             "title": "Email Notification",
@@ -93,7 +109,9 @@ class TestNotificationAPI:
         resp = await client.post("/api/v1/notifications/send", json=payload, headers=headers)
         assert resp.status_code == 201
 
-    async def test_get_notification_preferences(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_get_notification_preferences(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         headers = await self._auth(client, db_session)
         resp = await client.get("/api/v1/notifications/preferences", headers=headers)
         assert resp.status_code == 200
@@ -102,7 +120,9 @@ class TestNotificationAPI:
         assert "enable_email" in data
         assert "enable_sms" in data
 
-    async def test_update_notification_preferences(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_update_notification_preferences(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         headers = await self._auth(client, db_session)
         payload = {"enable_sms": True, "enable_push": False}
         resp = await client.put("/api/v1/notifications/preferences", json=payload, headers=headers)

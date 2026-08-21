@@ -131,10 +131,11 @@ async def list_dogs(
     min_weight: float | None = Query(None, ge=0.0, description="Minimum weight in kg"),
     max_weight: float | None = Query(None, ge=0.0, description="Maximum weight in kg"),
     location: str | None = Query(
-        None, description=(
+        None,
+        description=(
             "Free-text match on the shelter facility name/address; only dogs "
             "assigned to a facility are returned when this filter is active"
-        )
+        ),
     ),
     current_user: CurrentUser | None = Depends(get_optional_current_user),
     service: DogService = Depends(get_dog_service),
@@ -144,8 +145,7 @@ async def list_dogs(
     # visitors AND authenticated adopters/app users - sees only adoptable dogs so
     # already-adopted animals never leak into the public adoption page.
     is_staff = current_user is not None and (
-        has_permission(current_user.user, SHELTER_READ)
-        or is_admin_role(current_user.claims)
+        has_permission(current_user.user, SHELTER_READ) or is_admin_role(current_user.claims)
     )
     public_view = not is_staff
     if public_view:
@@ -191,12 +191,13 @@ async def get_dog(
     # everyone else (including authenticated adopters) may only view public
     # details for adoptable dogs.
     is_staff = current_user is not None and (
-        has_permission(current_user.user, SHELTER_READ)
-        or is_admin_role(current_user.claims)
+        has_permission(current_user.user, SHELTER_READ) or is_admin_role(current_user.claims)
     )
 
     if not is_staff and not dog.is_adoptable:
-        raise NotFoundError("Dog profile is currently in intake/treatment and not yet available for public adoption.")
+        raise NotFoundError(
+            "Dog profile is currently in intake/treatment and not yet available for public adoption."
+        )
     if not is_staff and dog.status == DogStatus.ADOPTED:
         raise NotFoundError("This dog has already been adopted and is no longer available.")
 
@@ -459,6 +460,7 @@ async def bulk_delete_dogs(
     current_user: CurrentUser = Depends(get_current_user),
     service: DogService = Depends(get_dog_service),
 ) -> ApiResponse[BulkDeleteResponse]:
+    deleted = await service.bulk_soft_delete(payload.ids, current_user.id)
     return ApiResponse(
         data=BulkDeleteResponse(
             message=f"{deleted} dog(s) deleted.",
@@ -477,7 +479,10 @@ async def bulk_delete_dogs(
 async def provision_dog_safety_tag(
     dog_id: uuid.UUID,
     request: Request,
-    force_reissue: bool = Query(False, description="If true, revokes existing active tag and provisions a replacement token."),
+    force_reissue: bool = Query(
+        False,
+        description="If true, revokes existing active tag and provisions a replacement token.",
+    ),
     current_user: CurrentUser = Depends(get_current_user),
     service: CompanionPetService = Depends(get_companion_pet_service),
 ) -> ApiResponse[DogSafetyTagProvisionResponse]:
@@ -528,6 +533,7 @@ async def deactivate_dog_safety_tag(
     current_user: CurrentUser = Depends(get_current_user),
     service: CompanionPetService = Depends(get_companion_pet_service),
 ) -> ApiResponse[None]:
-    await service.deactivate_dog_safety_tag(dog_id, current_user, ip_address=resolve_client_ip(request))
+    await service.deactivate_dog_safety_tag(
+        dog_id, current_user, ip_address=resolve_client_ip(request)
+    )
     return ApiResponse(message="Safety Tag deactivated successfully.")
-

@@ -35,7 +35,15 @@ DEFAULT_TRIGGERS = [
     ("lost_found_match", "lost_found", "Lost & Found Match Detected", True, True, False, "HIGH"),
     ("lost_found_claim", "lost_found", "Ownership Claim Update", True, True, False, "NORMAL"),
     # Adoption
-    ("adoption_submitted", "adoption", "Adoption Application Received", True, True, False, "NORMAL"),
+    (
+        "adoption_submitted",
+        "adoption",
+        "Adoption Application Received",
+        True,
+        True,
+        False,
+        "NORMAL",
+    ),
     ("adoption_approved", "adoption", "Adoption Application Approved", True, True, False, "HIGH"),
     ("adoption_rejected", "adoption", "Adoption Application Update", True, True, False, "NORMAL"),
     ("adoption_completed", "adoption", "Pet Adoption Completed", True, True, False, "HIGH"),
@@ -45,8 +53,24 @@ DEFAULT_TRIGGERS = [
     ("foster_placed", "foster", "Pet Placed with Foster", True, True, False, "HIGH"),
     # Companion Pet
     ("safety_tag_scanned", "companion_pet", "Safety Tag Scanned Alert", True, True, False, "HIGH"),
-    ("pet_appointment_reminder", "companion_pet", "Veterinary Appointment Reminder", True, True, False, "NORMAL"),
-    ("pet_vaccination_due", "companion_pet", "Pet Vaccination Due Alert", True, True, False, "NORMAL"),
+    (
+        "pet_appointment_reminder",
+        "companion_pet",
+        "Veterinary Appointment Reminder",
+        True,
+        True,
+        False,
+        "NORMAL",
+    ),
+    (
+        "pet_vaccination_due",
+        "companion_pet",
+        "Pet Vaccination Due Alert",
+        True,
+        True,
+        False,
+        "NORMAL",
+    ),
     # Donation
     ("donation_received", "donation", "Donation Receipt & Thank You", True, True, False, "NORMAL"),
     ("sponsorship_created", "donation", "Pet Sponsorship Started", True, True, False, "NORMAL"),
@@ -59,18 +83,47 @@ DEFAULT_TRIGGERS = [
     ("auth_mfa_changed", "auth", "MFA Settings Updated", True, True, False, "HIGH"),
     # Grievance
     ("grievance_assigned", "grievance", "Grievance Assigned to Staff", True, True, False, "NORMAL"),
-    ("grievance_escalated", "grievance", "Grievance SLA Escalation Alert", True, True, False, "HIGH"),
+    (
+        "grievance_escalated",
+        "grievance",
+        "Grievance SLA Escalation Alert",
+        True,
+        True,
+        False,
+        "HIGH",
+    ),
     # Fleet
     ("fleet_maintenance_due", "fleet", "Vehicle Maintenance Overdue", True, True, False, "HIGH"),
     ("fleet_equipment_overdue", "fleet", "Rescue Equipment Overdue", True, True, False, "HIGH"),
     # Volunteer
-    ("volunteer_application_update", "volunteer", "Volunteer Application Update", True, True, False, "NORMAL"),
-    ("volunteer_shift_reminder", "volunteer", "Volunteer Shift Reminder", True, True, False, "NORMAL"),
+    (
+        "volunteer_application_update",
+        "volunteer",
+        "Volunteer Application Update",
+        True,
+        True,
+        False,
+        "NORMAL",
+    ),
+    (
+        "volunteer_shift_reminder",
+        "volunteer",
+        "Volunteer Shift Reminder",
+        True,
+        True,
+        False,
+        "NORMAL",
+    ),
 ]
 
 
 class GovernanceCheckResult:
-    def __init__(self, action: str, reason: str | None = None, trigger_config: NotificationTriggerConfig | None = None) -> None:
+    def __init__(
+        self,
+        action: str,
+        reason: str | None = None,
+        trigger_config: NotificationTriggerConfig | None = None,
+    ) -> None:
         self.action = action  # "SEND_IMMEDIATELY", "BLOCKED", "PAUSED", "PENDING_APPROVAL"
         self.reason = reason
         self.trigger_config = trigger_config
@@ -82,12 +135,17 @@ class NotificationGovernanceService:
 
     async def ensure_seed_defaults(self) -> None:
         """Seed default global, module, and trigger configurations if missing."""
-        global_cfg = (await self._session.execute(select(NotificationGlobalConfig))).scalars().first()
+        global_cfg = (
+            (await self._session.execute(select(NotificationGlobalConfig))).scalars().first()
+        )
         if global_cfg is None:
             self._session.add(NotificationGlobalConfig(push_status="ENABLED"))
 
         existing_triggers = {
-            t.trigger_code: t for t in (await self._session.execute(select(NotificationTriggerConfig))).scalars().all()
+            t.trigger_code: t
+            for t in (await self._session.execute(select(NotificationTriggerConfig)))
+            .scalars()
+            .all()
         }
         for code, mod, name, push_en, email_en, req_appr, prio in DEFAULT_TRIGGERS:
             if code not in existing_triggers:
@@ -104,7 +162,8 @@ class NotificationGovernanceService:
                 )
 
         existing_modules = {
-            m.module_name: m for m in (await self._session.execute(select(NotificationModuleConfig))).scalars().all()
+            m.module_name: m
+            for m in (await self._session.execute(select(NotificationModuleConfig))).scalars().all()
         }
         unique_modules = {mod for _, mod, _, _, _, _, _ in DEFAULT_TRIGGERS}
         for mod in unique_modules:
@@ -113,37 +172,63 @@ class NotificationGovernanceService:
 
         await self._session.flush()
 
-    async def evaluate_governance(self, trigger_code: str, module_name: str) -> GovernanceCheckResult:
+    async def evaluate_governance(
+        self, trigger_code: str, module_name: str
+    ) -> GovernanceCheckResult:
         """Evaluate 3-tier governance rules (Global -> Module -> Trigger)."""
         await self.ensure_seed_defaults()
 
         # Level 1: Global check
-        global_cfg = (await self._session.execute(select(NotificationGlobalConfig))).scalars().first()
+        global_cfg = (
+            (await self._session.execute(select(NotificationGlobalConfig))).scalars().first()
+        )
         if global_cfg is not None:
             if global_cfg.push_status == "DISABLED":
-                return GovernanceCheckResult("BLOCKED", "Global push notifications disabled by Superadmin.")
+                return GovernanceCheckResult(
+                    "BLOCKED", "Global push notifications disabled by Superadmin."
+                )
             if global_cfg.push_status == "PAUSED":
-                return GovernanceCheckResult("PAUSED", f"Global push notifications paused: {global_cfg.reason or 'Superadmin pause'}")
+                return GovernanceCheckResult(
+                    "PAUSED",
+                    f"Global push notifications paused: {global_cfg.reason or 'Superadmin pause'}",
+                )
 
         # Level 2: Module check
-        mod_stmt = select(NotificationModuleConfig).where(NotificationModuleConfig.module_name == module_name)
+        mod_stmt = select(NotificationModuleConfig).where(
+            NotificationModuleConfig.module_name == module_name
+        )
         mod_cfg = (await self._session.execute(mod_stmt)).scalars().first()
         if mod_cfg is not None:
             if mod_cfg.push_status == "DISABLED":
-                return GovernanceCheckResult("BLOCKED", f"Push notifications disabled for module '{module_name}'.")
+                return GovernanceCheckResult(
+                    "BLOCKED", f"Push notifications disabled for module '{module_name}'."
+                )
             if mod_cfg.push_status == "PAUSED":
-                return GovernanceCheckResult("PAUSED", f"Module '{module_name}' notifications paused: {mod_cfg.reason or 'Admin pause'}")
+                return GovernanceCheckResult(
+                    "PAUSED",
+                    f"Module '{module_name}' notifications paused: {mod_cfg.reason or 'Admin pause'}",
+                )
 
         # Level 3: Trigger check
-        trig_stmt = select(NotificationTriggerConfig).where(NotificationTriggerConfig.trigger_code == trigger_code)
+        trig_stmt = select(NotificationTriggerConfig).where(
+            NotificationTriggerConfig.trigger_code == trigger_code
+        )
         trig_cfg = (await self._session.execute(trig_stmt)).scalars().first()
         if trig_cfg is not None:
             if trig_cfg.push_status == "DISABLED":
-                return GovernanceCheckResult("BLOCKED", f"Trigger '{trigger_code}' disabled.", trigger_config=trig_cfg)
+                return GovernanceCheckResult(
+                    "BLOCKED", f"Trigger '{trigger_code}' disabled.", trigger_config=trig_cfg
+                )
             if trig_cfg.push_status == "PAUSED":
-                return GovernanceCheckResult("PAUSED", f"Trigger '{trigger_code}' paused.", trigger_config=trig_cfg)
+                return GovernanceCheckResult(
+                    "PAUSED", f"Trigger '{trigger_code}' paused.", trigger_config=trig_cfg
+                )
             if trig_cfg.requires_approval:
-                return GovernanceCheckResult("PENDING_APPROVAL", f"Trigger '{trigger_code}' requires Admin approval.", trigger_config=trig_cfg)
+                return GovernanceCheckResult(
+                    "PENDING_APPROVAL",
+                    f"Trigger '{trigger_code}' requires Admin approval.",
+                    trigger_config=trig_cfg,
+                )
 
         return GovernanceCheckResult("SEND_IMMEDIATELY", trigger_config=trig_cfg)
 
@@ -279,7 +364,9 @@ class NotificationGovernanceService:
             raise NotFoundError("Queued notification not found.")
 
         if item.status != "PENDING_APPROVAL":
-            raise ValidationFailedError(f"Cannot approve notification in status '{item.status}'. Please resume the notification first.")
+            raise ValidationFailedError(
+                f"Cannot approve notification in status '{item.status}'. Please resume the notification first."
+            )
 
         if item.expires_at and item.expires_at < datetime.now(UTC):
             item.status = "EXPIRED"
@@ -326,7 +413,9 @@ class NotificationGovernanceService:
         item.reviewed_at = datetime.now(UTC)
         item.approved_at = datetime.now(UTC)
 
-        target_uids = [uuid.UUID(uid) for uid in item.target_user_ids] if item.target_user_ids else None
+        target_uids = (
+            [uuid.UUID(uid) for uid in item.target_user_ids] if item.target_user_ids else None
+        )
         await self._dispatch_fcm(target_uids, item.title, item.body, item.action_url)
 
         await self.record_audit(
@@ -481,6 +570,7 @@ class NotificationGovernanceService:
     ) -> None:
         """Internal helper to dispatch push via FCM and create in-app Notification records."""
         from pawguard.modules.auth.models import User
+
         if target_user_ids:
             uids = target_user_ids
         else:
@@ -495,6 +585,7 @@ class NotificationGovernanceService:
             return
 
         from datetime import UTC, datetime
+
         from pawguard.modules.notifications.models import Notification
         from pawguard.modules.notifications.repository import NotificationRepository
         from pawguard.modules.notifications.service import NotificationService

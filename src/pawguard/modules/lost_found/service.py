@@ -71,7 +71,10 @@ class LostFoundService:
             raise ValidationFailedError("Only active lost-pet reports can be broadcast.")
         if self._arq is None:
             from pawguard.workers.jobs.lost_found_jobs import broadcast_lost_pet_alert
-            await broadcast_lost_pet_alert({"job_name": "broadcast_lost_pet_alert"}, report_id=str(report_id))
+
+            await broadcast_lost_pet_alert(
+                {"job_name": "broadcast_lost_pet_alert"}, report_id=str(report_id)
+            )
         else:
             try:
                 await self._arq.enqueue_job(
@@ -83,7 +86,10 @@ class LostFoundService:
             except Exception as exc:
                 logger.warning("arq_enqueue_failed_broadcasting_inline", error=str(exc))
                 from pawguard.workers.jobs.lost_found_jobs import broadcast_lost_pet_alert
-                await broadcast_lost_pet_alert({"job_name": "broadcast_lost_pet_alert"}, report_id=str(report_id))
+
+                await broadcast_lost_pet_alert(
+                    {"job_name": "broadcast_lost_pet_alert"}, report_id=str(report_id)
+                )
         if self._audit:
             await self._audit.record(
                 event_type=AuthAuditEventType.LOST_FOUND_BROADCAST_QUEUED,
@@ -95,8 +101,11 @@ class LostFoundService:
         return {"report_id": report_id, "queued": True}
 
     async def report_lost_pet(
-        self, user_id: uuid.UUID, payload: LostReportCreate,
-        actor_id: uuid.UUID | None = None, ip_address: str | None = None,
+        self,
+        user_id: uuid.UUID,
+        payload: LostReportCreate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
     ) -> LostReport:
         report = LostReport(
             user_id=user_id,
@@ -114,6 +123,7 @@ class LostFoundService:
             status=ReportStatus.ACTIVE,
             companion_pet_id=payload.companion_pet_id,
             photo_url=payload.photo_url,
+            photo_object_key=payload.photo_object_key,
         )
         await self._repo.create_lost_report(report)
         await self._repo._session.flush()
@@ -151,6 +161,7 @@ class LostFoundService:
             from sqlalchemy import select
 
             from pawguard.modules.companion_pet.models import CompanionPet
+
             stmt = select(CompanionPet).where(CompanionPet.id == payload.pet_id)
             pet = (await self._repo._session.execute(stmt)).scalar_one_or_none()
             if pet:
@@ -166,6 +177,7 @@ class LostFoundService:
         if owner_id and self._notification_svc:
             try:
                 from pawguard.modules.notifications.schemas import NotificationSend
+
                 await self._notification_svc.send_notification(
                     payload=NotificationSend(
                         user_id=owner_id,
@@ -185,8 +197,11 @@ class LostFoundService:
         return sighting
 
     async def report_found_pet(
-        self, user_id: uuid.UUID, payload: FoundReportCreate,
-        actor_id: uuid.UUID | None = None, ip_address: str | None = None,
+        self,
+        user_id: uuid.UUID,
+        payload: FoundReportCreate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
     ) -> FoundReport:
         report = FoundReport(
             user_id=user_id,
@@ -201,6 +216,7 @@ class LostFoundService:
             found_at=payload.found_at,
             status=ReportStatus.ACTIVE,
             photo_url=payload.photo_url,
+            photo_object_key=payload.photo_object_key,
         )
         await self._repo.create_found_report(report)
         await self._repo._session.flush()
@@ -266,7 +282,11 @@ class LostFoundService:
         species: Species | None = None,
     ) -> PaginatedResponse[LostReportResponse]:
         reports, total = await self._repo.list_lost_reports_paginated(
-            page_params, sort, search_term=search_term, status=status, species=species,
+            page_params,
+            sort,
+            search_term=search_term,
+            status=status,
+            species=species,
         )
         return PaginatedResponse(
             data=list(reports),
@@ -282,7 +302,11 @@ class LostFoundService:
         species: Species | None = None,
     ) -> PaginatedResponse[FoundReportResponse]:
         reports, total = await self._repo.list_found_reports_paginated(
-            page_params, sort, search_term=search_term, status=status, species=species,
+            page_params,
+            sort,
+            search_term=search_term,
+            status=status,
+            species=species,
         )
         return PaginatedResponse(
             data=list(reports),
@@ -297,7 +321,10 @@ class LostFoundService:
         found_report_id: uuid.UUID | None = None,
     ) -> PaginatedResponse[ReportMatchResponse]:
         matches, total = await self._repo.list_matches_paginated(
-            page_params, sort, lost_report_id=lost_report_id, found_report_id=found_report_id,
+            page_params,
+            sort,
+            lost_report_id=lost_report_id,
+            found_report_id=found_report_id,
         )
         return PaginatedResponse(
             data=list(matches),
@@ -401,22 +428,16 @@ class LostFoundService:
             raise NotFoundError("Report match record not found.")
 
         is_lost_owner = (
-            match.lost_report is not None
-            and match.lost_report.user_id == claimant_user_id
+            match.lost_report is not None and match.lost_report.user_id == claimant_user_id
         )
         is_found_reporter = (
-            match.found_report is not None
-            and match.found_report.user_id == claimant_user_id
+            match.found_report is not None and match.found_report.user_id == claimant_user_id
         )
         if not is_lost_owner and not is_found_reporter:
-            raise ForbiddenError(
-                "Only a reporter on this match may submit an ownership claim."
-            )
+            raise ForbiddenError("Only a reporter on this match may submit an ownership claim.")
 
         if match.status != MatchStatus.PENDING:
-            raise ValidationFailedError(
-                "This match has already been reviewed; claims are closed."
-            )
+            raise ValidationFailedError("This match has already been reviewed; claims are closed.")
         if not (payload.microchip_doc_url or payload.vet_bill_url or payload.photo_proof_url):
             raise ValidationFailedError(
                 "At least one proof document is required to verify ownership."
@@ -441,11 +462,13 @@ class LostFoundService:
                     "found_report_id": str(match.found_report_id),
                     "claimant_user_id": str(claimant_user_id),
                     "proof_types": [
-                        doc for doc in (
+                        doc
+                        for doc in (
                             "microchip_doc" if payload.microchip_doc_url else None,
                             "vet_bill" if payload.vet_bill_url else None,
                             "photo_proof" if payload.photo_proof_url else None,
-                        ) if doc
+                        )
+                        if doc
                     ],
                 },
             )
@@ -465,13 +488,9 @@ class LostFoundService:
         if match is None:
             raise NotFoundError("Report match record not found.")
         if match.claim_submitted_at is None:
-            raise ValidationFailedError(
-                "No ownership claim has been submitted for this match yet."
-            )
+            raise ValidationFailedError("No ownership claim has been submitted for this match yet.")
         if match.status != MatchStatus.PENDING:
-            raise ValidationFailedError(
-                "This match has already been reviewed."
-            )
+            raise ValidationFailedError("This match has already been reviewed.")
 
         now = datetime.now(UTC)
         new_status = MatchStatus.CONFIRMED if payload.approve else MatchStatus.REJECTED
@@ -484,10 +503,14 @@ class LostFoundService:
 
         if payload.approve:
             await self.resolve_lost_report(
-                match.lost_report_id, actor_id=actor_id, ip_address=ip_address,
+                match.lost_report_id,
+                actor_id=actor_id,
+                ip_address=ip_address,
             )
             await self.resolve_found_report(
-                match.found_report_id, actor_id=actor_id, ip_address=ip_address,
+                match.found_report_id,
+                actor_id=actor_id,
+                ip_address=ip_address,
             )
             # Workflow 6: release each party's contact to the other so the dog
             # can be returned.
@@ -613,14 +636,10 @@ class LostFoundService:
         # 6. Marker description overlap (max 5.0)
         if lost.marker_description and found.marker_description:
             lost_markers = {
-                m.strip().lower()
-                for m in lost.marker_description.split(",")
-                if m.strip()
+                m.strip().lower() for m in lost.marker_description.split(",") if m.strip()
             }
             found_markers = {
-                m.strip().lower()
-                for m in found.marker_description.split(",")
-                if m.strip()
+                m.strip().lower() for m in found.marker_description.split(",") if m.strip()
             }
             overlap = lost_markers & found_markers
             if overlap:
@@ -725,9 +744,11 @@ class LostFoundService:
     async def _notify_admins_of_match(self, match: ReportMatch) -> None:
         if self._notification_svc is None:
             return
-        pet_name = match.lost_report.pet_name if (
-            match.lost_report and match.lost_report.pet_name
-        ) else "a pet"
+        pet_name = (
+            match.lost_report.pet_name
+            if (match.lost_report and match.lost_report.pet_name)
+            else "a pet"
+        )
         await self._notification_svc.broadcast(
             BroadcastCreate(
                 title=f"New lost & found match: {pet_name}",
@@ -808,5 +829,7 @@ class LostFoundService:
         except Exception as exc:
             logger.warning(
                 "Failed to release contact to user %s for pet %s: %s",
-                to_user.id, pet_name, exc,
+                to_user.id,
+                pet_name,
+                exc,
             )

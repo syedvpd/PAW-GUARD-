@@ -59,7 +59,9 @@ class CompanionPetRepository:
         if page.page == 1 and len(rows) < page.limit:
             total = len(rows)
         else:
-            count = await self._session.execute(select(func.count()).select_from(stmt.order_by(None).subquery()))
+            count = await self._session.execute(
+                select(func.count()).select_from(stmt.order_by(None).subquery())
+            )
             total = count.scalar_one()
 
         return rows, total
@@ -108,7 +110,10 @@ class CompanionPetRepository:
         stmt = select(SafetyTag).where(
             or_(
                 SafetyTag.pet_id == pet_id,
-                SafetyTag.dog_id == select(CompanionPet.original_dog_id).where(CompanionPet.id == pet_id).scalar_subquery(),
+                SafetyTag.dog_id
+                == select(CompanionPet.original_dog_id)
+                .where(CompanionPet.id == pet_id)
+                .scalar_subquery(),
             ),
             SafetyTag.is_active.is_(True),
             SafetyTag.deleted_at.is_(None),
@@ -126,7 +131,6 @@ class CompanionPetRepository:
             )
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
-
 
     async def create_tag(self, tag: SafetyTag) -> SafetyTag:
         self._session.add(tag)
@@ -317,9 +321,7 @@ class CompanionPetRepository:
         )
         return (await self._session.execute(stmt)).scalars().all()
 
-    async def list_due_reminders(
-        self, from_at: datetime, until: datetime
-    ) -> Sequence[PetReminder]:
+    async def list_due_reminders(self, from_at: datetime, until: datetime) -> Sequence[PetReminder]:
         """Return active, non-deleted reminders due within [from_at, until]."""
         stmt = select(PetReminder).where(
             PetReminder.deleted_at.is_(None),

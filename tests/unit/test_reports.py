@@ -25,7 +25,8 @@ class TestReportService:
         mock_result.scalars.return_value.all.return_value = []
         mock_session.execute.return_value = mock_result
         result = await service.generate_report(
-            ReportType.DONATION, ReportFormat.CSV,
+            ReportType.DONATION,
+            ReportFormat.CSV,
         )
         assert result["format"] == "csv"
         assert result["report_type"] == "donation"
@@ -37,7 +38,8 @@ class TestReportService:
         mock_result.scalars.return_value.all.return_value = []
         mock_session.execute.return_value = mock_result
         result = await service.generate_report(
-            ReportType.DONATION, ReportFormat.PDF,
+            ReportType.DONATION,
+            ReportFormat.PDF,
         )
         assert result["format"] == "pdf"
         assert result["content_type"] == "application/pdf"
@@ -48,7 +50,8 @@ class TestReportService:
         mock_result.scalars.return_value.all.return_value = []
         mock_session.execute.return_value = mock_result
         result = await service.generate_report(
-            ReportType.DONATION, ReportFormat.EXCEL,
+            ReportType.DONATION,
+            ReportFormat.EXCEL,
         )
         assert result["format"] == "xlsx"
 
@@ -66,7 +69,8 @@ class TestReportService:
         mock_result.scalars.return_value.all.return_value = [mock_donation]
         mock_session.execute.return_value = mock_result
         result = await service.generate_report(
-            ReportType.DONATION, ReportFormat.CSV,
+            ReportType.DONATION,
+            ReportFormat.CSV,
         )
         assert result["size_bytes"] > 0
 
@@ -76,7 +80,8 @@ class TestReportService:
         mock_result.scalars.return_value.all.return_value = []
         mock_session.execute.return_value = mock_result
         result = await service.generate_report(
-            ReportType.ADOPTION, ReportFormat.CSV,
+            ReportType.ADOPTION,
+            ReportFormat.CSV,
         )
         assert result["report_type"] == "adoption"
 
@@ -86,7 +91,8 @@ class TestReportService:
         mock_result.scalars.return_value.all.return_value = []
         mock_session.execute.return_value = mock_result
         result = await service.generate_report(
-            ReportType.MEDICAL, ReportFormat.CSV,
+            ReportType.MEDICAL,
+            ReportFormat.CSV,
         )
         assert result["report_type"] == "medical"
 
@@ -96,7 +102,8 @@ class TestReportService:
         mock_result.scalars.return_value.all.return_value = []
         mock_session.execute.return_value = mock_result
         result = await service.generate_report(
-            ReportType.INVENTORY, ReportFormat.CSV,
+            ReportType.INVENTORY,
+            ReportFormat.CSV,
         )
         assert result["report_type"] == "inventory"
 
@@ -106,7 +113,8 @@ class TestReportService:
         mock_result.scalars.return_value.all.return_value = []
         mock_session.execute.return_value = mock_result
         result = await service.generate_report(
-            ReportType.RESCUE, ReportFormat.CSV,
+            ReportType.RESCUE,
+            ReportFormat.CSV,
         )
         assert result["report_type"] == "rescue"
 
@@ -171,7 +179,8 @@ class TestReportService:
         mock_result.scalars.return_value.all.return_value = []
         mock_session.execute.return_value = mock_result
         result = await service.generate_report(
-            ReportType.FINANCE, ReportFormat.CSV,
+            ReportType.FINANCE,
+            ReportFormat.CSV,
         )
         assert result["report_type"] == "finance"
 
@@ -181,7 +190,8 @@ class TestReportService:
         mock_result.scalars.return_value.all.return_value = []
         mock_session.execute.return_value = mock_result
         result = await service.generate_report(
-            ReportType.ANIMAL_POPULATION, ReportFormat.CSV,
+            ReportType.ANIMAL_POPULATION,
+            ReportFormat.CSV,
         )
         assert result["report_type"] == "animal_population"
 
@@ -191,7 +201,8 @@ class TestReportService:
         mock_result.scalars.return_value.all.return_value = []
         mock_session.execute.return_value = mock_result
         result = await service.generate_report(
-            ReportType.FOSTER, ReportFormat.CSV,
+            ReportType.FOSTER,
+            ReportFormat.CSV,
         )
         assert result["report_type"] == "foster"
 
@@ -201,7 +212,8 @@ class TestReportService:
         mock_result.scalars.return_value.all.return_value = []
         mock_session.execute.return_value = mock_result
         result = await service.generate_report(
-            ReportType.VOLUNTEER, ReportFormat.CSV,
+            ReportType.VOLUNTEER,
+            ReportFormat.CSV,
         )
         assert result["report_type"] == "volunteer"
 
@@ -211,7 +223,8 @@ class TestReportService:
         mock_result.scalars.return_value.all.return_value = []
         mock_session.execute.return_value = mock_result
         result = await service.generate_report(
-            ReportType.SHELTER, ReportFormat.CSV,
+            ReportType.SHELTER,
+            ReportFormat.CSV,
         )
         assert result["report_type"] == "shelter"
 
@@ -260,7 +273,8 @@ class TestReportService:
         mock_result.scalars.return_value.all.return_value = []
         mock_session.execute.return_value = mock_result
         result = await service.generate_report(
-            ReportType.DONATION, ReportFormat.CSV,
+            ReportType.DONATION,
+            ReportFormat.CSV,
         )
         assert result["download_url"].startswith("/api/v1/reports/download/")
         assert result["filename"].endswith(".csv")
@@ -271,7 +285,8 @@ class TestReportService:
         mock_result.scalars.return_value.all.return_value = []
         mock_session.execute.return_value = mock_result
         result = await service.generate_report(
-            ReportType.DONATION, ReportFormat.CSV,
+            ReportType.DONATION,
+            ReportFormat.CSV,
             period_start="2026-01-01",
             period_end="2026-06-30",
         )
@@ -283,7 +298,8 @@ class TestReportService:
         mock_result.scalars.return_value.all.return_value = []
         mock_session.execute.return_value = mock_result
         result = await service.generate_report(
-            ReportType.DONATION, ReportFormat.CSV,
+            ReportType.DONATION,
+            ReportFormat.CSV,
             filters={"status": "success"},
         )
         assert result is not None
@@ -320,10 +336,12 @@ class TestStaffPerformanceReport:
 
     @pytest.mark.asyncio
     async def test_staff_performance_report_returns_metrics(self, service, mock_session):
-        mock_session.execute = AsyncMock(side_effect=[
-            MagicMock(scalar=MagicMock(return_value=v))
-            for v in [42, 12, 20, 15, 8, 3.5, 25, 50, 45.2, 30]
-        ])
+        mock_session.execute = AsyncMock(
+            side_effect=[
+                MagicMock(scalar=MagicMock(return_value=v))
+                for v in [42, 12, 20, 15, 8, 3.5, 25, 50, 45.2, 30]
+            ]
+        )
         result = await service._staff_performance_report(None, None, None)
         assert result["title"] == "Staff Performance Report"
         assert result["headers"] == ["Metric", "Value"]

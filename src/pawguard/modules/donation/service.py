@@ -96,9 +96,7 @@ class DonationService:
             return
         try:
             donor_name = (
-                donation.donor.user.full_name
-                if donation.donor and donation.donor.user
-                else "Donor"
+                donation.donor.user.full_name if donation.donor and donation.donor.user else "Donor"
             )
             settings = get_settings()
             pdf_bytes = await asyncio.to_thread(
@@ -139,6 +137,7 @@ class DonationService:
             if self._notification_svc and donation.donor:
                 try:
                     from pawguard.modules.notifications.schemas import NotificationSend
+
                     await self._notification_svc.send_notification(
                         payload=NotificationSend(
                             user_id=donation.donor.user_id,
@@ -153,9 +152,7 @@ class DonationService:
                             send_email=True,
                             send_push=True,
                         ),
-                        user_email=(
-                            donation.donor.user.email if donation.donor.user else None
-                        ),
+                        user_email=(donation.donor.user.email if donation.donor.user else None),
                     )
                 except Exception as notif_exc:
                     logger.warning(
@@ -253,9 +250,7 @@ class DonationService:
             raise ValidationFailedError("This donation campaign has ended.")
         return campaign
 
-    async def _refresh_campaign_progress(
-        self, campaign_id: uuid.UUID | None
-    ) -> None:
+    async def _refresh_campaign_progress(self, campaign_id: uuid.UUID | None) -> None:
         """After a successful donation, recompute raised totals and auto-complete
         the campaign when its goal has been reached."""
         if campaign_id is None:
@@ -451,9 +446,7 @@ class DonationService:
                 status=DonationStatus.FAILED,
                 gateway_payment_id=gateway_payment_id,
             )
-            raise ValidationFailedError(
-                result.failure_reason or "Payment verification failed."
-            )
+            raise ValidationFailedError(result.failure_reason or "Payment verification failed.")
 
         tx_id = f"TXN-{uuid.uuid4().hex[:12].upper()}"
         updated = await self._repo.update_gateway_fields(
@@ -489,7 +482,10 @@ class DonationService:
 
         if res.donor and res.donor.user_id:
             try:
-                from pawguard.modules.notifications.governance_service import dispatch_governed_notification
+                from pawguard.modules.notifications.governance_service import (
+                    dispatch_governed_notification,
+                )
+
                 await dispatch_governed_notification(
                     self._repo._session,
                     trigger_code="donation_received",
@@ -497,7 +493,7 @@ class DonationService:
                     title="Thank you for your donation!",
                     body=f"Your donation of {res.currency} {res.amount} has been confirmed. Thank you for supporting PawGuard!",
                     target_user_ids=[res.donor.user_id],
-                    action_url=f"/donations/history",
+                    action_url="/donations/history",
                 )
             except Exception as exc:
                 logger.warning("failed_sending_donation_push", error=str(exc))
@@ -743,7 +739,9 @@ class DonationService:
             raise NotFoundError(f"Dog profile with ID '{payload.dog_id}' was not found.")
 
         if hasattr(dog, "status") and dog.status:
-            status_val = dog.status.value if hasattr(dog.status, "value") else str(dog.status).lower()
+            status_val = (
+                dog.status.value if hasattr(dog.status, "value") else str(dog.status).lower()
+            )
             if status_val in ("adopted", "deceased"):
                 raise ConflictError(
                     f"Dog with ID '{payload.dog_id}' has already been {status_val} and cannot be sponsored."
@@ -787,6 +785,7 @@ class DonationService:
         if self._notification_svc and donor.user:
             try:
                 from pawguard.modules.notifications.schemas import NotificationSend
+
                 dog_name = dog.name if hasattr(dog, "name") and dog.name else "your sponsored dog"
                 await self._notification_svc.send_notification(
                     payload=NotificationSend(
@@ -854,7 +853,8 @@ class DonationService:
             raise NotFoundError("Sponsorship not found.")
 
         updated = await self._repo.cancel_sponsorship(
-            sponsorship_id, datetime.now(UTC),
+            sponsorship_id,
+            datetime.now(UTC),
         )
         if updated is None:
             raise NotFoundError("Failed to cancel sponsorship.")
@@ -869,9 +869,7 @@ class DonationService:
             )
         return updated
 
-    async def list_sponsorships_for_donor(
-        self, user_id: uuid.UUID
-    ) -> list[DogSponsorship]:
+    async def list_sponsorships_for_donor(self, user_id: uuid.UUID) -> list[DogSponsorship]:
         donor = await self._repo.get_donor_by_user_id(user_id)
         if donor is None:
             return []
@@ -880,9 +878,7 @@ class DonationService:
     async def list_all_sponsorships(self) -> list[DogSponsorship]:
         return list(await self._repo.list_all_sponsorships())
 
-    async def get_sponsorship(
-        self, sponsorship_id: uuid.UUID
-    ) -> DogSponsorship:
+    async def get_sponsorship(self, sponsorship_id: uuid.UUID) -> DogSponsorship:
         sponsorship = await self._repo.get_sponsorship_by_id(sponsorship_id)
         if sponsorship is None:
             raise NotFoundError("Sponsorship not found.")
@@ -996,9 +992,7 @@ class DonationService:
             )
         return updated
 
-    async def charge_due_recurring_subscriptions(
-        self, session: AsyncSession
-    ) -> list[Donation]:
+    async def charge_due_recurring_subscriptions(self, session: AsyncSession) -> list[Donation]:
         """Charge all due recurring subscriptions.
 
         Returns the list of created PENDING Donation records. On success
@@ -1036,9 +1030,7 @@ class DonationService:
                     )
                     donation.payment_provider = order.provider
                     donation.gateway_order_id = order.order_id
-                    donation.notes = (
-                        "Recurring donation order initiated; awaiting payment."
-                    )
+                    donation.notes = "Recurring donation order initiated; awaiting payment."
                 except PaymentGatewayError:
                     pass
 
@@ -1056,7 +1048,9 @@ class DonationService:
                 calendar.monthrange(year, next_date)[1],
             )
             new_charge_date = sub.next_charge_date.replace(
-                year=year, month=next_date, day=day,
+                year=year,
+                month=next_date,
+                day=day,
             )
             await repo.advance_recurring_charge_date(sub.id, new_charge_date)
 
@@ -1127,7 +1121,8 @@ class DonationService:
                     "target_amount": str(result.target_amount),
                     "currency": result.currency,
                     "campaign_type": result.campaign_type.value
-                    if hasattr(result.campaign_type, "value") else result.campaign_type,
+                    if hasattr(result.campaign_type, "value")
+                    else result.campaign_type,
                 },
             )
         return result
@@ -1214,15 +1209,15 @@ class DonationService:
         """Public listing of currently accepting campaigns (PRR 3.1.7)."""
         campaigns = await self._repo.list_active_campaigns(datetime.now(UTC).date())
         return [
-            c for c in campaigns
-            if c.end_date is None or c.end_date >= datetime.now(UTC).date()
+            c for c in campaigns if c.end_date is None or c.end_date >= datetime.now(UTC).date()
         ]
 
     async def _to_campaign_response(self, campaign: DonationCampaign) -> DonationCampaignResponse:
         raised, donor_count = await self._repo.get_campaign_totals(campaign.id)
         progress = (
             (raised / float(campaign.target_amount) * 100.0)
-            if float(campaign.target_amount) > 0 else 0.0
+            if float(campaign.target_amount) > 0
+            else 0.0
         )
         return DonationCampaignResponse(
             id=campaign.id,

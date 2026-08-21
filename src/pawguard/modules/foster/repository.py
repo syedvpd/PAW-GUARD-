@@ -25,7 +25,12 @@ from pawguard.modules.foster.models import (
 class FosterRepository:
     PROFILE_SEARCH_FIELDS = ("preferences", "notes")
     PROFILE_SORTABLE_FIELDS = {
-        "status", "max_capacity", "active_count", "is_available", "created_at", "updated_at",
+        "status",
+        "max_capacity",
+        "active_count",
+        "is_available",
+        "created_at",
+        "updated_at",
     }
 
     def __init__(self, session: AsyncSession) -> None:
@@ -44,9 +49,7 @@ class FosterRepository:
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
-    async def get_profile_by_id_for_update(
-        self, profile_id: uuid.UUID
-    ) -> FosterProfile | None:
+    async def get_profile_by_id_for_update(self, profile_id: uuid.UUID) -> FosterProfile | None:
         """Return a foster profile under a row lock for placement allocation."""
         stmt = (
             select(FosterProfile)
@@ -97,6 +100,7 @@ class FosterRepository:
 
     async def soft_delete_profile(self, profile_id: uuid.UUID) -> bool:
         from datetime import UTC, datetime
+
         stmt = (
             update(FosterProfile)
             .where(FosterProfile.id == profile_id, FosterProfile.deleted_at.is_(None))
@@ -124,9 +128,7 @@ class FosterRepository:
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
-    async def get_placements_by_foster_id(
-        self, foster_id: uuid.UUID
-    ) -> Sequence[FosterPlacement]:
+    async def get_placements_by_foster_id(self, foster_id: uuid.UUID) -> Sequence[FosterPlacement]:
         stmt = (
             select(FosterPlacement)
             .options(selectinload(FosterPlacement.dog))
@@ -136,14 +138,14 @@ class FosterRepository:
         return (await self._session.execute(stmt)).scalars().all()
 
     async def list_profiles_by_ids(self, ids: list[uuid.UUID]) -> Sequence[FosterProfile]:
-        stmt = (
-            select(FosterProfile)
-            .where(FosterProfile.id.in_(ids), FosterProfile.deleted_at.is_(None))
+        stmt = select(FosterProfile).where(
+            FosterProfile.id.in_(ids), FosterProfile.deleted_at.is_(None)
         )
         return (await self._session.execute(stmt)).scalars().all()
 
     async def bulk_soft_delete_profiles(self, ids: list[uuid.UUID]) -> int:
         from datetime import UTC, datetime
+
         stmt = (
             update(FosterProfile)
             .where(FosterProfile.id.in_(ids), FosterProfile.deleted_at.is_(None))

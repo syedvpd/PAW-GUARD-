@@ -90,24 +90,36 @@ async def export_audit_logs(
     if format.lower() == "csv":
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow([
-            "id", "user_id", "user_name", "full_name", "role", "status",
-            "event_type", "ip_address", "user_agent", "created_at"
-        ])
+        writer.writerow(
+            [
+                "id",
+                "user_id",
+                "user_name",
+                "full_name",
+                "role",
+                "status",
+                "event_type",
+                "ip_address",
+                "user_agent",
+                "created_at",
+            ]
+        )
         for e in entries:
             formatted = _format_audit_entry(e)
-            writer.writerow([
-                formatted["id"],
-                formatted["user_id"] or "",
-                formatted["user_name"] or "",
-                formatted["full_name"] or "",
-                formatted["role"] or "",
-                formatted["status"],
-                formatted["event_type"],
-                formatted["ip_address"] or "",
-                formatted["user_agent"] or "",
-                formatted["created_at"] or "",
-            ])
+            writer.writerow(
+                [
+                    formatted["id"],
+                    formatted["user_id"] or "",
+                    formatted["user_name"] or "",
+                    formatted["full_name"] or "",
+                    formatted["role"] or "",
+                    formatted["status"],
+                    formatted["event_type"],
+                    formatted["ip_address"] or "",
+                    formatted["user_agent"] or "",
+                    formatted["created_at"] or "",
+                ]
+            )
         output.seek(0)
         return StreamingResponse(
             io.BytesIO(output.getvalue().encode("utf-8")),
@@ -133,5 +145,6 @@ async def get_audit_log(
     entry = await repo.get_by_id(entry_id)
     if entry is None:
         from pawguard.core.exceptions import NotFoundError
+
         raise NotFoundError("Audit log entry not found.")
     return ApiResponse(data=_format_audit_entry(entry))

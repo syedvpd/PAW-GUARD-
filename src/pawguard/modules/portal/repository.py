@@ -47,7 +47,9 @@ class PortalRepository:
         await self._session.flush()
         return message
 
-    async def get_newsletter_subscription(self, user_id: uuid.UUID) -> NewsletterSubscription | None:
+    async def get_newsletter_subscription(
+        self, user_id: uuid.UUID
+    ) -> NewsletterSubscription | None:
         stmt = select(NewsletterSubscription).where(NewsletterSubscription.user_id == user_id)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
@@ -67,9 +69,8 @@ class PortalRepository:
         return story
 
     async def get_story(self, story_id: uuid.UUID) -> SuccessStory | None:
-        stmt = (
-            select(SuccessStory)
-            .where(SuccessStory.id == story_id, SuccessStory.deleted_at.is_(None))
+        stmt = select(SuccessStory).where(
+            SuccessStory.id == story_id, SuccessStory.deleted_at.is_(None)
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
@@ -344,9 +345,8 @@ class PortalRepository:
 
     async def soft_delete_story(self, story_id: uuid.UUID) -> None:
         now = datetime.now(UTC)
-        stmt = (
-            select(SuccessStory)
-            .where(SuccessStory.id == story_id, SuccessStory.deleted_at.is_(None))
+        stmt = select(SuccessStory).where(
+            SuccessStory.id == story_id, SuccessStory.deleted_at.is_(None)
         )
         obj = (await self._session.execute(stmt)).scalar_one_or_none()
         if obj:
@@ -354,10 +354,7 @@ class PortalRepository:
 
     async def soft_delete_blog(self, post_id: uuid.UUID) -> None:
         now = datetime.now(UTC)
-        stmt = (
-            select(BlogPost)
-            .where(BlogPost.id == post_id, BlogPost.deleted_at.is_(None))
-        )
+        stmt = select(BlogPost).where(BlogPost.id == post_id, BlogPost.deleted_at.is_(None))
         obj = (await self._session.execute(stmt)).scalar_one_or_none()
         if obj:
             obj.deleted_at = now
@@ -557,9 +554,8 @@ class PortalRepository:
 
     async def bulk_soft_delete_stories(self, ids: list[uuid.UUID]) -> int:
         now = datetime.now(UTC)
-        stmt = (
-            select(SuccessStory)
-            .where(SuccessStory.id.in_(ids), SuccessStory.deleted_at.is_(None))
+        stmt = select(SuccessStory).where(
+            SuccessStory.id.in_(ids), SuccessStory.deleted_at.is_(None)
         )
         objs = (await self._session.execute(stmt)).scalars().all()
         for o in objs:
@@ -568,10 +564,7 @@ class PortalRepository:
 
     async def bulk_soft_delete_blogs(self, ids: list[uuid.UUID]) -> int:
         now = datetime.now(UTC)
-        stmt = (
-            select(BlogPost)
-            .where(BlogPost.id.in_(ids), BlogPost.deleted_at.is_(None))
-        )
+        stmt = select(BlogPost).where(BlogPost.id.in_(ids), BlogPost.deleted_at.is_(None))
         objs = (await self._session.execute(stmt)).scalars().all()
         for o in objs:
             o.deleted_at = now
@@ -586,9 +579,8 @@ class PortalRepository:
         return len(objs)
 
     async def bulk_update_story_status(self, ids: list[uuid.UUID], status: ContentStatus) -> int:
-        stmt = (
-            select(SuccessStory)
-            .where(SuccessStory.id.in_(ids), SuccessStory.deleted_at.is_(None))
+        stmt = select(SuccessStory).where(
+            SuccessStory.id.in_(ids), SuccessStory.deleted_at.is_(None)
         )
         objs = (await self._session.execute(stmt)).scalars().all()
         for o in objs:

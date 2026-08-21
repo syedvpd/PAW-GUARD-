@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.bulk import BulkDeleteRequest, BulkDeleteResponse
-from pawguard.core.exceptions import ForbiddenError, NotFoundError
+from pawguard.core.exceptions import ForbiddenError, NotFoundError, ValidationFailedError
 from pawguard.core.pagination import PageParams, page_params
 from pawguard.core.pii import mask_email, mask_full_name, mask_phone
 from pawguard.core.rate_limiter import rate_limit
@@ -27,6 +27,8 @@ from pawguard.modules.lost_found.repository import LostFoundRepository
 from pawguard.modules.lost_found.schemas import (
     FoundReportCreate,
     FoundReportResponse,
+    LostFoundPhotoUploadUrlRequest,
+    LostFoundPhotoUploadUrlResponse,
     LostReportCreate,
     LostReportResponse,
     OwnershipClaimReview,
@@ -42,9 +44,17 @@ from pawguard.modules.portal.router import get_portal_service
 from pawguard.modules.portal.schemas import SuccessStoryResponse
 from pawguard.modules.portal.service import PortalService
 from pawguard.services.audit_service import AuditService
+from pawguard.services.storage_service import StorageService
 from pawguard.workers.pool import get_arq_pool
 
 router = APIRouter(prefix="/lost-found", tags=["lost-found"])
+
+# Allowed image MIME types for lost/found pet photo uploads. Reuses the same
+# S3/Supabase presigned-upload architecture as the Emergency (rescue) flow but
+# restricts uploads to images only.
+_LOST_FOUND_PHOTO_MIME_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
+_LOST_FOUND_PHOTO_MAX_BYTES = 50 * 1024 * 1024  # 50 MB
+_LOST_FOUND_PHOTO_FOLDER = "lost-found"
 
 
 def _mask_reporter_identity(
@@ -116,6 +126,52 @@ async def report_public_sighting(
 
 
 @router.post(
+    "/photo-upload-url",
+    response_model=ApiResponse[LostFoundPhotoUploadUrlResponse],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(rate_limit("lost_found_photo_upload", 10, 60))],
+)
+async def request_lost_found_photo_upload_url(
+    payload: LostFoundPhotoUploadUrlRequest,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: LostFoundService = Depends(get_lost_found_service),
+) -> ApiResponse[LostFoundPhotoUploadUrlResponse]:
+    """Generate a presigned S3/Supabase PUT URL for a lost/found pet photo.
+
+    Authenticated counterpart to the Emergency ``/rescue/media-upload-url``
+    flow. The client uploads the file bytes directly to storage, then submits
+    the returned ``object_key`` on report creation. The object key is stored
+    permanently; the backend mints a fresh signed download URL on every read.
+
+    Upload authorization, image-only MIME validation, and the 50MB cap keep the
+    endpoint from becoming an unrestricted file-storage mechanism. The issued
+    key is scoped to the ``lost-found/`` folder with a random UUID, so a caller
+    cannot overwrite or read arbitrary objects.
+    """
+    if payload.mime_type not in _LOST_FOUND_PHOTO_MIME_TYPES:
+        raise ValidationFailedError(
+            f"Unsupported image type '{payload.mime_type}'. "
+            "Allowed types: JPEG, PNG, WEBP."
+        )
+    if payload.file_size > _LOST_FOUND_PHOTO_MAX_BYTES:
+        raise ValidationFailedError("File size exceeds the maximum 50MB limit for pet photos.")
+
+    storage = StorageService()
+    object_key = storage.build_object_key(folder=_LOST_FOUND_PHOTO_FOLDER, filename=payload.filename)
+    upload_url = storage.generate_presigned_upload_url(
+        object_key=object_key, content_type=payload.mime_type
+    )
+    return ApiResponse(
+        data=LostFoundPhotoUploadUrlResponse(
+            upload_url=upload_url,
+            object_key=object_key,
+        ),
+        message="Presigned photo upload URL generated successfully.",
+    )
+
+
+@router.post(
     "/lost",
     response_model=ApiResponse[LostReportResponse],
     status_code=status.HTTP_201_CREATED,
@@ -129,7 +185,10 @@ async def report_lost_pet(
 ) -> ApiResponse[LostReportResponse]:
     ip = request.client.host if request.client else None
     report = await service.report_lost_pet(
-        current_user.user.id, payload, actor_id=current_user.id, ip_address=ip,
+        current_user.user.id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
     )
     return ApiResponse(
         data=LostReportResponse.model_validate(report),
@@ -174,7 +233,10 @@ async def report_found_pet(
 ) -> ApiResponse[FoundReportResponse]:
     ip = request.client.host if request.client else None
     report = await service.report_found_pet(
-        current_user.user.id, payload, actor_id=current_user.id, ip_address=ip,
+        current_user.user.id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
     )
     return ApiResponse(
         data=FoundReportResponse.model_validate(report),
@@ -200,7 +262,11 @@ async def list_lost_reports(
     service: LostFoundService = Depends(get_lost_found_service),
 ) -> PaginatedResponse[LostReportResponse]:
     result = await service.list_lost_reports_paginated(
-        page, sort, search_term=search, status=status, species=species,
+        page,
+        sort,
+        search_term=search,
+        status=status,
+        species=species,
     )
     data = [LostReportResponse.model_validate(r) for r in result.data]
     for item in data:
@@ -226,7 +292,11 @@ async def list_found_reports(
     service: LostFoundService = Depends(get_lost_found_service),
 ) -> PaginatedResponse[FoundReportResponse]:
     result = await service.list_found_reports_paginated(
-        page, sort, search_term=search, status=status, species=species,
+        page,
+        sort,
+        search_term=search,
+        status=status,
+        species=species,
     )
     data = [FoundReportResponse.model_validate(r) for r in result.data]
     for item in data:
@@ -281,7 +351,6 @@ async def get_found_report(
     item = FoundReportResponse.model_validate(report)
     _mask_reporter_identity(item, current_user)
     return ApiResponse(data=item)
-
 
 
 @router.get(
@@ -426,10 +495,14 @@ async def resolve_match(
         if approve:
             ip_address = request.client.host if request.client else None
             await service.resolve_lost_report(
-                match.lost_report_id, actor_id=current_user.id, ip_address=ip_address,
+                match.lost_report_id,
+                actor_id=current_user.id,
+                ip_address=ip_address,
             )
             await service.resolve_found_report(
-                match.found_report_id, actor_id=current_user.id, ip_address=ip_address,
+                match.found_report_id,
+                actor_id=current_user.id,
+                ip_address=ip_address,
             )
 
     return ApiResponse(
@@ -451,7 +524,9 @@ async def delete_lost_report(
 ) -> ApiResponse[None]:
     ip = request.client.host if request.client else None
     await service.soft_delete_lost_report(
-        report_id, actor_id=current_user.id, ip_address=ip,
+        report_id,
+        actor_id=current_user.id,
+        ip_address=ip,
     )
     return ApiResponse(message="Lost report deleted.")
 
@@ -469,7 +544,9 @@ async def delete_found_report(
 ) -> ApiResponse[None]:
     ip = request.client.host if request.client else None
     await service.soft_delete_found_report(
-        report_id, actor_id=current_user.id, ip_address=ip,
+        report_id,
+        actor_id=current_user.id,
+        ip_address=ip,
     )
     return ApiResponse(message="Found report deleted.")
 
@@ -487,7 +564,9 @@ async def bulk_delete_lost_reports(
 ) -> BulkDeleteResponse:
     ip = request.client.host if request.client else None
     deleted = await service.bulk_delete_lost_reports(
-        payload.ids, actor_id=current_user.id, ip_address=ip,
+        payload.ids,
+        actor_id=current_user.id,
+        ip_address=ip,
     )
     return BulkDeleteResponse(
         message=f"{deleted} lost reports deleted.",
@@ -508,7 +587,9 @@ async def bulk_delete_found_reports(
 ) -> BulkDeleteResponse:
     ip = request.client.host if request.client else None
     deleted = await service.bulk_delete_found_reports(
-        payload.ids, actor_id=current_user.id, ip_address=ip,
+        payload.ids,
+        actor_id=current_user.id,
+        ip_address=ip,
     )
     return BulkDeleteResponse(
         message=f"{deleted} found reports deleted.",

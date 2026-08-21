@@ -18,18 +18,14 @@ COMPLAINT = {
 
 @pytest.mark.asyncio
 class TestGrievanceRateLimit:
-    async def test_complaint_submission_rate_limited(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_complaint_submission_rate_limited(self, client: AsyncClient) -> None:
         for _ in range(10):
             resp = await client.post("/api/v1/grievance", json=COMPLAINT)
             assert resp.status_code == 201
         overflow = await client.post("/api/v1/grievance", json=COMPLAINT)
         assert overflow.status_code == 429
 
-    async def test_feedback_submission_rate_limited(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_feedback_submission_rate_limited(self, client: AsyncClient) -> None:
         payload = {"rating": 5, "comments": "Great service"}
         for _ in range(10):
             resp = await client.post("/api/v1/grievance/feedback", json=payload)

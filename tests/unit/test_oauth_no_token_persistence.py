@@ -55,9 +55,7 @@ def _stored_values(record: object) -> str:
     """Join the values of `__dict__` (ORM) or `__slots__` (AuthenticatedTokens)."""
     if hasattr(record, "__dict__"):
         return "\n".join(str(v) for v in record.__dict__.values())
-    return "\n".join(
-        str(getattr(record, slot)) for slot in getattr(type(record), "__slots__", [])
-    )
+    return "\n".join(str(getattr(record, slot)) for slot in getattr(type(record), "__slots__", []))
 
 
 class TestOAuthAccountSchema:

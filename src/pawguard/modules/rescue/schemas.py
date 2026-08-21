@@ -110,12 +110,8 @@ class RescueRequestCreate(BaseModel):
     behavioral_indicators: str | None = Field(None, examples=["Timid, appears malnourished"])
     # Reporter self-assessment on intake; coordinators refine during
     # verification (PRR 3.2 severity prioritization).
-    severity: RescueSeverity = Field(
-        RescueSeverity.MEDIUM, examples=["high"]
-    )
-    is_urgent: bool = Field(
-        False, examples=[False]
-    )  # PRR 3.1.1 urgent-alert banner flag
+    severity: RescueSeverity = Field(RescueSeverity.MEDIUM, examples=["high"])
+    is_urgent: bool = Field(False, examples=[False])  # PRR 3.1.1 urgent-alert banner flag
     # Media evidence from the intake wizard (PRR 3.2): up to 5 photos + short
     # video clips (50MB combined) as object keys from the storage module's
     # presigned-upload flow.
@@ -212,12 +208,8 @@ class RescueDispatchCreate(BaseModel):
     equipment_details: str | None = None
     # Escalation Protocol (PRR 3.3): agents request back-up personnel,
     # veterinary transport, or law enforcement support from the field.
-    escalation_type: RescueEscalationType | None = Field(
-        None, examples=["backup_personnel"]
-    )
-    escalation_notes: str | None = Field(
-        None, examples=["Second team needed - dog is aggressive."]
-    )
+    escalation_type: RescueEscalationType | None = Field(None, examples=["backup_personnel"])
+    escalation_notes: str | None = Field(None, examples=["Second team needed - dog is aggressive."])
     notes: str | None = None
 
 
@@ -270,9 +262,7 @@ class RescueEscalateCreate(BaseModel):
     dedicated escalate endpoint, not only at dispatch time."""
 
     escalation_type: RescueEscalationType = Field(..., examples=["backup_personnel"])
-    escalation_notes: str | None = Field(
-        None, examples=["Second team needed - dog is aggressive."]
-    )
+    escalation_notes: str | None = Field(None, examples=["Second team needed - dog is aggressive."])
 
 
 class RescueDispatchResponse(BaseModel):
@@ -350,7 +340,6 @@ class NearbyAgentResponse(BaseModel):
     longitude: float | None = None
 
 
-
 class RescueReportCreate(BaseModel):
     notes: str | None = None
     photos: list[str] | None = Field(None, max_length=5)
@@ -373,9 +362,12 @@ class RescueReportResponse(BaseModel):
             urls = []
             if photos:
                 from pawguard.services.storage_service import get_storage_service
+
                 storage = get_storage_service()
                 try:
-                    urls = [storage.generate_presigned_download_url(object_key=k) for k in photos if k]
+                    urls = [
+                        storage.generate_presigned_download_url(object_key=k) for k in photos if k
+                    ]
                 except Exception:
                     urls = []
             return {
@@ -430,9 +422,12 @@ class RescueRequestResponse(BaseModel):
             urls = []
             if keys:
                 from pawguard.services.storage_service import get_storage_service
+
                 storage = get_storage_service()
                 try:
-                    urls = [storage.generate_presigned_download_url(object_key=k) for k in keys if k]
+                    urls = [
+                        storage.generate_presigned_download_url(object_key=k) for k in keys if k
+                    ]
                 except Exception:
                     urls = []
 

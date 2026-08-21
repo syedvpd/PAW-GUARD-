@@ -174,7 +174,7 @@ class TestAuditBeforeAfterState:
         session.flush.assert_awaited_once()
 
     async def test_record_coerces_complex_types_correctly(self) -> None:
-        from datetime import datetime, date, UTC
+        from datetime import UTC, date, datetime
         from decimal import Decimal
         from enum import Enum
 
@@ -195,21 +195,15 @@ class TestAuditBeforeAfterState:
                 "scheduled_at": test_dt,
                 "created_date": test_date,
                 "amount": test_decimal,
-                "nested": {
-                    "enum": DummyEnum.FOO,
-                    "list": [test_dt, test_decimal]
-                }
-            }
+                "nested": {"enum": DummyEnum.FOO, "list": [test_dt, test_decimal]},
+            },
         )
 
         expected_metadata = {
             "scheduled_at": test_dt.isoformat(),
             "created_date": test_date.isoformat(),
             "amount": 123.45,
-            "nested": {
-                "enum": "foo",
-                "list": [test_dt.isoformat(), 123.45]
-            }
+            "nested": {"enum": "foo", "list": [test_dt.isoformat(), 123.45]},
         }
         assert entry.event_metadata == expected_metadata
 

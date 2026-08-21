@@ -38,13 +38,9 @@ class TestEndToEndModuleFlows:
 
         # 2. Promote user to super_admin in DB and complete the mandatory
         #    admin MFA challenge so the bearer token carries admin claims.
-        headers = await promote_and_auth(
-            client, db_session, email=REGISTER_PAYLOAD["email"]
-        )
+        headers = await promote_and_auth(client, db_session, email=REGISTER_PAYLOAD["email"])
         user = (
-            await db_session.execute(
-                select(User).where(User.email == REGISTER_PAYLOAD["email"])
-            )
+            await db_session.execute(select(User).where(User.email == REGISTER_PAYLOAD["email"]))
         ).scalar_one()
 
         # 3. Emergency Rescue Flow
@@ -86,16 +82,12 @@ class TestEndToEndModuleFlows:
         assert dispatch_resp.json()["data"]["status"] == RescueStatus.DISPATCHED.value
 
         # Located
-        located_resp = await client.post(
-            f"/api/v1/rescue/{case_id}/located", headers=headers
-        )
+        located_resp = await client.post(f"/api/v1/rescue/{case_id}/located", headers=headers)
         assert located_resp.status_code == 200
         assert located_resp.json()["data"]["status"] == RescueStatus.LOCATED.value
 
         # Secured
-        secured_resp = await client.post(
-            f"/api/v1/rescue/{case_id}/secured", headers=headers
-        )
+        secured_resp = await client.post(f"/api/v1/rescue/{case_id}/secured", headers=headers)
         assert secured_resp.status_code == 200
         assert secured_resp.json()["data"]["status"] == RescueStatus.RESCUED.value
 
@@ -137,8 +129,10 @@ class TestEndToEndModuleFlows:
         # 4b. Medical clearance (required before a dog can be adopted).
         # Clearance requires a veterinarian role.
         vet_headers = await promote_and_auth(
-            client, db_session,
-            email=f"vet_{uuid.uuid4().hex[:8]}@example.com", role="veterinarian",
+            client,
+            db_session,
+            email=f"vet_{uuid.uuid4().hex[:8]}@example.com",
+            role="veterinarian",
         )
         clearance_resp = await client.post(
             f"/api/v1/medical/clearance/{dog_id}", headers=vet_headers
@@ -182,7 +176,9 @@ class TestEndToEndModuleFlows:
 
         # Attempt secondary application (should fail/raise conflict, since the
         # dog is already locked at home_check)
-        second_apply_resp = await client.post("/api/v1/adoptions", json=adopt_payload, headers=headers)
+        second_apply_resp = await client.post(
+            "/api/v1/adoptions", json=adopt_payload, headers=headers
+        )
         assert second_apply_resp.status_code == 409
 
         approve_resp = await client.put(
@@ -224,7 +220,9 @@ class TestEndToEndModuleFlows:
             "end_at": "2026-07-30T13:00:00Z",
             "capacity": 5,
         }
-        shift_resp = await client.post("/api/v1/volunteers/shifts", json=shift_payload, headers=headers)
+        shift_resp = await client.post(
+            "/api/v1/volunteers/shifts", json=shift_payload, headers=headers
+        )
         assert shift_resp.status_code == 201
         shift_id = shift_resp.json()["data"]["id"]
 
@@ -252,7 +250,9 @@ class TestEndToEndModuleFlows:
             "max_capacity": 2,
             "notes": "Spacious apartment",
         }
-        foster_resp = await client.post("/api/v1/fosters/apply", json=foster_payload, headers=headers)
+        foster_resp = await client.post(
+            "/api/v1/fosters/apply", json=foster_payload, headers=headers
+        )
         assert foster_resp.status_code == 201
         foster_profile_id = foster_resp.json()["data"]["id"]
 
@@ -273,20 +273,26 @@ class TestEndToEndModuleFlows:
             "notes": "Placing for recovery care",
         }
         place_resp = await client.post(
-            f"/api/v1/fosters/{foster_profile_id}/placements", json=placement_payload, headers=headers
+            f"/api/v1/fosters/{foster_profile_id}/placements",
+            json=placement_payload,
+            headers=headers,
         )
         assert place_resp.status_code == 201
         placement_id = place_resp.json()["data"]["id"]
 
         # Return dog from foster care
         return_resp = await client.post(
-            f"/api/v1/fosters/placements/{placement_id}/return", json={"notes": "Returned healthy"}, headers=headers
+            f"/api/v1/fosters/placements/{placement_id}/return",
+            json={"notes": "Returned healthy"},
+            headers=headers,
         )
         assert return_resp.status_code == 200
 
         # 8. Donation Flow
         donor_reg_payload = {"tax_identifier": "TAX-123456", "notes": "Regular corporate donor"}
-        donor_reg_resp = await client.post("/api/v1/donations/register", json=donor_reg_payload, headers=headers)
+        donor_reg_resp = await client.post(
+            "/api/v1/donations/register", json=donor_reg_payload, headers=headers
+        )
         assert donor_reg_resp.status_code == 201
 
         donation_payload = {
@@ -326,12 +332,16 @@ class TestEndToEndModuleFlows:
             "longitude": 78.4025,
             "found_at": "2026-07-28T11:00:00Z",
         }
-        found_resp = await client.post("/api/v1/lost-found/found", json=found_payload, headers=headers)
+        found_resp = await client.post(
+            "/api/v1/lost-found/found", json=found_payload, headers=headers
+        )
         assert found_resp.status_code == 201
         found_resp.json()["data"]["id"]
 
         # View matches
-        matches_resp = await client.get(f"/api/v1/lost-found/lost/{lost_id}/matches", headers=headers)
+        matches_resp = await client.get(
+            f"/api/v1/lost-found/lost/{lost_id}/matches", headers=headers
+        )
         assert matches_resp.status_code == 200
         matches = matches_resp.json()["data"]
         assert len(matches) >= 1

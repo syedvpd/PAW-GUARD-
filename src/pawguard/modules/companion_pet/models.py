@@ -3,6 +3,7 @@
 import uuid
 from datetime import datetime
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Boolean,
@@ -18,7 +19,6 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
 
 from pawguard.db.base import Base
 from pawguard.db.mixins import AuditMixin, SoftDeleteMixin, TimestampMixin, UUIDPkMixin
@@ -132,9 +132,10 @@ class PetClinicAccess(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, 
         index=True,
     )
     granted_by_id: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
-    ,
-        index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
@@ -165,9 +166,10 @@ class PetMedicalRecord(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin,
         index=True,
     )
     authored_by_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    ,
-        index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     stored_file_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
@@ -180,8 +182,6 @@ class PetMedicalRecord(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin,
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
-
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pawguard.modules.dog.models import DogProfile
@@ -209,17 +209,20 @@ class SafetyTag(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     scan_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     dog: Mapped["DogProfile"] = relationship("DogProfile", foreign_keys=[dog_id], lazy="joined")
-    pet: Mapped["CompanionPet | None"] = relationship("CompanionPet", foreign_keys=[pet_id], lazy="joined")
+    pet: Mapped["CompanionPet | None"] = relationship(
+        "CompanionPet", foreign_keys=[pet_id], lazy="joined"
+    )
 
     __table_args__ = (
         Index(
             "uq_pet_safety_tags_active_dog",
             "dog_id",
             unique=True,
-            postgresql_where=text("deleted_at IS NULL AND is_active IS TRUE AND dog_id IS NOT NULL"),
+            postgresql_where=text(
+                "deleted_at IS NULL AND is_active IS TRUE AND dog_id IS NOT NULL"
+            ),
         ),
     )
-
 
 
 class PetReminder(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):

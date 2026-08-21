@@ -29,6 +29,7 @@ class _RateLimitDependency:
 
     async def __call__(self, request: Request, redis: RedisClient = Depends(get_redis)) -> None:
         from pawguard.core.config import get_settings
+
         if not get_settings().rate_limiting_enabled:
             return
         user_key = _resolve_user_key(request)

@@ -49,9 +49,7 @@ def apply_sorting(
         field = default_field
     else:
         allowed = ", ".join(sorted(valid_fields))
-        raise ValidationFailedError(
-            f"Invalid sort_by '{sort.sort_by}'. Allowed fields: {allowed}."
-        )
+        raise ValidationFailedError(f"Invalid sort_by '{sort.sort_by}'. Allowed fields: {allowed}.")
     column = getattr(stmt.get_final_froms()[0].columns, field, None)
     if column is None:
         return stmt
@@ -74,10 +72,9 @@ def build_search_filter(
     for field_name in search_fields:
         column = getattr(model, field_name, None)
         if column is not None:
-            conditions.append(
-                cast(column, Unicode).ilike(search_pattern)
-            )
+            conditions.append(cast(column, Unicode).ilike(search_pattern))
     if not conditions:
         return None
     from sqlalchemy import or_
+
     return or_(*conditions)

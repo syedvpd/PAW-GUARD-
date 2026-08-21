@@ -3,7 +3,6 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 from fastapi import Request
-
 from sqlalchemy import event
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.ext.asyncio import (
@@ -13,15 +12,14 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+# Registers the before_flush audit-stamp listener as a side effect of import.
+import pawguard.db.audit  # noqa: F401
 from pawguard.core.config import get_settings
 from pawguard.core.metrics import (
     increment_counter,
     observe_histogram,
     set_gauge,
 )
-
-# Registers the before_flush audit-stamp listener as a side effect of import.
-import pawguard.db.audit  # noqa: F401
 
 _settings = get_settings()
 
@@ -89,7 +87,15 @@ def after_cursor_execute(
     if start_times:
         elapsed = (time.perf_counter() - start_times.pop()) * 1000
         stmt_clean = statement.strip().split()[0].upper() if statement.strip() else "OTHER"
-        if stmt_clean not in ("SELECT", "INSERT", "UPDATE", "DELETE", "COMMIT", "ROLLBACK", "BEGIN"):
+        if stmt_clean not in (
+            "SELECT",
+            "INSERT",
+            "UPDATE",
+            "DELETE",
+            "COMMIT",
+            "ROLLBACK",
+            "BEGIN",
+        ):
             stmt_clean = "OTHER"
         observe_histogram("db_query_duration_ms", elapsed, {"type": stmt_clean})
         increment_counter("db_queries_total", {"type": stmt_clean})

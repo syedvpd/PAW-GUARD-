@@ -111,7 +111,10 @@ class _FakeRequest:
 
 @pytest.mark.asyncio
 class TestRateLimiterXForwardedFor:
-    async def test_uses_last_forwarded_ip(self) -> None:
+    async def test_uses_last_forwarded_ip(self, monkeypatch) -> None:
+        from pawguard.core.config import get_settings
+
+        monkeypatch.setattr(get_settings(), "rate_limiting_enabled", True)
         limiter = rate_limit("login", 10, 60)
         request = _FakeRequest({"X-Forwarded-For": "203.0.113.5, 10.0.0.1"})
         redis = AsyncMock()
@@ -123,8 +126,10 @@ class TestRateLimiterXForwardedFor:
         assert "10.0.0.1" in key
         assert "127.0.0.1" not in key
 
+    async def test_falls_back_to_client_host_without_xff(self, monkeypatch) -> None:
+        from pawguard.core.config import get_settings
 
-    async def test_falls_back_to_client_host_without_xff(self) -> None:
+        monkeypatch.setattr(get_settings(), "rate_limiting_enabled", True)
         limiter = rate_limit("login", 10, 60)
         request = _FakeRequest({}, host="198.51.100.7")
         redis = AsyncMock()
@@ -135,7 +140,10 @@ class TestRateLimiterXForwardedFor:
         key = redis.incr.call_args.args[0]
         assert "198.51.100.7" in key
 
-    async def test_enforces_limit(self) -> None:
+    async def test_enforces_limit(self, monkeypatch) -> None:
+        from pawguard.core.config import get_settings
+
+        monkeypatch.setattr(get_settings(), "rate_limiting_enabled", True)
         limiter = rate_limit("login", 2, 60)
         request = _FakeRequest({"X-Forwarded-For": "203.0.113.9"})
         redis = AsyncMock()

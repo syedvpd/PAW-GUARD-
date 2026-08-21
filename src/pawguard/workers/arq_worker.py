@@ -79,18 +79,18 @@ def _track_failures(fn: Callable[..., Awaitable[Any]]) -> Any:
 async def outbox_poller_loop(ctx: dict[str, Any]) -> None:
     logger.info("outbox_poller_loop_started")
     from pawguard.workers.pool import _ensure_pool
+
     pool = await _ensure_pool()
 
     while True:
         try:
-            async with AsyncSessionLocal() as session:
-                async with session.begin():
-                    processed = await OutboxService.process_pending_events(session, pool)
-                    if processed > 0:
-                        logger.debug(f"Outbox processed {processed} events.")
+            async with AsyncSessionLocal() as session, session.begin():
+                processed = await OutboxService.process_pending_events(session, pool)
+                if processed > 0:
+                    logger.debug(f"Outbox processed {processed} events.")
         except Exception as e:
             logger.error("outbox_poller_loop_error", error=str(e))
-        
+
         await asyncio.sleep(2)
 
 

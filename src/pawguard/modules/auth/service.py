@@ -208,10 +208,7 @@ class AuthService:
         if user.mfa_enabled or (
             self._settings.mfa_mandatory_for_admins
             and self._is_admin(user)
-            and not (
-                self._settings.mfa_bypass_for_dev
-                and not self._settings.is_production
-            )
+            and not (self._settings.mfa_bypass_for_dev and not self._settings.is_production)
         ):
             return create_pre_auth_token(user_id=user.id, session_id=session.id)
 
@@ -242,10 +239,7 @@ class AuthService:
 
         device_record = await self._mfa.get_for_user(user.id)
 
-        if (
-            self._is_admin(user)
-            and not user.mfa_enabled
-        ):
+        if self._is_admin(user) and not user.mfa_enabled:
             # Mandatory MFA for admins: an admin without an enrolled device
             # cannot complete login - they must enroll first (PRR security).
             # Note: mfa_bypass_for_dev only applies at the login() gate above;
@@ -256,9 +250,7 @@ class AuthService:
                 ip_address=ctx.ip_address,
                 user_agent=ctx.user_agent,
             )
-            raise MFARequiredError(
-                "Admin accounts must enroll in MFA before completing login."
-            )
+            raise MFARequiredError("Admin accounts must enroll in MFA before completing login.")
 
         if device_record is None or not self._verify_totp(device_record, code):
             await self._audit.record(
@@ -432,6 +424,7 @@ class AuthService:
         try:
             from pawguard.modules.notifications.repository import NotificationRepository
             from pawguard.modules.notifications.service import NotificationService
+
             session = self._sessions._session
             notification_svc = NotificationService(repository=NotificationRepository(session))
             await notification_svc._send_push_to_users(
@@ -547,6 +540,7 @@ class AuthService:
         try:
             from pawguard.modules.notifications.repository import NotificationRepository
             from pawguard.modules.notifications.service import NotificationService
+
             session = self._sessions._session
             notification_svc = NotificationService(repository=NotificationRepository(session))
             await notification_svc._send_push_to_users(
@@ -655,9 +649,7 @@ class AuthService:
         self, *, user: User, payload: MFADisableRequest, ctx: RequestContext
     ) -> None:
         if self._is_admin(user):
-            raise MFADisableNotAllowedError(
-                "Admins must keep MFA enabled."
-            )
+            raise MFADisableNotAllowedError("Admins must keep MFA enabled.")
 
         confirmed_via: str | None = None
 
@@ -693,6 +685,7 @@ class AuthService:
         try:
             from pawguard.modules.notifications.repository import NotificationRepository
             from pawguard.modules.notifications.service import NotificationService
+
             session = self._sessions._session
             notification_svc = NotificationService(repository=NotificationRepository(session))
             await notification_svc._send_push_to_users(
@@ -731,9 +724,7 @@ class AuthService:
                 user = User(
                     email=normalized_email or f"{provider_user_id}@{provider}.oauth",
                     full_name=display_name,
-                    hashed_password=await asyncio.to_thread(
-                        hash_password, generate_opaque_token()
-                    ),
+                    hashed_password=await asyncio.to_thread(hash_password, generate_opaque_token()),
                     is_active=True,
                     is_verified=bool(provider_email),
                 )
@@ -753,7 +744,9 @@ class AuthService:
 
             assert user is not None
             # Double-check if account was created concurrently
-            existing_account = await self._oauth_accounts.get_by_provider(provider, provider_user_id)
+            existing_account = await self._oauth_accounts.get_by_provider(
+                provider, provider_user_id
+            )
             if existing_account is None:
                 account = OAuthAccount(
                     user_id=user.id,
@@ -795,6 +788,7 @@ class AuthService:
         existing = await self._oauth_accounts.get_by_provider(provider, provider_user_id)
         if existing is not None:
             from pawguard.core.exceptions import ConflictError
+
             raise ConflictError(f"This {provider} account is already linked to another user.")
 
         account = OAuthAccount(
@@ -856,9 +850,7 @@ class AuthService:
         if provider == "google":
             expected_aud = get_settings().google_oauth_client_id
             if not expected_aud:
-                raise InvalidCredentialsError(
-                    "Google OAuth is not configured on this server."
-                )
+                raise InvalidCredentialsError("Google OAuth is not configured on this server.")
             valid_auds = [aud.strip() for aud in expected_aud.split(",") if aud.strip()]
             async with httpx.AsyncClient() as client:
                 if token.startswith("ya29."):
@@ -915,9 +907,7 @@ class AuthService:
 
             expected_aud = get_settings().apple_oauth_client_id
             if not expected_aud:
-                raise InvalidCredentialsError(
-                    "Apple OAuth is not configured on this server."
-                )
+                raise InvalidCredentialsError("Apple OAuth is not configured on this server.")
             valid_auds = [aud.strip() for aud in expected_aud.split(",") if aud.strip()]
             async with httpx.AsyncClient() as client:
                 resp = await client.get("https://appleid.apple.com/auth/keys", timeout=10)
@@ -1012,6 +1002,7 @@ class AuthService:
 
 # ── Admin service ────────────────────────────────────────────────────────────
 
+
 class AdminService:
     """User provisioning and RBAC management for Super Administrator."""
 
@@ -1072,6 +1063,7 @@ class AdminService:
         existing = await self._roles.get_by_name(name)
         if existing is not None:
             from pawguard.core.exceptions import ConflictError
+
             raise ConflictError(f"Role '{name}' already exists.")
 
         role = Role(name=name, description=description, is_system=False)
@@ -1082,7 +1074,10 @@ class AdminService:
             invalid_codes = set(permission_codes) - found_codes
             if invalid_codes:
                 from pawguard.core.exceptions import ValidationFailedError
-                raise ValidationFailedError(f"Invalid permission code(s): {', '.join(sorted(invalid_codes))}")
+
+                raise ValidationFailedError(
+                    f"Invalid permission code(s): {', '.join(sorted(invalid_codes))}"
+                )
             await self._roles.set_permissions(role.id, [p.id for p in perms])
         await self._audit.record(
             event_type=AuthAuditEventType.ADMIN_ROLE_CREATED,
@@ -1127,7 +1122,10 @@ class AdminService:
             invalid_codes = set(permission_codes) - found_codes
             if invalid_codes:
                 from pawguard.core.exceptions import ValidationFailedError
-                raise ValidationFailedError(f"Invalid permission code(s): {', '.join(sorted(invalid_codes))}")
+
+                raise ValidationFailedError(
+                    f"Invalid permission code(s): {', '.join(sorted(invalid_codes))}"
+                )
             await self._roles.set_permissions(role.id, [p.id for p in perms])
         await self._audit.record(
             event_type=AuthAuditEventType.ADMIN_ROLE_UPDATED,
@@ -1201,6 +1199,7 @@ class AdminService:
         existing = await self._users.get_by_email(normalized_email)
         if existing is not None:
             from pawguard.core.exceptions import ConflictError
+
             raise ConflictError("A user with this email already exists.")
 
         user = User(
@@ -1322,7 +1321,11 @@ class AdminService:
             actor_id=actor_id,
             ip_address=ip_address,
             user_agent=user_agent,
-            metadata={"user_id": str(user.id), "email": email, "action": "restore_and_reset_password"},
+            metadata={
+                "user_id": str(user.id),
+                "email": email,
+                "action": "restore_and_reset_password",
+            },
         )
         return user
 
@@ -1345,7 +1348,10 @@ class AdminService:
         invalid_codes = set(permission_codes) - found_codes
         if invalid_codes:
             from pawguard.core.exceptions import ValidationFailedError
-            raise ValidationFailedError(f"Invalid permission code(s): {', '.join(sorted(invalid_codes))}")
+
+            raise ValidationFailedError(
+                f"Invalid permission code(s): {', '.join(sorted(invalid_codes))}"
+            )
         up_repo = self._user_permissions
         for p in perms:
             await up_repo.grant_permission(user_id, p.id, granted_by=actor_id)

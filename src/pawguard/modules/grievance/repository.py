@@ -153,9 +153,8 @@ class GrievanceRepository:
     # ── Bulk operations ─────────────────────────────────────────────────────
 
     async def bulk_soft_delete_tickets(self, ids: list[uuid.UUID]) -> int:
-        stmt = (
-            select(GrievanceTicket)
-            .where(GrievanceTicket.id.in_(ids), GrievanceTicket.deleted_at.is_(None))
+        stmt = select(GrievanceTicket).where(
+            GrievanceTicket.id.in_(ids), GrievanceTicket.deleted_at.is_(None)
         )
         tickets = (await self._session.execute(stmt)).scalars().all()
         for t in tickets:
@@ -163,9 +162,8 @@ class GrievanceRepository:
         return len(tickets)
 
     async def bulk_update_ticket_status(self, ids: list[uuid.UUID], status: GrievanceStatus) -> int:
-        stmt = (
-            select(GrievanceTicket)
-            .where(GrievanceTicket.id.in_(ids), GrievanceTicket.deleted_at.is_(None))
+        stmt = select(GrievanceTicket).where(
+            GrievanceTicket.id.in_(ids), GrievanceTicket.deleted_at.is_(None)
         )
         tickets = (await self._session.execute(stmt)).scalars().all()
         for t in tickets:
@@ -173,9 +171,8 @@ class GrievanceRepository:
         return len(tickets)
 
     async def bulk_soft_delete_feedback(self, ids: list[uuid.UUID]) -> int:
-        stmt = (
-            select(ServiceFeedback)
-            .where(ServiceFeedback.id.in_(ids), ServiceFeedback.deleted_at.is_(None))
+        stmt = select(ServiceFeedback).where(
+            ServiceFeedback.id.in_(ids), ServiceFeedback.deleted_at.is_(None)
         )
         feedbacks = (await self._session.execute(stmt)).scalars().all()
         for fb in feedbacks:

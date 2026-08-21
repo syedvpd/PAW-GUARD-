@@ -18,7 +18,8 @@ class SuccessStoryCreate(BaseModel):
         ..., min_length=1, max_length=255, examples=["From Stray to Star: Barnaby's Journey"]
     )
     summary: str = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         examples=["Rescued injured and malnourished, now thriving with his new family."],
     )
     body: str = Field(
@@ -35,7 +36,9 @@ class SuccessStoryUpdate(BaseModel):
     title: str | None = Field(None, min_length=1, max_length=255, examples=["Updated title"])
     summary: str | None = Field(None, examples=["Updated summary."])
     body: str | None = Field(None, examples=["Updated story body."])
-    hero_image_url: str | None = Field(None, max_length=512, examples=["https://example.com/updated.jpg"])
+    hero_image_url: str | None = Field(
+        None, max_length=512, examples=["https://example.com/updated.jpg"]
+    )
     dog_id: uuid.UUID | None = None
     status: ContentStatus | None = Field(None, examples=["published"])
 
@@ -114,21 +117,27 @@ class SuccessStoryResponse(BaseModel):
 
 class BlogPostCreate(BaseModel):
     title: str = Field(
-        ..., min_length=1, max_length=255,
+        ...,
+        min_length=1,
+        max_length=255,
         examples=["5 Signs Your New Rescue Dog Needs a Vet Visit"],
     )
     slug: str = Field(
-        ..., min_length=1, max_length=255, pattern=r"^[a-z0-9-]+$",
+        ...,
+        min_length=1,
+        max_length=255,
+        pattern=r"^[a-z0-9-]+$",
         examples=["5-signs-your-rescue-dog-needs-a-vet-visit"],
     )
-    excerpt: str = Field(
-        ..., min_length=1, examples=["Know the early warning signs to watch for."]
-    )
+    excerpt: str = Field(..., min_length=1, examples=["Know the early warning signs to watch for."])
     body: str = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         examples=["When you bring home a rescue dog, the first few weeks..."],
     )
-    cover_image_url: str | None = Field(None, max_length=512, examples=["https://example.com/blog/cover.jpg"])
+    cover_image_url: str | None = Field(
+        None, max_length=512, examples=["https://example.com/blog/cover.jpg"]
+    )
     category: str = Field("awareness", max_length=128, examples=["pet_care"])
     status: ContentStatus = ContentStatus.DRAFT
 
@@ -140,7 +149,9 @@ class BlogPostUpdate(BaseModel):
     )
     excerpt: str | None = Field(None, examples=["Updated excerpt."])
     body: str | None = Field(None, examples=["Updated body content."])
-    cover_image_url: str | None = Field(None, max_length=512, examples=["https://example.com/updated.jpg"])
+    cover_image_url: str | None = Field(
+        None, max_length=512, examples=["https://example.com/updated.jpg"]
+    )
     category: str | None = Field(None, max_length=128, examples=["pet_care"])
     status: ContentStatus | None = Field(None, examples=["published"])
 
@@ -372,23 +383,25 @@ class PublicHeroStats(BaseModel):
 
 class LegalDocumentCreate(BaseModel):
     slug: str = Field(
-        ..., min_length=1, max_length=255, pattern=r"^[a-z0-9-]+$",
+        ...,
+        min_length=1,
+        max_length=255,
+        pattern=r"^[a-z0-9-]+$",
         examples=["terms-of-service"],
     )
-    title: str = Field(
-        ..., min_length=1, max_length=255, examples=["Terms of Service"]
-    )
+    title: str = Field(..., min_length=1, max_length=255, examples=["Terms of Service"])
     document_type: LegalDocumentType = LegalDocumentType.OTHER
-    body: str = Field(
-        ..., min_length=1, examples=["1. Acceptance of Terms..."]
-    )
+    body: str = Field(..., min_length=1, examples=["1. Acceptance of Terms..."])
     version: str = Field("1.0", max_length=32, examples=["1.0"])
     status: ContentStatus = ContentStatus.DRAFT
 
 
 class LegalDocumentUpdate(BaseModel):
     slug: str | None = Field(
-        None, min_length=1, max_length=255, pattern=r"^[a-z0-9-]+$",
+        None,
+        min_length=1,
+        max_length=255,
+        pattern=r"^[a-z0-9-]+$",
         examples=["terms-of-service"],
     )
     title: str | None = Field(None, min_length=1, max_length=255, examples=["Terms of Service"])
@@ -414,9 +427,7 @@ class LegalDocumentResponse(BaseModel):
 
 
 class UrgentAlertCreate(BaseModel):
-    title: str = Field(
-        ..., min_length=1, max_length=255, examples=["Flooding in Sector 4"]
-    )
+    title: str = Field(..., min_length=1, max_length=255, examples=["Flooding in Sector 4"])
     message: str = Field(
         ..., min_length=1, examples=["Roads are flooded; rescue teams are on standby."]
     )

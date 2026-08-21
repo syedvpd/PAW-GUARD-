@@ -4,6 +4,7 @@ Binds request-scoped context (request_id, user_id, path, method, latency_ms, sta
 per the AGENTS.md LOGGING CONTRACT. Never log secrets, tokens, or passwords.
 """
 
+import contextlib
 import logging
 import sys
 from typing import Any
@@ -66,10 +67,8 @@ def configure_logging() -> None:
     )
 
     if hasattr(sys.stdout, "reconfigure"):
-        try:
+        with contextlib.suppress(Exception):
             sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-        except Exception:
-            pass
 
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(formatter)

@@ -37,9 +37,7 @@ async def broadcast_lost_pet_alert(ctx: dict[str, Any], *, report_id: str, **_: 
             )
         )
         user_ids = list(recipients.scalars().all())
-        notification_service = NotificationService(
-            repository=NotificationRepository(session)
-        )
+        notification_service = NotificationService(repository=NotificationRepository(session))
         payload = BroadcastCreate(
             title=f"Lost pet alert: {report.pet_name}",
             body=(
@@ -64,7 +62,9 @@ async def broadcast_lost_pet_alert(ctx: dict[str, Any], *, report_id: str, **_: 
         for offset in range(0, len(user_ids), 500):
             batch = user_ids[offset : offset + 500]
             await notification_service._send_push_to_users(
-                batch, push_title, push_body,
+                batch,
+                push_title,
+                push_body,
                 f"/api/v1/lost-found/lost/{report.id}",
             )
 

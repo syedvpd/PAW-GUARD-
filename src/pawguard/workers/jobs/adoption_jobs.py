@@ -73,10 +73,7 @@ async def post_adoption_followups(ctx: dict[str, object]) -> None:
                                 f"follow-up report."
                             ),
                             notification_type="follow_up",
-                            action_url=(
-                                f"/api/v1/adoptions/{app.id}"
-                                f"/follow-ups"
-                            ),
+                            action_url=(f"/api/v1/adoptions/{app.id}/follow-ups"),
                         )
                     )
 

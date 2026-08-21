@@ -109,7 +109,8 @@ async def delete_notification(
     service: NotificationService = Depends(get_notification_service),
 ) -> ApiResponse[None]:
     await service.delete_notification(
-        notification_id, user_id=current_user.id,
+        notification_id,
+        user_id=current_user.id,
         actor_id=current_user.id,
         ip_address=request.client.host if request.client else None,
     )
@@ -128,7 +129,8 @@ async def bulk_delete_notifications(
     service: NotificationService = Depends(get_notification_service),
 ) -> ApiResponse[BulkDeleteResponse]:
     deleted = await service.bulk_delete(
-        payload.ids, actor_id=current_user.id,
+        payload.ids,
+        actor_id=current_user.id,
         ip_address=request.client.host if request.client else None,
     )
     return ApiResponse(
@@ -152,8 +154,9 @@ async def send_notification(
     service: NotificationService = Depends(get_notification_service),
 ) -> ApiResponse[Any]:
     from pawguard.core.logging import get_logger
+
     logger = get_logger(__name__)
-    
+
     try:
         user_email = None
         if payload.send_email and payload.user_id:
@@ -162,7 +165,8 @@ async def send_notification(
             if user is not None:
                 user_email = user.email
         result = await service.send_notification(
-            payload, user_email=user_email,
+            payload,
+            user_email=user_email,
             actor_id=current_user.id,
             ip_address=request.client.host if request.client else None,
         )
@@ -224,7 +228,9 @@ async def broadcast_notification(
     service: NotificationService = Depends(get_notification_service),
 ) -> ApiResponse[list[NotificationResponse]]:
     notifications = await service.broadcast(
-        payload, user_ids, actor_id=current_user.id,
+        payload,
+        user_ids,
+        actor_id=current_user.id,
         ip_address=request.client.host if request.client else None,
     )
     return ApiResponse(
@@ -284,9 +290,13 @@ async def fcm_status(
         data={
             "firebase_initialized": app is not None,
             "project_id": app.project_id if app else None,
-            "credentials_configured": bool(settings.fcm_credentials_path or settings.fcm_credentials_json),
+            "credentials_configured": bool(
+                settings.fcm_credentials_path or settings.fcm_credentials_json
+            ),
             "user_has_token": bool(current_user.user.fcm_token),
             "user_push_enabled": current_user.user.push_notifications_enabled,
-            "token_preview": current_user.user.fcm_token[:20] + "..." if current_user.user.fcm_token else None,
+            "token_preview": current_user.user.fcm_token[:20] + "..."
+            if current_user.user.fcm_token
+            else None,
         }
     )

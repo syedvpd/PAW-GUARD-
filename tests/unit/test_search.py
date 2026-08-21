@@ -38,9 +38,7 @@ class TestApplySortingValidation:
         # Modules like fleet fuel allow sort by "filled_at" but not "created_at";
         # the shared dependency defaults sort_by="created_at", which must be
         # treated as "no explicit choice" rather than rejected.
-        stmt = apply_sorting(
-            _stmt(), SortParams(), {"sent_at"}, default_field="sent_at"
-        )
+        stmt = apply_sorting(_stmt(), SortParams(), {"sent_at"}, default_field="sent_at")
         assert "ORDER BY notifications.sent_at DESC" in _sql(stmt)
 
     def test_default_sort_by_uses_allowed_created_at(self):

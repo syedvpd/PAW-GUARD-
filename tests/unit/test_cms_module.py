@@ -76,23 +76,32 @@ class TestCmsModule:
         repo.get_newsletter_subscription = AsyncMock(return_value=None)
         repo.create_newsletter_subscription = AsyncMock()
 
-        assert await service.submit_contact_message(
-            ContactMessageCreate(
-                email=user.email, subject="Help", message="I need adoption support."
+        assert (
+            await service.submit_contact_message(
+                ContactMessageCreate(
+                    email=user.email, subject="Help", message="I need adoption support."
+                )
             )
-        ) is True
-        assert await service.subscribe_newsletter(
-            NewsletterSubscribeRequest(email=user.email)
-        ) is True
+            is True
+        )
+        assert (
+            await service.subscribe_newsletter(NewsletterSubscribeRequest(email=user.email)) is True
+        )
         assert arq.enqueue_job.await_count == 2
 
         repo.get_active_user_by_email.return_value = None
-        assert await service.submit_contact_message(
-            ContactMessageCreate(email="unknown@example.com", subject="Spam", message="No")
-        ) is False
-        assert await service.subscribe_newsletter(
-            NewsletterSubscribeRequest(email="unknown@example.com")
-        ) is False
+        assert (
+            await service.submit_contact_message(
+                ContactMessageCreate(email="unknown@example.com", subject="Spam", message="No")
+            )
+            is False
+        )
+        assert (
+            await service.subscribe_newsletter(
+                NewsletterSubscribeRequest(email="unknown@example.com")
+            )
+            is False
+        )
         assert arq.enqueue_job.await_count == 2
 
     @pytest.mark.asyncio
@@ -115,7 +124,10 @@ class TestCmsModule:
             ]
         )
         updated = await service.update_admin_cms_page(
-            "home", update_payload, user_id=uuid.uuid4(), ctx=RequestContext(ip_address="127.0.0.1", user_agent="pytest")
+            "home",
+            update_payload,
+            user_id=uuid.uuid4(),
+            ctx=RequestContext(ip_address="127.0.0.1", user_agent="pytest"),
         )
         assert updated.status == ContentStatus.DRAFT
 

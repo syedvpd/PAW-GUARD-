@@ -60,7 +60,8 @@ async def create_vehicle(
     service: FleetService = Depends(get_fleet_service),
 ) -> ApiResponse[VehicleResponse]:
     vehicle = await service.create_vehicle(
-        payload, actor_id=current_user.id,
+        payload,
+        actor_id=current_user.id,
         ip_address=request.client.host if request.client else None,
     )
     return ApiResponse(data=VehicleResponse.model_validate(vehicle), message="Vehicle registered.")
@@ -114,7 +115,9 @@ async def update_vehicle(
     service: FleetService = Depends(get_fleet_service),
 ) -> ApiResponse[VehicleResponse]:
     vehicle = await service.update_vehicle(
-        vehicle_id, payload, actor_id=current_user.id,
+        vehicle_id,
+        payload,
+        actor_id=current_user.id,
         ip_address=request.client.host if request.client else None,
     )
     return ApiResponse(data=VehicleResponse.model_validate(vehicle), message="Vehicle updated.")
@@ -133,7 +136,9 @@ async def update_vehicle_status(
     service: FleetService = Depends(get_fleet_service),
 ) -> ApiResponse[VehicleResponse]:
     vehicle = await service.update_vehicle_status(
-        vehicle_id, payload.status, actor_id=current_user.id,
+        vehicle_id,
+        payload.status,
+        actor_id=current_user.id,
         ip_address=request.client.host if request.client else None,
     )
     return ApiResponse(
@@ -265,7 +270,8 @@ async def checkout_equipment(
     service: FleetService = Depends(get_fleet_service),
 ) -> ApiResponse[EquipmentCheckoutResponse]:
     record = await service.checkout_equipment(
-        payload, actor_id=current_user.id,
+        payload,
+        actor_id=current_user.id,
         ip_address=request.client.host if request.client else None,
     )
     return ApiResponse(
@@ -320,7 +326,9 @@ async def return_equipment(
     service: FleetService = Depends(get_fleet_service),
 ) -> ApiResponse[EquipmentCheckoutResponse]:
     record = await service.return_equipment(
-        checkout_id, payload, actor_id=current_user.id,
+        checkout_id,
+        payload,
+        actor_id=current_user.id,
         ip_address=request.client.host if request.client else None,
     )
     return ApiResponse(
@@ -343,7 +351,8 @@ async def log_fuel(
     service: FleetService = Depends(get_fleet_service),
 ) -> ApiResponse[FuelLogResponse]:
     record = await service.log_fuel(
-        vehicle_id, payload,
+        vehicle_id,
+        payload,
         actor_id=current_user.id,
         ip_address=request.client.host if request.client else None,
     )

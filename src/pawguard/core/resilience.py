@@ -1,21 +1,26 @@
 import asyncio
 import random
 import time
+from collections.abc import Callable
 from enum import Enum
 from functools import wraps
-from typing import Callable, Any, TypeVar, ParamSpec
+from typing import Any, ParamSpec, TypeVar
 
 T = TypeVar("T")
 P = ParamSpec("P")
+
 
 class CircuitState(Enum):
     CLOSED = "closed"
     OPEN = "open"
     HALF_OPEN = "half_open"
 
+
 class CircuitBreakerOpenException(Exception):
     """Raised when the circuit breaker is OPEN and fails fast."""
+
     pass
+
 
 class CircuitBreaker:
     def __init__(self, failure_threshold: int = 5, recovery_timeout: float = 30.0) -> None:
@@ -51,6 +56,7 @@ class CircuitBreaker:
             except Exception as e:
                 self.record_failure()
                 raise e
+
         return wrapper
 
 
@@ -62,6 +68,7 @@ def retry_with_backoff(
     jitter: bool = True,
 ) -> Callable[[Callable[P, Any]], Callable[P, Any]]:
     """Decorator/helper to retry an async function with exponential backoff and optional jitter."""
+
     def decorator(func: Callable[P, Any]) -> Callable[P, Any]:
         @wraps(func)
         async def wrapper(*args: P.args, **kwargs: P.kwargs) -> Any:
@@ -77,5 +84,7 @@ def retry_with_backoff(
                         sleep_time = delay * random.uniform(0.5, 1.5)
                     await asyncio.sleep(sleep_time)
                     delay *= backoff_factor
+
         return wrapper
+
     return decorator

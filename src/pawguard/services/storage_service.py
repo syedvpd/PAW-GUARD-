@@ -100,7 +100,6 @@ class StorageService:
             endpoint = (self._endpoint or "https://pawguard-media.s3.amazonaws.com").rstrip("/")
             return f"{endpoint}/{bucket}/{object_key}?token={uuid.uuid4()}"
 
-
     def get_object_size(self, *, object_key: str) -> int:
         response = self._client.head_object(Bucket=self._bucket, Key=object_key)
         size: int = response["ContentLength"]
@@ -128,6 +127,7 @@ class StorageService:
 
 
 _storage_service_instance: StorageService | None = None
+
 
 def get_storage_service() -> StorageService:
     global _storage_service_instance

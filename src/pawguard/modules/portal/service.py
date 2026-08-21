@@ -114,7 +114,7 @@ class PortalService:
                 to=user.email,
                 subject="We received your PawGuard message",
                 body=(
-                    f"We received your message about \"{message.subject}\". "
+                    f'We received your message about "{message.subject}". '
                     "Our support team will review it and get back to you."
                 ),
             )
@@ -140,8 +140,7 @@ class PortalService:
                 to=user.email,
                 subject="Welcome to PawGuard updates",
                 body=(
-                    "You are now subscribed to PawGuard updates, rescue stories, "
-                    "and adoption news."
+                    "You are now subscribed to PawGuard updates, rescue stories, and adoption news."
                 ),
             )
         return True
@@ -187,9 +186,7 @@ class PortalService:
         story = await self._repo.get_story(story_id)
         if story is None:
             raise NotFoundError("Success story not found.")
-        for field, value in payload.model_dump(
-            exclude_unset=True
-        ).items():
+        for field, value in payload.model_dump(exclude_unset=True).items():
             setattr(story, field, value)
         if payload.status is not None:
             self._apply_publish(payload.status, story)
@@ -208,10 +205,7 @@ class PortalService:
         published_only: bool,
     ) -> SuccessStory:
         story = await self._repo.get_story(story_id)
-        if story is None or (
-            published_only
-            and story.status != ContentStatus.PUBLISHED
-        ):
+        if story is None or (published_only and story.status != ContentStatus.PUBLISHED):
             raise NotFoundError("Success story not found.")
         return story
 
@@ -220,11 +214,7 @@ class PortalService:
         *,
         published_only: bool,
     ) -> list[SuccessStory]:
-        return list(
-            await self._repo.list_stories(
-                published_only=published_only
-            )
-        )
+        return list(await self._repo.list_stories(published_only=published_only))
 
     async def list_stories_paginated(
         self,
@@ -234,18 +224,14 @@ class PortalService:
         search: str | None = None,
         sort: SortParams | None = None,
     ) -> tuple[list[SuccessStory], PaginationMeta]:
-        total = await self._repo.count_stories(
-            status=status, search=search
-        )
+        total = await self._repo.count_stories(status=status, search=search)
         stories = await self._repo.list_stories(
             page_params=page_params,
             status=status,
             search=search,
             sort=sort,
         )
-        meta = build_pagination_meta(
-            total=total, params=page_params or PageParams()
-        )
+        meta = build_pagination_meta(total=total, params=page_params or PageParams())
         return list(stories), meta
 
     # ── Blog posts ───────────────────────────────────────────────────────────
@@ -256,22 +242,16 @@ class PortalService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> BlogPost:
-        existing = await self._repo.get_blog_by_slug(
-            payload.slug
-        )
+        existing = await self._repo.get_blog_by_slug(payload.slug)
         if existing is not None:
-            raise ConflictError(
-                f"Blog slug '{payload.slug}' already exists."
-            )
+            raise ConflictError(f"Blog slug '{payload.slug}' already exists.")
         post = BlogPost(**payload.model_dump())
         self._apply_publish(post.status, post)
         result = await self._repo.create_blog(post)
         await self._session.flush()
         if self._audit and actor_id:
             await self._audit.record(
-                event_type=(
-                    AuthAuditEventType.PORTAL_POST_CREATED
-                ),
+                event_type=(AuthAuditEventType.PORTAL_POST_CREATED),
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
@@ -292,18 +272,11 @@ class PortalService:
         slug_taken = (
             payload.slug
             and payload.slug != post.slug
-            and await self._repo.get_blog_by_slug(
-                payload.slug
-            )
-            is not None
+            and await self._repo.get_blog_by_slug(payload.slug) is not None
         )
         if slug_taken:
-            raise ConflictError(
-                f"Blog slug '{payload.slug}' already exists."
-            )
-        for field, value in payload.model_dump(
-            exclude_unset=True
-        ).items():
+            raise ConflictError(f"Blog slug '{payload.slug}' already exists.")
+        for field, value in payload.model_dump(exclude_unset=True).items():
             setattr(post, field, value)
         if payload.status is not None:
             self._apply_publish(payload.status, post)
@@ -311,9 +284,7 @@ class PortalService:
         await self._session.refresh(post)
         if self._audit and actor_id:
             await self._audit.record(
-                event_type=(
-                    AuthAuditEventType.PORTAL_POST_UPDATED
-                ),
+                event_type=(AuthAuditEventType.PORTAL_POST_UPDATED),
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
@@ -328,10 +299,7 @@ class PortalService:
         published_only: bool,
     ) -> BlogPost:
         post = await self._repo.get_blog_by_id(post_id)
-        if post is None or (
-            published_only
-            and post.status != ContentStatus.PUBLISHED
-        ):
+        if post is None or (published_only and post.status != ContentStatus.PUBLISHED):
             raise NotFoundError("Blog post not found.")
         return post
 
@@ -342,10 +310,7 @@ class PortalService:
         published_only: bool,
     ) -> BlogPost:
         post = await self._repo.get_blog_by_slug(slug)
-        if post is None or (
-            published_only
-            and post.status != ContentStatus.PUBLISHED
-        ):
+        if post is None or (published_only and post.status != ContentStatus.PUBLISHED):
             raise NotFoundError("Blog post not found.")
         return post
 
@@ -383,9 +348,7 @@ class PortalService:
             search=search,
             sort=sort,
         )
-        meta = build_pagination_meta(
-            total=total, params=page_params or PageParams()
-        )
+        meta = build_pagination_meta(total=total, params=page_params or PageParams())
         return list(blogs), meta
 
     # ── Veterinary partners ──────────────────────────────────────────────────
@@ -396,9 +359,7 @@ class PortalService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> VeterinaryPartner:
-        result = await self._repo.create_vet(
-            VeterinaryPartner(**payload.model_dump())
-        )
+        result = await self._repo.create_vet(VeterinaryPartner(**payload.model_dump()))
         await self._session.flush()
         # veterinary_partners feeds the transparency aggregate - purge it.
         await self._invalidate_stats_cache()
@@ -413,12 +374,8 @@ class PortalService:
     ) -> VeterinaryPartner:
         partner = await self._repo.get_vet(partner_id)
         if partner is None:
-            raise NotFoundError(
-                "Veterinary partner not found."
-            )
-        for field, value in payload.model_dump(
-            exclude_unset=True
-        ).items():
+            raise NotFoundError("Veterinary partner not found.")
+        for field, value in payload.model_dump(exclude_unset=True).items():
             setattr(partner, field, value)
         await self._session.flush()
         await self._session.refresh(partner)
@@ -447,9 +404,7 @@ class PortalService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> ContactLocation:
-        return await self._repo.create_contact(
-            ContactLocation(**payload.model_dump())
-        )
+        return await self._repo.create_contact(ContactLocation(**payload.model_dump()))
 
     async def update_contact(
         self,
@@ -460,12 +415,8 @@ class PortalService:
     ) -> ContactLocation:
         location = await self._repo.get_contact(location_id)
         if location is None:
-            raise NotFoundError(
-                "Contact location not found."
-            )
-        for field, value in payload.model_dump(
-            exclude_unset=True
-        ).items():
+            raise NotFoundError("Contact location not found.")
+        for field, value in payload.model_dump(exclude_unset=True).items():
             setattr(location, field, value)
         await self._session.flush()
         await self._session.refresh(location)
@@ -482,9 +433,7 @@ class PortalService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> FAQEntry:
-        return await self._repo.create_faq(
-            FAQEntry(**payload.model_dump())
-        )
+        return await self._repo.create_faq(FAQEntry(**payload.model_dump()))
 
     async def update_faq(
         self,
@@ -496,9 +445,7 @@ class PortalService:
         entry = await self._repo.get_faq(entry_id)
         if entry is None:
             raise NotFoundError("FAQ entry not found.")
-        for field, value in payload.model_dump(
-            exclude_unset=True
-        ).items():
+        for field, value in payload.model_dump(exclude_unset=True).items():
             setattr(entry, field, value)
         await self._session.flush()
         await self._session.refresh(entry)
@@ -538,9 +485,7 @@ class PortalService:
             search=search,
             sort=sort,
         )
-        meta = build_pagination_meta(
-            total=total, params=page_params or PageParams()
-        )
+        meta = build_pagination_meta(total=total, params=page_params or PageParams())
         return list(faqs), meta
 
     # ── Soft delete ─────────────────────────────────────────────────────────
@@ -569,9 +514,7 @@ class PortalService:
         await self._session.flush()
         if self._audit and actor_id:
             await self._audit.record(
-                event_type=(
-                    AuthAuditEventType.PORTAL_POST_DELETED
-                ),
+                event_type=(AuthAuditEventType.PORTAL_POST_DELETED),
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
@@ -610,9 +553,7 @@ class PortalService:
         if self._audit and actor_id:
             post_ids = [str(i) for i in ids]
             await self._audit.record(
-                event_type=(
-                    AuthAuditEventType.PORTAL_POST_DELETED
-                ),
+                event_type=(AuthAuditEventType.PORTAL_POST_DELETED),
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
@@ -633,9 +574,7 @@ class PortalService:
         if self._audit and actor_id:
             faq_ids = [str(i) for i in ids]
             await self._audit.record(
-                event_type=(
-                    AuthAuditEventType.PORTAL_POST_DELETED
-                ),
+                event_type=(AuthAuditEventType.PORTAL_POST_DELETED),
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
@@ -653,9 +592,7 @@ class PortalService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> int:
-        return await self._repo.bulk_update_story_status(
-            ids, status
-        )
+        return await self._repo.bulk_update_story_status(ids, status)
 
     async def bulk_update_blog_status(
         self,
@@ -664,15 +601,11 @@ class PortalService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> int:
-        count = await self._repo.bulk_update_blog_status(
-            ids, status
-        )
+        count = await self._repo.bulk_update_blog_status(ids, status)
         if self._audit and actor_id:
             post_ids = [str(i) for i in ids]
             await self._audit.record(
-                event_type=(
-                    AuthAuditEventType.PORTAL_POST_UPDATED
-                ),
+                event_type=(AuthAuditEventType.PORTAL_POST_UPDATED),
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
@@ -691,15 +624,11 @@ class PortalService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> int:
-        count = await self._repo.bulk_update_faq_status(
-            ids, is_published
-        )
+        count = await self._repo.bulk_update_faq_status(ids, is_published)
         if self._audit and actor_id:
             faq_ids = [str(i) for i in ids]
             await self._audit.record(
-                event_type=(
-                    AuthAuditEventType.PORTAL_POST_UPDATED
-                ),
+                event_type=(AuthAuditEventType.PORTAL_POST_UPDATED),
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
@@ -740,9 +669,7 @@ class PortalService:
     async def get_setting(self, key: str) -> SystemSetting:
         setting = await self._repo.get_setting(key)
         if setting is None:
-            raise NotFoundError(
-                f"Setting '{key}' not found."
-            )
+            raise NotFoundError(f"Setting '{key}' not found.")
         return setting
 
     async def list_settings(self) -> list[SystemSetting]:
@@ -758,11 +685,7 @@ class PortalService:
 
         total_rescued = (
             await self._session.execute(
-                select(func.count())
-                .select_from(DogProfile)
-                .where(
-                    DogProfile.deleted_at.is_(None)
-                )
+                select(func.count()).select_from(DogProfile).where(DogProfile.deleted_at.is_(None))
             )
         ).scalar_one()
         active_care = (
@@ -787,11 +710,8 @@ class PortalService:
                 select(func.count())
                 .select_from(AdoptionApplication)
                 .where(
-                    AdoptionApplication.status
-                    == AdoptionStatus.COMPLETED,
-                    AdoptionApplication.deleted_at.is_(
-                        None
-                    ),
+                    AdoptionApplication.status == AdoptionStatus.COMPLETED,
+                    AdoptionApplication.deleted_at.is_(None),
                 )
             )
         ).scalar_one()
@@ -811,9 +731,7 @@ class PortalService:
                     ),
                     RescueRequest.deleted_at.is_(None),
                     or_(
-                        RescueRequest.severity.in_(
-                            [RescueSeverity.CRITICAL, RescueSeverity.HIGH]
-                        ),
+                        RescueRequest.severity.in_([RescueSeverity.CRITICAL, RescueSeverity.HIGH]),
                         RescueRequest.is_urgent.is_(True),
                     ),
                 )
@@ -844,9 +762,9 @@ class PortalService:
 
         funds_raised = (
             await self._session.execute(
-                select(
-                    func.coalesce(func.sum(Donation.amount), 0)
-                ).where(Donation.status == DonationStatus.SUCCESS)
+                select(func.coalesce(func.sum(Donation.amount), 0)).where(
+                    Donation.status == DonationStatus.SUCCESS
+                )
             )
         ).scalar_one()
         donations = (
@@ -861,9 +779,7 @@ class PortalService:
                 select(func.count())
                 .select_from(RescueRequest)
                 .where(
-                    RescueRequest.status.in_(
-                        [RescueStatus.RESCUED, RescueStatus.ADMITTED]
-                    ),
+                    RescueRequest.status.in_([RescueStatus.RESCUED, RescueStatus.ADMITTED]),
                     RescueRequest.deleted_at.is_(None),
                 )
             )
@@ -959,9 +875,7 @@ class PortalService:
     ) -> LegalDocument:
         existing = await self._repo.get_legal_doc_by_slug(payload.slug)
         if existing is not None:
-            raise ConflictError(
-                f"Legal document slug '{payload.slug}' already exists."
-            )
+            raise ConflictError(f"Legal document slug '{payload.slug}' already exists.")
         doc = LegalDocument(**payload.model_dump())
         self._apply_publish(doc.status, doc)
         result = await self._repo.create_legal_doc(doc)
@@ -990,13 +904,10 @@ class PortalService:
         slug_taken = (
             payload.slug
             and payload.slug != doc.slug
-            and await self._repo.get_legal_doc_by_slug(payload.slug)
-            is not None
+            and await self._repo.get_legal_doc_by_slug(payload.slug) is not None
         )
         if slug_taken:
-            raise ConflictError(
-                f"Legal document slug '{payload.slug}' already exists."
-            )
+            raise ConflictError(f"Legal document slug '{payload.slug}' already exists.")
         for field, value in payload.model_dump(exclude_unset=True).items():
             setattr(doc, field, value)
         if payload.status is not None:
@@ -1021,9 +932,7 @@ class PortalService:
         published_only: bool,
     ) -> LegalDocument:
         doc = await self._repo.get_legal_doc_by_slug(slug)
-        if doc is None or (
-            published_only and doc.status != ContentStatus.PUBLISHED
-        ):
+        if doc is None or (published_only and doc.status != ContentStatus.PUBLISHED):
             raise NotFoundError("Legal document not found.")
         return doc
 
@@ -1032,9 +941,7 @@ class PortalService:
         *,
         published_only: bool,
     ) -> list[LegalDocument]:
-        return list(
-            await self._repo.list_legal_docs(published_only=published_only)
-        )
+        return list(await self._repo.list_legal_docs(published_only=published_only))
 
     async def list_legal_docs_paginated(
         self,
@@ -1057,9 +964,7 @@ class PortalService:
             search=search,
             sort=sort,
         )
-        meta = build_pagination_meta(
-            total=total, params=page_params or PageParams()
-        )
+        meta = build_pagination_meta(total=total, params=page_params or PageParams())
         return list(docs), meta
 
     async def soft_delete_legal_doc(
@@ -1151,9 +1056,7 @@ class PortalService:
             search=search,
             sort=sort,
         )
-        meta = build_pagination_meta(
-            total=total, params=page_params or PageParams()
-        )
+        meta = build_pagination_meta(total=total, params=page_params or PageParams())
         return list(alerts), meta
 
     async def soft_delete_urgent_alert(
@@ -1185,16 +1088,17 @@ class PortalService:
         user_email: str,
     ) -> UserDashboardSummary:
         adoptions = (
-            await self._session.execute(
-                select(AdoptionApplication).where(
-                    AdoptionApplication.adopter_id
-                    == user_id,
-                    AdoptionApplication.deleted_at.is_(
-                        None
-                    ),
+            (
+                await self._session.execute(
+                    select(AdoptionApplication).where(
+                        AdoptionApplication.adopter_id == user_id,
+                        AdoptionApplication.deleted_at.is_(None),
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         volunteer = (
             await self._session.execute(
@@ -1215,91 +1119,68 @@ class PortalService:
         ).scalar_one_or_none()
 
         # Determine volunteer lifecycle state
-        volunteer_status = self._determine_volunteer_status(
-            volunteer, volunteer_application
-        )
+        volunteer_status = self._determine_volunteer_status(volunteer, volunteer_application)
 
         foster = (
             await self._session.execute(
-                select(FosterProfile).where(
-                    FosterProfile.user_id == user_id
-                )
+                select(FosterProfile).where(FosterProfile.user_id == user_id)
             )
         ).scalar_one_or_none()
 
         donations = (
-            await self._session.execute(
-                select(Donation)
-                .join(
-                    DonorProfile,
-                    Donation.donor_id == DonorProfile.id,
-                )
-                .where(
-                    DonorProfile.user_id == user_id
+            (
+                await self._session.execute(
+                    select(Donation)
+                    .join(
+                        DonorProfile,
+                        Donation.donor_id == DonorProfile.id,
+                    )
+                    .where(DonorProfile.user_id == user_id)
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         rescues = (
-            await self._session.execute(
-                select(RescueRequest).where(
-                    RescueRequest.reporter_email
-                    == user_email.lower(),
-                    RescueRequest.deleted_at.is_(None),
+            (
+                await self._session.execute(
+                    select(RescueRequest).where(
+                        RescueRequest.reporter_email == user_email.lower(),
+                        RescueRequest.deleted_at.is_(None),
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         lost_reports = (
-            await self._session.execute(
-                select(LostReport).where(
-                    LostReport.user_id == user_id
-                )
-            )
-        ).scalars().all()
+            (await self._session.execute(select(LostReport).where(LostReport.user_id == user_id)))
+            .scalars()
+            .all()
+        )
         found_reports = (
-            await self._session.execute(
-                select(FoundReport).where(
-                    FoundReport.user_id == user_id
-                )
-            )
-        ).scalars().all()
+            (await self._session.execute(select(FoundReport).where(FoundReport.user_id == user_id)))
+            .scalars()
+            .all()
+        )
 
         return UserDashboardSummary(
-            rescue_cases=[
-                self._serialize_rescue(r) for r in rescues
-            ],
-            adoption_applications=[
-                self._serialize_adoption(a) for a in adoptions
-            ],
-            volunteer_profile=(
-                self._serialize_volunteer(volunteer)
-                if volunteer
-                else None
-            ),
+            rescue_cases=[self._serialize_rescue(r) for r in rescues],
+            adoption_applications=[self._serialize_adoption(a) for a in adoptions],
+            volunteer_profile=(self._serialize_volunteer(volunteer) if volunteer else None),
             volunteer_status=volunteer_status,
             volunteer_application=(
                 self._serialize_volunteer_application(volunteer_application)
                 if volunteer_application
                 else None
             ),
-            foster_profile=(
-                self._serialize_foster(foster)
-                if foster
-                else None
-            ),
-            donations=[
-                self._serialize_donation(d) for d in donations
-            ],
+            foster_profile=(self._serialize_foster(foster) if foster else None),
+            donations=[self._serialize_donation(d) for d in donations],
             lost_found_reports=[
-                *[
-                    self._serialize_lost(lr)
-                    for lr in lost_reports
-                ],
-                *[
-                    self._serialize_found(f)
-                    for f in found_reports
-                ],
+                *[self._serialize_lost(lr) for lr in lost_reports],
+                *[self._serialize_found(f) for f in found_reports],
             ],
         )
 
@@ -1319,7 +1200,7 @@ class PortalService:
                 return "PENDING"
             else:
                 return "PENDING"
-        
+
         if application is not None:
             # Has an application but no profile yet
             if application.status == ApplicationStatus.REJECTED:
@@ -1333,7 +1214,7 @@ class PortalService:
                 return "NOT_APPLIED"
             else:
                 return "PENDING"
-        
+
         # No application and no profile
         return "NOT_APPLIED"
 
@@ -1614,10 +1495,9 @@ class PortalService:
             "seo_keywords": page.seo_keywords,
             "published_at": page.published_at.isoformat(),
             "sections": {
-                sec.section_key: {
-                    f.field_key: f.published_value for f in sec.fields
-                }
-                for sec in page.sections if sec.is_active
+                sec.section_key: {f.field_key: f.published_value for f in sec.fields}
+                for sec in page.sections
+                if sec.is_active
             },
         }
 
@@ -1688,12 +1568,20 @@ DEFAULT_CMS_PAGES_SEED: list[dict[str, Any]] = [
                 "fields": [
                     {"key": "hero_badge", "type": "text", "value": "Every Paw Deserves a Home"},
                     {"key": "title", "type": "text", "value": "Find Your New Best Friend..."},
-                    {"key": "subtitle", "type": "textarea", "value": "PawGuard connects rescued animals with loving families, helping every pet find a safe and caring forever home."},
+                    {
+                        "key": "subtitle",
+                        "type": "textarea",
+                        "value": "PawGuard connects rescued animals with loving families, helping every pet find a safe and caring forever home.",
+                    },
                     {"key": "primary_cta_text", "type": "text", "value": "Adopt a Pet"},
                     {"key": "primary_cta_url", "type": "url", "value": "/adopt"},
                     {"key": "secondary_cta_text", "type": "text", "value": "Report Lost Pet"},
                     {"key": "secondary_cta_url", "type": "url", "value": "/lost-found"},
-                    {"key": "hero_image_url", "type": "image", "value": "https://images.unsplash.com/photo-1543466835-00a7907e9de1"},
+                    {
+                        "key": "hero_image_url",
+                        "type": "image",
+                        "value": "https://images.unsplash.com/photo-1543466835-00a7907e9de1",
+                    },
                 ],
             },
             {
@@ -1702,7 +1590,11 @@ DEFAULT_CMS_PAGES_SEED: list[dict[str, Any]] = [
                 "display_order": 2,
                 "fields": [
                     {"key": "heading", "type": "text", "value": "Our Core Mission"},
-                    {"key": "body", "type": "textarea", "value": "Dedicated to rescuing street dogs, providing medical care, shelter, and matching them with caring forever homes."},
+                    {
+                        "key": "body",
+                        "type": "textarea",
+                        "value": "Dedicated to rescuing street dogs, providing medical care, shelter, and matching them with caring forever homes.",
+                    },
                 ],
             },
             {
@@ -1711,7 +1603,11 @@ DEFAULT_CMS_PAGES_SEED: list[dict[str, Any]] = [
                 "display_order": 3,
                 "fields": [
                     {"key": "heading", "type": "text", "value": "Emergency Rescue Needed?"},
-                    {"key": "subheading", "type": "text", "value": "Our dispatch team operates 24/7 for stray rescue."},
+                    {
+                        "key": "subheading",
+                        "type": "text",
+                        "value": "Our dispatch team operates 24/7 for stray rescue.",
+                    },
                     {"key": "button_text", "type": "text", "value": "Report Incident"},
                     {"key": "button_url", "type": "url", "value": "/rescue"},
                 ],
@@ -1732,7 +1628,11 @@ DEFAULT_CMS_PAGES_SEED: list[dict[str, Any]] = [
                 "display_order": 1,
                 "fields": [
                     {"key": "title", "type": "text", "value": "About PawGuard"},
-                    {"key": "subtitle", "type": "textarea", "value": "Empowering communities to protect, rescue, and care for strays."},
+                    {
+                        "key": "subtitle",
+                        "type": "textarea",
+                        "value": "Empowering communities to protect, rescue, and care for strays.",
+                    },
                 ],
             },
             {
@@ -1741,7 +1641,11 @@ DEFAULT_CMS_PAGES_SEED: list[dict[str, Any]] = [
                 "display_order": 2,
                 "fields": [
                     {"key": "heading", "type": "text", "value": "Our Vision"},
-                    {"key": "body", "type": "textarea", "value": "A world where no animal suffers from neglect, injury, or homelessness."},
+                    {
+                        "key": "body",
+                        "type": "textarea",
+                        "value": "A world where no animal suffers from neglect, injury, or homelessness.",
+                    },
                 ],
             },
         ],
@@ -1760,8 +1664,16 @@ DEFAULT_CMS_PAGES_SEED: list[dict[str, Any]] = [
                 "display_order": 1,
                 "fields": [
                     {"key": "title", "type": "text", "value": "Adoptable Dogs"},
-                    {"key": "subtitle", "type": "textarea", "value": "Browse rescued dogs ready for loving homes."},
-                    {"key": "notice", "type": "text", "value": "All dogs are vaccinated, dewormed, and microchipped."},
+                    {
+                        "key": "subtitle",
+                        "type": "textarea",
+                        "value": "Browse rescued dogs ready for loving homes.",
+                    },
+                    {
+                        "key": "notice",
+                        "type": "text",
+                        "value": "All dogs are vaccinated, dewormed, and microchipped.",
+                    },
                 ],
             },
             {
@@ -1770,7 +1682,11 @@ DEFAULT_CMS_PAGES_SEED: list[dict[str, Any]] = [
                 "display_order": 2,
                 "fields": [
                     {"key": "heading", "type": "text", "value": "Adoption Workflow"},
-                    {"key": "body", "type": "textarea", "value": "Submit an application -> Meet & Greet -> Home Check -> Welcome Home!"},
+                    {
+                        "key": "body",
+                        "type": "textarea",
+                        "value": "Submit an application -> Meet & Greet -> Home Check -> Welcome Home!",
+                    },
                 ],
             },
         ],
@@ -1789,7 +1705,11 @@ DEFAULT_CMS_PAGES_SEED: list[dict[str, Any]] = [
                 "display_order": 1,
                 "fields": [
                     {"key": "title", "type": "text", "value": "Emergency Rescue Operations"},
-                    {"key": "subtitle", "type": "textarea", "value": "Report injured or distressed strays for immediate dispatch."},
+                    {
+                        "key": "subtitle",
+                        "type": "textarea",
+                        "value": "Report injured or distressed strays for immediate dispatch.",
+                    },
                     {"key": "hotline", "type": "text", "value": "+1 (800) 555-PAW1"},
                 ],
             },
@@ -1809,7 +1729,11 @@ DEFAULT_CMS_PAGES_SEED: list[dict[str, Any]] = [
                 "display_order": 1,
                 "fields": [
                     {"key": "title", "type": "text", "value": "Lost & Found Pets"},
-                    {"key": "subtitle", "type": "textarea", "value": "Reuniting lost dogs with their owners across the community."},
+                    {
+                        "key": "subtitle",
+                        "type": "textarea",
+                        "value": "Reuniting lost dogs with their owners across the community.",
+                    },
                 ],
             },
         ],
@@ -1828,7 +1752,11 @@ DEFAULT_CMS_PAGES_SEED: list[dict[str, Any]] = [
                 "display_order": 1,
                 "fields": [
                     {"key": "title", "type": "text", "value": "Community & Awareness"},
-                    {"key": "subtitle", "type": "textarea", "value": "Learn animal welfare practices, volunteer, or foster."},
+                    {
+                        "key": "subtitle",
+                        "type": "textarea",
+                        "value": "Learn animal welfare practices, volunteer, or foster.",
+                    },
                 ],
             },
         ],
@@ -1847,7 +1775,11 @@ DEFAULT_CMS_PAGES_SEED: list[dict[str, Any]] = [
                 "display_order": 1,
                 "fields": [
                     {"key": "title", "type": "text", "value": "Support Our Mission"},
-                    {"key": "subtitle", "type": "textarea", "value": "Your contributions fund medical surgeries, food, shelter, and rescue runs."},
+                    {
+                        "key": "subtitle",
+                        "type": "textarea",
+                        "value": "Your contributions fund medical surgeries, food, shelter, and rescue runs.",
+                    },
                     {"key": "tax_info", "type": "text", "value": "80G Tax Exemption Eligible."},
                 ],
             },
@@ -1867,7 +1799,11 @@ DEFAULT_CMS_PAGES_SEED: list[dict[str, Any]] = [
                 "display_order": 1,
                 "fields": [
                     {"key": "title", "type": "text", "value": "Get in Touch"},
-                    {"key": "subtitle", "type": "textarea", "value": "Find shelter addresses, emergency hotlines, and operating hours."},
+                    {
+                        "key": "subtitle",
+                        "type": "textarea",
+                        "value": "Find shelter addresses, emergency hotlines, and operating hours.",
+                    },
                 ],
             },
         ],
@@ -1886,7 +1822,11 @@ DEFAULT_CMS_PAGES_SEED: list[dict[str, Any]] = [
                 "display_order": 1,
                 "fields": [
                     {"key": "title", "type": "text", "value": "Frequently Asked Questions"},
-                    {"key": "subtitle", "type": "textarea", "value": "Find answers to common questions about rescue, adoption, and volunteering."},
+                    {
+                        "key": "subtitle",
+                        "type": "textarea",
+                        "value": "Find answers to common questions about rescue, adoption, and volunteering.",
+                    },
                 ],
             },
         ],

@@ -139,21 +139,25 @@ class FosterService:
                     "Approval requires a passed background check and verified references."
                 )
             if not home_inspection_passed:
-                raise ValidationFailedError(
-                    "Approval requires a passed home inspection."
-                )
+                raise ValidationFailedError("Approval requires a passed home inspection.")
         if payload.status == FosterStatus.REJECTED and profile.status != FosterStatus.APPLIED:
             raise ConflictError("Only an applied foster profile can be rejected.")
         if payload.status == FosterStatus.INACTIVE and profile.active_count > 0:
-            raise ConflictError(
-                "A foster home with active placements cannot be marked inactive."
-            )
+            raise ConflictError("A foster home with active placements cannot be marked inactive.")
         for key, value in update_data.items():
             setattr(profile, key, value)
 
-        if payload.background_check_passed is not None and payload.vetted_at is None and profile.vetted_at is None:
+        if (
+            payload.background_check_passed is not None
+            and payload.vetted_at is None
+            and profile.vetted_at is None
+        ):
             profile.vetted_at = datetime.now(UTC)
-        if payload.home_inspection_passed is not None and payload.inspected_at is None and profile.inspected_at is None:
+        if (
+            payload.home_inspection_passed is not None
+            and payload.inspected_at is None
+            and profile.inspected_at is None
+        ):
             profile.inspected_at = datetime.now(UTC)
 
         # Coordinator approval (after the home inspection audit) is what
@@ -348,6 +352,7 @@ class FosterService:
             from pawguard.modules.notifications.governance_service import (
                 dispatch_governed_notification,
             )
+
             await dispatch_governed_notification(
                 self._repo._session,
                 trigger_code="foster_assigned",
@@ -555,16 +560,12 @@ class FosterService:
             raise NotFoundError("Foster placement not found.")
         return placement
 
-    async def list_supply_dispatches(
-        self, placement_id: uuid.UUID
-    ) -> list[FosterSupplyDispatch]:
+    async def list_supply_dispatches(self, placement_id: uuid.UUID) -> list[FosterSupplyDispatch]:
         await self.get_placement(placement_id)
         dispatches = await self._repo.get_supply_dispatches_for_placement(placement_id)
         return list(dispatches)
 
-    async def get_progress_logs(
-        self, placement_id: uuid.UUID
-    ) -> list[FosterProgressLog]:
+    async def get_progress_logs(self, placement_id: uuid.UUID) -> list[FosterProgressLog]:
         await self.get_placement(placement_id)
         logs = await self._repo.get_progress_logs_for_placement(placement_id)
         return list(logs)
@@ -625,7 +626,7 @@ class FosterService:
             residential_status="foster",
             has_landlord_approval=True,
             # Prefilled as True since the foster is already approved by the org
-            has_yard_fence=True,         # Prefilled as True
+            has_yard_fence=True,  # Prefilled as True
             household_members_count=1,
             existing_pets_medical_details="None",
             pet_care_experience="Approved PawGuard Foster Caregiver",

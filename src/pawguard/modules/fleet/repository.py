@@ -22,15 +22,26 @@ from pawguard.modules.fleet.models import (
 class FleetRepository:
     VEHICLE_SEARCH_FIELDS = ("make_model", "license_plate")
     VEHICLE_SORTABLE_FIELDS = {
-        "make_model", "license_plate", "status", "vehicle_type", "mileage",
-        "created_at", "updated_at",
+        "make_model",
+        "license_plate",
+        "status",
+        "vehicle_type",
+        "mileage",
+        "created_at",
+        "updated_at",
     }
     MAINTENANCE_SORTABLE_FIELDS = {
-        "service_date", "cost", "created_at",
+        "service_date",
+        "cost",
+        "created_at",
     }
     EQUIPMENT_SEARCH_FIELDS = ("equipment_name", "notes")
     EQUIPMENT_SORTABLE_FIELDS = {
-        "equipment_name", "checked_out_at", "expected_return_at", "returned_at", "created_at",
+        "equipment_name",
+        "checked_out_at",
+        "expected_return_at",
+        "returned_at",
+        "created_at",
     }
     FUEL_SORTABLE_FIELDS = {"filled_at", "volume_litres", "cost", "mileage_at_fill"}
     FUEL_SEARCH_FIELDS = ("vendor", "notes")
@@ -40,11 +51,7 @@ class FleetRepository:
 
     async def list_all_vehicles(self) -> Sequence[Vehicle]:
         """Return all non-deleted vehicles (for availability queries)."""
-        stmt = (
-            select(Vehicle)
-            .where(Vehicle.deleted_at.is_(None))
-            .order_by(Vehicle.license_plate)
-        )
+        stmt = select(Vehicle).where(Vehicle.deleted_at.is_(None)).order_by(Vehicle.license_plate)
         return (await self._session.execute(stmt)).scalars().all()
 
     async def create_vehicle(self, vehicle: Vehicle) -> Vehicle:
@@ -57,14 +64,17 @@ class FleetRepository:
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def get_vehicle_by_plate(self, license_plate: str) -> Vehicle | None:
-        stmt = (
-            select(Vehicle)
-            .where(Vehicle.license_plate == license_plate, Vehicle.deleted_at.is_(None))
+        stmt = select(Vehicle).where(
+            Vehicle.license_plate == license_plate, Vehicle.deleted_at.is_(None)
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def user_exists(self, user_id: uuid.UUID) -> bool:
-        stmt = select(func.count()).select_from(User).where(User.id == user_id, User.deleted_at.is_(None))
+        stmt = (
+            select(func.count())
+            .select_from(User)
+            .where(User.id == user_id, User.deleted_at.is_(None))
+        )
         return (await self._session.execute(stmt)).scalar_one() > 0
 
     async def paginate_vehicles(
@@ -128,6 +138,7 @@ class FleetRepository:
 
     async def soft_delete_vehicle(self, vehicle_id: uuid.UUID) -> bool:
         from datetime import UTC, datetime
+
         stmt = (
             update(Vehicle)
             .where(Vehicle.id == vehicle_id, Vehicle.deleted_at.is_(None))
@@ -137,7 +148,9 @@ class FleetRepository:
         return result.rowcount > 0  # type: ignore[attr-defined,no-any-return]
 
     async def update_vehicle_status(
-        self, vehicle_id: uuid.UUID, status: VehicleStatus,
+        self,
+        vehicle_id: uuid.UUID,
+        status: VehicleStatus,
     ) -> Vehicle | None:
         stmt = (
             update(Vehicle)
@@ -168,6 +181,7 @@ class FleetRepository:
 
     async def bulk_soft_delete_vehicles(self, ids: list[uuid.UUID]) -> int:
         from datetime import UTC, datetime
+
         stmt = (
             update(Vehicle)
             .where(Vehicle.id.in_(ids), Vehicle.deleted_at.is_(None))

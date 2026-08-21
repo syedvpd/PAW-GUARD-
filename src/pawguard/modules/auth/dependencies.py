@@ -4,7 +4,6 @@ These are the dependencies every future module's routers will depend on (RULE-00
 routers authenticate/authorise via dependencies, never inline).
 """
 
-import asyncio
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta

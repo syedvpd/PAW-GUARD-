@@ -92,6 +92,7 @@ class MedicalRecordCreate(BaseModel):
             if "date" in data and data["date"]:
                 if "occurred_at" not in data or not data["occurred_at"]:
                     from datetime import datetime
+
                     val = data["date"]
                     if isinstance(val, str):
                         try:
@@ -180,10 +181,9 @@ class SafetyTagScanRequest(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def map_legacy_fields(cls, data: any) -> any:
-        if isinstance(data, dict):
-            if "tag_code" in data and data["tag_code"]:
-                if "token" not in data or not data["token"]:
-                    data["token"] = data["tag_code"]
+        if isinstance(data, dict) and "tag_code" in data and data["tag_code"]:
+            if "token" not in data or not data["token"]:
+                data["token"] = data["tag_code"]
         return data
 
     @model_validator(mode="after")
@@ -230,7 +230,6 @@ class SafetyTagScanResponse(BaseModel):
     facility_phone: str | None = None
 
     message: str = "If this animal needs urgent care, contact PawGuard emergency rescue or a local veterinary clinic."
-
 
 
 class VetClinicCreate(BaseModel):
@@ -305,6 +304,7 @@ class PetAppointmentCreate(BaseModel):
         if isinstance(data, dict):
             if "scheduled_at" in data and data["scheduled_at"]:
                 from datetime import datetime, timedelta
+
                 val = data["scheduled_at"]
                 if isinstance(val, str):
                     try:
@@ -389,6 +389,7 @@ class PetReminderCreate(BaseModel):
             if "remind_at" in data and data["remind_at"]:
                 if "due_at" not in data or not data["due_at"]:
                     from datetime import datetime
+
                     val = data["remind_at"]
                     if isinstance(val, str):
                         try:
@@ -406,6 +407,7 @@ class PetReminderCreate(BaseModel):
                     data["details"] = data["message"]
             if "source_key" not in data or not data["source_key"]:
                 import uuid
+
                 data["source_key"] = f"manual:{uuid.uuid4()}"
         return data
 
@@ -451,12 +453,3 @@ class PetReminderResponse(BaseModel):
     @property
     def message(self) -> str:
         return self.title
-
-
-class MedicalRecordUpdate(BaseModel):
-    record_type: str | None = Field(None, min_length=1, max_length=64)
-    title: str | None = Field(None, min_length=1, max_length=255)
-    notes: str | None = Field(None, max_length=10000)
-    occurred_at: datetime | None = None
-    clinic_id: uuid.UUID | None = None
-    stored_file_id: uuid.UUID | None = None

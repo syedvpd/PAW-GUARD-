@@ -41,9 +41,7 @@ def get_actor() -> UUID | None:
 
 
 @event.listens_for(Session, "before_flush")
-def _stamp_audit_columns(
-    session: Session, flush_context: object, instances: object
-) -> None:
+def _stamp_audit_columns(session: Session, flush_context: object, instances: object) -> None:
     actor = _actor_id.get()
     if actor is None:
         return

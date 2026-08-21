@@ -148,7 +148,9 @@ def register_exception_handlers(app: FastAPI) -> None:
         )
         return JSONResponse(
             status_code=exc.status_code,
-            content=error_envelope(code=exc.code, message=clean_error_message(exc.message), details=exc.details),
+            content=error_envelope(
+                code=exc.code, message=clean_error_message(exc.message), details=exc.details
+            ),
         )
 
     @app.exception_handler(RequestValidationError)
@@ -239,7 +241,9 @@ def register_exception_handlers(app: FastAPI) -> None:
                 detail_msg = "A record with this unique identifier or key already exists."
                 if "Key (" in orig_msg:
                     # e.g. Key (email)=(test@example.com) already exists.
-                    key_part = orig_msg.split("Key (")[-1].split(")")[0] if "Key (" in orig_msg else ""
+                    key_part = (
+                        orig_msg.split("Key (")[-1].split(")")[0] if "Key (" in orig_msg else ""
+                    )
                     if key_part:
                         detail_msg = f"A record with {key_part} already exists."
                 return JSONResponse(
@@ -250,7 +254,11 @@ def register_exception_handlers(app: FastAPI) -> None:
                         details={"constraint": "unique_violation"},
                     ),
                 )
-            elif "foreign key" in err_msg or "foreignkey" in err_msg or "foreign key" in orig_msg.lower():
+            elif (
+                "foreign key" in err_msg
+                or "foreignkey" in err_msg
+                or "foreign key" in orig_msg.lower()
+            ):
                 return JSONResponse(
                     status_code=status.HTTP_409_CONFLICT,
                     content=error_envelope(
@@ -288,7 +296,9 @@ def register_exception_handlers(app: FastAPI) -> None:
 
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content=error_envelope(code="INTERNAL_ERROR", message="An internal database error occurred."),
+            content=error_envelope(
+                code="INTERNAL_ERROR", message="An internal database error occurred."
+            ),
         )
 
     @app.exception_handler(Exception)
@@ -301,5 +311,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         )
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content=error_envelope(code="INTERNAL_ERROR", message="An unexpected internal server error occurred."),
+            content=error_envelope(
+                code="INTERNAL_ERROR", message="An unexpected internal server error occurred."
+            ),
         )

@@ -62,23 +62,35 @@ class TestMedicalService:
     async def test_perform_clinical_exam(self, service, mock_repo, mock_dog_repo):
         dog_id = uuid.uuid4()
         mock_dog_repo.get_by_id.return_value = DogProfile(
-            id=dog_id, registration_number="DOG-001", name="B", breed="Mix",
-            gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+            id=dog_id,
+            registration_number="DOG-001",
+            name="B",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=False,
         )
         exam_id = uuid.uuid4()
         mock_repo.create_clinical_exam.return_value = ClinicalExam(
-            id=exam_id, dog_id=dog_id, vet_id=uuid.uuid4(),
-            exam_date=datetime.now(UTC), body_condition_score=5,
+            id=exam_id,
+            dog_id=dog_id,
+            vet_id=uuid.uuid4(),
+            exam_date=datetime.now(UTC),
+            body_condition_score=5,
             triage_diagnosis="Healthy",
         )
-        payload = ClinicalExamCreate(dog_id=dog_id, body_condition_score=5, triage_diagnosis="Healthy")
+        payload = ClinicalExamCreate(
+            dog_id=dog_id, body_condition_score=5, triage_diagnosis="Healthy"
+        )
         result = await service.perform_clinical_exam(uuid.uuid4(), payload, actor_id=uuid.uuid4())
         assert result.triage_diagnosis == "Healthy"
 
     @pytest.mark.asyncio
     async def test_perform_clinical_exam_dog_not_found(self, service, mock_dog_repo):
         mock_dog_repo.get_by_id.return_value = None
-        payload = ClinicalExamCreate(dog_id=uuid.uuid4(), body_condition_score=5, triage_diagnosis="X")
+        payload = ClinicalExamCreate(
+            dog_id=uuid.uuid4(), body_condition_score=5, triage_diagnosis="X"
+        )
         with pytest.raises(NotFoundError, match="Dog profile not found"):
             await service.perform_clinical_exam(uuid.uuid4(), payload)
 
@@ -86,16 +98,26 @@ class TestMedicalService:
     async def test_record_treatment(self, service, mock_repo, mock_dog_repo):
         dog_id = uuid.uuid4()
         mock_dog_repo.get_by_id.return_value = DogProfile(
-            id=dog_id, registration_number="DOG-001", name="B", breed="Mix",
-            gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+            id=dog_id,
+            registration_number="DOG-001",
+            name="B",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=False,
         )
         treatment_id = uuid.uuid4()
         mock_repo.create_treatment.return_value = MedicalTreatment(
-            id=treatment_id, dog_id=dog_id, vet_id=uuid.uuid4(),
-            treatment_date=datetime.now(UTC), treatment_type="surgery",
+            id=treatment_id,
+            dog_id=dog_id,
+            vet_id=uuid.uuid4(),
+            treatment_date=datetime.now(UTC),
+            treatment_type="surgery",
             description="Leg surgery",
         )
-        payload = MedicalTreatmentCreate(dog_id=dog_id, treatment_type="surgery", description="Leg surgery")
+        payload = MedicalTreatmentCreate(
+            dog_id=dog_id, treatment_type="surgery", description="Leg surgery"
+        )
         result = await service.record_treatment(uuid.uuid4(), payload, actor_id=uuid.uuid4())
         assert result.treatment_type == "surgery"
 
@@ -103,13 +125,21 @@ class TestMedicalService:
     async def test_administer_vaccine(self, service, mock_repo, mock_dog_repo):
         dog_id = uuid.uuid4()
         mock_dog_repo.get_by_id.return_value = DogProfile(
-            id=dog_id, registration_number="DOG-001", name="B", breed="Mix",
-            gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+            id=dog_id,
+            registration_number="DOG-001",
+            name="B",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=False,
         )
         vacc_id = uuid.uuid4()
         mock_repo.create_vaccination.return_value = VaccinationRecord(
-            id=vacc_id, dog_id=dog_id, administered_by=uuid.uuid4(),
-            administered_at=datetime.now(UTC), vaccine_name="Rabies",
+            id=vacc_id,
+            dog_id=dog_id,
+            administered_by=uuid.uuid4(),
+            administered_at=datetime.now(UTC),
+            vaccine_name="Rabies",
         )
         mock_repo.get_vaccine_protocol_by_name.return_value = None
         payload = VaccinationRecordCreate(dog_id=dog_id, vaccine_name="Rabies")
@@ -120,19 +150,34 @@ class TestMedicalService:
     async def test_prescribe_medication(self, service, mock_repo, mock_dog_repo):
         dog_id = uuid.uuid4()
         mock_dog_repo.get_by_id.return_value = DogProfile(
-            id=dog_id, registration_number="DOG-001", name="B", breed="Mix",
-            gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+            id=dog_id,
+            registration_number="DOG-001",
+            name="B",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=False,
         )
         rx_id = uuid.uuid4()
         now = datetime.now(UTC)
         mock_repo.create_prescription.return_value = Prescription(
-            id=rx_id, dog_id=dog_id, vet_id=uuid.uuid4(),
-            drug_name="Amoxicillin", dosage="500mg", route="Oral",
-            start_at=now, end_at=now, is_active=True,
+            id=rx_id,
+            dog_id=dog_id,
+            vet_id=uuid.uuid4(),
+            drug_name="Amoxicillin",
+            dosage="500mg",
+            route="Oral",
+            start_at=now,
+            end_at=now,
+            is_active=True,
         )
         payload = PrescriptionCreate(
-            dog_id=dog_id, drug_name="Amoxicillin", dosage="500mg",
-            route="Oral", start_at=now, end_at=now,
+            dog_id=dog_id,
+            drug_name="Amoxicillin",
+            dosage="500mg",
+            route="Oral",
+            start_at=now,
+            end_at=now,
         )
         result = await service.prescribe_medication(uuid.uuid4(), payload, actor_id=uuid.uuid4())
         assert result.drug_name == "Amoxicillin"
@@ -141,13 +186,20 @@ class TestMedicalService:
     async def test_authorize_adoption_clearance(self, service, mock_dog_repo):
         dog_id = uuid.uuid4()
         dog = DogProfile(
-            id=dog_id, registration_number="DOG-001", name="B", breed="Mix",
-            gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+            id=dog_id,
+            registration_number="DOG-001",
+            name="B",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=False,
             is_quarantine_passed=False,
         )
         mock_dog_repo.get_by_id.return_value = dog
         result = await service.authorize_adoption_clearance(
-            dog_id, roles={"veterinarian"}, actor_id=uuid.uuid4(),
+            dog_id,
+            roles={"veterinarian"},
+            actor_id=uuid.uuid4(),
         )
         assert result is True
         assert dog.is_adoptable is True
@@ -162,9 +214,14 @@ class TestMedicalService:
     async def test_list_exams_paginated(self, service, mock_repo):
         now = datetime.now(UTC)
         exam = ClinicalExam(
-            id=uuid.uuid4(), dog_id=uuid.uuid4(), vet_id=uuid.uuid4(),
-            exam_date=now, body_condition_score=5,
-            triage_diagnosis="Healthy", created_at=now, updated_at=now,
+            id=uuid.uuid4(),
+            dog_id=uuid.uuid4(),
+            vet_id=uuid.uuid4(),
+            exam_date=now,
+            body_condition_score=5,
+            triage_diagnosis="Healthy",
+            created_at=now,
+            updated_at=now,
         )
         mock_repo.list_exams_paginated.return_value = ([exam], 1)
         page = PageParams(page=1, page_size=20)
@@ -178,8 +235,11 @@ class TestMedicalService:
         exam_id = uuid.uuid4()
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = ClinicalExam(
-            id=exam_id, dog_id=uuid.uuid4(), vet_id=uuid.uuid4(),
-            exam_date=datetime.now(UTC), body_condition_score=5,
+            id=exam_id,
+            dog_id=uuid.uuid4(),
+            vet_id=uuid.uuid4(),
+            exam_date=datetime.now(UTC),
+            body_condition_score=5,
             triage_diagnosis="Healthy",
         )
         mock_repo._session.execute.return_value = mock_result
@@ -199,8 +259,11 @@ class TestMedicalService:
         treatment_id = uuid.uuid4()
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = MedicalTreatment(
-            id=treatment_id, dog_id=uuid.uuid4(), vet_id=uuid.uuid4(),
-            treatment_date=datetime.now(UTC), treatment_type="surgery",
+            id=treatment_id,
+            dog_id=uuid.uuid4(),
+            vet_id=uuid.uuid4(),
+            treatment_date=datetime.now(UTC),
+            treatment_type="surgery",
             description="Surgery",
         )
         mock_repo._session.execute.return_value = mock_result
@@ -212,8 +275,11 @@ class TestMedicalService:
         vacc_id = uuid.uuid4()
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = VaccinationRecord(
-            id=vacc_id, dog_id=uuid.uuid4(), administered_by=uuid.uuid4(),
-            administered_at=datetime.now(UTC), vaccine_name="Rabies",
+            id=vacc_id,
+            dog_id=uuid.uuid4(),
+            administered_by=uuid.uuid4(),
+            administered_at=datetime.now(UTC),
+            vaccine_name="Rabies",
         )
         mock_repo._session.execute.return_value = mock_result
         await service.soft_delete_vaccination(vacc_id, actor_id=uuid.uuid4())
@@ -223,9 +289,15 @@ class TestMedicalService:
     async def test_soft_delete_prescription(self, service, mock_repo):
         rx_id = uuid.uuid4()
         mock_repo.get_prescription_by_id.return_value = Prescription(
-            id=rx_id, dog_id=uuid.uuid4(), vet_id=uuid.uuid4(),
-            drug_name="Amox", dosage="500mg", route="Oral",
-            start_at=datetime.now(UTC), end_at=datetime.now(UTC), is_active=True,
+            id=rx_id,
+            dog_id=uuid.uuid4(),
+            vet_id=uuid.uuid4(),
+            drug_name="Amox",
+            dosage="500mg",
+            route="Oral",
+            start_at=datetime.now(UTC),
+            end_at=datetime.now(UTC),
+            is_active=True,
         )
         await service.soft_delete_prescription(rx_id, actor_id=uuid.uuid4())
         assert mock_repo._session.flush.called
@@ -234,9 +306,15 @@ class TestMedicalService:
     async def test_update_prescription(self, service, mock_repo):
         rx_id = uuid.uuid4()
         rx = Prescription(
-            id=rx_id, dog_id=uuid.uuid4(), vet_id=uuid.uuid4(),
-            drug_name="Amox", dosage="500mg", route="Oral",
-            start_at=datetime.now(UTC), end_at=datetime.now(UTC), is_active=True,
+            id=rx_id,
+            dog_id=uuid.uuid4(),
+            vet_id=uuid.uuid4(),
+            drug_name="Amox",
+            dosage="500mg",
+            route="Oral",
+            start_at=datetime.now(UTC),
+            end_at=datetime.now(UTC),
+            is_active=True,
         )
         mock_repo.get_prescription_by_id.return_value = rx
         payload = PrescriptionUpdate(dosage="1g")
@@ -247,9 +325,14 @@ class TestMedicalService:
     async def test_list_treatments_paginated(self, service, mock_repo):
         now = datetime.now(UTC)
         treatment = MedicalTreatment(
-            id=uuid.uuid4(), dog_id=uuid.uuid4(), vet_id=uuid.uuid4(),
-            treatment_date=now, treatment_type="therapy",
-            description="Physio", created_at=now, updated_at=now,
+            id=uuid.uuid4(),
+            dog_id=uuid.uuid4(),
+            vet_id=uuid.uuid4(),
+            treatment_date=now,
+            treatment_type="therapy",
+            description="Physio",
+            created_at=now,
+            updated_at=now,
         )
         mock_repo.list_treatments_paginated.return_value = ([treatment], 1)
         page = PageParams()
@@ -269,18 +352,28 @@ class TestMedicalService:
         )
         dog_id = uuid.uuid4()
         mock_dog_repo.get_by_id.return_value = DogProfile(
-            id=dog_id, registration_number="DOG-001", name="B", breed="Mix",
-            gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+            id=dog_id,
+            registration_number="DOG-001",
+            name="B",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=False,
         )
         treatment_id = uuid.uuid4()
         mock_repo.create_treatment.return_value = MedicalTreatment(
-            id=treatment_id, dog_id=dog_id, vet_id=uuid.uuid4(),
-            treatment_date=datetime.now(UTC), treatment_type="surgery",
+            id=treatment_id,
+            dog_id=dog_id,
+            vet_id=uuid.uuid4(),
+            treatment_date=datetime.now(UTC),
+            treatment_type="surgery",
             description="Leg surgery",
         )
         item_id = uuid.uuid4()
         payload = MedicalTreatmentCreate(
-            dog_id=dog_id, treatment_type="surgery", description="Leg surgery",
+            dog_id=dog_id,
+            treatment_type="surgery",
+            description="Leg surgery",
             inventory_consumptions=[{"item_id": item_id, "quantity": 2.0}],
         )
         vet_id = uuid.uuid4()
@@ -305,20 +398,35 @@ class TestMedicalService:
         )
         dog_id = uuid.uuid4()
         mock_dog_repo.get_by_id.return_value = DogProfile(
-            id=dog_id, registration_number="DOG-001", name="B", breed="Mix",
-            gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+            id=dog_id,
+            registration_number="DOG-001",
+            name="B",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=False,
         )
         rx_id = uuid.uuid4()
         now = datetime.now(UTC)
         mock_repo.create_prescription.return_value = Prescription(
-            id=rx_id, dog_id=dog_id, vet_id=uuid.uuid4(),
-            drug_name="Amoxicillin", dosage="500mg", route="Oral",
-            start_at=now, end_at=now, is_active=True,
+            id=rx_id,
+            dog_id=dog_id,
+            vet_id=uuid.uuid4(),
+            drug_name="Amoxicillin",
+            dosage="500mg",
+            route="Oral",
+            start_at=now,
+            end_at=now,
+            is_active=True,
         )
         item_id = uuid.uuid4()
         payload = PrescriptionCreate(
-            dog_id=dog_id, drug_name="Amoxicillin", dosage="500mg",
-            route="Oral", start_at=now, end_at=now,
+            dog_id=dog_id,
+            drug_name="Amoxicillin",
+            dosage="500mg",
+            route="Oral",
+            start_at=now,
+            end_at=now,
             inventory_consumptions=[{"item_id": item_id, "quantity": 1.0}],
         )
         await service.prescribe_medication(uuid.uuid4(), payload, actor_id=uuid.uuid4())
@@ -331,15 +439,25 @@ class TestMedicalService:
     async def test_no_inventory_calls_without_consumptions(self, service, mock_repo, mock_dog_repo):
         dog_id = uuid.uuid4()
         mock_dog_repo.get_by_id.return_value = DogProfile(
-            id=dog_id, registration_number="DOG-001", name="B", breed="Mix",
-            gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+            id=dog_id,
+            registration_number="DOG-001",
+            name="B",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=False,
         )
         mock_repo.create_treatment.return_value = MedicalTreatment(
-            id=uuid.uuid4(), dog_id=dog_id, vet_id=uuid.uuid4(),
-            treatment_date=datetime.now(UTC), treatment_type="surgery",
+            id=uuid.uuid4(),
+            dog_id=dog_id,
+            vet_id=uuid.uuid4(),
+            treatment_date=datetime.now(UTC),
+            treatment_type="surgery",
             description="Leg surgery",
         )
-        payload = MedicalTreatmentCreate(dog_id=dog_id, treatment_type="surgery", description="Leg surgery")
+        payload = MedicalTreatmentCreate(
+            dog_id=dog_id, treatment_type="surgery", description="Leg surgery"
+        )
         await service.record_treatment(uuid.uuid4(), payload, actor_id=uuid.uuid4())
 
 
@@ -370,8 +488,13 @@ class TestMedicalPrr35:
     @staticmethod
     def _dog(dog_id: uuid.UUID) -> DogProfile:
         return DogProfile(
-            id=dog_id, registration_number="DOG-001", name="B", breed="Mix",
-            gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+            id=dog_id,
+            registration_number="DOG-001",
+            name="B",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=False,
         )
 
     @pytest.mark.asyncio
@@ -381,16 +504,26 @@ class TestMedicalPrr35:
         log_id = uuid.uuid4()
         now = datetime.now(UTC)
         mock_repo.create_administration.return_value = MedicationAdministrationLog(
-            id=log_id, dog_id=dog_id, administered_by_id=uuid.uuid4(),
-            medication_name="Amoxicillin", dosage="5ml", route="Oral",
-            administered_at=now, notes="Given with food.",
+            id=log_id,
+            dog_id=dog_id,
+            administered_by_id=uuid.uuid4(),
+            medication_name="Amoxicillin",
+            dosage="5ml",
+            route="Oral",
+            administered_at=now,
+            notes="Given with food.",
         )
         payload = MedicationAdministrationCreate(
-            dog_id=dog_id, medication_name="Amoxicillin", dosage="5ml",
-            route="Oral", notes="Given with food.",
+            dog_id=dog_id,
+            medication_name="Amoxicillin",
+            dosage="5ml",
+            route="Oral",
+            notes="Given with food.",
         )
         result = await service.log_medication_administration(
-            uuid.uuid4(), payload, actor_id=uuid.uuid4(),
+            uuid.uuid4(),
+            payload,
+            actor_id=uuid.uuid4(),
         )
         assert result.id == log_id
         assert result.medication_name == "Amoxicillin"
@@ -404,7 +537,10 @@ class TestMedicalPrr35:
     async def test_log_medication_administration_dog_not_found(self, service, mock_dog_repo):
         mock_dog_repo.get_by_id.return_value = None
         payload = MedicationAdministrationCreate(
-            dog_id=uuid.uuid4(), medication_name="Amox", dosage="5ml", route="Oral",
+            dog_id=uuid.uuid4(),
+            medication_name="Amox",
+            dosage="5ml",
+            route="Oral",
         )
         with pytest.raises(NotFoundError, match="Dog profile not found"):
             await service.log_medication_administration(uuid.uuid4(), payload)
@@ -417,8 +553,11 @@ class TestMedicalPrr35:
         mock_dog_repo.get_by_id.return_value = self._dog(dog_id)
         mock_repo.get_prescription_by_id.return_value = None
         payload = MedicationAdministrationCreate(
-            prescription_id=uuid.uuid4(), dog_id=dog_id,
-            medication_name="Amox", dosage="5ml", route="Oral",
+            prescription_id=uuid.uuid4(),
+            dog_id=dog_id,
+            medication_name="Amox",
+            dosage="5ml",
+            route="Oral",
         )
         with pytest.raises(NotFoundError, match="Prescription not found"):
             await service.log_medication_administration(uuid.uuid4(), payload)
@@ -428,15 +567,24 @@ class TestMedicalPrr35:
         dog_id = uuid.uuid4()
         now = datetime.now(UTC)
         rec = VaccinationRecord(
-            id=uuid.uuid4(), dog_id=dog_id, administered_by=uuid.uuid4(),
-            administered_at=now, vaccine_name="Rabies",
+            id=uuid.uuid4(),
+            dog_id=dog_id,
+            administered_by=uuid.uuid4(),
+            administered_at=now,
+            vaccine_name="Rabies",
         )
         mock_repo.get_vaccine_protocol_by_name.return_value = VaccineProtocol(
-            id=uuid.uuid4(), name="Rabies", default_interval_days=365, is_required=True,
+            id=uuid.uuid4(),
+            name="Rabies",
+            default_interval_days=365,
+            is_required=True,
         )
         next_rec = VaccinationRecord(
-            id=uuid.uuid4(), dog_id=dog_id, administered_by=rec.administered_by,
-            administered_at=now + timedelta(days=365), vaccine_name="Rabies",
+            id=uuid.uuid4(),
+            dog_id=dog_id,
+            administered_by=rec.administered_by,
+            administered_at=now + timedelta(days=365),
+            vaccine_name="Rabies",
         )
         mock_repo.create_vaccination.return_value = next_rec
 
@@ -457,8 +605,11 @@ class TestMedicalPrr35:
     async def test_schedule_next_dose_skips_without_protocol(self, service, mock_repo):
         now = datetime.now(UTC)
         rec = VaccinationRecord(
-            id=uuid.uuid4(), dog_id=uuid.uuid4(), administered_by=uuid.uuid4(),
-            administered_at=now, vaccine_name="DHPP",
+            id=uuid.uuid4(),
+            dog_id=uuid.uuid4(),
+            administered_by=uuid.uuid4(),
+            administered_at=now,
+            vaccine_name="DHPP",
         )
         mock_repo.get_vaccine_protocol_by_name.return_value = None
 
@@ -472,8 +623,12 @@ class TestMedicalPrr35:
     async def test_schedule_next_dose_skips_when_already_scheduled(self, service, mock_repo):
         now = datetime.now(UTC)
         rec = VaccinationRecord(
-            id=uuid.uuid4(), dog_id=uuid.uuid4(), administered_by=uuid.uuid4(),
-            administered_at=now, vaccine_name="Rabies", next_due_at=now,
+            id=uuid.uuid4(),
+            dog_id=uuid.uuid4(),
+            administered_by=uuid.uuid4(),
+            administered_at=now,
+            vaccine_name="Rabies",
+            next_due_at=now,
         )
         result = await service.schedule_next_dose(rec)
         assert result is None
@@ -488,12 +643,18 @@ class TestMedicalPrr35:
         mock_dog_repo.get_by_id.return_value = self._dog(dog_id)
         now = datetime.now(UTC)
         rec = VaccinationRecord(
-            id=uuid.uuid4(), dog_id=dog_id, administered_by=vet_id,
-            administered_at=now, vaccine_name="Rabies",
+            id=uuid.uuid4(),
+            dog_id=dog_id,
+            administered_by=vet_id,
+            administered_at=now,
+            vaccine_name="Rabies",
         )
         mock_repo.create_vaccination.return_value = rec
         mock_repo.get_vaccine_protocol_by_name.return_value = VaccineProtocol(
-            id=uuid.uuid4(), name="Rabies", default_interval_days=90, is_required=False,
+            id=uuid.uuid4(),
+            name="Rabies",
+            default_interval_days=90,
+            is_required=False,
         )
         payload = VaccinationRecordCreate(dog_id=dog_id, vaccine_name="Rabies")
         result = await service.administer_vaccine(vet_id, payload, actor_id=uuid.uuid4())
@@ -505,7 +666,10 @@ class TestMedicalPrr35:
     async def test_create_vaccine_protocol(self, service, mock_repo):
         mock_repo.get_vaccine_protocol_by_name.return_value = None
         mock_repo.create_vaccine_protocol.return_value = VaccineProtocol(
-            id=uuid.uuid4(), name="Rabies", default_interval_days=365, is_required=True,
+            id=uuid.uuid4(),
+            name="Rabies",
+            default_interval_days=365,
+            is_required=True,
         )
         payload = VaccineProtocolCreate(name="Rabies", default_interval_days=365)
         result = await service.create_vaccine_protocol(payload, actor_id=uuid.uuid4())
@@ -517,7 +681,10 @@ class TestMedicalPrr35:
         from pawguard.core.exceptions import ConflictError
 
         mock_repo.get_vaccine_protocol_by_name.return_value = VaccineProtocol(
-            id=uuid.uuid4(), name="Rabies", default_interval_days=365, is_required=True,
+            id=uuid.uuid4(),
+            name="Rabies",
+            default_interval_days=365,
+            is_required=True,
         )
         payload = VaccineProtocolCreate(name="Rabies", default_interval_days=365)
         with pytest.raises(ConflictError, match="already exists"):
@@ -533,7 +700,9 @@ class TestMedicalPrr35:
         mock_dog_repo.get_by_id.return_value = dog
 
         result = await service.authorize_adoption_clearance(
-            dog_id, roles={"veterinarian"}, actor_id=vet_id,
+            dog_id,
+            roles={"veterinarian"},
+            actor_id=vet_id,
             payload=MedicalClearanceCreate(
                 clearance_type="adoption_surgery",
                 status="approved",
@@ -562,7 +731,9 @@ class TestMedicalPrr35:
         mock_dog_repo.get_by_id.return_value = dog
 
         result = await service.authorize_adoption_clearance(
-            dog_id, roles={"veterinarian"}, actor_id=uuid.uuid4(),
+            dog_id,
+            roles={"veterinarian"},
+            actor_id=uuid.uuid4(),
             payload=MedicalClearanceCreate(status="denied", decision_notes="Not ready."),
         )
 
@@ -577,9 +748,14 @@ class TestMedicalPrr35:
         now = datetime.now(UTC)
         mock_repo.get_clearances_by_dog.return_value = [
             MedicalClearance(
-                id=uuid.uuid4(), dog_id=dog_id, authorized_by_id=uuid.uuid4(),
-                clearance_type="adoption_surgery", status="approved",
-                authorized_at=now, created_at=now, updated_at=now,
+                id=uuid.uuid4(),
+                dog_id=dog_id,
+                authorized_by_id=uuid.uuid4(),
+                clearance_type="adoption_surgery",
+                status="approved",
+                authorized_at=now,
+                created_at=now,
+                updated_at=now,
             )
         ]
         result = await service.get_clearances_for_dog(dog_id)

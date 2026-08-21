@@ -33,16 +33,27 @@ from pawguard.modules.donation.models import (
 class DonationRepository:
     DONATION_SEARCH_FIELDS = ("transaction_id", "notes", "donor_id")
     DONATION_SORTABLE_FIELDS = {
-        "amount", "currency", "donation_type", "status", "created_at", "updated_at",
+        "amount",
+        "currency",
+        "donation_type",
+        "status",
+        "created_at",
+        "updated_at",
     }
     DONOR_SEARCH_FIELDS = ("notes", "tax_identifier")
     DONOR_SORTABLE_FIELDS = {
-        "created_at", "updated_at",
+        "created_at",
+        "updated_at",
     }
     CAMPAIGN_SEARCH_FIELDS = ("name", "description")
     CAMPAIGN_SORTABLE_FIELDS = {
-        "target_amount", "currency", "campaign_type", "status",
-        "start_date", "end_date", "created_at",
+        "target_amount",
+        "currency",
+        "campaign_type",
+        "status",
+        "start_date",
+        "end_date",
+        "created_at",
     }
 
     def __init__(self, session: AsyncSession) -> None:
@@ -92,6 +103,7 @@ class DonationRepository:
 
     async def soft_delete_donor(self, donor_id: uuid.UUID) -> bool:
         from datetime import datetime
+
         stmt = (
             update(DonorProfile)
             .where(DonorProfile.id == donor_id, DonorProfile.deleted_at.is_(None))
@@ -140,10 +152,7 @@ class DonationRepository:
         date_from: date_type | None = None,
         date_to: date_type | None = None,
     ) -> tuple[Sequence[Donation], int]:
-        stmt = (
-            select(Donation)
-            .options(selectinload(Donation.donor), selectinload(Donation.dog))
-        )
+        stmt = select(Donation).options(selectinload(Donation.donor), selectinload(Donation.dog))
 
         search_filter = build_search_filter(Donation, search_term, self.DONATION_SEARCH_FIELDS)
         if search_filter is not None:
@@ -216,10 +225,7 @@ class DonationRepository:
         sponsorship_id = current.sponsorship_id
 
         stmt = (
-            update(Donation)
-            .where(Donation.id == donation_id)
-            .values(**kwargs)
-            .returning(Donation)
+            update(Donation).where(Donation.id == donation_id).values(**kwargs).returning(Donation)
         )
         result = await self._session.execute(stmt)
         updated = result.scalar_one_or_none()
@@ -250,25 +256,21 @@ class DonationRepository:
         return (await self._session.execute(stmt)).scalars().all()
 
     async def list_donors_by_ids(self, ids: list[uuid.UUID]) -> Sequence[DonorProfile]:
-        stmt = (
-            select(DonorProfile)
-            .where(DonorProfile.id.in_(ids), DonorProfile.deleted_at.is_(None))
+        stmt = select(DonorProfile).where(
+            DonorProfile.id.in_(ids), DonorProfile.deleted_at.is_(None)
         )
         return (await self._session.execute(stmt)).scalars().all()
 
     async def bulk_update_donation_status(
         self, ids: list[uuid.UUID], status: DonationStatus
     ) -> int:
-        stmt = (
-            update(Donation)
-            .where(Donation.id.in_(ids))
-            .values(status=status)
-        )
+        stmt = update(Donation).where(Donation.id.in_(ids)).values(status=status)
         result = await self._session.execute(stmt)
         return result.rowcount  # type: ignore[attr-defined,no-any-return]
 
     async def bulk_soft_delete_donors(self, ids: list[uuid.UUID]) -> int:
         from datetime import datetime
+
         stmt = (
             update(DonorProfile)
             .where(DonorProfile.id.in_(ids), DonorProfile.deleted_at.is_(None))
@@ -438,9 +440,7 @@ class DonationRepository:
         )
         return (await self._session.execute(stmt)).scalars().all()
 
-    async def get_campaign_totals(
-        self, campaign_id: uuid.UUID
-    ) -> tuple[float, int]:
+    async def get_campaign_totals(self, campaign_id: uuid.UUID) -> tuple[float, int]:
         """Raised amount and distinct donor count for a campaign (successful
         donations only)."""
         raised, donor_count = (
@@ -476,9 +476,7 @@ class DonationRepository:
     async def get_recurring_subscription_by_id(
         self, subscription_id: uuid.UUID
     ) -> RecurringSubscription | None:
-        stmt = select(RecurringSubscription).where(
-            RecurringSubscription.id == subscription_id
-        )
+        stmt = select(RecurringSubscription).where(RecurringSubscription.id == subscription_id)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def cancel_recurring_subscription(
@@ -509,9 +507,7 @@ class DonationRepository:
         )
         return (await self._session.execute(stmt)).scalars().all()
 
-    async def has_pending_donation_for_subscription(
-        self, subscription_id: uuid.UUID
-    ) -> bool:
+    async def has_pending_donation_for_subscription(self, subscription_id: uuid.UUID) -> bool:
         stmt = select(Donation).where(
             Donation.recurring_subscription_id == subscription_id,
             Donation.status == DonationStatus.PENDING,

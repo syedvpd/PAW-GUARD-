@@ -93,7 +93,6 @@ def _mask_pii(text: str | None) -> str | None:
     return "*****"
 
 
-
 class CompanionPetService:
     def __init__(
         self,
@@ -487,7 +486,9 @@ class CompanionPetService:
                     await self._session.flush()
                 raw_token = _new_tag_token()
                 return tag, raw_token
-            return await self.provision_dog_safety_tag(pet.original_dog_id, current_user, force_reissue=True, ip_address=ip_address)
+            return await self.provision_dog_safety_tag(
+                pet.original_dog_id, current_user, force_reissue=True, ip_address=ip_address
+            )
 
         raw_token = _new_tag_token()
         tag = await self._repo.get_active_tag_for_pet(pet.id)
@@ -526,6 +527,7 @@ class CompanionPetService:
         if tag is not None:
             tag.is_active = False
             await self._session.flush()
+
     async def scan_safety_tag(
         self, raw_token: str, ip_address: str | None = None
     ) -> tuple[SafetyTag, CompanionPet | None, dict[str, Any]]:
@@ -548,7 +550,9 @@ class CompanionPetService:
 
         if dog is None and getattr(tag, "dog_id", None):
             try:
-                dog_stmt = select(DogProfile).where(DogProfile.id == tag.dog_id, DogProfile.deleted_at.is_(None))
+                dog_stmt = select(DogProfile).where(
+                    DogProfile.id == tag.dog_id, DogProfile.deleted_at.is_(None)
+                )
                 res = await self._session.execute(dog_stmt)
                 if hasattr(res, "scalar_one_or_none"):
                     found_dog = res.scalar_one_or_none()
@@ -559,7 +563,9 @@ class CompanionPetService:
 
         if dog is None and pet is not None and getattr(pet, "original_dog_id", None):
             try:
-                dog_stmt = select(DogProfile).where(DogProfile.id == pet.original_dog_id, DogProfile.deleted_at.is_(None))
+                dog_stmt = select(DogProfile).where(
+                    DogProfile.id == pet.original_dog_id, DogProfile.deleted_at.is_(None)
+                )
                 res = await self._session.execute(dog_stmt)
                 if hasattr(res, "scalar_one_or_none"):
                     found_dog = res.scalar_one_or_none()
@@ -577,7 +583,9 @@ class CompanionPetService:
 
         lost_report = None
         if search_id:
-            lost_report = await self._repo.get_active_lost_report_for_pet(search_id, owner_id, pet_name)
+            lost_report = await self._repo.get_active_lost_report_for_pet(
+                search_id, owner_id, pet_name
+            )
 
         is_lost = lost_report is not None
         status_str = "lost" if is_lost else (str(dog.status) if dog else "safe")
@@ -587,7 +595,6 @@ class CompanionPetService:
         if pet and getattr(pet, "owner", None):
             owner_name = pet.owner.full_name
             owner_phone = _mask_pii(pet.owner.phone)
-
 
         foster_name = None
         foster_phone = None
@@ -631,7 +638,10 @@ class CompanionPetService:
             try:
                 from pawguard.modules.notifications.repository import NotificationRepository
                 from pawguard.modules.notifications.service import NotificationService
-                notification_svc = NotificationService(repository=NotificationRepository(self._session))
+
+                notification_svc = NotificationService(
+                    repository=NotificationRepository(self._session)
+                )
                 await notification_svc._send_push_to_users(
                     [owner_id],
                     "Your pet's safety tag was scanned!",
@@ -669,14 +679,13 @@ class CompanionPetService:
         if app is None:
             raise NotFoundError("Adoption application not found.")
         if app.status not in (AdoptionStatus.APPROVED, AdoptionStatus.COMPLETED):
-            raise ForbiddenError("Only approved or completed adoption applications can be converted to a companion pet.")
-
-        stmt_pet = (
-            select(CompanionPet)
-            .where(
-                CompanionPet.adoption_application_id == application_id,
-                CompanionPet.deleted_at.is_(None),
+            raise ForbiddenError(
+                "Only approved or completed adoption applications can be converted to a companion pet."
             )
+
+        stmt_pet = select(CompanionPet).where(
+            CompanionPet.adoption_application_id == application_id,
+            CompanionPet.deleted_at.is_(None),
         )
         existing = (await self._session.execute(stmt_pet)).scalar_one_or_none()
         if existing is not None:
@@ -759,9 +768,7 @@ class CompanionPetService:
             meta=build_pagination_meta(total=total, params=page),
         )
 
-    async def list_clinic_veterinarians(
-        self, clinic_id: uuid.UUID
-    ) -> list[VeterinarianResponse]:
+    async def list_clinic_veterinarians(self, clinic_id: uuid.UUID) -> list[VeterinarianResponse]:
         if await self._repo.get_clinic(clinic_id) is None:
             raise NotFoundError("Veterinary clinic not found.")
         vets = await self._repo.list_clinic_veterinarians(clinic_id)

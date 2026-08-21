@@ -30,8 +30,12 @@ class AdoptionRepository:
         "residential_status",
     )
     SORTABLE_FIELDS = {
-        "status", "created_at", "updated_at", "completed_at",
-        "residential_status", "household_members_count",
+        "status",
+        "created_at",
+        "updated_at",
+        "completed_at",
+        "residential_status",
+        "household_members_count",
     }
 
     def __init__(self, session: AsyncSession) -> None:
@@ -47,7 +51,7 @@ class AdoptionRepository:
             select(AdoptionApplication)
             .options(
                 selectinload(AdoptionApplication.dog),
-                selectinload(AdoptionApplication.adopter).selectinload(User.roles)
+                selectinload(AdoptionApplication.adopter).selectinload(User.roles),
             )
             .where(AdoptionApplication.id == app_id, AdoptionApplication.deleted_at.is_(None))
         )
@@ -58,7 +62,7 @@ class AdoptionRepository:
             select(AdoptionApplication)
             .options(
                 selectinload(AdoptionApplication.dog),
-                selectinload(AdoptionApplication.adopter).selectinload(User.roles)
+                selectinload(AdoptionApplication.adopter).selectinload(User.roles),
             )
             .where(AdoptionApplication.dog_id == dog_id, AdoptionApplication.deleted_at.is_(None))
         )
@@ -69,7 +73,7 @@ class AdoptionRepository:
             select(AdoptionApplication)
             .options(
                 selectinload(AdoptionApplication.dog),
-                selectinload(AdoptionApplication.adopter).selectinload(User.roles)
+                selectinload(AdoptionApplication.adopter).selectinload(User.roles),
             )
             .where(
                 AdoptionApplication.adopter_id == adopter_id,
@@ -91,7 +95,7 @@ class AdoptionRepository:
             select(AdoptionApplication)
             .options(
                 selectinload(AdoptionApplication.dog),
-                selectinload(AdoptionApplication.adopter).selectinload(User.roles)
+                selectinload(AdoptionApplication.adopter).selectinload(User.roles),
             )
             .where(AdoptionApplication.deleted_at.is_(None))
         )
@@ -124,7 +128,7 @@ class AdoptionRepository:
             select(AdoptionApplication)
             .options(
                 selectinload(AdoptionApplication.dog),
-                selectinload(AdoptionApplication.adopter).selectinload(User.roles)
+                selectinload(AdoptionApplication.adopter).selectinload(User.roles),
             )
             .where(AdoptionApplication.id.in_(ids), AdoptionApplication.deleted_at.is_(None))
         )
@@ -134,6 +138,7 @@ class AdoptionRepository:
         from datetime import UTC, datetime
 
         from sqlalchemy import update
+
         stmt = (
             update(AdoptionApplication)
             .where(AdoptionApplication.id.in_(ids), AdoptionApplication.deleted_at.is_(None))
@@ -147,19 +152,18 @@ class AdoptionRepository:
     # approval (HOME_CHECK), not just final APPROVED - two applicants must
     # not both be mid-inspection for the same dog at once.
     LOCKING_STATUSES = (
-        AdoptionStatus.HOME_CHECK, AdoptionStatus.APPROVED, AdoptionStatus.COMPLETED,
+        AdoptionStatus.HOME_CHECK,
+        AdoptionStatus.APPROVED,
+        AdoptionStatus.COMPLETED,
     )
 
     async def get_approved_application_for_dog(
         self, dog_id: uuid.UUID
     ) -> AdoptionApplication | None:
-        stmt = (
-            select(AdoptionApplication)
-            .where(
-                AdoptionApplication.dog_id == dog_id,
-                AdoptionApplication.status.in_(self.LOCKING_STATUSES),
-                AdoptionApplication.deleted_at.is_(None)
-            )
+        stmt = select(AdoptionApplication).where(
+            AdoptionApplication.dog_id == dog_id,
+            AdoptionApplication.status.in_(self.LOCKING_STATUSES),
+            AdoptionApplication.deleted_at.is_(None),
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
@@ -181,6 +185,7 @@ class AdoptionRepository:
 
     async def bulk_update_status(self, ids: list[uuid.UUID], status: AdoptionStatus) -> int:
         from sqlalchemy import update
+
         stmt = (
             update(AdoptionApplication)
             .where(AdoptionApplication.id.in_(ids), AdoptionApplication.deleted_at.is_(None))
@@ -224,12 +229,9 @@ class AdoptionRepository:
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def get_completed_applications(self) -> Sequence[AdoptionApplication]:
-        stmt = (
-            select(AdoptionApplication)
-            .where(
-                AdoptionApplication.status == AdoptionStatus.COMPLETED,
-                AdoptionApplication.deleted_at.is_(None),
-            )
+        stmt = select(AdoptionApplication).where(
+            AdoptionApplication.status == AdoptionStatus.COMPLETED,
+            AdoptionApplication.deleted_at.is_(None),
         )
         return (await self._session.execute(stmt)).scalars().all()
 
@@ -241,9 +243,7 @@ class AdoptionRepository:
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
-    async def get_follow_ups_for_application(
-        self, app_id: uuid.UUID
-    ) -> Sequence[AdoptionFollowUp]:
+    async def get_follow_ups_for_application(self, app_id: uuid.UUID) -> Sequence[AdoptionFollowUp]:
         stmt = (
             select(AdoptionFollowUp)
             .options(selectinload(AdoptionFollowUp.application))
@@ -255,12 +255,9 @@ class AdoptionRepository:
     async def get_follow_up_for_milestone(
         self, app_id: uuid.UUID, due_day: int
     ) -> AdoptionFollowUp | None:
-        stmt = (
-            select(AdoptionFollowUp)
-            .where(
-                AdoptionFollowUp.adoption_application_id == app_id,
-                AdoptionFollowUp.due_day == due_day,
-            )
+        stmt = select(AdoptionFollowUp).where(
+            AdoptionFollowUp.adoption_application_id == app_id,
+            AdoptionFollowUp.due_day == due_day,
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
@@ -278,9 +275,7 @@ class AdoptionRepository:
                 AdoptionApplication.id == AdoptionFollowUp.adoption_application_id,
             )
             .where(
-                AdoptionFollowUp.status.in_(
-                    [FollowUpStatus.PENDING, FollowUpStatus.OVERDUE]
-                ),
+                AdoptionFollowUp.status.in_([FollowUpStatus.PENDING, FollowUpStatus.OVERDUE]),
                 AdoptionFollowUp.due_at <= now,
                 AdoptionApplication.deleted_at.is_(None),
             )

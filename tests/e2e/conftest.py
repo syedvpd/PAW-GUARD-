@@ -1,12 +1,12 @@
-"""E2E conftest: shared fixtures for the full backend validation suite."""
+"""E2E Test Configuration & Fixtures."""
+# ruff: noqa: E402
+
 import os
-import sys
 
 os.environ.setdefault("AWS_ACCESS_KEY_ID", "mock_key")
 os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "mock_secret")
 os.environ["ENVIRONMENT"] = "test"
 
-import base64
 from collections.abc import AsyncGenerator
 from unittest.mock import MagicMock
 
@@ -26,10 +26,8 @@ def mock_boto3_client(service_name, *args, **kwargs):
 
         mock_s3.get_object.side_effect = get_object_mock
         mock_s3.head_object.return_value = {"ContentLength": 1024}
-        mock_s3.generate_presigned_url.side_effect = (
-            lambda operation, Params, ExpiresIn=900: (
-                f"http://localhost/{Params.get('Bucket', 'bucket')}/{Params.get('Key', 'key')}"
-            )
+        mock_s3.generate_presigned_url.side_effect = lambda operation, Params, ExpiresIn=900: (
+            f"http://localhost/{Params.get('Bucket', 'bucket')}/{Params.get('Key', 'key')}"
         )
         return mock_s3
     return original_boto3_client(service_name, *args, **kwargs)
@@ -73,6 +71,7 @@ class FakeRedis:
 
     async def scan_iter(self, match=""):
         import fnmatch
+
         for k in self._store:
             if fnmatch.fnmatch(k, match):
                 yield k
@@ -124,9 +123,7 @@ async def fake_redis() -> FakeRedis:
 
 
 @pytest_asyncio.fixture
-async def client(
-    db_session: AsyncSession, fake_redis: FakeRedis
-) -> AsyncGenerator[AsyncClient]:
+async def client(db_session: AsyncSession, fake_redis: FakeRedis) -> AsyncGenerator[AsyncClient]:
     app = create_app()
     app.dependency_overrides[get_db] = lambda: db_session
     app.dependency_overrides[get_redis] = lambda: fake_redis
@@ -141,5 +138,6 @@ async def client(
 async def setup(client: AsyncClient, db_session: AsyncSession):
     """Create all prerequisite data and return the TEST state object."""
     from tests.e2e.factories import TEST, setup_all_prerequisites
+
     await setup_all_prerequisites(client, db_session)
     return TEST

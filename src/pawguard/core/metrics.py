@@ -78,12 +78,16 @@ class _MetricRegistry:
         with self._lock:
             self._gauges[key] = value
 
-    def inc_gauge(self, name: str, labels: dict[str, str] | None = None, delta: float = 1.0) -> None:
+    def inc_gauge(
+        self, name: str, labels: dict[str, str] | None = None, delta: float = 1.0
+    ) -> None:
         key = self._label_key(name, labels)
         with self._lock:
             self._gauges[key] += delta
 
-    def dec_gauge(self, name: str, labels: dict[str, str] | None = None, delta: float = 1.0) -> None:
+    def dec_gauge(
+        self, name: str, labels: dict[str, str] | None = None, delta: float = 1.0
+    ) -> None:
         key = self._label_key(name, labels)
         with self._lock:
             self._gauges[key] -= delta
@@ -130,7 +134,9 @@ class _MetricRegistry:
                     lines.append(f"{m_name}{lbl_str} {val}")
 
             # 3. Histograms
-            histograms_by_metric: dict[str, list[tuple[dict[str, str], _HistogramAccumulator]]] = defaultdict(list)
+            histograms_by_metric: dict[str, list[tuple[dict[str, str], _HistogramAccumulator]]] = (
+                defaultdict(list)
+            )
             for k, acc in self._histograms.items():
                 m_name, m_labels = self._parse_key(k)
                 histograms_by_metric[m_name].append((m_labels, acc))
@@ -146,8 +152,12 @@ class _MetricRegistry:
                     # +Inf bucket
                     inf_labels = dict(m_labels)
                     inf_labels["le"] = "+Inf"
-                    lines.append(f"{m_name}_bucket{self._format_prom_labels(inf_labels)} {acc.count}")
-                    lines.append(f"{m_name}_sum{self._format_prom_labels(m_labels)} {round(acc.sum, 4)}")
+                    lines.append(
+                        f"{m_name}_bucket{self._format_prom_labels(inf_labels)} {acc.count}"
+                    )
+                    lines.append(
+                        f"{m_name}_sum{self._format_prom_labels(m_labels)} {round(acc.sum, 4)}"
+                    )
                     lines.append(f"{m_name}_count{self._format_prom_labels(m_labels)} {acc.count}")
 
         return "\n".join(lines) + "\n"

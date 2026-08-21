@@ -1,16 +1,15 @@
 """Generic audit trail writer, reused by auth and every future domain module."""
 
 import uuid
+from datetime import date, datetime
+from decimal import Decimal
+from enum import Enum
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.modules.auth.models import AuthAuditEventType, AuthAuditLog
 
-
-from datetime import date, datetime
-from decimal import Decimal
-from enum import Enum
 
 def _jsonable(value: Any) -> Any:
     """Recursively coerce values into JSON-safe primitives for JSONB columns.

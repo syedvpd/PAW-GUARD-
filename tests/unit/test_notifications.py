@@ -32,10 +32,10 @@ class TestNotificationService:
         mock_repo.create.return_value = Notification(
             user_id=uuid.uuid4(), title="Test", body="Body"
         )
-        payload = NotificationCreate(
-            user_id=uuid.uuid4(), title="Test", body="Body"
+        payload = NotificationCreate(user_id=uuid.uuid4(), title="Test", body="Body")
+        result = await service.create_notification(
+            payload, actor_id=uuid.uuid4(), ip_address="127.0.0.1"
         )
-        result = await service.create_notification(payload, actor_id=uuid.uuid4(), ip_address="127.0.0.1")
         assert result.title == "Test"
 
     async def test_broadcast(self, service, mock_repo):
@@ -45,7 +45,9 @@ class TestNotificationService:
         ]
         payload = BroadcastCreate(title="Broadcast", body="Body")
         user_ids = [uuid.uuid4(), uuid.uuid4()]
-        results = await service.broadcast(payload, user_ids, actor_id=uuid.uuid4(), ip_address="127.0.0.1")
+        results = await service.broadcast(
+            payload, user_ids, actor_id=uuid.uuid4(), ip_address="127.0.0.1"
+        )
         assert len(results) == 2
         mock_repo.create_many.assert_awaited_once()
 
@@ -57,6 +59,7 @@ class TestNotificationService:
     async def test_mark_read_not_found(self, service, mock_repo):
         mock_repo.mark_read.return_value = None
         from pawguard.core.exceptions import NotFoundError
+
         with pytest.raises(NotFoundError):
             await service.mark_read(uuid.uuid4(), uuid.uuid4())
 
@@ -73,6 +76,7 @@ class TestNotificationPreferenceService:
     async def test_get_preferences_creates_default(self, service, mock_repo):
         mock_repo.get_by_user.return_value = None
         from pawguard.modules.notifications.models import NotificationPreference
+
         mock_repo.upsert.return_value = NotificationPreference(user_id=uuid.uuid4())
         result = await service.get_preferences(uuid.uuid4())
         assert result is not None

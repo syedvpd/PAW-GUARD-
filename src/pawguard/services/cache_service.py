@@ -23,17 +23,30 @@ class CacheService:
         try:
             raw = await self._redis.get(self._key(key))
             elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
-            observe_histogram("redis_operation_duration_ms", elapsed_ms, {"op": "get", "namespace": self._namespace})
+            observe_histogram(
+                "redis_operation_duration_ms",
+                elapsed_ms,
+                {"op": "get", "namespace": self._namespace},
+            )
 
             if raw is not None:
                 increment_counter("redis_cache_hits_total", {"namespace": self._namespace})
-                increment_counter("redis_operations_total", {"op": "get", "namespace": self._namespace, "status": "hit"})
+                increment_counter(
+                    "redis_operations_total",
+                    {"op": "get", "namespace": self._namespace, "status": "hit"},
+                )
                 return json.loads(raw)
             increment_counter("redis_cache_misses_total", {"namespace": self._namespace})
-            increment_counter("redis_operations_total", {"op": "get", "namespace": self._namespace, "status": "miss"})
+            increment_counter(
+                "redis_operations_total",
+                {"op": "get", "namespace": self._namespace, "status": "miss"},
+            )
             return None
         except Exception:
-            increment_counter("redis_operations_total", {"op": "get", "namespace": self._namespace, "status": "error"})
+            increment_counter(
+                "redis_operations_total",
+                {"op": "get", "namespace": self._namespace, "status": "error"},
+            )
             raise
 
     async def set(self, key: str, value: Any, *, ttl_seconds: int = DEFAULT_TTL_SECONDS) -> None:
@@ -41,10 +54,20 @@ class CacheService:
         try:
             await self._redis.set(self._key(key), json.dumps(value), ex=ttl_seconds)
             elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
-            observe_histogram("redis_operation_duration_ms", elapsed_ms, {"op": "set", "namespace": self._namespace})
-            increment_counter("redis_operations_total", {"op": "set", "namespace": self._namespace, "status": "ok"})
+            observe_histogram(
+                "redis_operation_duration_ms",
+                elapsed_ms,
+                {"op": "set", "namespace": self._namespace},
+            )
+            increment_counter(
+                "redis_operations_total",
+                {"op": "set", "namespace": self._namespace, "status": "ok"},
+            )
         except Exception:
-            increment_counter("redis_operations_total", {"op": "set", "namespace": self._namespace, "status": "error"})
+            increment_counter(
+                "redis_operations_total",
+                {"op": "set", "namespace": self._namespace, "status": "error"},
+            )
             raise
 
     async def delete(self, key: str) -> None:
@@ -52,10 +75,20 @@ class CacheService:
         try:
             await self._redis.delete(self._key(key))
             elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
-            observe_histogram("redis_operation_duration_ms", elapsed_ms, {"op": "delete", "namespace": self._namespace})
-            increment_counter("redis_operations_total", {"op": "delete", "namespace": self._namespace, "status": "ok"})
+            observe_histogram(
+                "redis_operation_duration_ms",
+                elapsed_ms,
+                {"op": "delete", "namespace": self._namespace},
+            )
+            increment_counter(
+                "redis_operations_total",
+                {"op": "delete", "namespace": self._namespace, "status": "ok"},
+            )
         except Exception:
-            increment_counter("redis_operations_total", {"op": "delete", "namespace": self._namespace, "status": "error"})
+            increment_counter(
+                "redis_operations_total",
+                {"op": "delete", "namespace": self._namespace, "status": "error"},
+            )
             raise
 
     async def delete_prefix(self, prefix: str) -> None:
@@ -65,10 +98,20 @@ class CacheService:
             async for k in self._redis.scan_iter(match=pattern):
                 await self._redis.delete(k)
             elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
-            observe_histogram("redis_operation_duration_ms", elapsed_ms, {"op": "delete_prefix", "namespace": self._namespace})
-            increment_counter("redis_operations_total", {"op": "delete_prefix", "namespace": self._namespace, "status": "ok"})
+            observe_histogram(
+                "redis_operation_duration_ms",
+                elapsed_ms,
+                {"op": "delete_prefix", "namespace": self._namespace},
+            )
+            increment_counter(
+                "redis_operations_total",
+                {"op": "delete_prefix", "namespace": self._namespace, "status": "ok"},
+            )
         except Exception:
-            increment_counter("redis_operations_total", {"op": "delete_prefix", "namespace": self._namespace, "status": "error"})
+            increment_counter(
+                "redis_operations_total",
+                {"op": "delete_prefix", "namespace": self._namespace, "status": "error"},
+            )
             raise
 
     async def acquire_lock(self, lock_key: str, token: str, expire_ms: int = 10000) -> bool:
@@ -78,19 +121,33 @@ class CacheService:
             from pawguard.redis.client import _NullRedis
 
             if isinstance(self._redis, _NullRedis):
-                increment_counter("redis_operations_total", {"op": "acquire_lock", "namespace": self._namespace, "status": "unavailable"})
+                increment_counter(
+                    "redis_operations_total",
+                    {"op": "acquire_lock", "namespace": self._namespace, "status": "unavailable"},
+                )
                 return False
             res = await self._redis.set(self._key(lock_key), token, px=expire_ms, nx=True)
             ok = bool(res)
             elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
-            observe_histogram("redis_operation_duration_ms", elapsed_ms, {"op": "acquire_lock", "namespace": self._namespace})
+            observe_histogram(
+                "redis_operation_duration_ms",
+                elapsed_ms,
+                {"op": "acquire_lock", "namespace": self._namespace},
+            )
             increment_counter(
                 "redis_operations_total",
-                {"op": "acquire_lock", "namespace": self._namespace, "status": "acquired" if ok else "busy"},
+                {
+                    "op": "acquire_lock",
+                    "namespace": self._namespace,
+                    "status": "acquired" if ok else "busy",
+                },
             )
             return ok
         except Exception:
-            increment_counter("redis_operations_total", {"op": "acquire_lock", "namespace": self._namespace, "status": "error"})
+            increment_counter(
+                "redis_operations_total",
+                {"op": "acquire_lock", "namespace": self._namespace, "status": "error"},
+            )
             return False
 
     async def release_lock(self, lock_key: str, token: str) -> bool:
@@ -99,7 +156,10 @@ class CacheService:
         from pawguard.redis.client import _NullRedis
 
         if isinstance(self._redis, _NullRedis):
-            increment_counter("redis_operations_total", {"op": "release_lock", "namespace": self._namespace, "status": "unavailable"})
+            increment_counter(
+                "redis_operations_total",
+                {"op": "release_lock", "namespace": self._namespace, "status": "unavailable"},
+            )
             return False
 
         lua_script = """
@@ -113,13 +173,23 @@ class CacheService:
             res = await self._redis.eval(lua_script, 1, self._key(lock_key), token)
             ok = bool(res)
             elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
-            observe_histogram("redis_operation_duration_ms", elapsed_ms, {"op": "release_lock", "namespace": self._namespace})
+            observe_histogram(
+                "redis_operation_duration_ms",
+                elapsed_ms,
+                {"op": "release_lock", "namespace": self._namespace},
+            )
             increment_counter(
                 "redis_operations_total",
-                {"op": "release_lock", "namespace": self._namespace, "status": "released" if ok else "mismatch"},
+                {
+                    "op": "release_lock",
+                    "namespace": self._namespace,
+                    "status": "released" if ok else "mismatch",
+                },
             )
             return ok
         except Exception:
-            increment_counter("redis_operations_total", {"op": "release_lock", "namespace": self._namespace, "status": "error"})
+            increment_counter(
+                "redis_operations_total",
+                {"op": "release_lock", "namespace": self._namespace, "status": "error"},
+            )
             return False
-

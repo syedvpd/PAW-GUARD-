@@ -9,7 +9,9 @@ from pawguard.main import create_app
 
 def test_metric_registry_prometheus_text_format():
     reg = _MetricRegistry()
-    reg.increment("http_requests_total", {"method": "GET", "route": "/api/v1/dogs", "status": "200"}, value=15)
+    reg.increment(
+        "http_requests_total", {"method": "GET", "route": "/api/v1/dogs", "status": "200"}, value=15
+    )
     reg.set_gauge("http_requests_in_flight", 3.0, {"method": "GET"})
     reg.observe("http_request_duration_ms", 12.5, {"method": "GET", "route": "/api/v1/dogs"})
 
@@ -19,8 +21,14 @@ def test_metric_registry_prometheus_text_format():
     assert "# TYPE http_requests_in_flight gauge" in prom_text
     assert 'http_requests_in_flight{method="GET"} 3.0' in prom_text
     assert "# TYPE http_request_duration_ms histogram" in prom_text
-    assert 'http_request_duration_ms_bucket{le="25.0",method="GET",route="/api/v1/dogs"} 1' in prom_text
-    assert 'http_request_duration_ms_bucket{le="+Inf",method="GET",route="/api/v1/dogs"} 1' in prom_text
+    assert (
+        'http_request_duration_ms_bucket{le="25.0",method="GET",route="/api/v1/dogs"} 1'
+        in prom_text
+    )
+    assert (
+        'http_request_duration_ms_bucket{le="+Inf",method="GET",route="/api/v1/dogs"} 1'
+        in prom_text
+    )
     assert 'http_request_duration_ms_count{method="GET",route="/api/v1/dogs"} 1' in prom_text
 
 

@@ -62,7 +62,9 @@ class TestDisableMFA:
         service = _make_service()
         user = _make_user()
 
-        await service.disable_mfa(user=user, payload=MFADisableRequest(password="CurrentP@ss99"), ctx=_ctx())
+        await service.disable_mfa(
+            user=user, payload=MFADisableRequest(password="CurrentP@ss99"), ctx=_ctx()
+        )
 
         assert user.mfa_enabled is False
         service._audit.record.assert_awaited_once()
@@ -205,72 +207,85 @@ class TestRegisterRequestValidation:
         from pawguard.modules.auth.schemas import RegisterRequest
 
         # Case 1: First name provided, last name omitted
-        req1 = RegisterRequest.model_validate({
-            "email": "user.one@example.com",
-            "password": "Password123!",
-            "first_name": "Barnaby",
-        })
+        req1 = RegisterRequest.model_validate(
+            {
+                "email": "user.one@example.com",
+                "password": "Password123!",
+                "first_name": "Barnaby",
+            }
+        )
         assert req1.full_name == "Barnaby"
 
         # Case 2: Both first name and last name provided
-        req2 = RegisterRequest.model_validate({
-            "email": "user.two@example.com",
-            "password": "Password123!",
-            "first_name": "Barnaby",
-            "last_name": "Smith",
-        })
+        req2 = RegisterRequest.model_validate(
+            {
+                "email": "user.two@example.com",
+                "password": "Password123!",
+                "first_name": "Barnaby",
+                "last_name": "Smith",
+            }
+        )
         assert req2.full_name == "Barnaby Smith"
 
     def test_rejects_numbers_in_full_name(self) -> None:
         from pawguard.modules.auth.schemas import RegisterRequest
 
         with pytest.raises(ValueError, match="alphabetic characters"):
-            RegisterRequest.model_validate({
-                "email": "user.three@example.com",
-                "password": "Password123!",
-                "full_name": "Jane Doe 123",
-            })
+            RegisterRequest.model_validate(
+                {
+                    "email": "user.three@example.com",
+                    "password": "Password123!",
+                    "full_name": "Jane Doe 123",
+                }
+            )
 
     def test_strict_indian_mobile_number_validation(self) -> None:
         from pawguard.modules.auth.schemas import RegisterRequest
 
         # Valid +91 10-digit number
-        req1 = RegisterRequest.model_validate({
-            "email": "user.four@example.com",
-            "password": "Password123!",
-            "full_name": "Jane Doe",
-            "phone": "+91 98765 43210",
-        })
+        req1 = RegisterRequest.model_validate(
+            {
+                "email": "user.four@example.com",
+                "password": "Password123!",
+                "full_name": "Jane Doe",
+                "phone": "+91 98765 43210",
+            }
+        )
         assert req1.phone == "+919876543210"
 
         # Invalid +91 number (too short / invalid starting digit)
         with pytest.raises(ValueError, match="Indian mobile number"):
-            RegisterRequest.model_validate({
-                "email": "user.five@example.com",
-                "password": "Password123!",
-                "full_name": "Jane Doe",
-                "phone": "+9112345",
-            })
+            RegisterRequest.model_validate(
+                {
+                    "email": "user.five@example.com",
+                    "password": "Password123!",
+                    "full_name": "Jane Doe",
+                    "phone": "+9112345",
+                }
+            )
 
     def test_email_validation_before_and_after_at(self) -> None:
         from pawguard.modules.auth.schemas import RegisterRequest
 
         # Invalid email missing top-level domain
         with pytest.raises(ValueError):
-            RegisterRequest.model_validate({
-                "email": "bademail@domain",
-                "password": "Password123!",
-                "full_name": "Jane Doe",
-            })
+            RegisterRequest.model_validate(
+                {
+                    "email": "bademail@domain",
+                    "password": "Password123!",
+                    "full_name": "Jane Doe",
+                }
+            )
 
         # Invalid email missing username before @
         with pytest.raises(ValueError):
-            RegisterRequest.model_validate({
-                "email": "@domain.com",
-                "password": "Password123!",
-                "full_name": "Jane Doe",
-            })
-
+            RegisterRequest.model_validate(
+                {
+                    "email": "@domain.com",
+                    "password": "Password123!",
+                    "full_name": "Jane Doe",
+                }
+            )
 
     @pytest.mark.asyncio
     async def test_service_rejects_same_password(self) -> None:
@@ -285,4 +300,3 @@ class TestRegisterRequestValidation:
                 current_session_id=uuid.uuid4(),
                 ctx=_ctx(),
             )
-

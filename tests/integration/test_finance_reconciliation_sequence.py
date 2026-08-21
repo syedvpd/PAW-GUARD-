@@ -30,15 +30,11 @@ from pawguard.modules.finance.models import FinancialTransaction, GeneralLedgerE
 
 @pytest.mark.asyncio
 class TestFinanceReconciliationBatch:
-    async def _staff_headers(
-        self, client: AsyncClient, db_session: AsyncSession
-    ) -> dict:
+    async def _staff_headers(self, client: AsyncClient, db_session: AsyncSession) -> dict:
         email = f"finstaff{uuid.uuid4().hex[:8]}@recon.test.com"
         return await register_and_auth(client, db_session, email=email)
 
-    async def _create_donations(
-        self, db_session: AsyncSession, count: int
-    ) -> list[Donation]:
+    async def _create_donations(self, db_session: AsyncSession, count: int) -> list[Donation]:
         donor_user = User(
             email=f"donor{uuid.uuid4().hex[:8]}@recon.test.com",
             hashed_password="unused",
@@ -90,23 +86,21 @@ class TestFinanceReconciliationBatch:
         )
         donations = await self._create_donations(db_session, 3)
 
-        resp = await client.post(
-            "/api/v1/finance/reconcile/donations", headers=headers
-        )
+        resp = await client.post("/api/v1/finance/reconcile/donations", headers=headers)
         assert resp.status_code == 200
         assert resp.json()["data"]["reconciled"] == 3
 
         rows = (
-            await db_session.execute(
-                select(FinancialTransaction)
-                .where(
-                    FinancialTransaction.donation_id.in_(
-                        [d.id for d in donations]
-                    )
+            (
+                await db_session.execute(
+                    select(FinancialTransaction)
+                    .where(FinancialTransaction.donation_id.in_([d.id for d in donations]))
+                    .order_by(FinancialTransaction.transaction_number)
                 )
-                .order_by(FinancialTransaction.transaction_number)
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         assert len(rows) == 3
         numbers = [t.transaction_number for t in rows]
         assert len(set(numbers)) == 3
@@ -114,12 +108,14 @@ class TestFinanceReconciliationBatch:
 
         for tx in rows:
             entries = (
-                await db_session.execute(
-                    select(GeneralLedgerEntry).where(
-                        GeneralLedgerEntry.transaction_id == tx.id
+                (
+                    await db_session.execute(
+                        select(GeneralLedgerEntry).where(GeneralLedgerEntry.transaction_id == tx.id)
                     )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             assert len(entries) == 2
             assert entries[0].debit_amount == tx.amount
             assert entries[1].credit_amount == tx.amount

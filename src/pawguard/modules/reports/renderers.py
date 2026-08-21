@@ -25,9 +25,7 @@ def generate_csv(
             writer.writerow([section.get("title", "")])
             writer.writerow(section.get("headers", []))
             for row in section.get("rows", []):
-                writer.writerow(
-                    [str(cell) if cell is not None else "" for cell in row]
-                )
+                writer.writerow([str(cell) if cell is not None else "" for cell in row])
     return output.getvalue().encode("utf-8-sig")
 
 
@@ -85,7 +83,8 @@ def generate_excel(
             for row_idx, row in enumerate(sec_rows, start=2):
                 for col_idx, cell_value in enumerate(row, start=1):
                     sec_ws.cell(
-                        row=row_idx, column=col_idx,
+                        row=row_idx,
+                        column=col_idx,
                         value=str(cell_value) if cell_value is not None else "",
                     )
 
@@ -118,9 +117,12 @@ def generate_pdf(
     buf = io.BytesIO()
     page_size = landscape_size(A4) if landscape else A4
     doc = SimpleDocTemplate(
-        buf, pagesize=page_size,
-        leftMargin=0.5 * inch, rightMargin=0.5 * inch,
-        topMargin=0.5 * inch, bottomMargin=0.5 * inch,
+        buf,
+        pagesize=page_size,
+        leftMargin=0.5 * inch,
+        rightMargin=0.5 * inch,
+        topMargin=0.5 * inch,
+        bottomMargin=0.5 * inch,
     )
     styles = getSampleStyleSheet()
     elements = []
@@ -138,17 +140,19 @@ def generate_pdf(
     col_width = available_width / max(len(headers), 1)
     table = Table(table_data, colWidths=[col_width] * len(headers))
 
-    style = TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#4472C4")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, 0), 9),
-        ("FONTSIZE", (0, 1), (-1, -1), 8),
-        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-        ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F2F2F2")]),
-    ])
+    style = TableStyle(
+        [
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#4472C4")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, 0), 9),
+            ("FONTSIZE", (0, 1), (-1, -1), 8),
+            ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+            ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F2F2F2")]),
+        ]
+    )
     table.setStyle(style)
     elements.append(table)
 
@@ -162,24 +166,28 @@ def generate_pdf(
             sec_headers = section.get("headers", [])
             sec_rows = section.get("rows", [])
             sec_data = [sec_headers]
-            sec_data.extend(
-                [str(c) if c is not None else "" for c in row] for row in sec_rows
-            )
+            sec_data.extend([str(c) if c is not None else "" for c in row] for row in sec_rows)
             if sec_headers:
                 sec_width = available_width / len(sec_headers)
                 sec_table = Table(sec_data, colWidths=[sec_width] * len(sec_headers))
-                sec_table.setStyle(TableStyle([
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#4472C4")),
-                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                    ("FONTSIZE", (0, 0), (-1, 0), 9),
-                    ("FONTSIZE", (0, 1), (-1, -1), 8),
-                    ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-                    (
-                        "ROWBACKGROUNDS", (0, 1), (-1, -1),
-                        [colors.white, colors.HexColor("#F2F2F2")],
-                    ),
-                ]))
+                sec_table.setStyle(
+                    TableStyle(
+                        [
+                            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#4472C4")),
+                            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                            ("FONTSIZE", (0, 0), (-1, 0), 9),
+                            ("FONTSIZE", (0, 1), (-1, -1), 8),
+                            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                            (
+                                "ROWBACKGROUNDS",
+                                (0, 1),
+                                (-1, -1),
+                                [colors.white, colors.HexColor("#F2F2F2")],
+                            ),
+                        ]
+                    )
+                )
                 elements.append(sec_table)
 
     doc.build(elements)

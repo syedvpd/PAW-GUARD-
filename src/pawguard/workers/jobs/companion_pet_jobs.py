@@ -27,9 +27,7 @@ async def send_companion_pet_reminders(ctx: dict[str, Any]) -> int:
     async with AsyncSessionLocal() as session:
         repository = CompanionPetRepository(session)
         pool = ctx.get("redis")
-        notification_service = NotificationService(
-            NotificationRepository(session), arq_pool=pool
-        )
+        notification_service = NotificationService(NotificationRepository(session), arq_pool=pool)
         reminders = await repository.list_due_reminders(now, window_end)
         for reminder in reminders:
             if await deliver_reminder_once(repository, notification_service, reminder):

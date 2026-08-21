@@ -8,19 +8,18 @@
 
 import uuid
 from datetime import UTC, datetime
+from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-from types import SimpleNamespace
-from typing import Any
 
 from pawguard.modules.auth.models import User
 from pawguard.modules.companion_pet.models import CompanionPet, SafetyTag, VetClinic
 from pawguard.modules.companion_pet.repository import CompanionPetRepository
 from pawguard.modules.companion_pet.schemas import SafetyTagScanResponse
 from pawguard.modules.companion_pet.service import CompanionPetService
-from pawguard.modules.lost_found.models import LostReport, PetSighting, ReportStatus
+from pawguard.modules.lost_found.models import LostReport, ReportStatus
 from pawguard.modules.lost_found.repository import LostFoundRepository
 from pawguard.modules.lost_found.schemas import PetSightingCreate
 from pawguard.modules.lost_found.service import LostFoundService
@@ -132,8 +131,12 @@ async def test_get_single_clinic_details() -> None:
 @pytest.mark.asyncio
 async def test_deactivate_safety_tag() -> None:
     owner_id = uuid.uuid4()
-    pet = CompanionPet(id=uuid.uuid4(), owner_id=owner_id, name="Max", species="dog", is_scan_enabled=True)
-    tag = SafetyTag(id=uuid.uuid4(), pet_id=pet.id, token_hash="abc", token_prefix="abc", is_active=True)
+    pet = CompanionPet(
+        id=uuid.uuid4(), owner_id=owner_id, name="Max", species="dog", is_scan_enabled=True
+    )
+    tag = SafetyTag(
+        id=uuid.uuid4(), pet_id=pet.id, token_hash="abc", token_prefix="abc", is_active=True
+    )
 
     repo = AsyncMock(spec=CompanionPetRepository)
     repo.get_pet.return_value = pet
@@ -179,6 +182,7 @@ async def test_record_public_sighting_notifies_owner() -> None:
 
 def test_empty_patch_body_raises_validation_error() -> None:
     from pydantic import ValidationError
+
     from pawguard.modules.companion_pet.schemas import CompanionPetUpdate
 
     with pytest.raises(ValidationError) as exc_info:

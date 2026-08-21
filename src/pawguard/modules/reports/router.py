@@ -78,9 +78,11 @@ async def download_report(
     filepath = (reports_dir / filename).resolve()
     if not str(filepath).startswith(str(reports_dir.resolve())):  # noqa: ASYNC240
         from fastapi import HTTPException
+
         raise HTTPException(status_code=403, detail="Invalid file path.")
     if not filepath.is_file():
         from fastapi import HTTPException
+
         raise HTTPException(status_code=404, detail="Report not found.")
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     media_types = {

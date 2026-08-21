@@ -1,6 +1,6 @@
 """Performance tracker: records latency for every endpoint call."""
+
 import json
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -31,8 +31,11 @@ class PerformanceTracker:
 
     def start(self, module: str, method: str, path: str):
         self._current = EndpointResult(
-            module=module, method=method, path=path,
-            status_code=0, expected_status=0,
+            module=module,
+            method=method,
+            path=path,
+            status_code=0,
+            expected_status=0,
         )
 
     def record(self, status_code: int, expected_status: int, latency_ms: float):
@@ -60,8 +63,11 @@ class PerformanceTracker:
         failed = sum(1 for r in self.results if r.result == "FAIL")
         blocked = sum(1 for r in self.results if r.result == "BLOCKED")
         return {
-            "total": total, "passed": passed, "failed": failed,
-            "blocked": blocked, "coverage": f"{(passed+failed+blocked)/max(total,1)*100:.1f}%",
+            "total": total,
+            "passed": passed,
+            "failed": failed,
+            "blocked": blocked,
+            "coverage": f"{(passed + failed + blocked) / max(total, 1) * 100:.1f}%",
         }
 
     def save(self, path: str):
@@ -69,18 +75,35 @@ class PerformanceTracker:
         out.parent.mkdir(parents=True, exist_ok=True)
         csv_path = out.with_suffix(".csv")
         with open(csv_path, "w") as f:
-            f.write("module,method,path,status_code,expected_status,p50_ms,p95_ms,max_ms,result,failure_reason\n")
+            f.write(
+                "module,method,path,status_code,expected_status,p50_ms,p95_ms,max_ms,result,failure_reason\n"
+            )
             for r in self.results:
-                f.write(f"{r.module},{r.method},{r.path},{r.status_code},{r.expected_status},"
-                        f"{r.p50_ms:.2f},{r.p95_ms:.2f},{r.max_ms:.2f},{r.result},{r.failure_reason}\n")
+                f.write(
+                    f"{r.module},{r.method},{r.path},{r.status_code},{r.expected_status},"
+                    f"{r.p50_ms:.2f},{r.p95_ms:.2f},{r.max_ms:.2f},{r.result},{r.failure_reason}\n"
+                )
         json_path = out.with_suffix(".json")
         with open(json_path, "w") as f:
-            json.dump([{
-                "module": r.module, "method": r.method, "path": r.path,
-                "status_code": r.status_code, "expected_status": r.expected_status,
-                "p50_ms": r.p50_ms, "p95_ms": r.p95_ms, "max_ms": r.max_ms,
-                "result": r.result, "failure_reason": r.failure_reason,
-            } for r in self.results], f, indent=2)
+            json.dump(
+                [
+                    {
+                        "module": r.module,
+                        "method": r.method,
+                        "path": r.path,
+                        "status_code": r.status_code,
+                        "expected_status": r.expected_status,
+                        "p50_ms": r.p50_ms,
+                        "p95_ms": r.p95_ms,
+                        "max_ms": r.max_ms,
+                        "result": r.result,
+                        "failure_reason": r.failure_reason,
+                    }
+                    for r in self.results
+                ],
+                f,
+                indent=2,
+            )
         return self.summary()
 
 

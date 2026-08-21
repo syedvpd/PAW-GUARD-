@@ -70,6 +70,7 @@ class VolunteerService:
             return
         try:
             from pawguard.modules.notifications.schemas import NotificationSend
+
             await self._notification_svc.send_notification(
                 payload=NotificationSend(
                     user_id=profile.user_id,
@@ -82,9 +83,7 @@ class VolunteerService:
                 user_email=profile.user.email,
             )
         except Exception as exc:
-            logger.warning(
-                "Failed to notify volunteer %s: %s", profile.id, exc, exc_info=True
-            )
+            logger.warning("Failed to notify volunteer %s: %s", profile.id, exc, exc_info=True)
 
     async def apply_to_volunteer(
         self,
@@ -114,7 +113,7 @@ class VolunteerService:
                 res = await self._repo.get_application_by_id(existing_app.id)
                 if res is None:
                     raise NotFoundError("Failed to fetch re-submitted volunteer application.")
-                
+
                 if self._audit:
                     await self._audit.record(
                         event_type=AuthAuditEventType.VOLUNTEER_APPLICATION_SUBMITTED,
@@ -127,7 +126,7 @@ class VolunteerService:
                             "action": "reapplication",
                         },
                     )
-                
+
                 await self._notify_volunteer_application(
                     res,
                     title="Volunteer application re-submitted",
@@ -233,7 +232,10 @@ class VolunteerService:
                 status = "REJECTED"
                 can_apply = True
                 can_reapply = True
-            elif application.status in [ApplicationStatus.SUBMITTED, ApplicationStatus.UNDER_REVIEW]:
+            elif application.status in [
+                ApplicationStatus.SUBMITTED,
+                ApplicationStatus.UNDER_REVIEW,
+            ]:
                 status = "PENDING"
                 can_apply = False
                 can_reapply = False
@@ -252,7 +254,9 @@ class VolunteerService:
 
         return VolunteerLifecycleStatus(
             status=status,
-            application=VolunteerApplicationResponse.model_validate(application) if application else None,
+            application=VolunteerApplicationResponse.model_validate(application)
+            if application
+            else None,
             profile=VolunteerProfileResponse.model_validate(profile) if profile else None,
             can_apply=can_apply,
             can_reapply=can_reapply,
@@ -270,8 +274,11 @@ class VolunteerService:
         application = await self._repo.get_application_by_id(application_id)
         if application is None:
             raise NotFoundError("Volunteer application not found.")
-        
-        if application.status != ApplicationStatus.SUBMITTED and application.status != ApplicationStatus.UNDER_REVIEW:
+
+        if (
+            application.status != ApplicationStatus.SUBMITTED
+            and application.status != ApplicationStatus.UNDER_REVIEW
+        ):
             raise ValidationFailedError(
                 f"Cannot approve application with status '{application.status}'."
             )
@@ -285,7 +292,7 @@ class VolunteerService:
         application.status = ApplicationStatus.APPROVED
         application.reviewed_by = reviewer_id
         application.reviewed_at = datetime.now(UTC)
-        
+
         # Create volunteer profile from application
         profile = VolunteerProfile(
             user_id=application.user_id,
@@ -301,7 +308,7 @@ class VolunteerService:
         )
         await self._repo.create_profile(profile)
         await self._repo._session.flush()
-        
+
         res = await self._repo.get_profile_by_id(profile.id)
         if res is None:
             raise NotFoundError("Failed to fetch newly created volunteer profile.")
@@ -345,8 +352,11 @@ class VolunteerService:
         application = await self._repo.get_application_by_id(application_id)
         if application is None:
             raise NotFoundError("Volunteer application not found.")
-        
-        if application.status != ApplicationStatus.SUBMITTED and application.status != ApplicationStatus.UNDER_REVIEW:
+
+        if (
+            application.status != ApplicationStatus.SUBMITTED
+            and application.status != ApplicationStatus.UNDER_REVIEW
+        ):
             raise ValidationFailedError(
                 f"Cannot reject application with status '{application.status}'."
             )
@@ -398,6 +408,7 @@ class VolunteerService:
             return
         try:
             from pawguard.modules.notifications.schemas import NotificationSend
+
             await self._notification_svc.send_notification(
                 payload=NotificationSend(
                     user_id=application.user_id,
@@ -430,6 +441,7 @@ class VolunteerService:
             return
         try:
             from pawguard.modules.notifications.schemas import NotificationSend
+
             await self._notification_svc.send_notification(
                 payload=NotificationSend(
                     user_id=user_id,
@@ -659,10 +671,9 @@ class VolunteerService:
         total_hours = sum(float(r.hours_logged) for r in records if r.hours_logged is not None)
         period_start = records[0].check_out_at if records else None
         period_end = records[-1].check_out_at if records else None
-        roles = sorted({
-            r.shift.role_name for r in records
-            if r.shift is not None and r.shift.role_name
-        })
+        roles = sorted(
+            {r.shift.role_name for r in records if r.shift is not None and r.shift.role_name}
+        )
         return VolunteerServiceSummary(
             volunteer_id=profile_id,
             total_hours=round(total_hours, 2),

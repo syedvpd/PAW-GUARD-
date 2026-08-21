@@ -73,8 +73,7 @@ class ShelterSection(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
         PG_UUID(as_uuid=True),
         ForeignKey("shelter_facilities.id", ondelete="CASCADE"),
         nullable=False,
-    
-        index=True
+        index=True,
     )
     name: Mapped[str] = mapped_column(
         String(128), nullable=False
@@ -89,9 +88,10 @@ class Kennel(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "kennels"
 
     section_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("shelter_sections.id", ondelete="CASCADE"), nullable=False
-    ,
-        index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("shelter_sections.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     identifier: Mapped[str] = mapped_column(String(64), nullable=False)  # e.g., K-08
     capacity: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
@@ -104,28 +104,28 @@ class FacilityTransfer(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "facility_transfers"
 
     dog_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("dog_profiles.id", ondelete="CASCADE"), nullable=False
-    ,
-        index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("dog_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     from_facility_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("shelter_facilities.id", ondelete="CASCADE"),
         nullable=False,
-    
-        index=True
+        index=True,
     )
     to_facility_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("shelter_facilities.id", ondelete="CASCADE"),
         nullable=False,
-    
-        index=True
+        index=True,
     )
     transferred_by: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    ,
-        index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     status: Mapped[TransferStatus] = mapped_column(
         String(32), default=TransferStatus.PENDING, nullable=False
@@ -138,17 +138,19 @@ class FacilityTransfer(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
         DateTime(timezone=True), nullable=True
     )
     sender_confirmed_by: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
-    ,
-        index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     receiver_confirmed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     receiver_confirmed_by: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
-    ,
-        index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
 
 
@@ -156,14 +158,16 @@ class DailyCareLog(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "daily_care_logs"
 
     dog_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("dog_profiles.id", ondelete="CASCADE"), nullable=False
-    ,
-        index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("dog_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     logged_by: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    ,
-        index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     feed_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     dietary_requirements: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -175,14 +179,16 @@ class KennelCleaningLog(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "kennel_cleaning_logs"
 
     kennel_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("kennels.id", ondelete="CASCADE"), nullable=False
-    ,
-        index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("kennels.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     cleaned_by: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    ,
-        index=True
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     cleaned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     sanitation_state_after: Mapped[KennelSanitationState] = mapped_column(

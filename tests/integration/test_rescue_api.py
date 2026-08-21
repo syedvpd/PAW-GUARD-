@@ -27,9 +27,7 @@ LOGIN_PAYLOAD = {
 @pytest.mark.asyncio
 class TestRescueAPI:
     async def _auth(self, client: AsyncClient, db_session: AsyncSession) -> dict:
-        return await register_and_auth(
-            client, db_session, email=REGISTER_PAYLOAD["email"]
-        )
+        return await register_and_auth(client, db_session, email=REGISTER_PAYLOAD["email"])
 
     async def test_report_incident(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
@@ -48,26 +46,50 @@ class TestRescueAPI:
         assert data["status"] == RescueStatus.REPORTED.value
         assert "RES-" in data["ticket_number"]
 
-    async def test_report_incident_validation_error(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_report_incident_validation_error(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         headers = await self._auth(client, db_session)
         resp = await client.post("/api/v1/rescue/report", json={}, headers=headers)
         assert resp.status_code == 422
 
     async def test_verify_rescue(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
-        report_payload = {"reporter_name": "John", "reporter_phone": "+111", "location_address": "Test Rd", "physical_condition": "Sick"}
-        report_resp = await client.post("/api/v1/rescue/report", json=report_payload, headers=headers)
+        report_payload = {
+            "reporter_name": "John",
+            "reporter_phone": "+111",
+            "location_address": "Test Rd",
+            "physical_condition": "Sick",
+        }
+        report_resp = await client.post(
+            "/api/v1/rescue/report", json=report_payload, headers=headers
+        )
         case_id = report_resp.json()["data"]["id"]
-        resp = await client.post(f"/api/v1/rescue/{case_id}/verify", json={"status": "verified"}, headers=headers)
+        resp = await client.post(
+            f"/api/v1/rescue/{case_id}/verify", json={"status": "verified"}, headers=headers
+        )
         assert resp.status_code == 200
         assert resp.json()["data"]["status"] == RescueStatus.VERIFIED.value
 
-    async def test_verify_rescue_reject(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_verify_rescue_reject(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         headers = await self._auth(client, db_session)
-        report_payload = {"reporter_name": "John", "reporter_phone": "+222", "location_address": "Reject Rd", "physical_condition": "Stray"}
-        report_resp = await client.post("/api/v1/rescue/report", json=report_payload, headers=headers)
+        report_payload = {
+            "reporter_name": "John",
+            "reporter_phone": "+222",
+            "location_address": "Reject Rd",
+            "physical_condition": "Stray",
+        }
+        report_resp = await client.post(
+            "/api/v1/rescue/report", json=report_payload, headers=headers
+        )
         case_id = report_resp.json()["data"]["id"]
-        resp = await client.post(f"/api/v1/rescue/{case_id}/verify", json={"status": "rejected", "rejection_rationale": "False alarm"}, headers=headers)
+        resp = await client.post(
+            f"/api/v1/rescue/{case_id}/verify",
+            json={"status": "rejected", "rejection_rationale": "False alarm"},
+            headers=headers,
+        )
         assert resp.status_code == 200
         assert resp.json()["data"]["status"] == RescueStatus.REJECTED.value
 
@@ -77,18 +99,24 @@ class TestRescueAPI:
         """Escalation Protocol request is stored on the dispatch (M-D)."""
         headers = await self._auth(client, db_session)
         user_id = (
-            await db_session.execute(
-                select(User).where(User.email == REGISTER_PAYLOAD["email"])
-            )
-        ).scalar_one().id
+            (await db_session.execute(select(User).where(User.email == REGISTER_PAYLOAD["email"])))
+            .scalar_one()
+            .id
+        )
         r = await client.post(
             "/api/v1/rescue/report",
-            json={"reporter_name": "Esc", "reporter_phone": "+112",
-                  "location_address": "Esc Rd", "physical_condition": "Critical"},
+            json={
+                "reporter_name": "Esc",
+                "reporter_phone": "+112",
+                "location_address": "Esc Rd",
+                "physical_condition": "Critical",
+            },
             headers=headers,
         )
         cid = r.json()["data"]["id"]
-        await client.post(f"/api/v1/rescue/{cid}/verify", json={"status": "verified"}, headers=headers)
+        await client.post(
+            f"/api/v1/rescue/{cid}/verify", json={"status": "verified"}, headers=headers
+        )
         resp = await client.post(
             f"/api/v1/rescue/{cid}/dispatch",
             json={
@@ -106,36 +134,85 @@ class TestRescueAPI:
 
     async def test_dispatch_rescue(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
-        user_id = (await db_session.execute(select(User).where(User.email == REGISTER_PAYLOAD["email"]))).scalar_one().id
-        report_payload = {"reporter_name": "Dispatch", "reporter_phone": "+333", "location_address": "Dispatch Rd", "physical_condition": "Critical"}
-        report_resp = await client.post("/api/v1/rescue/report", json=report_payload, headers=headers)
+        user_id = (
+            (await db_session.execute(select(User).where(User.email == REGISTER_PAYLOAD["email"])))
+            .scalar_one()
+            .id
+        )
+        report_payload = {
+            "reporter_name": "Dispatch",
+            "reporter_phone": "+333",
+            "location_address": "Dispatch Rd",
+            "physical_condition": "Critical",
+        }
+        report_resp = await client.post(
+            "/api/v1/rescue/report", json=report_payload, headers=headers
+        )
         case_id = report_resp.json()["data"]["id"]
-        await client.post(f"/api/v1/rescue/{case_id}/verify", json={"status": "verified"}, headers=headers)
-        dispatch_payload = {"assigned_driver_id": str(user_id), "vehicle_id": "VAN-002", "equipment_details": "Cage, Net"}
-        resp = await client.post(f"/api/v1/rescue/{case_id}/dispatch", json=dispatch_payload, headers=headers)
+        await client.post(
+            f"/api/v1/rescue/{case_id}/verify", json={"status": "verified"}, headers=headers
+        )
+        dispatch_payload = {
+            "assigned_driver_id": str(user_id),
+            "vehicle_id": "VAN-002",
+            "equipment_details": "Cage, Net",
+        }
+        resp = await client.post(
+            f"/api/v1/rescue/{case_id}/dispatch", json=dispatch_payload, headers=headers
+        )
         assert resp.status_code == 200
         assert resp.json()["data"]["status"] == RescueStatus.DISPATCHED.value
 
     async def test_located_rescue(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
-        user_id = (await db_session.execute(select(User).where(User.email == REGISTER_PAYLOAD["email"]))).scalar_one().id
-        report_payload = {"reporter_name": "Located", "reporter_phone": "+444", "location_address": "Located Rd", "physical_condition": "Injured"}
+        user_id = (
+            (await db_session.execute(select(User).where(User.email == REGISTER_PAYLOAD["email"])))
+            .scalar_one()
+            .id
+        )
+        report_payload = {
+            "reporter_name": "Located",
+            "reporter_phone": "+444",
+            "location_address": "Located Rd",
+            "physical_condition": "Injured",
+        }
         r = await client.post("/api/v1/rescue/report", json=report_payload, headers=headers)
         cid = r.json()["data"]["id"]
-        await client.post(f"/api/v1/rescue/{cid}/verify", json={"status": "verified"}, headers=headers)
-        await client.post(f"/api/v1/rescue/{cid}/dispatch", json={"assigned_driver_id": str(user_id), "vehicle_id": "VAN-003"}, headers=headers)
+        await client.post(
+            f"/api/v1/rescue/{cid}/verify", json={"status": "verified"}, headers=headers
+        )
+        await client.post(
+            f"/api/v1/rescue/{cid}/dispatch",
+            json={"assigned_driver_id": str(user_id), "vehicle_id": "VAN-003"},
+            headers=headers,
+        )
         resp = await client.post(f"/api/v1/rescue/{cid}/located", headers=headers)
         assert resp.status_code == 200
         assert resp.json()["data"]["status"] == RescueStatus.LOCATED.value
 
     async def test_secured_rescue(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
-        user_id = (await db_session.execute(select(User).where(User.email == REGISTER_PAYLOAD["email"]))).scalar_one().id
-        report_payload = {"reporter_name": "Secured", "reporter_phone": "+555", "location_address": "Secured Rd", "physical_condition": "Injured"}
+        user_id = (
+            (await db_session.execute(select(User).where(User.email == REGISTER_PAYLOAD["email"])))
+            .scalar_one()
+            .id
+        )
+        report_payload = {
+            "reporter_name": "Secured",
+            "reporter_phone": "+555",
+            "location_address": "Secured Rd",
+            "physical_condition": "Injured",
+        }
         r = await client.post("/api/v1/rescue/report", json=report_payload, headers=headers)
         cid = r.json()["data"]["id"]
-        await client.post(f"/api/v1/rescue/{cid}/verify", json={"status": "verified"}, headers=headers)
-        await client.post(f"/api/v1/rescue/{cid}/dispatch", json={"assigned_driver_id": str(user_id), "vehicle_id": "VAN-004"}, headers=headers)
+        await client.post(
+            f"/api/v1/rescue/{cid}/verify", json={"status": "verified"}, headers=headers
+        )
+        await client.post(
+            f"/api/v1/rescue/{cid}/dispatch",
+            json={"assigned_driver_id": str(user_id), "vehicle_id": "VAN-004"},
+            headers=headers,
+        )
         await client.post(f"/api/v1/rescue/{cid}/located", headers=headers)
         resp = await client.post(f"/api/v1/rescue/{cid}/secured", headers=headers)
         assert resp.status_code == 200
@@ -143,47 +220,105 @@ class TestRescueAPI:
 
     async def test_admitted_rescue(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
-        user_id = (await db_session.execute(select(User).where(User.email == REGISTER_PAYLOAD["email"]))).scalar_one().id
-        report_payload = {"reporter_name": "Admit", "reporter_phone": "+666", "location_address": "Admit Rd", "physical_condition": "Critical"}
+        user_id = (
+            (await db_session.execute(select(User).where(User.email == REGISTER_PAYLOAD["email"])))
+            .scalar_one()
+            .id
+        )
+        report_payload = {
+            "reporter_name": "Admit",
+            "reporter_phone": "+666",
+            "location_address": "Admit Rd",
+            "physical_condition": "Critical",
+        }
         r = await client.post("/api/v1/rescue/report", json=report_payload, headers=headers)
         cid = r.json()["data"]["id"]
-        await client.post(f"/api/v1/rescue/{cid}/verify", json={"status": "verified"}, headers=headers)
-        await client.post(f"/api/v1/rescue/{cid}/dispatch", json={"assigned_driver_id": str(user_id), "vehicle_id": "VAN-005"}, headers=headers)
+        await client.post(
+            f"/api/v1/rescue/{cid}/verify", json={"status": "verified"}, headers=headers
+        )
+        await client.post(
+            f"/api/v1/rescue/{cid}/dispatch",
+            json={"assigned_driver_id": str(user_id), "vehicle_id": "VAN-005"},
+            headers=headers,
+        )
         await client.post(f"/api/v1/rescue/{cid}/located", headers=headers)
         await client.post(f"/api/v1/rescue/{cid}/secured", headers=headers)
-        admit_payload = {"notes": "Admitted with minor injuries", "photos": ["http://example.com/photo.jpg"]}
-        resp = await client.post(f"/api/v1/rescue/{cid}/admitted", json=admit_payload, headers=headers)
+        admit_payload = {
+            "notes": "Admitted with minor injuries",
+            "photos": ["http://example.com/photo.jpg"],
+        }
+        resp = await client.post(
+            f"/api/v1/rescue/{cid}/admitted", json=admit_payload, headers=headers
+        )
         assert resp.status_code == 200
         assert resp.json()["data"]["status"] == RescueStatus.ADMITTED.value
 
     async def test_fail_rescue(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
-        user_id = (await db_session.execute(select(User).where(User.email == REGISTER_PAYLOAD["email"]))).scalar_one().id
-        report_payload = {"reporter_name": "Fail", "reporter_phone": "+777", "location_address": "Fail Rd", "physical_condition": "Stray"}
+        user_id = (
+            (await db_session.execute(select(User).where(User.email == REGISTER_PAYLOAD["email"])))
+            .scalar_one()
+            .id
+        )
+        report_payload = {
+            "reporter_name": "Fail",
+            "reporter_phone": "+777",
+            "location_address": "Fail Rd",
+            "physical_condition": "Stray",
+        }
         r = await client.post("/api/v1/rescue/report", json=report_payload, headers=headers)
         cid = r.json()["data"]["id"]
-        await client.post(f"/api/v1/rescue/{cid}/verify", json={"status": "verified"}, headers=headers)
-        await client.post(f"/api/v1/rescue/{cid}/dispatch", json={"assigned_driver_id": str(user_id), "vehicle_id": "VAN-006"}, headers=headers)
-        resp = await client.post(f"/api/v1/rescue/{cid}/fail?failure_reason=Animal%20fled", headers=headers)
+        await client.post(
+            f"/api/v1/rescue/{cid}/verify", json={"status": "verified"}, headers=headers
+        )
+        await client.post(
+            f"/api/v1/rescue/{cid}/dispatch",
+            json={"assigned_driver_id": str(user_id), "vehicle_id": "VAN-006"},
+            headers=headers,
+        )
+        resp = await client.post(
+            f"/api/v1/rescue/{cid}/fail?failure_reason=Animal%20fled", headers=headers
+        )
         assert resp.status_code == 200
         assert resp.json()["data"]["status"] == RescueStatus.VERIFIED.value
         # Canonical PRR 3.3 outcome code stored, not free text (M-1).
         assert resp.json()["data"]["dispatch"]["failure_reason"] == "animal_fled"
 
-    async def test_fail_rescue_normalises_legacy_reason(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_fail_rescue_normalises_legacy_reason(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         """Legacy free-text reasons are stored as canonical outcome codes (M-1)."""
         headers = await self._auth(client, db_session)
-        user_id = (await db_session.execute(select(User).where(User.email == REGISTER_PAYLOAD["email"]))).scalar_one().id
-        report_payload = {"reporter_name": "Fail2", "reporter_phone": "+778", "location_address": "Fail2 Rd", "physical_condition": "Injured"}
+        user_id = (
+            (await db_session.execute(select(User).where(User.email == REGISTER_PAYLOAD["email"])))
+            .scalar_one()
+            .id
+        )
+        report_payload = {
+            "reporter_name": "Fail2",
+            "reporter_phone": "+778",
+            "location_address": "Fail2 Rd",
+            "physical_condition": "Injured",
+        }
         r = await client.post("/api/v1/rescue/report", json=report_payload, headers=headers)
         cid = r.json()["data"]["id"]
-        await client.post(f"/api/v1/rescue/{cid}/verify", json={"status": "verified"}, headers=headers)
-        await client.post(f"/api/v1/rescue/{cid}/dispatch", json={"assigned_driver_id": str(user_id), "vehicle_id": "VAN-007"}, headers=headers)
-        resp = await client.post(f"/api/v1/rescue/{cid}/fail?failure_reason=Area%20Inaccessible", headers=headers)
+        await client.post(
+            f"/api/v1/rescue/{cid}/verify", json={"status": "verified"}, headers=headers
+        )
+        await client.post(
+            f"/api/v1/rescue/{cid}/dispatch",
+            json={"assigned_driver_id": str(user_id), "vehicle_id": "VAN-007"},
+            headers=headers,
+        )
+        resp = await client.post(
+            f"/api/v1/rescue/{cid}/fail?failure_reason=Area%20Inaccessible", headers=headers
+        )
         assert resp.status_code == 200
         assert resp.json()["data"]["dispatch"]["failure_reason"] == "area_inaccessible"
 
-    async def test_list_rescue_requests(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_list_rescue_requests(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         headers = await self._auth(client, db_session)
         resp = await client.get("/api/v1/rescue", headers=headers)
         assert resp.status_code == 200
@@ -191,25 +326,31 @@ class TestRescueAPI:
         assert "data" in body
         assert "total" in body["meta"]
 
-    async def test_list_rescue_with_filters(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_list_rescue_with_filters(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         headers = await self._auth(client, db_session)
         resp = await client.get("/api/v1/rescue?status=reported", headers=headers)
         assert resp.status_code == 200
 
-    async def test_public_status_lookup(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_public_status_lookup(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         """A reporter can look up their own case status without auth by
         providing the ticket number AND the phone they reported with (M-E)."""
         headers = await self._auth(client, db_session)
         r = await client.post(
             "/api/v1/rescue/report",
-            json={"reporter_name": "Status", "reporter_phone": "+113",
-                  "location_address": "Status Rd", "physical_condition": "Injured"},
+            json={
+                "reporter_name": "Status",
+                "reporter_phone": "+113",
+                "location_address": "Status Rd",
+                "physical_condition": "Injured",
+            },
             headers=headers,
         )
         ticket = r.json()["data"]["ticket_number"]
-        resp = await client.get(
-            f"/api/v1/rescue/status?ticket_number={ticket}&phone=%2B113"
-        )
+        resp = await client.get(f"/api/v1/rescue/status?ticket_number={ticket}&phone=%2B113")
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["ticket_number"] == ticket
@@ -225,14 +366,16 @@ class TestRescueAPI:
         headers = await self._auth(client, db_session)
         r = await client.post(
             "/api/v1/rescue/report",
-            json={"reporter_name": "Status2", "reporter_phone": "+114",
-                  "location_address": "Status2 Rd", "physical_condition": "Injured"},
+            json={
+                "reporter_name": "Status2",
+                "reporter_phone": "+114",
+                "location_address": "Status2 Rd",
+                "physical_condition": "Injured",
+            },
             headers=headers,
         )
         ticket = r.json()["data"]["ticket_number"]
-        resp = await client.get(
-            f"/api/v1/rescue/status?ticket_number={ticket}&phone=%2B9999999999"
-        )
+        resp = await client.get(f"/api/v1/rescue/status?ticket_number={ticket}&phone=%2B9999999999")
         assert resp.status_code == 404
 
     async def test_public_status_lookup_unknown_ticket_404(
@@ -247,20 +390,32 @@ class TestRescueAPI:
 
     async def test_get_rescue_by_id(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
-        report_payload = {"reporter_name": "Get", "reporter_phone": "+888", "location_address": "Get Rd", "physical_condition": "Sick"}
+        report_payload = {
+            "reporter_name": "Get",
+            "reporter_phone": "+888",
+            "location_address": "Get Rd",
+            "physical_condition": "Sick",
+        }
         r = await client.post("/api/v1/rescue/report", json=report_payload, headers=headers)
         cid = r.json()["data"]["id"]
         resp = await client.get(f"/api/v1/rescue/{cid}", headers=headers)
         assert resp.status_code == 200
 
-    async def test_get_rescue_not_found(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_get_rescue_not_found(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         headers = await self._auth(client, db_session)
         resp = await client.get(f"/api/v1/rescue/{uuid.uuid4()}", headers=headers)
         assert resp.status_code == 404
 
     async def test_soft_delete_rescue(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
-        report_payload = {"reporter_name": "Delete", "reporter_phone": "+999", "location_address": "Delete Rd", "physical_condition": "Injured"}
+        report_payload = {
+            "reporter_name": "Delete",
+            "reporter_phone": "+999",
+            "location_address": "Delete Rd",
+            "physical_condition": "Injured",
+        }
         r = await client.post("/api/v1/rescue/report", json=report_payload, headers=headers)
         cid = r.json()["data"]["id"]
         resp = await client.delete(f"/api/v1/rescue/{cid}", headers=headers)
@@ -268,14 +423,21 @@ class TestRescueAPI:
         get_resp = await client.get(f"/api/v1/rescue/{cid}", headers=headers)
         assert get_resp.status_code == 404
 
-    async def test_bulk_status_update_legal_transition(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_bulk_status_update_legal_transition(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         """Bulk REPORTED -> VERIFIED applies when every request is eligible."""
         headers = await self._auth(client, db_session)
         ids = []
         for i in range(2):
             r = await client.post(
                 "/api/v1/rescue/report",
-                json={"reporter_name": f"Bulk{i}", "reporter_phone": f"+10{i}", "location_address": f"Bulk Rd {i}", "physical_condition": "Injured"},
+                json={
+                    "reporter_name": f"Bulk{i}",
+                    "reporter_phone": f"+10{i}",
+                    "location_address": f"Bulk Rd {i}",
+                    "physical_condition": "Injured",
+                },
                 headers=headers,
             )
             assert r.status_code == 201
@@ -289,12 +451,19 @@ class TestRescueAPI:
         assert resp.status_code == 200
         assert resp.json()["data"]["updated_count"] == 2
 
-    async def test_bulk_status_update_blocks_illegal_jump(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_bulk_status_update_blocks_illegal_jump(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         """Bulk REPORTED -> ADMITTED must be rejected with 409 (H-1)."""
         headers = await self._auth(client, db_session)
         r = await client.post(
             "/api/v1/rescue/report",
-            json={"reporter_name": "Jump", "reporter_phone": "+101", "location_address": "Jump Rd", "physical_condition": "Injured"},
+            json={
+                "reporter_name": "Jump",
+                "reporter_phone": "+101",
+                "location_address": "Jump Rd",
+                "physical_condition": "Injured",
+            },
             headers=headers,
         )
         cid = r.json()["data"]["id"]
@@ -309,12 +478,19 @@ class TestRescueAPI:
         check = await client.get(f"/api/v1/rescue/{cid}", headers=headers)
         assert check.json()["data"]["status"] == RescueStatus.REPORTED.value
 
-    async def test_bulk_status_update_blocks_rejected(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_bulk_status_update_blocks_rejected(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         """Bulk REJECTED is ambiguous - must be a 422 (H-1)."""
         headers = await self._auth(client, db_session)
         r = await client.post(
             "/api/v1/rescue/report",
-            json={"reporter_name": "Rej", "reporter_phone": "+102", "location_address": "Rej Rd", "physical_condition": "Injured"},
+            json={
+                "reporter_name": "Rej",
+                "reporter_phone": "+102",
+                "location_address": "Rej Rd",
+                "physical_condition": "Injured",
+            },
             headers=headers,
         )
         cid = r.json()["data"]["id"]
@@ -326,12 +502,19 @@ class TestRescueAPI:
         )
         assert resp.status_code == 422
 
-    async def test_report_incident_normalises_legacy_condition(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_report_incident_normalises_legacy_condition(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         """Legacy free-text condition labels map to canonical enum values (H-2)."""
         headers = await self._auth(client, db_session)
         r = await client.post(
             "/api/v1/rescue/report",
-            json={"reporter_name": "Norm", "reporter_phone": "+103", "location_address": "Norm Rd", "physical_condition": "Injured/Fractured"},
+            json={
+                "reporter_name": "Norm",
+                "reporter_phone": "+103",
+                "location_address": "Norm Rd",
+                "physical_condition": "Injured/Fractured",
+            },
             headers=headers,
         )
         assert r.status_code == 201
@@ -346,8 +529,10 @@ class TestRescueAPI:
         r = await client.post(
             "/api/v1/rescue/report",
             json={
-                "reporter_name": "Media", "reporter_phone": "+109",
-                "location_address": "Media Rd", "physical_condition": "Injured",
+                "reporter_name": "Media",
+                "reporter_phone": "+109",
+                "location_address": "Media Rd",
+                "physical_condition": "Injured",
                 "media_evidence": media,
             },
             headers=headers,
@@ -364,8 +549,10 @@ class TestRescueAPI:
         r = await client.post(
             "/api/v1/rescue/report",
             json={
-                "reporter_name": "Media2", "reporter_phone": "+110",
-                "location_address": "Media2 Rd", "physical_condition": "Injured",
+                "reporter_name": "Media2",
+                "reporter_phone": "+110",
+                "location_address": "Media2 Rd",
+                "physical_condition": "Injured",
                 "media_evidence": [f"rescue/2026/08/p{i}.jpg" for i in range(6)],
             },
             headers=headers,
@@ -380,8 +567,10 @@ class TestRescueAPI:
         r = await client.post(
             "/api/v1/rescue/report",
             json={
-                "reporter_name": "Env", "reporter_phone": "+111",
-                "location_address": "Env Rd", "physical_condition": "Injured",
+                "reporter_name": "Env",
+                "reporter_phone": "+111",
+                "location_address": "Env Rd",
+                "physical_condition": "Injured",
                 "environmental_factors": "Heavy rain, flooding",
                 "reporter_notes": "Dog is very timid",
             },
@@ -392,12 +581,19 @@ class TestRescueAPI:
         assert data["environmental_factors"] == "Heavy rain, flooding"
         assert data["reporter_notes"] == "Dog is very timid"
 
-    async def test_report_incident_rejects_unknown_condition(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_report_incident_rejects_unknown_condition(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         """Values outside the controlled set fail validation (H-2)."""
         headers = await self._auth(client, db_session)
         r = await client.post(
             "/api/v1/rescue/report",
-            json={"reporter_name": "Bad", "reporter_phone": "+104", "location_address": "Bad Rd", "physical_condition": "Sparkly Unicorn"},
+            json={
+                "reporter_name": "Bad",
+                "reporter_phone": "+104",
+                "location_address": "Bad Rd",
+                "physical_condition": "Sparkly Unicorn",
+            },
             headers=headers,
         )
         assert r.status_code == 422
@@ -410,9 +606,12 @@ class TestRescueAPI:
         r = await client.post(
             "/api/v1/rescue/report",
             json={
-                "reporter_name": "Sev", "reporter_phone": "+105",
-                "location_address": "Sev Rd", "physical_condition": "Injured",
-                "severity": "high", "is_urgent": True,
+                "reporter_name": "Sev",
+                "reporter_phone": "+105",
+                "location_address": "Sev Rd",
+                "physical_condition": "Injured",
+                "severity": "high",
+                "is_urgent": True,
             },
             headers=headers,
         )
@@ -428,8 +627,12 @@ class TestRescueAPI:
         headers = await self._auth(client, db_session)
         r = await client.post(
             "/api/v1/rescue/report",
-            json={"reporter_name": "Sev2", "reporter_phone": "+106",
-                  "location_address": "Sev2 Rd", "physical_condition": "Stray"},
+            json={
+                "reporter_name": "Sev2",
+                "reporter_phone": "+106",
+                "location_address": "Sev2 Rd",
+                "physical_condition": "Stray",
+            },
             headers=headers,
         )
         assert r.status_code == 201
@@ -444,8 +647,12 @@ class TestRescueAPI:
         headers = await self._auth(client, db_session)
         r = await client.post(
             "/api/v1/rescue/report",
-            json={"reporter_name": "Sev3", "reporter_phone": "+107",
-                  "location_address": "Sev3 Rd", "physical_condition": "Injured"},
+            json={
+                "reporter_name": "Sev3",
+                "reporter_phone": "+107",
+                "location_address": "Sev3 Rd",
+                "physical_condition": "Injured",
+            },
             headers=headers,
         )
         cid = r.json()["data"]["id"]
@@ -460,26 +667,34 @@ class TestRescueAPI:
         assert data["severity"] == "critical"
         assert data["is_urgent"] is True
 
-    async def test_escalate_rescue(
-        self, client: AsyncClient, db_session: AsyncSession
-    ) -> None:
+    async def test_escalate_rescue(self, client: AsyncClient, db_session: AsyncSession) -> None:
         """Escalation sets escalation_type and escalation_notes on the
         dispatch and returns the updated rescue request."""
         headers = await self._auth(client, db_session)
         user_id = (
-            await db_session.execute(
-                select(User).where(User.email == REGISTER_PAYLOAD["email"])
-            )
-        ).scalar_one().id
+            (await db_session.execute(select(User).where(User.email == REGISTER_PAYLOAD["email"])))
+            .scalar_one()
+            .id
+        )
         r = await client.post(
             "/api/v1/rescue/report",
-            json={"reporter_name": "Esc", "reporter_phone": "+112",
-                  "location_address": "Esc Rd", "physical_condition": "Critical"},
+            json={
+                "reporter_name": "Esc",
+                "reporter_phone": "+112",
+                "location_address": "Esc Rd",
+                "physical_condition": "Critical",
+            },
             headers=headers,
         )
         cid = r.json()["data"]["id"]
-        await client.post(f"/api/v1/rescue/{cid}/verify", json={"status": "verified"}, headers=headers)
-        await client.post(f"/api/v1/rescue/{cid}/dispatch", json={"assigned_driver_id": str(user_id)}, headers=headers)
+        await client.post(
+            f"/api/v1/rescue/{cid}/verify", json={"status": "verified"}, headers=headers
+        )
+        await client.post(
+            f"/api/v1/rescue/{cid}/dispatch",
+            json={"assigned_driver_id": str(user_id)},
+            headers=headers,
+        )
         resp = await client.post(
             f"/api/v1/rescue/{cid}/escalate",
             json={"escalation_type": "backup_personnel", "escalation_notes": "Dog is aggressive"},
@@ -490,7 +705,9 @@ class TestRescueAPI:
         assert data["dispatch"]["escalation_type"] == "backup_personnel"
         assert data["dispatch"]["escalation_notes"] == "Dog is aggressive"
 
-    async def test_escalate_rescue_not_found(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_escalate_rescue_not_found(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         headers = await self._auth(client, db_session)
         resp = await client.post(
             f"/api/v1/rescue/{uuid.uuid4()}/escalate",
@@ -499,12 +716,18 @@ class TestRescueAPI:
         )
         assert resp.status_code == 404
 
-    async def test_escalate_rescue_no_dispatch(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_escalate_rescue_no_dispatch(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         headers = await self._auth(client, db_session)
         r = await client.post(
             "/api/v1/rescue/report",
-            json={"reporter_name": "NoDisp", "reporter_phone": "+115",
-                  "location_address": "NoDisp Rd", "physical_condition": "Injured"},
+            json={
+                "reporter_name": "NoDisp",
+                "reporter_phone": "+115",
+                "location_address": "NoDisp Rd",
+                "physical_condition": "Injured",
+            },
             headers=headers,
         )
         cid = r.json()["data"]["id"]
@@ -515,18 +738,30 @@ class TestRescueAPI:
         )
         assert resp.status_code == 404
 
-    async def test_escalate_rescue_requires_permission(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_escalate_rescue_requires_permission(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         """Escalate requires rescue:update permission."""
         headers = await self._auth(client, db_session)
         r = await client.post(
             "/api/v1/rescue/report",
-            json={"reporter_name": "Perm", "reporter_phone": "+116",
-                  "location_address": "Perm Rd", "physical_condition": "Injured"},
+            json={
+                "reporter_name": "Perm",
+                "reporter_phone": "+116",
+                "location_address": "Perm Rd",
+                "physical_condition": "Injured",
+            },
             headers=headers,
         )
         cid = r.json()["data"]["id"]
-        await client.post(f"/api/v1/rescue/{cid}/verify", json={"status": "verified"}, headers=headers)
-        await client.post(f"/api/v1/rescue/{cid}/dispatch", json={"assigned_driver_id": str(uuid.uuid4())}, headers=headers)
+        await client.post(
+            f"/api/v1/rescue/{cid}/verify", json={"status": "verified"}, headers=headers
+        )
+        await client.post(
+            f"/api/v1/rescue/{cid}/dispatch",
+            json={"assigned_driver_id": str(uuid.uuid4())},
+            headers=headers,
+        )
         resp = await client.post(
             f"/api/v1/rescue/{cid}/escalate",
             json={"escalation_type": "backup_personnel"},
@@ -534,22 +769,36 @@ class TestRescueAPI:
         )
         assert resp.status_code == 200
 
-    async def test_list_rescue_assigned_to_me(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_list_rescue_assigned_to_me(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         """assigned_to_me=true filters to cases where the user is on the dispatch team."""
         headers = await self._auth(client, db_session)
-        user_id = (await db_session.execute(select(User).where(User.email == REGISTER_PAYLOAD["email"]))).scalar_one().id
+        user_id = (
+            (await db_session.execute(select(User).where(User.email == REGISTER_PAYLOAD["email"])))
+            .scalar_one()
+            .id
+        )
         r = await client.post(
             "/api/v1/rescue/report",
-            json={"reporter_name": "Assigned", "reporter_phone": "+117",
-                  "location_address": "Assigned Rd", "physical_condition": "Injured"},
+            json={
+                "reporter_name": "Assigned",
+                "reporter_phone": "+117",
+                "location_address": "Assigned Rd",
+                "physical_condition": "Injured",
+            },
             headers=headers,
         )
         cid = r.json()["data"]["id"]
-        await client.post(f"/api/v1/rescue/{cid}/verify", json={"status": "verified"}, headers=headers)
-        await client.post(f"/api/v1/rescue/{cid}/dispatch", json={"assigned_driver_id": str(user_id)}, headers=headers)
-        resp = await client.get(
-            "/api/v1/rescue?assigned_to_me=true", headers=headers
+        await client.post(
+            f"/api/v1/rescue/{cid}/verify", json={"status": "verified"}, headers=headers
         )
+        await client.post(
+            f"/api/v1/rescue/{cid}/dispatch",
+            json={"assigned_driver_id": str(user_id)},
+            headers=headers,
+        )
+        resp = await client.get("/api/v1/rescue?assigned_to_me=true", headers=headers)
         assert resp.status_code == 200
         items = resp.json()["data"]
         assert any(i["id"] == cid for i in items)

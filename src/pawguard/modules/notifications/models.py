@@ -16,8 +16,10 @@ class Notification(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Bas
     __tablename__ = "notifications"
 
     user_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False, index=True,
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
@@ -45,12 +47,8 @@ class NotificationPreference(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     enable_push: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     enable_email: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     enable_sms: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    quiet_hours_start: Mapped[str | None] = mapped_column(
-        String(5), nullable=True
-    )
-    quiet_hours_end: Mapped[str | None] = mapped_column(
-        String(5), nullable=True
-    )
+    quiet_hours_start: Mapped[str | None] = mapped_column(String(5), nullable=True)
+    quiet_hours_end: Mapped[str | None] = mapped_column(String(5), nullable=True)
 
 
 class NotificationGlobalConfig(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
@@ -72,9 +70,7 @@ class NotificationModuleConfig(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
 
     __tablename__ = "notification_module_configs"
 
-    module_name: Mapped[str] = mapped_column(
-        String(64), unique=True, nullable=False, index=True
-    )
+    module_name: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
     push_status: Mapped[str] = mapped_column(
         String(16), default="ENABLED", nullable=False, index=True
     )
@@ -89,9 +85,7 @@ class NotificationTriggerConfig(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
 
     __tablename__ = "notification_trigger_configs"
 
-    trigger_code: Mapped[str] = mapped_column(
-        String(64), unique=True, nullable=False, index=True
-    )
+    trigger_code: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
     module_name: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     display_name: Mapped[str] = mapped_column(String(128), nullable=False)
     push_status: Mapped[str] = mapped_column(

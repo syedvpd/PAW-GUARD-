@@ -11,9 +11,7 @@ from pawguard.modules.volunteer.models import ApplicationStatus, VolunteerStatus
 
 class VolunteerProfileCreate(BaseModel):
     emergency_contact_name: str = Field(..., min_length=1, max_length=255, examples=["Jane Doe"])
-    emergency_contact_phone: str = Field(
-        ..., min_length=1, max_length=32, examples=["+1-555-0100"]
-    )
+    emergency_contact_phone: str = Field(..., min_length=1, max_length=32, examples=["+1-555-0100"])
     skills: str | None = Field(None, examples=["Grooming, Transport, Photography"])
     availability: str | None = Field(None, max_length=255, examples=["Weekends, Evenings"])
     notes: str | None = Field(None, examples=["Available for emergency call-outs on weekends."])
@@ -124,7 +122,9 @@ class VolunteerApplicationResponse(BaseModel):
 
 
 class VolunteerApplicationReject(BaseModel):
-    reason: str = Field(..., min_length=10, max_length=1000, examples=["Incomplete background check."])
+    reason: str = Field(
+        ..., min_length=10, max_length=1000, examples=["Incomplete background check."]
+    )
 
 
 class VolunteerLifecycleStatus(BaseModel):

@@ -6,10 +6,6 @@ from uuid import uuid4
 from pawguard.core.metrics import (
     _HistogramAccumulator,
     _MetricRegistry,
-    create_timer,
-    get_metrics_snapshot,
-    increment_counter,
-    observe_histogram,
 )
 from pawguard.core.middleware import _resolve_route_path
 

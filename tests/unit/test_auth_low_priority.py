@@ -148,4 +148,3 @@ class TestResolveClientIp:
             client_host="10.0.0.1",
         )
         assert resolve_client_ip(req) == "10.0.0.1"
-

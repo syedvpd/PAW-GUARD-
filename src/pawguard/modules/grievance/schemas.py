@@ -14,7 +14,8 @@ class GrievanceCreate(BaseModel):
     reporter_email: str | None = Field(None, max_length=255, examples=["priya.nair@example.com"])
     complaint_type: str = Field(..., min_length=1, max_length=128, examples=["Rescue Delay"])
     details: str = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         examples=["Reported an injured dog at 9am but the team arrived after 6 hours."],
     )
 

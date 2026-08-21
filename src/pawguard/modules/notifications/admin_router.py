@@ -42,6 +42,7 @@ def get_gov_service(db: AsyncSession = Depends(get_db)) -> NotificationGovernanc
 
 # ── System Dashboard Overview ────────────────────────────────────────────────
 
+
 @admin_router.get(
     "/overview",
     response_model=ApiResponse[NotificationOverviewResponse],
@@ -136,6 +137,7 @@ async def get_notifications_overview(
 
 # ── Global Controls (Level 1) ────────────────────────────────────────────────
 
+
 @admin_router.get(
     "/global",
     response_model=ApiResponse[GlobalConfigResponse],
@@ -184,10 +186,14 @@ async def update_global_config(
         reason=payload.reason,
         ip_address=request.client.host if request.client else None,
     )
-    return ApiResponse(data=GlobalConfigResponse.model_validate(cfg), message="Global push notification settings updated.")
+    return ApiResponse(
+        data=GlobalConfigResponse.model_validate(cfg),
+        message="Global push notification settings updated.",
+    )
 
 
 # ── Module Controls (Level 2) ────────────────────────────────────────────────
+
 
 @admin_router.get(
     "/modules",
@@ -199,7 +205,15 @@ async def list_module_configs(
     service: NotificationGovernanceService = Depends(get_gov_service),
 ) -> ApiResponse[list[ModuleConfigResponse]]:
     await service.ensure_seed_defaults()
-    modules = (await db.execute(select(NotificationModuleConfig).order_by(NotificationModuleConfig.module_name))).scalars().all()
+    modules = (
+        (
+            await db.execute(
+                select(NotificationModuleConfig).order_by(NotificationModuleConfig.module_name)
+            )
+        )
+        .scalars()
+        .all()
+    )
     return ApiResponse(data=[ModuleConfigResponse.model_validate(m) for m in modules])
 
 
@@ -220,7 +234,9 @@ async def update_module_config(
         raise ValidationFailedError("push_status must be 'ENABLED', 'DISABLED', or 'PAUSED'.")
 
     await service.ensure_seed_defaults()
-    stmt = select(NotificationModuleConfig).where(NotificationModuleConfig.module_name == module_name)
+    stmt = select(NotificationModuleConfig).where(
+        NotificationModuleConfig.module_name == module_name
+    )
     mod = (await db.execute(stmt)).scalars().first()
     if mod is None:
         raise NotFoundError(f"Module config '{module_name}' not found.")
@@ -241,10 +257,14 @@ async def update_module_config(
         reason=payload.reason,
         ip_address=request.client.host if request.client else None,
     )
-    return ApiResponse(data=ModuleConfigResponse.model_validate(mod), message=f"Module '{module_name}' settings updated.")
+    return ApiResponse(
+        data=ModuleConfigResponse.model_validate(mod),
+        message=f"Module '{module_name}' settings updated.",
+    )
 
 
 # ── Trigger Controls (Level 3) ────────────────────────────────────────────────
+
 
 @admin_router.get(
     "/triggers",
@@ -260,7 +280,9 @@ async def list_trigger_configs(
     stmt = select(NotificationTriggerConfig)
     if module_name:
         stmt = stmt.where(NotificationTriggerConfig.module_name == module_name)
-    stmt = stmt.order_by(NotificationTriggerConfig.module_name, NotificationTriggerConfig.trigger_code)
+    stmt = stmt.order_by(
+        NotificationTriggerConfig.module_name, NotificationTriggerConfig.trigger_code
+    )
     triggers = (await db.execute(stmt)).scalars().all()
     return ApiResponse(data=[TriggerConfigResponse.model_validate(t) for t in triggers])
 
@@ -308,10 +330,14 @@ async def update_trigger_config(
         reason=f"Updated settings for trigger '{trig.trigger_code}'",
         ip_address=request.client.host if request.client else None,
     )
-    return ApiResponse(data=TriggerConfigResponse.model_validate(trig), message=f"Trigger '{trig.trigger_code}' configuration updated.")
+    return ApiResponse(
+        data=TriggerConfigResponse.model_validate(trig),
+        message=f"Trigger '{trig.trigger_code}' configuration updated.",
+    )
 
 
 # ── Admin Approval Queue Workflows ───────────────────────────────────────────
+
 
 @admin_router.get(
     "/approvals",
@@ -370,7 +396,10 @@ async def approve_notification(
         actor_role="admin",
         ip_address=request.client.host if request.client else None,
     )
-    return ApiResponse(data=ApprovalQueueItemResponse.model_validate(item), message="Notification approved and queued for FCM dispatch.")
+    return ApiResponse(
+        data=ApprovalQueueItemResponse.model_validate(item),
+        message="Notification approved and queued for FCM dispatch.",
+    )
 
 
 @admin_router.post(
@@ -392,7 +421,9 @@ async def reject_notification(
         actor_role="admin",
         ip_address=request.client.host if request.client else None,
     )
-    return ApiResponse(data=ApprovalQueueItemResponse.model_validate(item), message="Notification rejected.")
+    return ApiResponse(
+        data=ApprovalQueueItemResponse.model_validate(item), message="Notification rejected."
+    )
 
 
 @admin_router.post(
@@ -414,7 +445,9 @@ async def pause_notification(
         actor_role="admin",
         ip_address=request.client.host if request.client else None,
     )
-    return ApiResponse(data=ApprovalQueueItemResponse.model_validate(item), message="Notification paused.")
+    return ApiResponse(
+        data=ApprovalQueueItemResponse.model_validate(item), message="Notification paused."
+    )
 
 
 @admin_router.post(
@@ -434,10 +467,13 @@ async def resume_notification(
         actor_role="admin",
         ip_address=request.client.host if request.client else None,
     )
-    return ApiResponse(data=ApprovalQueueItemResponse.model_validate(item), message="Notification resumed.")
+    return ApiResponse(
+        data=ApprovalQueueItemResponse.model_validate(item), message="Notification resumed."
+    )
 
 
 # ── Dispatch Logs & Governance Audit Logs ────────────────────────────────────
+
 
 @admin_router.get(
     "/dispatch-logs",
@@ -483,4 +519,6 @@ async def list_governance_audit_logs(
 
     stmt = stmt.order_by(NotificationGovernanceAuditLog.created_at.desc()).limit(limit)
     logs = (await db.execute(stmt)).scalars().all()
-    return ApiResponse(data=[GovernanceAuditLogResponse.model_validate(log_entry) for log_entry in logs])
+    return ApiResponse(
+        data=[GovernanceAuditLogResponse.model_validate(log_entry) for log_entry in logs]
+    )

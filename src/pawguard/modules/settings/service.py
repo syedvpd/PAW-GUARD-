@@ -168,9 +168,7 @@ class PublicContentService:
         mission = await self._repo.get_by_key(MISSION_KEY)
         updated = None
         for setting in (about, mission):
-            if setting is not None and (
-                updated is None or setting.updated_at > updated
-            ):
+            if setting is not None and (updated is None or setting.updated_at > updated):
                 updated = setting.updated_at
         return PublicContentResponse(
             about_us=about.value if about else DEFAULT_ABOUT_US,

@@ -33,9 +33,11 @@ from pawguard.services.audit_service import AuditService
 def _make_dog(**kw):
     now = datetime.now(UTC)
     vals = dict(
-        is_spayed_neutered=False, is_quarantine_passed=False,
+        is_spayed_neutered=False,
+        is_quarantine_passed=False,
         breed_classification=DogBreedClassification.UNKNOWN,
-        created_at=now, updated_at=now,
+        created_at=now,
+        updated_at=now,
     )
     vals.update(kw)
     return DogProfile(**vals)
@@ -65,8 +67,13 @@ class TestDogService:
     async def test_register_dog(self, service, mock_repo, mock_audit):
         dog_id = uuid.uuid4()
         mock_repo.create.return_value = DogProfile(
-            id=dog_id, registration_number="DOG-2026-1234", name="Buddy", breed="Labrador",
-            gender="male", status=DogStatus.RESCUED, is_adoptable=False,
+            id=dog_id,
+            registration_number="DOG-2026-1234",
+            name="Buddy",
+            breed="Labrador",
+            gender="male",
+            status=DogStatus.RESCUED,
+            is_adoptable=False,
         )
         payload = DogProfileCreate(name="Buddy", breed="Labrador", gender="male")
         result = await service.register_dog(payload, actor_id=uuid.uuid4())
@@ -77,8 +84,13 @@ class TestDogService:
     async def test_get_dog_found(self, service, mock_repo):
         dog_id = uuid.uuid4()
         mock_repo.get_by_id.return_value = _make_dog(
-            id=dog_id, registration_number="DOG-2026-0001", name="Max", breed="Beagle",
-            gender="male", status=DogStatus.SHELTER, is_adoptable=True,
+            id=dog_id,
+            registration_number="DOG-2026-0001",
+            name="Max",
+            breed="Beagle",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=True,
         )
         result = await service.get_dog(dog_id)
         assert result.name == "Max"
@@ -111,8 +123,13 @@ class TestDogService:
     async def test_update_dog(self, service, mock_repo):
         dog_id = uuid.uuid4()
         dog = _make_dog(
-            id=dog_id, registration_number="DOG-2026-0002", name="Old", breed="Mix",
-            gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+            id=dog_id,
+            registration_number="DOG-2026-0002",
+            name="Old",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=False,
         )
         mock_repo.get_by_id.return_value = dog
         payload = DogProfileUpdate(name="Updated")
@@ -123,8 +140,13 @@ class TestDogService:
     async def test_update_dog_cannot_grant_is_adoptable(self, service, mock_repo):
         dog_id = uuid.uuid4()
         dog = _make_dog(
-            id=dog_id, registration_number="DOG-2026-0002", name="Old", breed="Mix",
-            gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+            id=dog_id,
+            registration_number="DOG-2026-0002",
+            name="Old",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=False,
         )
         mock_repo.get_by_id.return_value = dog
         payload = DogProfileUpdate(is_adoptable=True)
@@ -135,8 +157,13 @@ class TestDogService:
     async def test_register_dog_ignores_is_adoptable_payload(self, service, mock_repo, mock_audit):
         dog_id = uuid.uuid4()
         mock_repo.create.return_value = DogProfile(
-            id=dog_id, registration_number="DOG-2026-1234", name="Buddy", breed="Labrador",
-            gender="male", status=DogStatus.RESCUED, is_adoptable=False,
+            id=dog_id,
+            registration_number="DOG-2026-1234",
+            name="Buddy",
+            breed="Labrador",
+            gender="male",
+            status=DogStatus.RESCUED,
+            is_adoptable=False,
         )
         payload = DogProfileCreate(name="Buddy", breed="Labrador", gender="male", is_adoptable=True)
         await service.register_dog(payload, actor_id=uuid.uuid4())
@@ -153,8 +180,13 @@ class TestDogService:
     async def test_update_dog_status(self, service, mock_repo):
         dog_id = uuid.uuid4()
         dog = _make_dog(
-            id=dog_id, registration_number="DOG-2026-0003", name="Rex", breed="Mix",
-            gender="male", status=DogStatus.RESCUED, is_adoptable=False,
+            id=dog_id,
+            registration_number="DOG-2026-0003",
+            name="Rex",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.RESCUED,
+            is_adoptable=False,
         )
         mock_repo.get_by_id.return_value = dog
         result = await service.update_dog_status(dog_id, DogStatus.SHELTER, actor_id=uuid.uuid4())
@@ -164,8 +196,13 @@ class TestDogService:
     async def test_soft_delete_dog(self, service, mock_repo):
         dog_id = uuid.uuid4()
         dog = _make_dog(
-            id=dog_id, registration_number="DOG-2026-0004", name="Rocky", breed="Mix",
-            gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+            id=dog_id,
+            registration_number="DOG-2026-0004",
+            name="Rocky",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=False,
         )
         mock_repo.get_by_id.return_value = dog
         await service.soft_delete_dog(dog_id, actor_id=uuid.uuid4())
@@ -180,8 +217,13 @@ class TestDogService:
     @pytest.mark.asyncio
     async def test_list_dogs_paginated(self, service, mock_repo):
         dog = _make_dog(
-            id=uuid.uuid4(), registration_number="DOG-2026-0005", name="Oscar",
-            breed="Poodle", gender="male", status=DogStatus.SHELTER, is_adoptable=True,
+            id=uuid.uuid4(),
+            registration_number="DOG-2026-0005",
+            name="Oscar",
+            breed="Poodle",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=True,
         )
         mock_repo.list_paginated.return_value = ([dog], 1)
         page = PageParams(page=1, page_size=20)
@@ -196,10 +238,24 @@ class TestDogService:
         ids = [uuid.uuid4(), uuid.uuid4()]
         mock_repo.bulk_update_status.return_value = 2
         mock_repo.list_by_ids.return_value = [
-            _make_dog(id=ids[0], registration_number="DOG-2026-0001", name="A",
-                      breed="Mix", gender="male", status=DogStatus.SHELTER, is_adoptable=False),
-            _make_dog(id=ids[1], registration_number="DOG-2026-0002", name="B",
-                      breed="Mix", gender="female", status=DogStatus.SHELTER, is_adoptable=False),
+            _make_dog(
+                id=ids[0],
+                registration_number="DOG-2026-0001",
+                name="A",
+                breed="Mix",
+                gender="male",
+                status=DogStatus.SHELTER,
+                is_adoptable=False,
+            ),
+            _make_dog(
+                id=ids[1],
+                registration_number="DOG-2026-0002",
+                name="B",
+                breed="Mix",
+                gender="female",
+                status=DogStatus.SHELTER,
+                is_adoptable=False,
+            ),
         ]
         count = await service.bulk_update_status(ids, DogStatus.ADOPTED, actor_id=uuid.uuid4())
         assert count == 2
@@ -215,12 +271,17 @@ class TestDogService:
         unknown = uuid.uuid4()
         mock_repo.bulk_update_status.return_value = 1
         mock_repo.list_by_ids.return_value = [
-            _make_dog(id=known, registration_number="DOG-2026-0001", name="A",
-                      breed="Mix", gender="male", status=DogStatus.SHELTER, is_adoptable=False),
+            _make_dog(
+                id=known,
+                registration_number="DOG-2026-0001",
+                name="A",
+                breed="Mix",
+                gender="male",
+                status=DogStatus.SHELTER,
+                is_adoptable=False,
+            ),
         ]
-        await service.bulk_update_status(
-            [known, unknown], DogStatus.ADOPTED, actor_id=uuid.uuid4()
-        )
+        await service.bulk_update_status([known, unknown], DogStatus.ADOPTED, actor_id=uuid.uuid4())
         assert mock_repo.create_activity.await_count == 1
         logged = mock_repo.create_activity.call_args[0][0]
         assert logged.dog_id == known
@@ -230,27 +291,46 @@ class TestDogService:
         ids = [uuid.uuid4(), uuid.uuid4()]
         mock_repo.bulk_soft_delete.return_value = 2
         mock_repo.list_by_ids.return_value = [
-            _make_dog(id=ids[0], registration_number="DOG-2026-0001", name="A",
-                      breed="Mix", gender="male", status=DogStatus.SHELTER, is_adoptable=False),
-            _make_dog(id=ids[1], registration_number="DOG-2026-0002", name="B",
-                      breed="Mix", gender="female", status=DogStatus.SHELTER, is_adoptable=False),
+            _make_dog(
+                id=ids[0],
+                registration_number="DOG-2026-0001",
+                name="A",
+                breed="Mix",
+                gender="male",
+                status=DogStatus.SHELTER,
+                is_adoptable=False,
+            ),
+            _make_dog(
+                id=ids[1],
+                registration_number="DOG-2026-0002",
+                name="B",
+                breed="Mix",
+                gender="female",
+                status=DogStatus.SHELTER,
+                is_adoptable=False,
+            ),
         ]
         count = await service.bulk_soft_delete(ids, actor_id=uuid.uuid4())
         assert count == 2
         assert mock_repo.create_activity.await_count == 2
 
     @pytest.mark.asyncio
-    async def test_bulk_soft_delete_captures_dogs_before_delete(
-        self, service, mock_repo
-    ):
+    async def test_bulk_soft_delete_captures_dogs_before_delete(self, service, mock_repo):
         """list_by_ids must run BEFORE the soft-delete, otherwise the
         deleted_at.is_(None) filter returns nothing and no timeline entries
         are written for the just-deleted dogs."""
         ids = [uuid.uuid4()]
         mock_repo.bulk_soft_delete.return_value = 1
         mock_repo.list_by_ids.return_value = [
-            _make_dog(id=ids[0], registration_number="DOG-2026-0001", name="A",
-                      breed="Mix", gender="male", status=DogStatus.SHELTER, is_adoptable=False),
+            _make_dog(
+                id=ids[0],
+                registration_number="DOG-2026-0001",
+                name="A",
+                breed="Mix",
+                gender="male",
+                status=DogStatus.SHELTER,
+                is_adoptable=False,
+            ),
         ]
 
         await service.bulk_soft_delete(ids, actor_id=uuid.uuid4())
@@ -267,8 +347,15 @@ class TestDogService:
         unknown = uuid.uuid4()
         mock_repo.bulk_soft_delete.return_value = 1
         mock_repo.list_by_ids.return_value = [
-            _make_dog(id=known, registration_number="DOG-2026-0001", name="A",
-                      breed="Mix", gender="male", status=DogStatus.SHELTER, is_adoptable=False),
+            _make_dog(
+                id=known,
+                registration_number="DOG-2026-0001",
+                name="A",
+                breed="Mix",
+                gender="male",
+                status=DogStatus.SHELTER,
+                is_adoptable=False,
+            ),
         ]
         await service.bulk_soft_delete([known, unknown], actor_id=uuid.uuid4())
         assert mock_repo.create_activity.await_count == 1
@@ -277,17 +364,25 @@ class TestDogService:
     # ── H-1: registration-number collision retry ──────────────────────────────
 
     @pytest.mark.asyncio
-    async def test_register_dog_retries_on_number_collision(
-        self, service, mock_repo, mock_audit
-    ):
+    async def test_register_dog_retries_on_number_collision(self, service, mock_repo, mock_audit):
         taken = _make_dog(
-            id=uuid.uuid4(), registration_number="DOG-2026-9999", name="Taken",
-            breed="Mix", gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+            id=uuid.uuid4(),
+            registration_number="DOG-2026-9999",
+            name="Taken",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=False,
         )
         mock_repo.get_by_registration.side_effect = [taken, None]
         mock_repo.create.return_value = _make_dog(
-            id=uuid.uuid4(), registration_number="DOG-2026-7777", name="Buddy",
-            breed="Labrador", gender="male", status=DogStatus.RESCUED, is_adoptable=False,
+            id=uuid.uuid4(),
+            registration_number="DOG-2026-7777",
+            name="Buddy",
+            breed="Labrador",
+            gender="male",
+            status=DogStatus.RESCUED,
+            is_adoptable=False,
         )
         payload = DogProfileCreate(name="Buddy", breed="Labrador", gender="male")
 
@@ -304,8 +399,13 @@ class TestDogService:
     async def test_register_dog_autogenerates_microchip(self, service, mock_repo, mock_audit):
         """When no microchip is supplied, a unique 15-digit one is generated."""
         dog = _make_dog(
-            id=uuid.uuid4(), registration_number="DOG-2026-0001", name="Buddy",
-            breed="Labrador", gender="male", status=DogStatus.RESCUED, is_adoptable=False,
+            id=uuid.uuid4(),
+            registration_number="DOG-2026-0001",
+            name="Buddy",
+            breed="Labrador",
+            gender="male",
+            status=DogStatus.RESCUED,
+            is_adoptable=False,
         )
         mock_repo.create.return_value = dog
         payload = DogProfileCreate(name="Buddy", breed="Labrador", gender="male")
@@ -322,12 +422,19 @@ class TestDogService:
     async def test_register_dog_keeps_supplied_microchip(self, service, mock_repo, mock_audit):
         """An explicitly provided microchip is preserved (not overwritten)."""
         dog = _make_dog(
-            id=uuid.uuid4(), registration_number="DOG-2026-0001", name="Buddy",
-            breed="Labrador", gender="male", status=DogStatus.RESCUED, is_adoptable=False,
+            id=uuid.uuid4(),
+            registration_number="DOG-2026-0001",
+            name="Buddy",
+            breed="Labrador",
+            gender="male",
+            status=DogStatus.RESCUED,
+            is_adoptable=False,
         )
         mock_repo.create.return_value = dog
         payload = DogProfileCreate(
-            name="Buddy", breed="Labrador", gender="male",
+            name="Buddy",
+            breed="Labrador",
+            gender="male",
             microchip_id="985141002399999",
         )
 
@@ -340,15 +447,25 @@ class TestDogService:
     async def test_register_dog_retries_microchip_collision(self, service, mock_repo, mock_audit):
         """A generated microchip colliding with an existing one is retried."""
         taken = _make_dog(
-            id=uuid.uuid4(), registration_number="DOG-2026-0001", name="Chip Dog",
-            breed="Mix", gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+            id=uuid.uuid4(),
+            registration_number="DOG-2026-0001",
+            name="Chip Dog",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=False,
             microchip_id="985999999999999",
         )
         # First generated candidate collides; second is free.
         mock_repo.get_by_microchip.side_effect = [taken, None]
         dog = _make_dog(
-            id=uuid.uuid4(), registration_number="DOG-2026-0001", name="Buddy",
-            breed="Labrador", gender="male", status=DogStatus.RESCUED, is_adoptable=False,
+            id=uuid.uuid4(),
+            registration_number="DOG-2026-0001",
+            name="Buddy",
+            breed="Labrador",
+            gender="male",
+            status=DogStatus.RESCUED,
+            is_adoptable=False,
         )
         mock_repo.create.return_value = dog
         payload = DogProfileCreate(name="Buddy", breed="Labrador", gender="male")
@@ -362,8 +479,13 @@ class TestDogService:
     async def test_register_dog_duplicate_details_conflict(self, service, mock_repo):
         """A dog already present with the same identifying details → 409."""
         existing = _make_dog(
-            id=uuid.uuid4(), registration_number="DOG-2026-0001", name="Buddy",
-            breed="Labrador", gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+            id=uuid.uuid4(),
+            registration_number="DOG-2026-0001",
+            name="Buddy",
+            breed="Labrador",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=False,
         )
         mock_repo.get_duplicate_by_details.return_value = existing
         payload = DogProfileCreate(name="Buddy", breed="Labrador", gender="male")
@@ -374,16 +496,21 @@ class TestDogService:
         mock_repo.create.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_register_dog_duplicate_microchip_conflict(
-        self, service, mock_repo
-    ):
+    async def test_register_dog_duplicate_microchip_conflict(self, service, mock_repo):
         existing = _make_dog(
-            id=uuid.uuid4(), registration_number="DOG-2026-0001", name="Chip Dog",
-            breed="Mix", gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+            id=uuid.uuid4(),
+            registration_number="DOG-2026-0001",
+            name="Chip Dog",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=False,
         )
         mock_repo.get_by_microchip.return_value = existing
         payload = DogProfileCreate(
-            name="Buddy", breed="Labrador", gender="male",
+            name="Buddy",
+            breed="Labrador",
+            gender="male",
             microchip_id="985141002345678",
         )
 
@@ -393,17 +520,25 @@ class TestDogService:
         mock_repo.create.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_update_dog_duplicate_microchip_conflict(
-        self, service, mock_repo
-    ):
+    async def test_update_dog_duplicate_microchip_conflict(self, service, mock_repo):
         dog = _make_dog(
-            id=uuid.uuid4(), registration_number="DOG-2026-0002", name="Old",
-            breed="Mix", gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+            id=uuid.uuid4(),
+            registration_number="DOG-2026-0002",
+            name="Old",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=False,
         )
         mock_repo.get_by_id.return_value = dog
         mock_repo.get_by_microchip.return_value = _make_dog(
-            id=uuid.uuid4(), registration_number="DOG-2026-0003", name="Other",
-            breed="Mix", gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+            id=uuid.uuid4(),
+            registration_number="DOG-2026-0003",
+            name="Other",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=False,
         )
 
         with pytest.raises(ConflictError, match="microchip"):
@@ -418,8 +553,13 @@ class TestDogService:
     @pytest.mark.asyncio
     async def test_register_dog_records_activity(self, service, mock_repo, mock_audit):
         dog = _make_dog(
-            id=uuid.uuid4(), registration_number="DOG-2026-1234", name="Buddy",
-            breed="Labrador", gender="male", status=DogStatus.RESCUED, is_adoptable=False,
+            id=uuid.uuid4(),
+            registration_number="DOG-2026-1234",
+            name="Buddy",
+            breed="Labrador",
+            gender="male",
+            status=DogStatus.RESCUED,
+            is_adoptable=False,
         )
         mock_repo.create.return_value = dog
         payload = DogProfileCreate(name="Buddy", breed="Labrador", gender="male")
@@ -434,8 +574,13 @@ class TestDogService:
     @pytest.mark.asyncio
     async def test_status_change_records_activity(self, service, mock_repo):
         dog = _make_dog(
-            id=uuid.uuid4(), registration_number="DOG-2026-0003", name="Rex",
-            breed="Mix", gender="male", status=DogStatus.RESCUED, is_adoptable=False,
+            id=uuid.uuid4(),
+            registration_number="DOG-2026-0003",
+            name="Rex",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.RESCUED,
+            is_adoptable=False,
         )
         mock_repo.get_by_id.return_value = dog
 
@@ -446,21 +591,26 @@ class TestDogService:
         assert log.event_metadata == {"old_status": "rescued", "new_status": "shelter"}
 
     @pytest.mark.asyncio
-    async def test_get_dog_timeline_returns_chronological_stream(
-        self, service, mock_repo
-    ):
+    async def test_get_dog_timeline_returns_chronological_stream(self, service, mock_repo):
         dog_id = uuid.uuid4()
         mock_repo.get_any_by_id.return_value = _make_dog(
-            id=dog_id, registration_number="DOG-2026-0001", name="Max",
-            breed="Beagle", gender="male", status=DogStatus.SHELTER, is_adoptable=True,
+            id=dog_id,
+            registration_number="DOG-2026-0001",
+            name="Max",
+            breed="Beagle",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=True,
         )
         mock_repo.list_activity_by_dog.return_value = [
             DogActivityLog(
-                dog_id=dog_id, event_type=DogActivityEventType.REGISTERED,
+                dog_id=dog_id,
+                event_type=DogActivityEventType.REGISTERED,
                 message="Dog registered.",
             ),
             DogActivityLog(
-                dog_id=dog_id, event_type=DogActivityEventType.STATUS_CHANGED,
+                dog_id=dog_id,
+                event_type=DogActivityEventType.STATUS_CHANGED,
                 message="Status changed.",
             ),
         ]
@@ -472,20 +622,24 @@ class TestDogService:
         mock_repo.list_activity_by_dog.assert_awaited_once_with(dog_id)
 
     @pytest.mark.asyncio
-    async def test_get_dog_timeline_readable_after_soft_delete(
-        self, service, mock_repo
-    ):
+    async def test_get_dog_timeline_readable_after_soft_delete(self, service, mock_repo):
         """PRR 3.4: the trail stays readable after soft-deletion."""
         dog_id = uuid.uuid4()
         deleted_dog = _make_dog(
-            id=dog_id, registration_number="DOG-2026-0001", name="Max",
-            breed="Beagle", gender="male", status=DogStatus.ADOPTED, is_adoptable=False,
+            id=dog_id,
+            registration_number="DOG-2026-0001",
+            name="Max",
+            breed="Beagle",
+            gender="male",
+            status=DogStatus.ADOPTED,
+            is_adoptable=False,
         )
         deleted_dog.deleted_at = datetime.now(UTC)
         mock_repo.get_any_by_id.return_value = deleted_dog
         mock_repo.list_activity_by_dog.return_value = [
             DogActivityLog(
-                dog_id=dog_id, event_type=DogActivityEventType.DELETED,
+                dog_id=dog_id,
+                event_type=DogActivityEventType.DELETED,
                 message="Dog soft-deleted.",
             ),
         ]
@@ -504,12 +658,14 @@ class TestDogService:
     # ── M-3: breed classification (Pure/Mix/Unknown) ────────────────────────
 
     @pytest.mark.asyncio
-    async def test_register_dog_infers_breed_classification(
-        self, service, mock_repo, mock_audit
-    ):
+    async def test_register_dog_infers_breed_classification(self, service, mock_repo, mock_audit):
         dog = _make_dog(
-            id=uuid.uuid4(), registration_number="DOG-2026-1234", name="Buddy",
-            breed="Labrador Mix", gender="male", status=DogStatus.RESCUED,
+            id=uuid.uuid4(),
+            registration_number="DOG-2026-1234",
+            name="Buddy",
+            breed="Labrador Mix",
+            gender="male",
+            status=DogStatus.RESCUED,
             is_adoptable=False,
         )
         mock_repo.create.return_value = dog
@@ -521,17 +677,21 @@ class TestDogService:
         assert created_dog.breed_classification == DogBreedClassification.MIX
 
     @pytest.mark.asyncio
-    async def test_register_dog_explicit_classification_wins(
-        self, service, mock_repo, mock_audit
-    ):
+    async def test_register_dog_explicit_classification_wins(self, service, mock_repo, mock_audit):
         dog = _make_dog(
-            id=uuid.uuid4(), registration_number="DOG-2026-1234", name="Buddy",
-            breed="Labrador Mix", gender="male", status=DogStatus.RESCUED,
+            id=uuid.uuid4(),
+            registration_number="DOG-2026-1234",
+            name="Buddy",
+            breed="Labrador Mix",
+            gender="male",
+            status=DogStatus.RESCUED,
             is_adoptable=False,
         )
         mock_repo.create.return_value = dog
         payload = DogProfileCreate(
-            name="Buddy", breed="Labrador Mix", gender="male",
+            name="Buddy",
+            breed="Labrador Mix",
+            gender="male",
             breed_classification=DogBreedClassification.PURE,
         )
 
@@ -541,14 +701,17 @@ class TestDogService:
         assert created_dog.breed_classification == DogBreedClassification.PURE
 
     @pytest.mark.asyncio
-    async def test_update_dog_reinfers_classification_on_breed_change(
-        self, service, mock_repo
-    ):
+    async def test_update_dog_reinfers_classification_on_breed_change(self, service, mock_repo):
         dog_id = uuid.uuid4()
         dog = _make_dog(
-            id=dog_id, registration_number="DOG-2026-0002", name="Old",
-            breed="Labrador", gender="male", status=DogStatus.SHELTER,
-            is_adoptable=False, breed_classification=DogBreedClassification.UNKNOWN,
+            id=dog_id,
+            registration_number="DOG-2026-0002",
+            name="Old",
+            breed="Labrador",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=False,
+            breed_classification=DogBreedClassification.UNKNOWN,
         )
         mock_repo.get_by_id.return_value = dog
 
@@ -559,16 +722,19 @@ class TestDogService:
         assert dog.breed_classification == DogBreedClassification.MIX
 
     @pytest.mark.asyncio
-    async def test_update_dog_explicit_null_reinfers_classification(
-        self, service, mock_repo
-    ):
+    async def test_update_dog_explicit_null_reinfers_classification(self, service, mock_repo):
         """An explicit null breed_classification means auto-infer (the column
         is NOT NULL, so a bare None would be a constraint violation)."""
         dog_id = uuid.uuid4()
         dog = _make_dog(
-            id=dog_id, registration_number="DOG-2026-0002", name="Old",
-            breed="Labrador Mix", gender="male", status=DogStatus.SHELTER,
-            is_adoptable=False, breed_classification=DogBreedClassification.UNKNOWN,
+            id=dog_id,
+            registration_number="DOG-2026-0002",
+            name="Old",
+            breed="Labrador Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=False,
+            breed_classification=DogBreedClassification.UNKNOWN,
         )
         mock_repo.get_by_id.return_value = dog
 
@@ -586,14 +752,17 @@ class TestDogService:
     ):
         dog_id = uuid.uuid4()
         dog = _make_dog(
-            id=dog_id, registration_number="DOG-2026-0005", name="Rex",
-            breed="Mix", gender="male", status=DogStatus.SHELTER,
-            is_adoptable=False, weight=15.0,
+            id=dog_id,
+            registration_number="DOG-2026-0005",
+            name="Rex",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=False,
+            weight=15.0,
         )
         mock_repo.get_by_id.return_value = dog
-        mock_repo.create_weight_log.return_value = DogWeightLog(
-            dog_id=dog_id, weight=16.4
-        )
+        mock_repo.create_weight_log.return_value = DogWeightLog(dog_id=dog_id, weight=16.4)
 
         result = await service.record_weight(
             dog_id,
@@ -612,13 +781,15 @@ class TestDogService:
         assert result is not None
 
     @pytest.mark.asyncio
-    async def test_get_weight_history_returns_chronological(
-        self, service, mock_repo
-    ):
+    async def test_get_weight_history_returns_chronological(self, service, mock_repo):
         dog_id = uuid.uuid4()
         mock_repo.get_by_id.return_value = _make_dog(
-            id=dog_id, registration_number="DOG-2026-0006", name="Scale",
-            breed="Mix", gender="female", status=DogStatus.SHELTER,
+            id=dog_id,
+            registration_number="DOG-2026-0006",
+            name="Scale",
+            breed="Mix",
+            gender="female",
+            status=DogStatus.SHELTER,
             is_adoptable=False,
         )
         mock_repo.list_weight_logs.return_value = [
@@ -665,12 +836,15 @@ class TestDogService:
         assert _parse_age_months(text) == expected
 
     @pytest.mark.asyncio
-    async def test_register_dog_derives_age_months(
-        self, service, mock_repo, mock_audit
-    ):
+    async def test_register_dog_derives_age_months(self, service, mock_repo, mock_audit):
         dog = _make_dog(
-            id=uuid.uuid4(), registration_number="DOG-2026-1234", name="Pup",
-            breed="Mix", gender="male", status=DogStatus.RESCUED, is_adoptable=False,
+            id=uuid.uuid4(),
+            registration_number="DOG-2026-1234",
+            name="Pup",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.RESCUED,
+            is_adoptable=False,
         )
         mock_repo.create.return_value = dog
 
@@ -683,19 +857,25 @@ class TestDogService:
         assert created.age_months == 24
 
     @pytest.mark.asyncio
-    async def test_register_dog_explicit_age_months_wins(
-        self, service, mock_repo, mock_audit
-    ):
+    async def test_register_dog_explicit_age_months_wins(self, service, mock_repo, mock_audit):
         dog = _make_dog(
-            id=uuid.uuid4(), registration_number="DOG-2026-1234", name="Pup",
-            breed="Mix", gender="male", status=DogStatus.RESCUED, is_adoptable=False,
+            id=uuid.uuid4(),
+            registration_number="DOG-2026-1234",
+            name="Pup",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.RESCUED,
+            is_adoptable=False,
         )
         mock_repo.create.return_value = dog
 
         await service.register_dog(
             DogProfileCreate(
-                name="Pup", breed="Mix", gender="male",
-                estimated_age="2 years", age_months=18,
+                name="Pup",
+                breed="Mix",
+                gender="male",
+                estimated_age="2 years",
+                age_months=18,
             ),
             actor_id=uuid.uuid4(),
         )
@@ -704,14 +884,18 @@ class TestDogService:
         assert created.age_months == 18
 
     @pytest.mark.asyncio
-    async def test_update_dog_reinfers_age_months_on_age_edit(
-        self, service, mock_repo
-    ):
+    async def test_update_dog_reinfers_age_months_on_age_edit(self, service, mock_repo):
         dog_id = uuid.uuid4()
         dog = _make_dog(
-            id=dog_id, registration_number="DOG-2026-0002", name="Old",
-            breed="Mix", gender="male", status=DogStatus.SHELTER,
-            is_adoptable=False, estimated_age="1 year", age_months=12,
+            id=dog_id,
+            registration_number="DOG-2026-0002",
+            name="Old",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=False,
+            estimated_age="1 year",
+            age_months=12,
         )
         mock_repo.get_by_id.return_value = dog
 
@@ -724,18 +908,23 @@ class TestDogService:
     # ── L-1: visual attributes ──────────────────────────────────────────────
 
     @pytest.mark.asyncio
-    async def test_register_dog_stores_visual_attributes(
-        self, service, mock_repo, mock_audit
-    ):
+    async def test_register_dog_stores_visual_attributes(self, service, mock_repo, mock_audit):
         dog = _make_dog(
-            id=uuid.uuid4(), registration_number="DOG-2026-1234", name="Spot",
-            breed="Mix", gender="female", status=DogStatus.RESCUED, is_adoptable=False,
+            id=uuid.uuid4(),
+            registration_number="DOG-2026-1234",
+            name="Spot",
+            breed="Mix",
+            gender="female",
+            status=DogStatus.RESCUED,
+            is_adoptable=False,
         )
         mock_repo.create.return_value = dog
 
         await service.register_dog(
             DogProfileCreate(
-                name="Spot", breed="Mix", gender="female",
+                name="Spot",
+                breed="Mix",
+                gender="female",
                 ear_shape=DogEarShape.FLOPPY,
                 tail_type=DogTailType.CURLED,
                 distinctive_markers="White patch on chest",

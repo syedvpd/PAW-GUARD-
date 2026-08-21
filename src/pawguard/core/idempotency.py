@@ -3,17 +3,17 @@
 import asyncio
 import base64
 import hashlib
-import json
 import logging
 from typing import Any
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import Response, JSONResponse
+from starlette.responses import JSONResponse, Response
 
+from pawguard.core.constants import ACCESS_TOKEN_COOKIE_NAME
+from pawguard.core.security import parse_access_token_claims
 from pawguard.redis.client import RedisClient, _ensure_client, _NullRedis
 from pawguard.services.cache_service import CacheService
-from pawguard.core.security import parse_access_token_claims
-from pawguard.core.constants import ACCESS_TOKEN_COOKIE_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -22,10 +22,12 @@ async def _resolve_redis(request: Request) -> RedisClient:
     """Resolves the Redis client, honoring dependency overrides if present (e.g. in tests)."""
     dependency_overrides = getattr(request.app, "dependency_overrides", {})
     from pawguard.redis.client import get_redis
+
     override = dependency_overrides.get(get_redis)
     if override:
         try:
             import inspect
+
             res = override()
             if hasattr(res, "__anext__"):
                 # Handle async generator override
@@ -63,26 +65,27 @@ def _build_hit_response(cached_resp: dict[str, Any]) -> Response:
         content=body_decoded,
         status_code=cached_resp["status_code"],
         headers=headers,
-        media_type=headers.get("content-type")
+        media_type=headers.get("content-type"),
     )
 
 
 class IdempotencyMiddleware(BaseHTTPMiddleware):
-    """Enforces API Idempotency via Idempotency-Key or X-Idempotency-Key headers.
-    """
+    """Enforces API Idempotency via Idempotency-Key or X-Idempotency-Key headers."""
 
     async def dispatch(self, request: Request, call_next) -> Response:
         if request.method not in ("POST", "PUT", "PATCH", "DELETE"):
             return await call_next(request)
 
-        idempotency_key = request.headers.get("idempotency-key") or request.headers.get("x-idempotency-key")
+        idempotency_key = request.headers.get("idempotency-key") or request.headers.get(
+            "x-idempotency-key"
+        )
         if not idempotency_key:
             return await call_next(request)
 
         if not (10 <= len(idempotency_key) <= 128):
             return JSONResponse(
                 status_code=400,
-                content={"success": False, "error": "Invalid Idempotency-Key format."}
+                content={"success": False, "error": "Invalid Idempotency-Key format."},
             )
 
         redis = await _resolve_redis(request)
@@ -93,15 +96,17 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         cache_service = CacheService(redis, namespace="idempotency")
 
         body_bytes = await request.body()
+
         async def receive():
             await asyncio.sleep(0)
             return {"type": "http.request", "body": body_bytes, "more_body": False}
+
         request._receive = receive
 
         user_id = _extract_user_id(request)
         query_str = str(request.query_params)
         payload_hash = hashlib.sha256(
-            f"{request.method}:{request.url.path}:{query_str}:".encode("utf-8") + body_bytes
+            f"{request.method}:{request.url.path}:{query_str}:".encode() + body_bytes
         ).hexdigest()
 
         redis_key = f"{idempotency_key}:{user_id}"
@@ -113,8 +118,8 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                     content={
                         "success": False,
                         "error": "Request is already in flight. Please retry later.",
-                        "code": "IDEMPOTENCY_IN_FLIGHT"
-                    }
+                        "code": "IDEMPOTENCY_IN_FLIGHT",
+                    },
                 )
             if cached.get("request_hash") != payload_hash:
                 return JSONResponse(
@@ -122,15 +127,13 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                     content={
                         "success": False,
                         "error": "Idempotency Key was reused with a different request payload.",
-                        "code": "IDEMPOTENCY_KEY_REUSE_MISMATCH"
-                    }
+                        "code": "IDEMPOTENCY_KEY_REUSE_MISMATCH",
+                    },
                 )
             return _build_hit_response(cached["response"])
 
         await cache_service.set(
-            redis_key, 
-            {"status": "processing", "request_hash": payload_hash}, 
-            ttl_seconds=86400
+            redis_key, {"status": "processing", "request_hash": payload_hash}, ttl_seconds=86400
         )
 
         try:
@@ -141,8 +144,17 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
 
             if response.status_code < 500:
                 headers_to_cache = {
-                    k: v for k, v in response.headers.items() 
-                    if k.lower() not in ("date", "keep-alive", "server", "x-request-id", "x-trace-id", "x-span-id")
+                    k: v
+                    for k, v in response.headers.items()
+                    if k.lower()
+                    not in (
+                        "date",
+                        "keep-alive",
+                        "server",
+                        "x-request-id",
+                        "x-trace-id",
+                        "x-span-id",
+                    )
                 }
                 cached_data = {
                     "status": "completed",
@@ -150,8 +162,8 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                     "response": {
                         "status_code": response.status_code,
                         "headers": headers_to_cache,
-                        "body": base64.b64encode(response_body).decode("utf-8")
-                    }
+                        "body": base64.b64encode(response_body).decode("utf-8"),
+                    },
                 }
                 await cache_service.set(redis_key, cached_data, ttl_seconds=86400)
 
@@ -161,7 +173,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                 content=response_body,
                 status_code=response.status_code,
                 headers=headers,
-                media_type=response.media_type
+                media_type=response.media_type,
             )
         except Exception:
             await cache_service.delete(redis_key)

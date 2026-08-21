@@ -102,12 +102,9 @@ class MedicalRepository:
         return (await self._session.execute(stmt)).scalars().all()
 
     async def get_vaccine_protocol_by_name(self, name: str) -> VaccineProtocol | None:
-        stmt = (
-            select(VaccineProtocol)
-            .where(
-                func.lower(func.trim(VaccineProtocol.name)) == name.strip().lower(),
-                VaccineProtocol.deleted_at.is_(None),
-            )
+        stmt = select(VaccineProtocol).where(
+            func.lower(func.trim(VaccineProtocol.name)) == name.strip().lower(),
+            VaccineProtocol.deleted_at.is_(None),
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
@@ -124,9 +121,7 @@ class MedicalRepository:
         )
         return (await self._session.execute(stmt)).scalars().all()
 
-    async def get_latest_approved_clearance(
-        self, dog_id: uuid.UUID
-    ) -> MedicalClearance | None:
+    async def get_latest_approved_clearance(self, dog_id: uuid.UUID) -> MedicalClearance | None:
         """Most recent non-expired approved MedicalClearance for the dog.
 
         Used by the adoption exclusivity gate (PRR 3.5): a dog cannot be
@@ -155,10 +150,9 @@ class MedicalRepository:
         return res
 
     async def get_prescription_by_id(self, p_id: uuid.UUID) -> Prescription | None:
-        stmt = (
-            select(Prescription).where(
-                Prescription.id == p_id, Prescription.deleted_at.is_(None),
-            )
+        stmt = select(Prescription).where(
+            Prescription.id == p_id,
+            Prescription.deleted_at.is_(None),
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
@@ -195,10 +189,7 @@ class MedicalRepository:
         return (await self._session.execute(stmt)).scalars().all()
 
     async def list_active_prescriptions(self) -> Sequence[Prescription]:
-        stmt = (
-            select(Prescription)
-            .where(Prescription.is_active, Prescription.deleted_at.is_(None))
-        )
+        stmt = select(Prescription).where(Prescription.is_active, Prescription.deleted_at.is_(None))
         return (await self._session.execute(stmt)).scalars().all()
 
     async def list_exams_paginated(
@@ -314,9 +305,8 @@ class MedicalRepository:
         return results, total
 
     async def list_by_ids(self, ids: list[uuid.UUID]) -> Sequence[Prescription]:
-        stmt = (
-            select(Prescription)
-            .where(Prescription.id.in_(ids), Prescription.deleted_at.is_(None))
+        stmt = select(Prescription).where(
+            Prescription.id.in_(ids), Prescription.deleted_at.is_(None)
         )
         return (await self._session.execute(stmt)).scalars().all()
 

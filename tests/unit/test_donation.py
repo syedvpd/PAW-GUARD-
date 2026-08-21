@@ -45,8 +45,12 @@ from pawguard.services.storage_service import StorageService
 def _make_donation(**kw):
     now = datetime.now(UTC)
     vals = dict(
-        amount=0, currency="USD", donation_type=DonationType.ONE_TIME,
-        status=DonationStatus.PENDING, created_at=now, updated_at=now,
+        amount=0,
+        currency="USD",
+        donation_type=DonationType.ONE_TIME,
+        status=DonationStatus.PENDING,
+        created_at=now,
+        updated_at=now,
     )
     vals.update(kw)
     return Donation(**vals)
@@ -91,7 +95,8 @@ class TestDonationService:
         mock_repo.get_donor_by_user_id.return_value = None
         donor_id = uuid.uuid4()
         mock_repo.create_donor_profile.return_value = DonorProfile(
-            id=donor_id, user_id=user_id,
+            id=donor_id,
+            user_id=user_id,
         )
         payload = DonorProfileCreate(tax_identifier="TAX-123")
         result = await service.register_donor(user_id, payload)
@@ -105,11 +110,15 @@ class TestDonationService:
         mock_repo.get_donor_by_user_id.return_value = None
         donor_id = uuid.uuid4()
         mock_repo.create_donor_profile.return_value = DonorProfile(
-            id=donor_id, user_id=user_id,
+            id=donor_id,
+            user_id=user_id,
         )
         payload = DonorProfileCreate(tax_identifier="TAX-123")
         await service.register_donor(
-            user_id, payload, actor_id=user_id, ip_address="203.0.113.9",
+            user_id,
+            payload,
+            actor_id=user_id,
+            ip_address="203.0.113.9",
         )
         mock_audit.record.assert_awaited_once()
         kwargs = mock_audit.record.call_args.kwargs
@@ -150,8 +159,12 @@ class TestDonationService:
         donation_id = uuid.uuid4()
         mock_repo.create_donation.return_value = None
         mock_repo.get_donation_by_id.return_value = Donation(
-            id=donation_id, donor_id=donor_id, amount=100.0, currency="USD",
-            donation_type=DonationType.ONE_TIME, status=DonationStatus.SUCCESS,
+            id=donation_id,
+            donor_id=donor_id,
+            amount=100.0,
+            currency="USD",
+            donation_type=DonationType.ONE_TIME,
+            status=DonationStatus.SUCCESS,
             transaction_id="TXN-ABC123",
         )
         payload = DonationCreate(amount=100.0, currency="USD", donation_type=DonationType.ONE_TIME)
@@ -170,7 +183,8 @@ class TestDonationService:
         user_id = uuid.uuid4()
         donor_id = uuid.uuid4()
         mock_repo.get_donor_by_user_id.return_value = DonorProfile(
-            id=donor_id, user_id=user_id,
+            id=donor_id,
+            user_id=user_id,
         )
         donation_id = uuid.uuid4()
         # The real repo assigns the id on flush; the mock must do the same or
@@ -190,14 +204,21 @@ class TestDonationService:
         )
 
         svc = DonationService(
-            mock_repo, mock_dog_repo, payment_gateway=mock_gateway,
+            mock_repo,
+            mock_dog_repo,
+            payment_gateway=mock_gateway,
             audit_service=mock_audit,
         )
         payload = DonationCreate(
-            amount=100.0, currency="INR", donation_type=DonationType.ONE_TIME,
+            amount=100.0,
+            currency="INR",
+            donation_type=DonationType.ONE_TIME,
         )
         await svc.initiate_online_donation(
-            user_id, payload, actor_id=user_id, ip_address="203.0.113.9",
+            user_id,
+            payload,
+            actor_id=user_id,
+            ip_address="203.0.113.9",
         )
         mock_audit.record.assert_awaited_once()
         kwargs = mock_audit.record.call_args.kwargs
@@ -213,8 +234,12 @@ class TestDonationService:
         mock_repo.get_donor_by_user_id.return_value = DonorProfile(id=donor_id, user_id=user_id)
         donation_id = uuid.uuid4()
         mock_repo.get_donation_by_id.return_value = Donation(
-            id=donation_id, donor_id=donor_id, amount=100.0, currency="USD",
-            donation_type=DonationType.ONE_TIME, status=DonationStatus.SUCCESS,
+            id=donation_id,
+            donor_id=donor_id,
+            amount=100.0,
+            currency="USD",
+            donation_type=DonationType.ONE_TIME,
+            status=DonationStatus.SUCCESS,
             transaction_id="TXN-ABC123",
         )
         payload = DonationCreate(amount=100.0, currency="USD", donation_type=DonationType.ONE_TIME)
@@ -227,10 +252,12 @@ class TestDonationService:
         donation_id = uuid.uuid4()
         actor_id = uuid.uuid4()
         mock_repo.get_donation_by_id.return_value = _make_donation(
-            id=donation_id, status=DonationStatus.PENDING,
+            id=donation_id,
+            status=DonationStatus.PENDING,
         )
         mock_repo.update_donation_status.return_value = _make_donation(
-            id=donation_id, status=DonationStatus.FAILED,
+            id=donation_id,
+            status=DonationStatus.FAILED,
         )
         await service.update_donation_status(donation_id, DonationStatus.FAILED, actor_id=actor_id)
         mock_audit.record.assert_awaited_once()
@@ -249,18 +276,30 @@ class TestDonationService:
         user_id = uuid.uuid4()
         dog_id = uuid.uuid4()
         mock_dog_repo.get_by_id.return_value = DogProfile(
-            id=dog_id, registration_number="DOG-001", name="B", breed="Mix",
-            gender="male", status=DogStatus.SHELTER, is_adoptable=False,
+            id=dog_id,
+            registration_number="DOG-001",
+            name="B",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=False,
         )
         donor_id = uuid.uuid4()
         mock_repo.get_donor_by_user_id.return_value = DonorProfile(id=donor_id, user_id=user_id)
         donation_id = uuid.uuid4()
         mock_repo.get_donation_by_id.return_value = Donation(
-            id=donation_id, donor_id=donor_id, dog_id=dog_id, amount=50.0,
-            currency="USD", donation_type=DonationType.SPONSORSHIP,
-            status=DonationStatus.SUCCESS, transaction_id="TXN-DEF456",
+            id=donation_id,
+            donor_id=donor_id,
+            dog_id=dog_id,
+            amount=50.0,
+            currency="USD",
+            donation_type=DonationType.SPONSORSHIP,
+            status=DonationStatus.SUCCESS,
+            transaction_id="TXN-DEF456",
         )
-        payload = DonationCreate(amount=50.0, currency="USD", dog_id=dog_id, donation_type=DonationType.SPONSORSHIP)
+        payload = DonationCreate(
+            amount=50.0, currency="USD", dog_id=dog_id, donation_type=DonationType.SPONSORSHIP
+        )
         result = await service.make_donation(user_id, payload)
         assert result.dog_id == dog_id
 
@@ -276,8 +315,11 @@ class TestDonationService:
     @pytest.mark.asyncio
     async def test_list_donations_paginated(self, service, mock_repo):
         donation = _make_donation(
-            id=uuid.uuid4(), donor_id=uuid.uuid4(), amount=25.0,
-            donation_type=DonationType.ONE_TIME, status=DonationStatus.SUCCESS,
+            id=uuid.uuid4(),
+            donor_id=uuid.uuid4(),
+            amount=25.0,
+            donation_type=DonationType.ONE_TIME,
+            status=DonationStatus.SUCCESS,
         )
         mock_repo.paginate_donations.return_value = ([donation], 1)
         page = PageParams(page=1, page_size=20)
@@ -304,8 +346,12 @@ class TestDonationService:
     async def test_get_donation(self, service, mock_repo):
         donation_id = uuid.uuid4()
         mock_repo.get_donation_by_id.return_value = Donation(
-            id=donation_id, donor_id=uuid.uuid4(), amount=100.0, currency="USD",
-            donation_type=DonationType.ONE_TIME, status=DonationStatus.SUCCESS,
+            id=donation_id,
+            donor_id=uuid.uuid4(),
+            amount=100.0,
+            currency="USD",
+            donation_type=DonationType.ONE_TIME,
+            status=DonationStatus.SUCCESS,
         )
         result = await service.get_donation(donation_id)
         assert result.id == donation_id
@@ -327,9 +373,14 @@ class TestDonationService:
         donation_id = uuid.uuid4()
         now = datetime.now(UTC)
         donation = Donation(
-            id=donation_id, donor_id=donor_id, donor=donor, amount=100.0,
-            currency="USD", donation_type=DonationType.ONE_TIME,
-            status=DonationStatus.SUCCESS, transaction_id="TXN-ABC123",
+            id=donation_id,
+            donor_id=donor_id,
+            donor=donor,
+            amount=100.0,
+            currency="USD",
+            donation_type=DonationType.ONE_TIME,
+            status=DonationStatus.SUCCESS,
+            transaction_id="TXN-ABC123",
             created_at=now,
         )
         mock_repo.create_donation.return_value = None
@@ -340,7 +391,9 @@ class TestDonationService:
         mock_storage.build_object_key.return_value = "documents/receipt_test.pdf"
 
         svc = DonationService(
-            mock_repo, mock_dog_repo, audit_service=mock_audit,
+            mock_repo,
+            mock_dog_repo,
+            audit_service=mock_audit,
             storage_service=mock_storage,
         )
         payload = DonationCreate(amount=100.0, currency="USD", donation_type=DonationType.ONE_TIME)
@@ -372,39 +425,48 @@ class TestSponsorshipService:
     @pytest.fixture
     def service(self, mock_repo, mock_dog_repo, mock_audit, mock_notification_svc):
         return DonationService(
-            mock_repo, mock_dog_repo,
+            mock_repo,
+            mock_dog_repo,
             audit_service=mock_audit,
             notification_service=mock_notification_svc,
         )
 
     @pytest.mark.asyncio
-    async def test_create_sponsorship_success(
-        self, service, mock_repo, mock_dog_repo, mock_audit
-    ):
+    async def test_create_sponsorship_success(self, service, mock_repo, mock_dog_repo, mock_audit):
         user_id = uuid.uuid4()
         donor_id = uuid.uuid4()
         dog_id = uuid.uuid4()
         actor_id = uuid.uuid4()
 
         mock_repo.get_donor_by_user_id.return_value = DonorProfile(
-            id=donor_id, user_id=user_id,
+            id=donor_id,
+            user_id=user_id,
         )
         mock_dog_repo.get_by_id.return_value = DogProfile(
-            id=dog_id, registration_number="DOG-001", name="Bella",
-            breed="Mix", gender="female", status=DogStatus.SHELTER,
+            id=dog_id,
+            registration_number="DOG-001",
+            name="Bella",
+            breed="Mix",
+            gender="female",
+            status=DogStatus.SHELTER,
             is_adoptable=True,
         )
 
         sponsorship_id = uuid.uuid4()
         mock_repo.create_sponsorship.return_value = DogSponsorship(
-            id=sponsorship_id, donor_id=donor_id, dog_id=dog_id,
-            monthly_amount=25.0, currency="USD",
+            id=sponsorship_id,
+            donor_id=donor_id,
+            dog_id=dog_id,
+            monthly_amount=25.0,
+            currency="USD",
             status=SponsorshipStatus.ACTIVE,
         )
 
         payload = SponsorshipCreate(dog_id=dog_id, monthly_amount=25.0)
         result = await service.create_sponsorship(
-            user_id, payload, actor_id=actor_id,
+            user_id,
+            payload,
+            actor_id=actor_id,
         )
 
         assert result.donor_id == donor_id
@@ -420,18 +482,25 @@ class TestSponsorshipService:
         actor_id = uuid.uuid4()
 
         mock_repo.get_sponsorship_by_id.return_value = DogSponsorship(
-            id=sponsorship_id, donor_id=uuid.uuid4(), dog_id=uuid.uuid4(),
-            monthly_amount=25.0, currency="USD",
+            id=sponsorship_id,
+            donor_id=uuid.uuid4(),
+            dog_id=uuid.uuid4(),
+            monthly_amount=25.0,
+            currency="USD",
             status=SponsorshipStatus.ACTIVE,
         )
         mock_repo.cancel_sponsorship.return_value = DogSponsorship(
-            id=sponsorship_id, donor_id=uuid.uuid4(), dog_id=uuid.uuid4(),
-            monthly_amount=25.0, currency="USD",
+            id=sponsorship_id,
+            donor_id=uuid.uuid4(),
+            dog_id=uuid.uuid4(),
+            monthly_amount=25.0,
+            currency="USD",
             status=SponsorshipStatus.CANCELLED,
         )
 
         result = await service.cancel_sponsorship(
-            sponsorship_id, actor_id=actor_id,
+            sponsorship_id,
+            actor_id=actor_id,
         )
 
         assert result.status == SponsorshipStatus.CANCELLED
@@ -445,23 +514,31 @@ class TestSponsorshipService:
         actor_id = uuid.uuid4()
 
         mock_repo.get_sponsorship_by_id.return_value = DogSponsorship(
-            id=sponsorship_id, donor_id=uuid.uuid4(), dog_id=uuid.uuid4(),
-            monthly_amount=25.0, currency="USD",
+            id=sponsorship_id,
+            donor_id=uuid.uuid4(),
+            dog_id=uuid.uuid4(),
+            monthly_amount=25.0,
+            currency="USD",
             status=SponsorshipStatus.ACTIVE,
         )
         mock_repo.update_sponsorship_status.return_value = DogSponsorship(
-            id=sponsorship_id, donor_id=uuid.uuid4(), dog_id=uuid.uuid4(),
-            monthly_amount=25.0, currency="USD",
+            id=sponsorship_id,
+            donor_id=uuid.uuid4(),
+            dog_id=uuid.uuid4(),
+            monthly_amount=25.0,
+            currency="USD",
             status=SponsorshipStatus.PAUSED,
         )
 
         result = await service.pause_sponsorship(
-            sponsorship_id, actor_id=actor_id,
+            sponsorship_id,
+            actor_id=actor_id,
         )
 
         assert result.status == SponsorshipStatus.PAUSED
         mock_repo.update_sponsorship_status.assert_awaited_once_with(
-            sponsorship_id, SponsorshipStatus.PAUSED,
+            sponsorship_id,
+            SponsorshipStatus.PAUSED,
         )
         mock_audit.record.assert_awaited_once()
         assert mock_audit.record.call_args.kwargs["event_type"].value == "sponsorship_paused"
@@ -489,7 +566,8 @@ class TestCampaignService:
         """End date before start date is rejected (PRR 3.11 data integrity)."""
         mock_repo.create_campaign.return_value = _make_campaign(id=uuid.uuid4())
         payload = DonationCampaignCreate(
-            name="Test", target_amount=100.0,
+            name="Test",
+            target_amount=100.0,
             start_date=datetime.now(UTC).date(),
             end_date=datetime.now(UTC).date().replace(year=1999),
         )
@@ -502,11 +580,14 @@ class TestCampaignService:
         campaign_id = uuid.uuid4()
         mock_repo.create_campaign.return_value = _make_campaign(id=campaign_id)
         payload = DonationCampaignCreate(
-            name="Rescue the Pack", target_amount=5000.0,
+            name="Rescue the Pack",
+            target_amount=5000.0,
             start_date=datetime.now(UTC).date(),
         )
         result = await service.create_campaign(
-            payload, actor_id=uuid.uuid4(), ip_address="203.0.113.9",
+            payload,
+            actor_id=uuid.uuid4(),
+            ip_address="203.0.113.9",
         )
         assert result.id == campaign_id
         mock_audit.record.assert_awaited_once()
@@ -519,11 +600,14 @@ class TestCampaignService:
         campaign_id = uuid.uuid4()
         mock_repo.get_campaign_by_id.return_value = _make_campaign(id=campaign_id)
         mock_repo.update_campaign.return_value = _make_campaign(
-            id=campaign_id, name="Updated",
+            id=campaign_id,
+            name="Updated",
         )
         payload = DonationCampaignUpdate(name="Updated")
         result = await service.update_campaign(
-            campaign_id, payload, actor_id=uuid.uuid4(),
+            campaign_id,
+            payload,
+            actor_id=uuid.uuid4(),
         )
         assert result.name == "Updated"
         mock_audit.record.assert_awaited_once()
@@ -551,18 +635,26 @@ class TestCampaignService:
         campaign_id = uuid.uuid4()
         mock_repo.get_donor_by_user_id.return_value = DonorProfile(id=donor_id, user_id=user_id)
         mock_repo.get_campaign_by_id.return_value = _make_campaign(
-            id=campaign_id, target_amount=1000.0,
+            id=campaign_id,
+            target_amount=1000.0,
         )
         mock_repo.get_campaign_totals.return_value = (50.0, 1)
         donation_id = uuid.uuid4()
         mock_repo.create_donation.side_effect = lambda d: setattr(d, "id", donation_id)
         mock_repo.get_donation_by_id.return_value = Donation(
-            id=donation_id, donor_id=donor_id, campaign_id=campaign_id,
-            amount=50.0, currency="USD", donation_type=DonationType.ONE_TIME,
-            status=DonationStatus.SUCCESS, transaction_id="TXN-CMP1",
+            id=donation_id,
+            donor_id=donor_id,
+            campaign_id=campaign_id,
+            amount=50.0,
+            currency="USD",
+            donation_type=DonationType.ONE_TIME,
+            status=DonationStatus.SUCCESS,
+            transaction_id="TXN-CMP1",
         )
         payload = DonationCreate(
-            amount=50.0, currency="USD", campaign_id=campaign_id,
+            amount=50.0,
+            currency="USD",
+            campaign_id=campaign_id,
         )
         result = await service.make_donation(user_id, payload)
         assert result.campaign_id == campaign_id
@@ -573,7 +665,8 @@ class TestCampaignService:
     async def test_make_donation_to_closed_campaign_rejected(self, service, mock_repo):
         user_id = uuid.uuid4()
         mock_repo.get_donor_by_user_id.return_value = DonorProfile(
-            id=uuid.uuid4(), user_id=user_id,
+            id=uuid.uuid4(),
+            user_id=user_id,
         )
         mock_repo.get_campaign_by_id.return_value = _make_campaign(
             status=CampaignStatus.CANCELLED,
@@ -586,7 +679,8 @@ class TestCampaignService:
     async def test_make_donation_to_unknown_campaign_rejected(self, service, mock_repo):
         user_id = uuid.uuid4()
         mock_repo.get_donor_by_user_id.return_value = DonorProfile(
-            id=uuid.uuid4(), user_id=user_id,
+            id=uuid.uuid4(),
+            user_id=user_id,
         )
         mock_repo.get_campaign_by_id.return_value = None
         payload = DonationCreate(amount=10.0, campaign_id=uuid.uuid4())
@@ -594,9 +688,7 @@ class TestCampaignService:
             await service.make_donation(user_id, payload)
 
     @pytest.mark.asyncio
-    async def test_campaign_auto_completes_when_goal_reached(
-        self, service, mock_repo, mock_audit
-    ):
+    async def test_campaign_auto_completes_when_goal_reached(self, service, mock_repo, mock_audit):
         """A donation that pushes a campaign past its goal flips it to
         COMPLETED and records a campaign_completed audit event (PRR 3.11)."""
         user_id = uuid.uuid4()
@@ -604,24 +696,33 @@ class TestCampaignService:
         campaign_id = uuid.uuid4()
         mock_repo.get_donor_by_user_id.return_value = DonorProfile(id=donor_id, user_id=user_id)
         mock_repo.get_campaign_by_id.return_value = _make_campaign(
-            id=campaign_id, target_amount=1000.0,
+            id=campaign_id,
+            target_amount=1000.0,
         )
         mock_repo.get_campaign_totals.return_value = (1500.0, 2)
         donation_id = uuid.uuid4()
         mock_repo.create_donation.side_effect = lambda d: setattr(d, "id", donation_id)
         mock_repo.get_donation_by_id.return_value = Donation(
-            id=donation_id, donor_id=donor_id, campaign_id=campaign_id,
-            amount=500.0, currency="USD", donation_type=DonationType.ONE_TIME,
-            status=DonationStatus.SUCCESS, transaction_id="TXN-CMP2",
+            id=donation_id,
+            donor_id=donor_id,
+            campaign_id=campaign_id,
+            amount=500.0,
+            currency="USD",
+            donation_type=DonationType.ONE_TIME,
+            status=DonationStatus.SUCCESS,
+            transaction_id="TXN-CMP2",
         )
         mock_repo.update_campaign.return_value = _make_campaign(
-            id=campaign_id, status=CampaignStatus.COMPLETED,
+            id=campaign_id,
+            status=CampaignStatus.COMPLETED,
         )
         payload = DonationCreate(amount=500.0, campaign_id=campaign_id)
         await service.make_donation(user_id, payload, actor_id=user_id)
         update_kwargs = mock_repo.update_campaign.call_args.kwargs
         assert update_kwargs["status"] == CampaignStatus.COMPLETED
-        assert mock_audit.record.call_args.kwargs["event_type"].value == "donation_campaign_completed"
+        assert (
+            mock_audit.record.call_args.kwargs["event_type"].value == "donation_campaign_completed"
+        )
 
     @pytest.mark.asyncio
     async def test_list_active_campaigns_filters_closed(self, service, mock_repo):
@@ -648,7 +749,8 @@ class TestCampaignService:
         mock_repo.paginate_campaigns.return_value = ([_make_campaign(id=uuid.uuid4())], 1)
         mock_repo.get_campaign_totals.return_value = (0.0, 0)
         result = await service.list_campaigns_paginated(
-            PageParams(page=1, page_size=20), SortParams(),
+            PageParams(page=1, page_size=20),
+            SortParams(),
         )
         assert isinstance(result, PaginatedResponse)
         assert result.meta.total == 1
@@ -834,7 +936,8 @@ class TestRecurringSubscriptionService:
         donor_id = uuid.uuid4()
         sub_id = uuid.uuid4()
         mock_repo.get_donor_by_user_id.return_value = DonorProfile(
-            id=donor_id, user_id=user_id,
+            id=donor_id,
+            user_id=user_id,
         )
         mock_repo.create_recurring_subscription.return_value = RecurringSubscription(
             id=sub_id,
@@ -901,7 +1004,9 @@ class TestRecurringSubscriptionService:
             await service.cancel_recurring_subscription(sub_id)
 
     @pytest.mark.asyncio
-    async def test_charge_due_recurring_subscriptions(self, service, mock_repo, mock_dog_repo, mock_audit):
+    async def test_charge_due_recurring_subscriptions(
+        self, service, mock_repo, mock_dog_repo, mock_audit
+    ):
         donor_id = uuid.uuid4()
         sub_id = uuid.uuid4()
         today = datetime.now(UTC).date()
@@ -935,7 +1040,6 @@ class TestRecurringSubscriptionService:
 
         from sqlalchemy.ext.asyncio import AsyncSession
 
-
         mock_session = AsyncMock(spec=AsyncSession)
         with patch("pawguard.modules.donation.service.DonationRepository", return_value=mock_repo):
             donations = await service.charge_due_recurring_subscriptions(mock_session)
@@ -946,7 +1050,9 @@ class TestRecurringSubscriptionService:
         mock_repo.advance_recurring_charge_date.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_charge_skips_subscription_with_pending_donation(self, service, mock_repo, mock_dog_repo, mock_audit):
+    async def test_charge_skips_subscription_with_pending_donation(
+        self, service, mock_repo, mock_dog_repo, mock_audit
+    ):
         donor_id = uuid.uuid4()
         sub_id = uuid.uuid4()
         today = datetime.now(UTC).date()
@@ -968,7 +1074,6 @@ class TestRecurringSubscriptionService:
         from unittest.mock import patch
 
         from sqlalchemy.ext.asyncio import AsyncSession
-
 
         mock_session = AsyncMock(spec=AsyncSession)
         with patch("pawguard.modules.donation.service.DonationRepository", return_value=mock_repo):
@@ -998,8 +1103,13 @@ class TestSponsorshipValidation:
 
         mock_repo.get_donor_by_user_id.return_value = DonorProfile(id=donor_id, user_id=user_id)
         mock_dog_repo.get_by_id.return_value = DogProfile(
-            id=dog_id, registration_number="DOG-001", name="Rex", breed="Mix",
-            gender="male", status=DogStatus.ADOPTED, is_adoptable=False,
+            id=dog_id,
+            registration_number="DOG-001",
+            name="Rex",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.ADOPTED,
+            is_adoptable=False,
         )
 
         payload = SponsorshipCreate(dog_id=dog_id, monthly_amount=100.0, currency="USD")
@@ -1007,21 +1117,33 @@ class TestSponsorshipValidation:
             await service.create_sponsorship(user_id, payload)
 
     @pytest.mark.asyncio
-    async def test_create_sponsorship_duplicate_sponsorship_fails(self, service, mock_repo, mock_dog_repo):
+    async def test_create_sponsorship_duplicate_sponsorship_fails(
+        self, service, mock_repo, mock_dog_repo
+    ):
         user_id = uuid.uuid4()
         dog_id = uuid.uuid4()
         donor_id = uuid.uuid4()
 
         mock_repo.get_donor_by_user_id.return_value = DonorProfile(id=donor_id, user_id=user_id)
         mock_dog_repo.get_by_id.return_value = DogProfile(
-            id=dog_id, registration_number="DOG-002", name="Max", breed="Mix",
-            gender="male", status=DogStatus.SHELTER, is_adoptable=True,
+            id=dog_id,
+            registration_number="DOG-002",
+            name="Max",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=True,
         )
 
         existing_sp = DogSponsorship(
-            id=uuid.uuid4(), donor_id=donor_id, dog_id=dog_id, monthly_amount=50.0,
-            currency="USD", status=SponsorshipStatus.ACTIVE,
-            next_charge_date=datetime.now(UTC).date(), started_at=datetime.now(UTC),
+            id=uuid.uuid4(),
+            donor_id=donor_id,
+            dog_id=dog_id,
+            monthly_amount=50.0,
+            currency="USD",
+            status=SponsorshipStatus.ACTIVE,
+            next_charge_date=datetime.now(UTC).date(),
+            started_at=datetime.now(UTC),
         )
         mock_repo.get_sponsorships_for_donor.return_value = [existing_sp]
 
@@ -1032,6 +1154,8 @@ class TestSponsorshipValidation:
     @pytest.mark.asyncio
     async def test_create_sponsorship_invalid_amount_fails(self, service):
         user_id = uuid.uuid4()
-        payload = SponsorshipCreate.model_construct(dog_id=uuid.uuid4(), monthly_amount=0.0, currency="USD")
+        payload = SponsorshipCreate.model_construct(
+            dog_id=uuid.uuid4(), monthly_amount=0.0, currency="USD"
+        )
         with pytest.raises(ValidationFailedError, match="greater than zero"):
             await service.create_sponsorship(user_id, payload)

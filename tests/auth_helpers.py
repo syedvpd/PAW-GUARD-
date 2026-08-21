@@ -50,14 +50,11 @@ async def promote_and_auth(
     user.is_verified = True
     await db_session.commit()
 
-    login = await client.post(
-        "/api/v1/auth/login", json={"email": email, "password": password}
-    )
+    login = await client.post("/api/v1/auth/login", json={"email": email, "password": password})
     body = login.json()["data"]
     if "access_token" not in body:
         raise AssertionError(
-            "Pre-promotion login should not require MFA: "
-            f"{login.status_code} {login.text}"
+            f"Pre-promotion login should not require MFA: {login.status_code} {login.text}"
         )
     enroll_headers = _bearer(body["access_token"])
     enroll = await client.post("/api/v1/auth/mfa/enroll", headers=enroll_headers)
@@ -74,16 +71,12 @@ async def promote_and_auth(
         raise AssertionError(f"MFA confirm failed: {confirm.status_code} {confirm.text}")
 
     user = await _fetch_user(db_session, email)
-    role_row = (
-        await db_session.execute(select(Role).where(Role.name == role))
-    ).scalar_one()
+    role_row = (await db_session.execute(select(Role).where(Role.name == role))).scalar_one()
     if role_row not in user.roles:
         user.roles.append(role_row)
     await db_session.commit()
 
-    login = await client.post(
-        "/api/v1/auth/login", json={"email": email, "password": password}
-    )
+    login = await client.post("/api/v1/auth/login", json={"email": email, "password": password})
     body = login.json()["data"]
     if "access_token" in body:
         return _bearer(body["access_token"])
@@ -126,6 +119,4 @@ async def register_and_auth(
     )
     if resp.status_code != 201:
         raise AssertionError(f"Register failed: {resp.status_code} {resp.text}")
-    return await promote_and_auth(
-        client, db_session, email=email, password=password, role=role
-    )
+    return await promote_and_auth(client, db_session, email=email, password=password, role=role)

@@ -71,7 +71,9 @@ class TestScheduledJobs:
         mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
         return mock_factory
 
-    def _assert_notification_payloads(self, mock_notif: AsyncMock, expected_titles: set[str]) -> None:
+    def _assert_notification_payloads(
+        self, mock_notif: AsyncMock, expected_titles: set[str]
+    ) -> None:
         assert mock_notif.create_notification.call_count >= 1
         titles = set()
         for call in mock_notif.create_notification.call_args_list:
@@ -86,7 +88,9 @@ class TestScheduledJobs:
     @patch("pawguard.workers.jobs.scheduled_jobs.AsyncSessionLocal")
     @patch("pawguard.workers.jobs.scheduled_jobs.NotificationService")
     @patch("pawguard.workers.jobs.scheduled_jobs.UserRepository")
-    async def test_check_inventory_low_stock(self, mock_user_repo_cls, mock_notif_cls, mock_session_factory):
+    async def test_check_inventory_low_stock(
+        self, mock_user_repo_cls, mock_notif_cls, mock_session_factory
+    ):
         """Should alert staff when stock <= reorder threshold."""
         item = MagicMock()
         item.name = "Dog Food"
@@ -118,7 +122,9 @@ class TestScheduledJobs:
     @patch("pawguard.workers.jobs.scheduled_jobs.AsyncSessionLocal")
     @patch("pawguard.workers.jobs.scheduled_jobs.NotificationService")
     @patch("pawguard.workers.jobs.scheduled_jobs.UserRepository")
-    async def test_check_inventory_low_stock_no_alerts(self, mock_user_repo_cls, mock_notif_cls, mock_session_factory):
+    async def test_check_inventory_low_stock_no_alerts(
+        self, mock_user_repo_cls, mock_notif_cls, mock_session_factory
+    ):
         """Should not alert when stock is sufficient."""
         mock_session = self._mock_session([])
         mock_session_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
@@ -135,7 +141,9 @@ class TestScheduledJobs:
     @patch("pawguard.workers.jobs.scheduled_jobs.AsyncSessionLocal")
     @patch("pawguard.workers.jobs.scheduled_jobs.NotificationService")
     @patch("pawguard.workers.jobs.scheduled_jobs.UserRepository")
-    async def test_check_inventory_expiry(self, mock_user_repo_cls, mock_notif_cls, mock_session_factory):
+    async def test_check_inventory_expiry(
+        self, mock_user_repo_cls, mock_notif_cls, mock_session_factory
+    ):
         """Should alert staff for items expiring within 60 days."""
         from datetime import date as date_type
 
@@ -165,7 +173,9 @@ class TestScheduledJobs:
     @patch("pawguard.workers.jobs.scheduled_jobs.AsyncSessionLocal")
     @patch("pawguard.workers.jobs.scheduled_jobs.NotificationService")
     @patch("pawguard.workers.jobs.scheduled_jobs.UserRepository")
-    async def test_check_vaccination_renewals(self, mock_user_repo_cls, mock_notif_cls, mock_session_factory):
+    async def test_check_vaccination_renewals(
+        self, mock_user_repo_cls, mock_notif_cls, mock_session_factory
+    ):
         """Should remind staff for vaccinations due within 14 days."""
         vax = MagicMock()
         vax.vaccine_name = "Rabies"
@@ -242,9 +252,7 @@ class TestScheduledJobs:
 
         mock_session = AsyncMock()
         mock_session.execute.side_effect = [item_result, no_staff_result]
-        mock_session_factory.return_value.__aenter__ = AsyncMock(
-            return_value=mock_session
-        )
+        mock_session_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session_factory.return_value.__aexit__ = AsyncMock(return_value=False)
 
         mock_notif = AsyncMock()
@@ -300,9 +308,7 @@ class TestScheduledJobs:
             no_feedback_result,
             no_prior_result,
         ]
-        mock_session_factory.return_value.__aenter__ = AsyncMock(
-            return_value=mock_session
-        )
+        mock_session_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session_factory.return_value.__aexit__ = AsyncMock(return_value=False)
 
         mock_notif = AsyncMock()
@@ -348,9 +354,7 @@ class TestScheduledJobs:
             adoption_new,
         ]
         feedback_result = MagicMock()
-        feedback_result.scalars.return_value.all.return_value = [
-            adoption_with_feedback.id
-        ]
+        feedback_result.scalars.return_value.all.return_value = [adoption_with_feedback.id]
         prior_result = MagicMock()
         prior_result.scalars.return_value.all.return_value = [
             f"/api/v1/grievance/feedback?adoption_application_id={adoption_with_prior.id}"
@@ -362,9 +366,7 @@ class TestScheduledJobs:
             feedback_result,
             prior_result,
         ]
-        mock_session_factory.return_value.__aenter__ = AsyncMock(
-            return_value=mock_session
-        )
+        mock_session_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session_factory.return_value.__aexit__ = AsyncMock(return_value=False)
 
         mock_notif = AsyncMock()
@@ -388,9 +390,7 @@ class TestScheduledJobs:
 
         mock_session = AsyncMock()
         mock_session.execute.return_value = empty_result
-        mock_session_factory.return_value.__aenter__ = AsyncMock(
-            return_value=mock_session
-        )
+        mock_session_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session_factory.return_value.__aexit__ = AsyncMock(return_value=False)
 
         mock_notif = AsyncMock()

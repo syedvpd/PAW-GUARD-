@@ -39,9 +39,11 @@ class InventoryRepository:
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
-    async def get_items_by_ids(self, item_ids: list[uuid.UUID]) -> dict[uuid.UUID, InventoryItem | None]:
+    async def get_items_by_ids(
+        self, item_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, InventoryItem | None]:
         """Fetch multiple items by ID in a single query.
-        
+
         Returns a dict mapping item_id -> item (or None if not found).
         More efficient than calling get_item in a loop (N+1 problem).
         """
@@ -59,9 +61,7 @@ class InventoryRepository:
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
-    async def update_item(
-        self, item: InventoryItem, **kwargs: object
-    ) -> InventoryItem:
+    async def update_item(self, item: InventoryItem, **kwargs: object) -> InventoryItem:
         for key, value in kwargs.items():
             if hasattr(item, key):
                 setattr(item, key, value)
@@ -79,7 +79,8 @@ class InventoryRepository:
         return movement
 
     async def list_movements_by_item(
-        self, item_id: uuid.UUID,
+        self,
+        item_id: uuid.UUID,
     ) -> Sequence[InventoryMovement]:
         stmt = (
             select(InventoryMovement)
@@ -174,9 +175,9 @@ class InventoryRepository:
 
     async def soft_delete_item(self, item_id: uuid.UUID) -> bool:
         from datetime import UTC, datetime
-        stmt = (
-            select(InventoryItem)
-            .where(InventoryItem.id == item_id, InventoryItem.deleted_at.is_(None))
+
+        stmt = select(InventoryItem).where(
+            InventoryItem.id == item_id, InventoryItem.deleted_at.is_(None)
         )
         item = (await self._session.execute(stmt)).scalar_one_or_none()
         if item is None:
@@ -187,10 +188,10 @@ class InventoryRepository:
 
     async def bulk_delete_items(self, ids: list[uuid.UUID]) -> int:
         from datetime import UTC, datetime
+
         now = datetime.now(UTC)
-        stmt = (
-            select(InventoryItem)
-            .where(InventoryItem.id.in_(ids), InventoryItem.deleted_at.is_(None))
+        stmt = select(InventoryItem).where(
+            InventoryItem.id.in_(ids), InventoryItem.deleted_at.is_(None)
         )
         items = (await self._session.execute(stmt)).scalars().all()
         for item in items:
@@ -203,11 +204,7 @@ class InventoryRepository:
         ids: list[uuid.UUID],
         status: RequisitionStatus,
     ) -> int:
-        stmt = (
-            update(RequisitionOrder)
-            .where(RequisitionOrder.id.in_(ids))
-            .values(status=status)
-        )
+        stmt = update(RequisitionOrder).where(RequisitionOrder.id.in_(ids)).values(status=status)
         result = await self._session.execute(stmt)
         await self._session.flush()
         return result.rowcount  # type: ignore[attr-defined,no-any-return]
@@ -244,9 +241,7 @@ class InventoryRepository:
         is_active: bool | None = None,
     ) -> tuple[Sequence[Supplier], int]:
         stmt = select(Supplier).where(Supplier.deleted_at.is_(None))
-        search_filter = build_search_filter(
-            Supplier, search_term, self.SEARCH_FIELDS_SUPPLIERS
-        )
+        search_filter = build_search_filter(Supplier, search_term, self.SEARCH_FIELDS_SUPPLIERS)
         if search_filter is not None:
             stmt = stmt.where(search_filter)
         if is_active is not None:
@@ -258,9 +253,7 @@ class InventoryRepository:
         results = (await self._session.execute(stmt)).scalars().all()
         return results, total
 
-    async def update_supplier(
-        self, supplier: Supplier, **kwargs: object
-    ) -> Supplier:
+    async def update_supplier(self, supplier: Supplier, **kwargs: object) -> Supplier:
         for key, value in kwargs.items():
             if hasattr(supplier, key):
                 setattr(supplier, key, value)
@@ -270,6 +263,7 @@ class InventoryRepository:
 
     async def soft_delete_supplier(self, supplier_id: uuid.UUID) -> bool:
         from datetime import UTC, datetime
+
         stmt = select(Supplier).where(
             Supplier.id == supplier_id,
             Supplier.deleted_at.is_(None),
@@ -295,7 +289,5 @@ class InventoryRepository:
         return (await self._session.execute(stmt)).scalars().all()
 
     async def get_supplier_items(self, supplier_id: uuid.UUID) -> Sequence[InventoryItemSupplier]:
-        stmt = select(InventoryItemSupplier).where(
-            InventoryItemSupplier.supplier_id == supplier_id
-        )
+        stmt = select(InventoryItemSupplier).where(InventoryItemSupplier.supplier_id == supplier_id)
         return (await self._session.execute(stmt)).scalars().all()

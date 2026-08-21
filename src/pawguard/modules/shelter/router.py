@@ -108,10 +108,7 @@ async def list_facilities(
         facility_type=facility_type,
     )
     return PaginatedResponse(
-        data=[
-            ShelterFacilityResponse.model_validate(f)
-            for f in result.data
-        ],
+        data=[ShelterFacilityResponse.model_validate(f) for f in result.data],
         meta=result.meta,
     )
 
@@ -201,10 +198,7 @@ async def list_sections(
         search_term=search,
     )
     return PaginatedResponse(
-        data=[
-            ShelterSectionResponse.model_validate(s)
-            for s in result.data
-        ],
+        data=[ShelterSectionResponse.model_validate(s) for s in result.data],
         meta=result.meta,
     )
 
@@ -247,7 +241,9 @@ async def list_kennels(
     db: AsyncSession = Depends(get_db),
 ) -> PaginatedResponse[KennelResponse]:
     result = await service.list_kennels_paginated(
-        page, sort, section_id=section_id,
+        page,
+        sort,
+        section_id=section_id,
     )
     # Enrich with occupancy data
     from sqlalchemy import select
@@ -306,9 +302,7 @@ async def assign_dog_to_kennel(
         dog_id,
         kennel_id,
         actor_id=current_user.id,
-        ip_address=request.client.host
-        if request.client
-        else None,
+        ip_address=request.client.host if request.client else None,
     )
     return ApiResponse(
         data=success,
@@ -332,9 +326,7 @@ async def update_kennel_sanitation(
         kennel_id,
         status_val,
         actor_id=current_user.id,
-        ip_address=request.client.host
-        if request.client
-        else None,
+        ip_address=request.client.host if request.client else None,
     )
     return ApiResponse(
         data=KennelResponse.model_validate(kennel),
@@ -360,9 +352,7 @@ async def log_kennel_cleaning(
         cleaned_by_id=current_user.id,
         payload=payload,
         actor_id=current_user.id,
-        ip_address=request.client.host
-        if request.client
-        else None,
+        ip_address=request.client.host if request.client else None,
     )
     return ApiResponse(
         data=KennelCleaningLogResponse.model_validate(log),
@@ -382,13 +372,12 @@ async def list_kennel_cleaning_logs(
     service: ShelterService = Depends(get_shelter_service),
 ) -> PaginatedResponse[KennelCleaningLogResponse]:
     result = await service.list_cleaning_logs_paginated(
-        page, sort, kennel_id=kennel_id,
+        page,
+        sort,
+        kennel_id=kennel_id,
     )
     return PaginatedResponse(
-        data=[
-            KennelCleaningLogResponse.model_validate(log)
-            for log in result.data
-        ],
+        data=[KennelCleaningLogResponse.model_validate(log) for log in result.data],
         meta=result.meta,
     )
 
@@ -409,16 +398,11 @@ async def request_transfer(
         current_user.user.id,
         payload,
         actor_id=current_user.id,
-        ip_address=request.client.host
-        if request.client
-        else None,
+        ip_address=request.client.host if request.client else None,
     )
     return ApiResponse(
         data=FacilityTransferResponse.model_validate(transfer),
-        message=(
-            "Inter-facility transfer request submitted "
-            "successfully."
-        ),
+        message=("Inter-facility transfer request submitted successfully."),
     )
 
 
@@ -515,16 +499,11 @@ async def submit_daily_care_log(
         current_user.user.id,
         payload,
         actor_id=current_user.id,
-        ip_address=request.client.host
-        if request.client
-        else None,
+        ip_address=request.client.host if request.client else None,
     )
     return ApiResponse(
         data=DailyCareLogResponse.model_validate(care_log),
-        message=(
-            "Daily care operational updates recorded "
-            "successfully."
-        ),
+        message=("Daily care operational updates recorded successfully."),
     )
 
 
@@ -539,10 +518,7 @@ async def list_care_logs(
 ) -> ApiResponse[list[DailyCareLogResponse]]:
     logs = await service.list_care_logs(dog_id)
     return ApiResponse(
-        data=[
-            DailyCareLogResponse.model_validate(log)
-            for log in logs
-        ],
+        data=[DailyCareLogResponse.model_validate(log) for log in logs],
     )
 
 
@@ -570,7 +546,8 @@ async def update_facility_status(
     service: ShelterService = Depends(get_shelter_service),
 ) -> ApiResponse[ShelterFacilityResponse]:
     facility = await service.update_facility_status(
-        facility_id, payload.status,
+        facility_id,
+        payload.status,
     )
     return ApiResponse(
         data=ShelterFacilityResponse.model_validate(facility),
@@ -606,7 +583,8 @@ async def bulk_update_facility_status(
     service: ShelterService = Depends(get_shelter_service),
 ) -> BulkStatusUpdateResponse:
     updated = await service.bulk_update_facility_status(
-        payload.ids, parse_enum(FacilityStatus, payload.status),
+        payload.ids,
+        parse_enum(FacilityStatus, payload.status),
     )
     return BulkStatusUpdateResponse(
         message=f"{updated} facilities updated.",

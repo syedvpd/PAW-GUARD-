@@ -309,9 +309,12 @@ class FinanceExpenseResponse(BaseModel):
 
 class RefundRequest(BaseModel):
     donation_id: uuid.UUID
-    reason: str = Field(..., min_length=5, max_length=1000, examples=["Donor requested cancellation."])
+    reason: str = Field(
+        ..., min_length=5, max_length=1000, examples=["Donor requested cancellation."]
+    )
     refund_amount: Decimal | None = Field(
-        default=None, gt=0,
+        default=None,
+        gt=0,
         description="Partial refund amount. If omitted, full donation amount is refunded.",
     )
 

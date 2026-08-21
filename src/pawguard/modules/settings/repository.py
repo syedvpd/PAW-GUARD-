@@ -22,9 +22,11 @@ class SystemSettingRepository:
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def list_by_category(self, category: str) -> Sequence[SystemSetting]:
-        stmt = select(SystemSetting).where(
-            SystemSetting.category == category
-        ).order_by(SystemSetting.key)
+        stmt = (
+            select(SystemSetting)
+            .where(SystemSetting.category == category)
+            .order_by(SystemSetting.key)
+        )
         return (await self._session.execute(stmt)).scalars().all()
 
     async def list_all(self) -> Sequence[SystemSetting]:
@@ -37,11 +39,7 @@ class SystemSettingRepository:
         return setting
 
     async def update_by_key(self, key: str, value: str) -> SystemSetting | None:
-        stmt = (
-            update(SystemSetting)
-            .where(SystemSetting.key == key)
-            .values(value=value)
-        )
+        stmt = update(SystemSetting).where(SystemSetting.key == key).values(value=value)
         await self._session.execute(stmt)
         return await self.get_by_key(key)
 
@@ -87,9 +85,11 @@ class BusinessRuleRepository:
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def list_by_module(self, module: str) -> Sequence[BusinessRule]:
-        stmt = select(BusinessRule).where(
-            BusinessRule.module == module
-        ).order_by(BusinessRule.rule_key)
+        stmt = (
+            select(BusinessRule)
+            .where(BusinessRule.module == module)
+            .order_by(BusinessRule.rule_key)
+        )
         return (await self._session.execute(stmt)).scalars().all()
 
     async def list_all(self) -> Sequence[BusinessRule]:

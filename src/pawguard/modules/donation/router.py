@@ -85,9 +85,7 @@ _UNMASKED_DONOR_PII_PERMISSIONS = {
 }
 
 
-def _mask_donor_pii(
-    item: DonorProfileResponse, current_user: CurrentUser
-) -> DonorProfileResponse:
+def _mask_donor_pii(item: DonorProfileResponse, current_user: CurrentUser) -> DonorProfileResponse:
     """Return a copy of the response with donor PII masked unless the
     caller holds donor-management permissions or is the donor themselves."""
     is_owner = current_user.user.id == item.user_id
@@ -127,7 +125,10 @@ def get_donation_service(
         gateway = None
     finance_svc = FinanceService(FinanceRepository(db), audit_service=audit)
     return DonationService(
-        repo, dog_repo, gateway, audit_service=audit,
+        repo,
+        dog_repo,
+        gateway,
+        audit_service=audit,
         notification_service=notification_svc,
         storage_service=storage_svc,
         finance_service=finance_svc,
@@ -171,7 +172,9 @@ async def update_donor(
     service: DonationService = Depends(get_donation_service),
 ) -> ApiResponse[DonorProfileResponse]:
     donor = await service.update_donor(
-        donor_id, payload, actor_id=current_user.id,
+        donor_id,
+        payload,
+        actor_id=current_user.id,
         ip_address=request.client.host if request.client else None,
     )
     return ApiResponse(
@@ -193,7 +196,8 @@ async def soft_delete_donor(
     service: DonationService = Depends(get_donation_service),
 ) -> ApiResponse[None]:
     await service.soft_delete_donor(
-        donor_id, actor_id=current_user.id,
+        donor_id,
+        actor_id=current_user.id,
         ip_address=request.client.host if request.client else None,
     )
     return ApiResponse(message="Donor profile deleted successfully.")
@@ -216,7 +220,9 @@ async def record_manual_donation(
     donations from the public must use POST /donations/checkout + /verify,
     which actually verify payment before marking a donation SUCCESS."""
     donation = await service.make_donation(
-        current_user.id, payload, actor_id=current_user.id,
+        current_user.id,
+        payload,
+        actor_id=current_user.id,
         ip_address=request.client.host if request.client else None,
     )
     return ApiResponse(
@@ -262,7 +268,9 @@ async def verify_donation_checkout(
 ) -> ApiResponse[DonationResponse]:
     donation = await service.get_donation(payload.donation_id)
     is_owner = donation.donor is not None and donation.donor.user_id == current_user.user.id
-    has_staff_perm = has_permission(current_user.user, "finance:reconcile") or has_permission(current_user.user, "donation:read")
+    has_staff_perm = has_permission(current_user.user, "finance:reconcile") or has_permission(
+        current_user.user, "donation:read"
+    )
     if not is_owner and not has_staff_perm:
         raise ForbiddenError("You do not have permission to verify this donation payment.")
     donation = await service.verify_donation_payment(
@@ -378,6 +386,7 @@ async def get_donation_receipt(
     if not donation.receipt_file_key:
         from pawguard.modules.finance.repository import FinanceRepository
         from pawguard.modules.finance.service import FinanceService
+
         finance = FinanceService(FinanceRepository(db), audit_service=audit)
         try:
             await finance.ensure_donation_receipt(donation_id, actor_id=current_user.id)
@@ -410,7 +419,9 @@ async def update_donation_status(
     service: DonationService = Depends(get_donation_service),
 ) -> ApiResponse[DonationResponse]:
     donation = await service.update_donation_status(
-        donation_id, payload.status, actor_id=current_user.id,
+        donation_id,
+        payload.status,
+        actor_id=current_user.id,
         ip_address=request.client.host if request.client else None,
     )
     return ApiResponse(
@@ -486,7 +497,8 @@ async def bulk_delete_donors(
     service: DonationService = Depends(get_donation_service),
 ) -> ApiResponse[BulkDeleteResponse]:
     deleted = await service.bulk_soft_delete(
-        payload.ids, actor_id=current_user.id,
+        payload.ids,
+        actor_id=current_user.id,
         ip_address=request.client.host if request.client else None,
     )
     return ApiResponse(
@@ -510,7 +522,8 @@ async def create_sponsorship(
     service: DonationService = Depends(get_donation_service),
 ) -> ApiResponse[SponsorshipResponse]:
     sponsorship = await service.create_sponsorship(
-        current_user.id, payload,
+        current_user.id,
+        payload,
         actor_id=current_user.id,
         ip_address=request.client.host if request.client else None,
     )
@@ -537,13 +550,15 @@ async def update_sponsorship_status(
         raise ForbiddenError("You do not have permission to update this sponsorship.")
     if payload.status == SponsorshipStatus.PAUSED:
         sponsorship = await service.pause_sponsorship(
-            sponsorship_id, actor_id=current_user.id,
+            sponsorship_id,
+            actor_id=current_user.id,
             ip_address=request.client.host if request.client else None,
         )
         message = "Sponsorship paused successfully."
     elif payload.status == SponsorshipStatus.CANCELLED:
         sponsorship = await service.cancel_sponsorship(
-            sponsorship_id, actor_id=current_user.id,
+            sponsorship_id,
+            actor_id=current_user.id,
             ip_address=request.client.host if request.client else None,
         )
         message = "Sponsorship cancelled successfully."
@@ -775,10 +790,7 @@ async def list_my_recurring_subscriptions(
         donor.id,
     )
     return ApiResponse(
-        data=[
-            RecurringSubscriptionResponse.model_validate(s)
-            for s in subscriptions
-        ],
+        data=[RecurringSubscriptionResponse.model_validate(s) for s in subscriptions],
         message="Recurring subscriptions retrieved.",
     )
 
@@ -798,16 +810,9 @@ async def cancel_recurring_subscription(
     )
     if subscription is None:
         raise NotFoundError("Recurring subscription not found.")
-    is_owner = (
-        subscription.donor is not None
-        and subscription.donor.user_id == current_user.user.id
-    )
-    if not is_owner and not has_permission(
-        current_user.user, "donation:manage"
-    ):
-        raise ForbiddenError(
-            "You do not have permission to cancel this subscription."
-        )
+    is_owner = subscription.donor is not None and subscription.donor.user_id == current_user.user.id
+    if not is_owner and not has_permission(current_user.user, "donation:manage"):
+        raise ForbiddenError("You do not have permission to cancel this subscription.")
     updated = await service.cancel_recurring_subscription(
         subscription_id,
         actor_id=current_user.id,

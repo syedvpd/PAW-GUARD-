@@ -95,6 +95,7 @@ def get_portal_service(
 
 # ── Public reads (no auth) ───────────────────────────────────────────────────
 
+
 @router.get(
     "/stats",
     response_model=ApiResponse[PublicHeroStats],
@@ -250,6 +251,7 @@ async def get_user_dashboard(
 
 
 # ── Admin CMS writes ─────────────────────────────────────────────────────────
+
 
 @router.post(
     "/admin/success-stories",
@@ -508,6 +510,7 @@ async def update_faq(
 
 # ── Admin paginated list endpoints ────────────────────────────────────────────
 
+
 @router.get(
     "/admin/success-stories",
     response_model=PaginatedResponse[SuccessStoryResponse],
@@ -625,6 +628,7 @@ async def list_settings(
 
 # ── Soft delete endpoints ────────────────────────────────────────────────────
 
+
 @router.delete(
     "/admin/success-stories/{story_id}",
     response_model=ApiResponse[None],
@@ -689,6 +693,7 @@ async def soft_delete_faq(
 
 
 # ── Bulk operation endpoints ─────────────────────────────────────────────────
+
 
 @router.post(
     "/admin/success-stories/bulk/delete",
@@ -827,9 +832,7 @@ async def bulk_update_faq_status(
     service: PortalService = Depends(get_portal_service),
 ) -> BulkStatusUpdateResponse:
     ip = request.client.host if request.client else None
-    is_published = (
-        payload.status.lower() == "true" or payload.status == "published"
-    )
+    is_published = payload.status.lower() == "true" or payload.status == "published"
     updated = await service.bulk_update_faq_status(
         payload.ids,
         is_published,
@@ -843,6 +846,7 @@ async def bulk_update_faq_status(
 
 
 # ── Legal documents (admin) ──────────────────────────────────────────────────
+
 
 @router.post(
     "/admin/legal",
@@ -943,6 +947,7 @@ async def admin_list_legal_docs(
 
 
 # ── Urgent alerts (admin) ────────────────────────────────────────────────────
+
 
 @router.post(
     "/admin/urgent-alerts",

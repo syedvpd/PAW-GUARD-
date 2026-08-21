@@ -1,11 +1,13 @@
 import uuid
-from unittest.mock import AsyncMock, MagicMock
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
+
+from pawguard.modules.auth.models import User
 from pawguard.modules.rescue.models import RescueDispatch, RescueRequest, RescueStatus
-from pawguard.modules.rescue.schemas import RescueDispatchResponse, NearbyAgentResponse
+from pawguard.modules.rescue.schemas import RescueDispatchResponse
 from pawguard.modules.rescue.service import RescueService
-from pawguard.modules.auth.models import User, Role
 
 
 class TestRescueGeo:
@@ -37,9 +39,7 @@ class TestRescueGeo:
         mock_redis.geoadd.assert_called_once_with(
             "rescue:agent_locations", (78.3741, 17.4482, str(agent_id))
         )
-        mock_redis.set.assert_any_call(
-            f"rescue:agent_active:{agent_id}", "1", ex=300
-        )
+        mock_redis.set.assert_any_call(f"rescue:agent_active:{agent_id}", "1", ex=300)
 
     @pytest.mark.asyncio
     async def test_get_nearest_agents_redis_hit(self, service, mock_repo, mock_redis):

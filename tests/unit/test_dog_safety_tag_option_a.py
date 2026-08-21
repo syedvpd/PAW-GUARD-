@@ -3,16 +3,15 @@
 import uuid
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 
-from pawguard.core.exceptions import ConflictError, NotFoundError
-from pawguard.modules.auth.dependencies import CurrentUser
+from pawguard.core.exceptions import ConflictError
 from pawguard.modules.auth.models import User
 from pawguard.modules.companion_pet.models import CompanionPet, SafetyTag
 from pawguard.modules.companion_pet.service import CompanionPetService
 from pawguard.modules.dog.models import DogGender, DogProfile, DogStatus
 from pawguard.modules.lost_found.models import LostReport, ReportStatus
-
 
 
 class TestDogSafetyTagOptionA:
@@ -45,9 +44,10 @@ class TestDogSafetyTagOptionA:
         current_user.user = user_mock
         return current_user
 
-
     @pytest.mark.asyncio
-    async def test_a_admitted_dog_safety_tag_provisioning(self, service, mock_repo, mock_session, admin_user):
+    async def test_a_admitted_dog_safety_tag_provisioning(
+        self, service, mock_repo, mock_session, admin_user
+    ):
         """TEST A: ADMITTED dog without CompanionPet -> provision Safety Tag -> SUCCESS."""
         dog_id = uuid.uuid4()
         dog = DogProfile(
@@ -302,7 +302,9 @@ class TestDogSafetyTagOptionA:
         tag.pet = pet
 
         mock_repo.get_tag_by_hash.return_value = tag
-        mock_repo.get_active_lost_report_for_pet.return_value = None  # No active lost report after reunion
+        mock_repo.get_active_lost_report_for_pet.return_value = (
+            None  # No active lost report after reunion
+        )
 
         _tag, _pet, lost_info = await service.scan_safety_tag("rawtok_h")
 
@@ -325,7 +327,9 @@ class TestDogSafetyTagOptionA:
             is_active=True,
         )
         dog = DogProfile(id=dog_id, name="Legacy Rover", status=DogStatus.ADOPTED)
-        pet = CompanionPet(id=pet_id, name="Legacy Rover", original_dog_id=dog_id, is_scan_enabled=True)
+        pet = CompanionPet(
+            id=pet_id, name="Legacy Rover", original_dog_id=dog_id, is_scan_enabled=True
+        )
         legacy_tag.dog = dog
         legacy_tag.pet = pet
 

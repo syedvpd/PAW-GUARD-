@@ -83,7 +83,9 @@ async def create_item(
         raise ForbiddenError("Requisition approval requires administrator privileges.")
     ip = request.client.host if request.client else None
     item = await service.create_item(
-        payload, actor_id=current_user.id, ip_address=ip,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
     )
     return ApiResponse(
         data=InventoryItemResponse.model_validate(item),
@@ -137,7 +139,10 @@ async def update_item(
 ) -> ApiResponse[InventoryItemResponse]:
     ip = request.client.host if request.client else None
     item = await service.update_item(
-        item_id, payload, actor_id=current_user.id, ip_address=ip,
+        item_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
     )
     return ApiResponse(
         data=InventoryItemResponse.model_validate(item),
@@ -159,8 +164,10 @@ async def record_movement(
 ) -> ApiResponse[InventoryMovementResponse]:
     ip = request.client.host if request.client else None
     movement = await service.record_movement(
-        current_user.id, payload,
-        actor_id=current_user.id, ip_address=ip,
+        current_user.id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
     )
     return ApiResponse(
         data=InventoryMovementResponse.model_validate(movement),
@@ -181,7 +188,10 @@ async def list_movements(
     service: InventoryService = Depends(get_inventory_service),
 ) -> PaginatedResponse[InventoryMovementResponse]:
     result = await service.list_movements_paginated(
-        page, sort, item_id=item_id, movement_type=movement_type,
+        page,
+        sort,
+        item_id=item_id,
+        movement_type=movement_type,
     )
     return PaginatedResponse(
         data=[InventoryMovementResponse.model_validate(m) for m in result.data],
@@ -203,8 +213,10 @@ async def create_requisition(
 ) -> ApiResponse[RequisitionOrderResponse]:
     ip = request.client.host if request.client else None
     req = await service.create_requisition(
-        current_user.id, payload,
-        actor_id=current_user.id, ip_address=ip,
+        current_user.id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
     )
     return ApiResponse(
         data=RequisitionOrderResponse.model_validate(req),
@@ -244,8 +256,11 @@ async def update_requisition_status(
 ) -> ApiResponse[RequisitionOrderResponse]:
     ip = request.client.host if request.client else None
     req = await service.update_requisition_status(
-        current_user.id, req_id, payload.status,
-        actor_id=current_user.id, ip_address=ip,
+        current_user.id,
+        req_id,
+        payload.status,
+        actor_id=current_user.id,
+        ip_address=ip,
     )
     return ApiResponse(
         data=RequisitionOrderResponse.model_validate(req),
@@ -266,7 +281,9 @@ async def delete_item(
 ) -> ApiResponse[None]:
     ip = request.client.host if request.client else None
     await service.soft_delete_item(
-        item_id, actor_id=current_user.id, ip_address=ip,
+        item_id,
+        actor_id=current_user.id,
+        ip_address=ip,
     )
     return ApiResponse(message="Inventory item deleted.")
 
@@ -284,7 +301,9 @@ async def bulk_delete_items(
 ) -> BulkDeleteResponse:
     ip = request.client.host if request.client else None
     deleted = await service.bulk_delete_items(
-        payload.ids, actor_id=current_user.id, ip_address=ip,
+        payload.ids,
+        actor_id=current_user.id,
+        ip_address=ip,
     )
     return BulkDeleteResponse(
         message=f"{deleted} items deleted.",
@@ -302,7 +321,8 @@ async def bulk_update_requisition_status(
     service: InventoryService = Depends(get_inventory_service),
 ) -> BulkStatusUpdateResponse:
     updated = await service.bulk_update_requisition_status(
-        payload.ids, parse_enum(RequisitionStatus, payload.status),
+        payload.ids,
+        parse_enum(RequisitionStatus, payload.status),
     )
     return BulkStatusUpdateResponse(
         message=f"{updated} requisitions updated.",
@@ -327,7 +347,9 @@ async def create_supplier(
 ) -> ApiResponse[SupplierResponse]:
     ip = request.client.host if request.client else None
     supplier = await service.create_supplier(
-        payload, actor_id=current_user.id, ip_address=ip,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
     )
     return ApiResponse(
         data=SupplierResponse.model_validate(supplier),
@@ -377,7 +399,10 @@ async def update_supplier(
 ) -> ApiResponse[SupplierResponse]:
     ip = request.client.host if request.client else None
     supplier = await service.update_supplier(
-        supplier_id, payload, actor_id=current_user.id, ip_address=ip,
+        supplier_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
     )
     return ApiResponse(
         data=SupplierResponse.model_validate(supplier),
@@ -398,6 +423,8 @@ async def delete_supplier(
 ) -> ApiResponse[None]:
     ip = request.client.host if request.client else None
     await service.soft_delete_supplier(
-        supplier_id, actor_id=current_user.id, ip_address=ip,
+        supplier_id,
+        actor_id=current_user.id,
+        ip_address=ip,
     )
     return ApiResponse(message="Supplier deleted.")

@@ -16,16 +16,29 @@ class PublicUser(HttpUser):
 
     @task(1)
     def submit_rescue_report(self):
-        self.client.post("/api/v1/public/rescue/report", json={
-            "reporter_name": "Load Tester", "reporter_phone": "+919876543210",
-            "reporter_email": "load@test.com", "location": {"address": "Load St", "latitude": 17.4, "longitude": 78.4},
-            "number_of_dogs": 1, "animal_condition": "stray", "description": "Load test"
-        }, name="/api/v1/public/rescue/report")
+        self.client.post(
+            "/api/v1/public/rescue/report",
+            json={
+                "reporter_name": "Load Tester",
+                "reporter_phone": "+919876543210",
+                "reporter_email": "load@test.com",
+                "location": {"address": "Load St", "latitude": 17.4, "longitude": 78.4},
+                "number_of_dogs": 1,
+                "animal_condition": "stray",
+                "description": "Load test",
+            },
+            name="/api/v1/public/rescue/report",
+        )
 
     @task(1)
     def submit_adoption_application(self):
-        self.client.post("/api/v1/adoption/applications", json={
-            "dog_id": "00000000-0000-0000-0000-000000000000",
-            "applicant_name": "Load Tester", "applicant_email": "load@test.com",
-            "applicant_phone": "+919876543210"
-        }, name="/api/v1/adoption/applications")
+        self.client.post(
+            "/api/v1/adoption/applications",
+            json={
+                "dog_id": "00000000-0000-0000-0000-000000000000",
+                "applicant_name": "Load Tester",
+                "applicant_email": "load@test.com",
+                "applicant_phone": "+919876543210",
+            },
+            name="/api/v1/adoption/applications",
+        )

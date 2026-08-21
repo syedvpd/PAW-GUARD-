@@ -28,6 +28,7 @@ def _jpeg_bytes() -> bytes:
     Image.new("RGB", (8, 8), color=(0, 128, 255)).save(buf, format="JPEG")
     return buf.getvalue()
 
+
 # A real 1x1 PNG so python-magic's signature detection recognizes it.
 _PNG_BYTES = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
@@ -37,8 +38,14 @@ _PNG_BYTES = base64.b64decode(
 def _make_file(**kw):
     now = datetime.now(UTC)
     vals = dict(
-        object_key="dogs/abc.jpg", original_filename="abc.jpg", mime_type="image/jpeg",
-        file_size=1024, folder="dogs", is_uploaded=False, created_at=now, updated_at=now,
+        object_key="dogs/abc.jpg",
+        original_filename="abc.jpg",
+        mime_type="image/jpeg",
+        file_size=1024,
+        folder="dogs",
+        is_uploaded=False,
+        created_at=now,
+        updated_at=now,
     )
     vals.update(kw)
     return StoredFile(**vals)
@@ -99,7 +106,9 @@ class TestStorageService:
         assert result.thumbnail_object_key == "dogs/abc_thumb.jpg"
 
     @pytest.mark.asyncio
-    async def test_confirm_upload_thumbnail_failure_does_not_reject(self, service, mock_repo, mock_s3):
+    async def test_confirm_upload_thumbnail_failure_does_not_reject(
+        self, service, mock_repo, mock_s3
+    ):
         file_id = uuid.uuid4()
         stored = _make_file(id=file_id, mime_type="image/jpeg", file_size=999)
         mock_repo.get_by_id.return_value = stored
@@ -143,9 +152,7 @@ class TestStorageService:
         assert stored.is_uploaded is False
 
     @pytest.mark.asyncio
-    async def test_confirm_upload_rejects_oversized_batch(
-        self, service, mock_repo, mock_s3
-    ):
+    async def test_confirm_upload_rejects_oversized_batch(self, service, mock_repo, mock_s3):
         """When batch_file_ids are provided the combined size is checked
         against the 50 MB cap before the individual file is confirmed."""
         file_id = uuid.uuid4()
@@ -183,7 +190,9 @@ class TestS3PresignedUploadUrl:
 
     def test_upload_url_does_not_sign_content_type(self) -> None:
         mock_client = MagicMock()
-        mock_client.generate_presigned_url.return_value = "https://bucket/signed?X-Amz-SignedHeaders=host"
+        mock_client.generate_presigned_url.return_value = (
+            "https://bucket/signed?X-Amz-SignedHeaders=host"
+        )
         svc = self._service(mock_client)
 
         url = svc.generate_presigned_upload_url(

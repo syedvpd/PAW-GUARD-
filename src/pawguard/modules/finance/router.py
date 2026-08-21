@@ -73,9 +73,7 @@ async def create_account(
     service: FinanceService = Depends(get_finance_service),
 ) -> ApiResponse[ChartOfAccountsResponse]:
     ip = request.client.host if request.client else None
-    account = await service.create_account(
-        payload, actor_id=current_user.id, ip_address=ip
-    )
+    account = await service.create_account(payload, actor_id=current_user.id, ip_address=ip)
     return ApiResponse(
         data=ChartOfAccountsResponse.model_validate(account),
         message="Account created.",
@@ -147,9 +145,7 @@ async def delete_account(
     service: FinanceService = Depends(get_finance_service),
 ) -> ApiResponse[None]:
     ip = request.client.host if request.client else None
-    await service.soft_delete_account(
-        account_id, actor_id=current_user.id, ip_address=ip
-    )
+    await service.soft_delete_account(account_id, actor_id=current_user.id, ip_address=ip)
     return ApiResponse(message="Account deleted.")
 
 
@@ -166,9 +162,7 @@ async def create_transaction(
     service: FinanceService = Depends(get_finance_service),
 ) -> ApiResponse[FinancialTransactionResponse]:
     ip = request.client.host if request.client else None
-    tx = await service.create_transaction(
-        payload, actor_id=current_user.id, ip_address=ip
-    )
+    tx = await service.create_transaction(payload, actor_id=current_user.id, ip_address=ip)
     return ApiResponse(
         data=FinancialTransactionResponse.model_validate(tx),
         message="Transaction created.",
@@ -245,9 +239,7 @@ async def delete_transaction(
     service: FinanceService = Depends(get_finance_service),
 ) -> ApiResponse[None]:
     ip = request.client.host if request.client else None
-    await service.soft_delete_transaction(
-        tx_id, actor_id=current_user.id, ip_address=ip
-    )
+    await service.soft_delete_transaction(tx_id, actor_id=current_user.id, ip_address=ip)
     return ApiResponse(message="Transaction deleted.")
 
 
@@ -308,9 +300,7 @@ async def reconcile_donations(
         actor_id=current_user.id,
         ip_address=ip,
     )
-    return ApiResponse(
-        data=result, message=f"Reconciled {result['reconciled']} donations."
-    )
+    return ApiResponse(data=result, message=f"Reconciled {result['reconciled']} donations.")
 
 
 @router.get(
@@ -338,9 +328,7 @@ async def create_budget(
     service: FinanceService = Depends(get_finance_service),
 ) -> ApiResponse[BudgetResponse]:
     ip = request.client.host if request.client else None
-    budget = await service.create_budget(
-        payload, actor_id=current_user.id, ip_address=ip
-    )
+    budget = await service.create_budget(payload, actor_id=current_user.id, ip_address=ip)
     return ApiResponse(
         data=BudgetResponse.model_validate(budget),
         message="Budget created.",
@@ -360,9 +348,7 @@ async def list_budgets(
     is_active: bool | None = Query(None),
     service: FinanceService = Depends(get_finance_service),
 ) -> PaginatedResponse[BudgetResponse]:
-    return await service.list_budgets_paginated(
-        page, sort, search, fiscal_year, is_active
-    )
+    return await service.list_budgets_paginated(page, sort, search, fiscal_year, is_active)
 
 
 @router.get(
@@ -413,9 +399,7 @@ async def delete_budget(
     service: FinanceService = Depends(get_finance_service),
 ) -> ApiResponse[None]:
     ip = request.client.host if request.client else None
-    await service.soft_delete_budget(
-        budget_id, actor_id=current_user.id, ip_address=ip
-    )
+    await service.soft_delete_budget(budget_id, actor_id=current_user.id, ip_address=ip)
     return ApiResponse(message="Budget deleted.")
 
 
@@ -432,9 +416,7 @@ async def create_recurring(
     service: FinanceService = Depends(get_finance_service),
 ) -> ApiResponse[RecurringTransactionResponse]:
     ip = request.client.host if request.client else None
-    rtx = await service.create_recurring(
-        payload, actor_id=current_user.id, ip_address=ip
-    )
+    rtx = await service.create_recurring(payload, actor_id=current_user.id, ip_address=ip)
     return ApiResponse(
         data=RecurringTransactionResponse.model_validate(rtx),
         message="Recurring transaction created.",
@@ -453,9 +435,7 @@ async def list_recurring(
     is_active: bool | None = Query(None),
     service: FinanceService = Depends(get_finance_service),
 ) -> PaginatedResponse[RecurringTransactionResponse]:
-    return await service.list_recurring_paginated(
-        page, sort, search, is_active
-    )
+    return await service.list_recurring_paginated(page, sort, search, is_active)
 
 
 @router.delete(
@@ -470,9 +450,7 @@ async def delete_recurring(
     service: FinanceService = Depends(get_finance_service),
 ) -> ApiResponse[None]:
     ip = request.client.host if request.client else None
-    await service.soft_delete_recurring(
-        rtx_id, actor_id=current_user.id, ip_address=ip
-    )
+    await service.soft_delete_recurring(rtx_id, actor_id=current_user.id, ip_address=ip)
     return ApiResponse(message="Recurring transaction deleted.")
 
 
@@ -535,9 +513,7 @@ async def create_expense(
     service: FinanceService = Depends(get_finance_service),
 ) -> ApiResponse[FinanceExpenseResponse]:
     ip = request.client.host if request.client else None
-    expense = await service.create_expense(
-        payload, actor_id=current_user.id, ip_address=ip
-    )
+    expense = await service.create_expense(payload, actor_id=current_user.id, ip_address=ip)
     return ApiResponse(
         data=FinanceExpenseResponse.model_validate(expense),
         message="Expense created.",
@@ -611,9 +587,7 @@ async def submit_expense(
     service: FinanceService = Depends(get_finance_service),
 ) -> ApiResponse[FinanceExpenseResponse]:
     ip = request.client.host if request.client else None
-    expense = await service.submit_expense(
-        expense_id, actor_id=current_user.id, ip_address=ip
-    )
+    expense = await service.submit_expense(expense_id, actor_id=current_user.id, ip_address=ip)
     return ApiResponse(
         data=FinanceExpenseResponse.model_validate(expense),
         message="Expense submitted for approval.",
@@ -632,9 +606,7 @@ async def approve_expense(
     service: FinanceService = Depends(get_finance_service),
 ) -> ApiResponse[FinanceExpenseResponse]:
     ip = request.client.host if request.client else None
-    expense = await service.approve_expense(
-        expense_id, actor_id=current_user.id, ip_address=ip
-    )
+    expense = await service.approve_expense(expense_id, actor_id=current_user.id, ip_address=ip)
     return ApiResponse(
         data=FinanceExpenseResponse.model_validate(expense),
         message="Expense approved.",
@@ -675,9 +647,7 @@ async def pay_expense(
     service: FinanceService = Depends(get_finance_service),
 ) -> ApiResponse[FinanceExpenseResponse]:
     ip = request.client.host if request.client else None
-    expense = await service.pay_expense(
-        expense_id, actor_id=current_user.id, ip_address=ip
-    )
+    expense = await service.pay_expense(expense_id, actor_id=current_user.id, ip_address=ip)
     return ApiResponse(
         data=FinanceExpenseResponse.model_validate(expense),
         message="Expense marked as paid and posted to ledger.",
@@ -696,9 +666,7 @@ async def delete_expense(
     service: FinanceService = Depends(get_finance_service),
 ) -> ApiResponse[None]:
     ip = request.client.host if request.client else None
-    await service.soft_delete_expense(
-        expense_id, actor_id=current_user.id, ip_address=ip
-    )
+    await service.soft_delete_expense(expense_id, actor_id=current_user.id, ip_address=ip)
     return ApiResponse(message="Expense deleted.")
 
 

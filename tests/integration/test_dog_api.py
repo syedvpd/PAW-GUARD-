@@ -27,9 +27,7 @@ LOGIN_PAYLOAD = {
 @pytest.mark.asyncio
 class TestDogAPI:
     async def _auth(self, client: AsyncClient, db_session: AsyncSession) -> dict:
-        return await register_and_auth(
-            client, db_session, email=REGISTER_PAYLOAD["email"]
-        )
+        return await register_and_auth(client, db_session, email=REGISTER_PAYLOAD["email"])
 
     async def test_register_dog(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
@@ -58,7 +56,9 @@ class TestDogAPI:
         # granted via the vet-authorized medical clearance endpoint.
         assert data["is_adoptable"] is False
 
-    async def test_register_dog_validation_error(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_register_dog_validation_error(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         headers = await self._auth(client, db_session)
         resp = await client.post("/api/v1/dogs", json={"name": ""}, headers=headers)
         assert resp.status_code == 422
@@ -111,7 +111,9 @@ class TestDogAPI:
             "/api/v1/dogs", json={**base, "distinctive_markers": "left ear notch"}, headers=headers
         )
         second = await client.post(
-            "/api/v1/dogs", json={**base, "distinctive_markers": "white chest patch"}, headers=headers
+            "/api/v1/dogs",
+            json={**base, "distinctive_markers": "white chest patch"},
+            headers=headers,
         )
         assert first.status_code == 201
         assert second.status_code == 201
@@ -249,7 +251,9 @@ class TestDogAPI:
         pure = await client.post(
             "/api/v1/dogs",
             json={
-                "name": "Purebred", "breed": "Labrador", "gender": "male",
+                "name": "Purebred",
+                "breed": "Labrador",
+                "gender": "male",
                 "breed_classification": "pure",
             },
             headers=headers,
@@ -314,8 +318,11 @@ class TestDogAPI:
         """Ear shape, tail type and distinctive markers survive create + update."""
         headers = await self._auth(client, db_session)
         payload = {
-            "name": "MarkerDog", "breed": "Mix", "gender": "male",
-            "ear_shape": "floppy", "tail_type": "curled",
+            "name": "MarkerDog",
+            "breed": "Mix",
+            "gender": "male",
+            "ear_shape": "floppy",
+            "tail_type": "curled",
             "distinctive_markers": "White patch on chest, notched left ear",
         }
         resp = await client.post("/api/v1/dogs", json=payload, headers=headers)
@@ -356,12 +363,24 @@ class TestDogAPI:
 
         young = await client.post(
             "/api/v1/dogs",
-            json={"name": "Puppy", "breed": "Mix", "gender": "male", "estimated_age": "6 months", "weight": 4.0},
+            json={
+                "name": "Puppy",
+                "breed": "Mix",
+                "gender": "male",
+                "estimated_age": "6 months",
+                "weight": 4.0,
+            },
             headers=headers,
         )
         adult = await client.post(
             "/api/v1/dogs",
-            json={"name": "Mature", "breed": "Mix", "gender": "male", "estimated_age": "3 years", "weight": 25.0},
+            json={
+                "name": "Mature",
+                "breed": "Mix",
+                "gender": "male",
+                "estimated_age": "3 years",
+                "weight": 25.0,
+            },
             headers=headers,
         )
         assert young.status_code == adult.status_code == 201
@@ -371,9 +390,7 @@ class TestDogAPI:
         # Make both adoptable so the anonymous directory can see them.
         for dog_id in (young_id, adult_id):
             dog = (
-                await db_session.execute(
-                    select(DogProfile).where(DogProfile.id == dog_id)
-                )
+                await db_session.execute(select(DogProfile).where(DogProfile.id == dog_id))
             ).scalar_one()
             dog.is_adoptable = True
         await db_session.commit()
@@ -409,7 +426,9 @@ class TestDogAPI:
         resp = await client.post(
             "/api/v1/dogs",
             json={
-                "name": "LocDog", "breed": "Mix", "gender": "female",
+                "name": "LocDog",
+                "breed": "Mix",
+                "gender": "female",
                 "shelter_facility_id": str(facility.id),
             },
             headers=headers,
@@ -440,7 +459,15 @@ class TestDogAPI:
 
     async def test_list_dogs(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
-        payload = {"name": "Buddy", "breed": "Beagle", "gender": "male", "estimated_age": "2y", "weight": 15, "color": "brown", "temperament": "friendly"}
+        payload = {
+            "name": "Buddy",
+            "breed": "Beagle",
+            "gender": "male",
+            "estimated_age": "2y",
+            "weight": 15,
+            "color": "brown",
+            "temperament": "friendly",
+        }
         await client.post("/api/v1/dogs", json=payload, headers=headers)
         resp = await client.get("/api/v1/dogs", headers=headers)
         assert resp.status_code == 200
@@ -448,14 +475,26 @@ class TestDogAPI:
         assert "data" in body
         assert "total" in body["meta"]
 
-    async def test_list_dogs_with_filters(self, client: AsyncClient, db_session: AsyncSession) -> None:
+    async def test_list_dogs_with_filters(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
         headers = await self._auth(client, db_session)
-        resp = await client.get("/api/v1/dogs?status=rescued&is_adoptable=true&breed=Labrador", headers=headers)
+        resp = await client.get(
+            "/api/v1/dogs?status=rescued&is_adoptable=true&breed=Labrador", headers=headers
+        )
         assert resp.status_code == 200
 
     async def test_get_dog_by_id(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
-        payload = {"name": "Charlie", "breed": "Pug", "gender": "male", "estimated_age": "1y", "weight": 10, "color": "fawn", "temperament": "friendly"}
+        payload = {
+            "name": "Charlie",
+            "breed": "Pug",
+            "gender": "male",
+            "estimated_age": "1y",
+            "weight": 10,
+            "color": "fawn",
+            "temperament": "friendly",
+        }
         create_resp = await client.post("/api/v1/dogs", json=payload, headers=headers)
         dog_id = create_resp.json()["data"]["id"]
         resp = await client.get(f"/api/v1/dogs/{dog_id}", headers=headers)
@@ -469,7 +508,15 @@ class TestDogAPI:
 
     async def test_update_dog(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
-        payload = {"name": "Max", "breed": "Husky", "gender": "male", "estimated_age": "4y", "weight": 30, "color": "white", "temperament": "high_energy"}
+        payload = {
+            "name": "Max",
+            "breed": "Husky",
+            "gender": "male",
+            "estimated_age": "4y",
+            "weight": 30,
+            "color": "white",
+            "temperament": "high_energy",
+        }
         create_resp = await client.post("/api/v1/dogs", json=payload, headers=headers)
         dog_id = create_resp.json()["data"]["id"]
         update_payload = {"name": "Maximus", "weight": 32}
@@ -480,16 +527,34 @@ class TestDogAPI:
 
     async def test_patch_dog_status(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
-        payload = {"name": "Luna", "breed": "Indie", "gender": "female", "estimated_age": "2y", "weight": 18, "color": "brown", "temperament": "timid_fearful"}
+        payload = {
+            "name": "Luna",
+            "breed": "Indie",
+            "gender": "female",
+            "estimated_age": "2y",
+            "weight": 18,
+            "color": "brown",
+            "temperament": "timid_fearful",
+        }
         create_resp = await client.post("/api/v1/dogs", json=payload, headers=headers)
         dog_id = create_resp.json()["data"]["id"]
-        resp = await client.patch(f"/api/v1/dogs/{dog_id}/status", json={"status": "shelter"}, headers=headers)
+        resp = await client.patch(
+            f"/api/v1/dogs/{dog_id}/status", json={"status": "shelter"}, headers=headers
+        )
         assert resp.status_code == 200
         assert resp.json()["data"]["status"] == DogStatus.SHELTER.value
 
     async def test_soft_delete_dog(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
-        payload = {"name": "Oscar", "breed": "German Shepherd", "gender": "male", "estimated_age": "3y", "weight": 35, "color": "tan", "temperament": "aggressive"}
+        payload = {
+            "name": "Oscar",
+            "breed": "German Shepherd",
+            "gender": "male",
+            "estimated_age": "3y",
+            "weight": 35,
+            "color": "tan",
+            "temperament": "aggressive",
+        }
         create_resp = await client.post("/api/v1/dogs", json=payload, headers=headers)
         dog_id = create_resp.json()["data"]["id"]
         resp = await client.delete(f"/api/v1/dogs/{dog_id}", headers=headers)
@@ -499,20 +564,58 @@ class TestDogAPI:
 
     async def test_bulk_status_update(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
-        payload1 = {"name": "Bulk1", "breed": "Mix", "gender": "male", "estimated_age": "1y", "weight": 12, "color": "black", "temperament": "friendly"}
-        payload2 = {"name": "Bulk2", "breed": "Mix", "gender": "female", "estimated_age": "2y", "weight": 14, "color": "white", "temperament": "friendly"}
+        payload1 = {
+            "name": "Bulk1",
+            "breed": "Mix",
+            "gender": "male",
+            "estimated_age": "1y",
+            "weight": 12,
+            "color": "black",
+            "temperament": "friendly",
+        }
+        payload2 = {
+            "name": "Bulk2",
+            "breed": "Mix",
+            "gender": "female",
+            "estimated_age": "2y",
+            "weight": 14,
+            "color": "white",
+            "temperament": "friendly",
+        }
         d1 = (await client.post("/api/v1/dogs", json=payload1, headers=headers)).json()["data"]
         d2 = (await client.post("/api/v1/dogs", json=payload2, headers=headers)).json()["data"]
-        resp = await client.post("/api/v1/dogs/bulk/status-update", json={"ids": [d1["id"], d2["id"]], "status": "clinic"}, headers=headers)
+        resp = await client.post(
+            "/api/v1/dogs/bulk/status-update",
+            json={"ids": [d1["id"], d2["id"]], "status": "clinic"},
+            headers=headers,
+        )
         assert resp.status_code == 200
         assert resp.json()["data"]["updated_count"] == 2
 
     async def test_bulk_delete(self, client: AsyncClient, db_session: AsyncSession) -> None:
         headers = await self._auth(client, db_session)
-        payload1 = {"name": "Del1", "breed": "Mix", "gender": "male", "estimated_age": "1y", "weight": 11, "color": "brown", "temperament": "friendly"}
-        payload2 = {"name": "Del2", "breed": "Mix", "gender": "female", "estimated_age": "2y", "weight": 13, "color": "black", "temperament": "friendly"}
+        payload1 = {
+            "name": "Del1",
+            "breed": "Mix",
+            "gender": "male",
+            "estimated_age": "1y",
+            "weight": 11,
+            "color": "brown",
+            "temperament": "friendly",
+        }
+        payload2 = {
+            "name": "Del2",
+            "breed": "Mix",
+            "gender": "female",
+            "estimated_age": "2y",
+            "weight": 13,
+            "color": "black",
+            "temperament": "friendly",
+        }
         d1 = (await client.post("/api/v1/dogs", json=payload1, headers=headers)).json()["data"]
         d2 = (await client.post("/api/v1/dogs", json=payload2, headers=headers)).json()["data"]
-        resp = await client.post("/api/v1/dogs/bulk/delete", json={"ids": [d1["id"], d2["id"]]}, headers=headers)
+        resp = await client.post(
+            "/api/v1/dogs/bulk/delete", json={"ids": [d1["id"], d2["id"]]}, headers=headers
+        )
         assert resp.status_code == 200
         assert resp.json()["data"]["deleted_count"] == 2

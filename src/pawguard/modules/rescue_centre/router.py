@@ -163,7 +163,8 @@ async def update_rescue_centre_status(
     service: ShelterService = Depends(get_shelter_service),
 ) -> ApiResponse[ShelterFacilityResponse]:
     facility = await service.update_facility_status(
-        facility_id, payload.status,
+        facility_id,
+        payload.status,
     )
     return ApiResponse(
         data=ShelterFacilityResponse.model_validate(facility),
@@ -199,7 +200,8 @@ async def bulk_update_rescue_centre_status(
     service: ShelterService = Depends(get_shelter_service),
 ) -> BulkStatusUpdateResponse:
     updated = await service.bulk_update_facility_status(
-        payload.ids, parse_enum(FacilityStatus, payload.status),
+        payload.ids,
+        parse_enum(FacilityStatus, payload.status),
     )
     return BulkStatusUpdateResponse(
         message=f"{updated} rescue centres updated.",

@@ -1,7 +1,6 @@
 """Unit tests for the Transactional Outbox Pattern."""
 
 import pytest
-from datetime import datetime, UTC
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -45,7 +44,7 @@ async def test_outbox_process_pending_events_success(db_session: AsyncSession):
     """Pending events must be enqueued to ARQ Redis and marked completed with a processed timestamp."""
     job_name = "test_verification"
     payload = {"to": "user@example.com"}
-    
+
     # 1. Enqueue job
     await OutboxService.enqueue_job(db_session, job_name, **payload)
     await db_session.commit()
@@ -58,7 +57,7 @@ async def test_outbox_process_pending_events_success(db_session: AsyncSession):
     assert arq_pool.enqueued_jobs[0] == (job_name, payload)
 
     # 3. Verify event updated to completed in DB
-    stmt = select(OutboxEvent).where(OutboxEvent.status == "completed")
+    stmt = select(OutboxEvent).where(OutboxEvent.job_name == job_name, OutboxEvent.status == "completed")
     db_event = (await db_session.execute(stmt)).scalar_one_or_none()
     assert db_event is not None
     assert db_event.processed_at is not None

@@ -14,9 +14,7 @@ class SystemSetting(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
 
     key: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     value: Mapped[str] = mapped_column(Text, nullable=False)
-    category: Mapped[str] = mapped_column(
-        String(64), nullable=False, default="general", index=True
-    )
+    category: Mapped[str] = mapped_column(String(64), nullable=False, default="general", index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_encrypted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_editable: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

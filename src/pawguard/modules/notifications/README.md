@@ -102,18 +102,22 @@ POST /notifications/send {user_id?, target_roles?, send_push, send_email, ...}
 ```python
 # Direct push (low latency):
 from pawguard.modules.notifications.service import NotificationService
+
 svc = NotificationService(repository=NotificationRepository(session))
 await svc._send_push_to_users([user_id], title, body, action_url)
 
 # Via NotificationSend (in-app + optional push + email):
 from pawguard.modules.notifications.schemas import NotificationSend
-await svc.send_notification(NotificationSend(
-    user_id=user_id,
-    title="...",
-    body="...",
-    notification_type="rescue_alert",
-    action_url="/rescue/{id}",
-    send_push=True,
-    send_email=True,
-))
+
+await svc.send_notification(
+    NotificationSend(
+        user_id=user_id,
+        title="...",
+        body="...",
+        notification_type="rescue_alert",
+        action_url="/rescue/{id}",
+        send_push=True,
+        send_email=True,
+    )
+)
 ```

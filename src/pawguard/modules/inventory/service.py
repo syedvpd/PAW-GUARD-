@@ -3,6 +3,7 @@
 Adheres to RULE-003.
 """
 
+import contextlib
 import uuid
 from collections.abc import Sequence
 from typing import Any
@@ -57,13 +58,11 @@ class InventoryService:
 
     async def _invalidate_dashboard_cache(self) -> None:
         if self._redis:
-            try:
+            with contextlib.suppress(Exception):
                 await self._redis.delete(
                     "cache:dashboard:inventory",
                     "cache:dashboard:operations",
                 )
-            except Exception:
-                pass
 
     async def create_item(
         self,
@@ -182,9 +181,7 @@ class InventoryService:
                 actor_id=None,
             )
         except Exception:  # pragma: no cover - alerting must never break stock ops
-            logger.warning(
-                "Failed to send low-stock alert for item %s", item.id, exc_info=True
-            )
+            logger.warning("Failed to send low-stock alert for item %s", item.id, exc_info=True)
 
     async def create_requisition(
         self,
@@ -268,9 +265,7 @@ class InventoryService:
         if "name" in update_data and update_data["name"] != item.name:
             existing = await self._repo.get_item_by_name(update_data["name"])
             if existing is not None:
-                raise ConflictError(
-                    f"Inventory item '{update_data['name']}' already registered."
-                )
+                raise ConflictError(f"Inventory item '{update_data['name']}' already registered.")
         updated = await self._repo.update_item(item, **update_data)
         await self._invalidate_dashboard_cache()
         if self._audit and actor_id:
@@ -286,7 +281,9 @@ class InventoryService:
             )
         return updated
 
-    async def get_items_by_ids(self, item_ids: list[uuid.UUID]) -> dict[uuid.UUID, InventoryItem | None]:
+    async def get_items_by_ids(
+        self, item_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, InventoryItem | None]:
         """Fetch multiple items by ID in a single query.
 
         Returns a dict mapping item_id -> item (or None if not found).
@@ -311,7 +308,10 @@ class InventoryService:
         category: ItemCategory | None = None,
     ) -> PaginatedResponse[InventoryItemResponse]:
         items, total = await self._repo.list_items_paginated(
-            page_params, sort, search_term=search_term, category=category,
+            page_params,
+            sort,
+            search_term=search_term,
+            category=category,
         )
         return PaginatedResponse(
             data=list(items),
@@ -330,7 +330,10 @@ class InventoryService:
             if item is None:
                 raise NotFoundError("Inventory item not found.")
         movements, total = await self._repo.list_movements_paginated(
-            page_params, sort, item_id=item_id, movement_type=movement_type,
+            page_params,
+            sort,
+            item_id=item_id,
+            movement_type=movement_type,
         )
         return PaginatedResponse(
             data=list(movements),
@@ -344,7 +347,9 @@ class InventoryService:
         status: RequisitionStatus | None = None,
     ) -> PaginatedResponse[RequisitionOrderResponse]:
         reqs, total = await self._repo.list_requisitions_paginated(
-            page_params, sort, status=status,
+            page_params,
+            sort,
+            status=status,
         )
         return PaginatedResponse(
             data=list(reqs),
@@ -451,9 +456,7 @@ class InventoryService:
         if "name" in update_data and update_data["name"] != supplier.name:
             existing = await self._repo.get_supplier_by_name(update_data["name"])
             if existing is not None:
-                raise ConflictError(
-                    f"Supplier '{update_data['name']}' already registered."
-                )
+                raise ConflictError(f"Supplier '{update_data['name']}' already registered.")
         updated = await self._repo.update_supplier(supplier, **update_data)
         if self._audit and actor_id:
             await self._audit.record(
@@ -476,7 +479,10 @@ class InventoryService:
         is_active: bool | None = None,
     ) -> PaginatedResponse[SupplierResponse]:
         suppliers, total = await self._repo.list_suppliers_paginated(
-            page_params, sort, search_term=search_term, is_active=is_active,
+            page_params,
+            sort,
+            search_term=search_term,
+            is_active=is_active,
         )
         return PaginatedResponse(
             data=[SupplierResponse.model_validate(s) for s in suppliers],

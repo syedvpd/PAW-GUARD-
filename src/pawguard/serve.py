@@ -46,9 +46,7 @@ async def _run_api() -> None:
 async def _main() -> None:
     api_task = asyncio.create_task(_run_api())
     worker_task = asyncio.create_task(_run_worker())
-    done, pending = await asyncio.wait(
-        {api_task, worker_task}, return_when=asyncio.FIRST_COMPLETED
-    )
+    done, pending = await asyncio.wait({api_task, worker_task}, return_when=asyncio.FIRST_COMPLETED)
     for task in pending:
         task.cancel()
     for task in done:

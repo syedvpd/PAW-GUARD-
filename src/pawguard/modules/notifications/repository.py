@@ -25,9 +25,7 @@ class NotificationRepository:
         await self._session.refresh(notification)
         return notification
 
-    async def create_many(
-        self, notifications: list[Notification]
-    ) -> list[Notification]:
+    async def create_many(self, notifications: list[Notification]) -> list[Notification]:
         self._session.add_all(notifications)
         await self._session.flush()
         for n in notifications:
@@ -92,9 +90,8 @@ class NotificationRepository:
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def count_unread(self, user_id: uuid.UUID) -> int:
-        stmt = (
-            select(func.count(Notification.id))
-            .where(Notification.user_id == user_id, Notification.is_read.is_(False))
+        stmt = select(func.count(Notification.id)).where(
+            Notification.user_id == user_id, Notification.is_read.is_(False)
         )
         result = await self._session.execute(stmt)
         return result.scalar_one()
@@ -129,9 +126,7 @@ class NotificationPreferenceRepository:
         self._session = session
 
     async def get_by_user(self, user_id: uuid.UUID) -> NotificationPreference | None:
-        stmt = select(NotificationPreference).where(
-            NotificationPreference.user_id == user_id
-        )
+        stmt = select(NotificationPreference).where(NotificationPreference.user_id == user_id)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def upsert(

@@ -112,7 +112,9 @@ class TestReceiptAccessControl:
         headers = await self._register_and_auth(
             client, db_session, "owner@receipt.test.com", donor_role
         )
-        donation_id = await self._create_owned_donation(client, db_session, "owner@receipt.test.com")
+        donation_id = await self._create_owned_donation(
+            client, db_session, "owner@receipt.test.com"
+        )
         resp = await client.get(f"/api/v1/donations/{donation_id}/receipt", headers=headers)
         assert resp.status_code == 200
         assert resp.json()["data"]["object_key"] == RECEIPT_KEY
@@ -120,10 +122,10 @@ class TestReceiptAccessControl:
     async def test_non_owner_donor_cannot_download_receipt(
         self, client: AsyncClient, db_session: AsyncSession, donor_role: Role
     ) -> None:
-        await self._register_and_auth(
-            client, db_session, "owner2@receipt.test.com", donor_role
+        await self._register_and_auth(client, db_session, "owner2@receipt.test.com", donor_role)
+        donation_id = await self._create_owned_donation(
+            client, db_session, "owner2@receipt.test.com"
         )
-        donation_id = await self._create_owned_donation(client, db_session, "owner2@receipt.test.com")
         other_headers = await self._register_and_auth(
             client, db_session, "other2@receipt.test.com", donor_role
         )
@@ -134,14 +136,12 @@ class TestReceiptAccessControl:
     async def test_staff_with_donation_read_can_download_any_receipt(
         self, client: AsyncClient, db_session: AsyncSession, donor_role: Role
     ) -> None:
-        await self._register_and_auth(
-            client, db_session, "owner3@receipt.test.com", donor_role
+        await self._register_and_auth(client, db_session, "owner3@receipt.test.com", donor_role)
+        donation_id = await self._create_owned_donation(
+            client, db_session, "owner3@receipt.test.com"
         )
-        donation_id = await self._create_owned_donation(client, db_session, "owner3@receipt.test.com")
 
-        staff_headers = await register_and_auth(
-            client, db_session, email="staff3@receipt.test.com"
-        )
+        staff_headers = await register_and_auth(client, db_session, email="staff3@receipt.test.com")
 
         resp = await client.get(f"/api/v1/donations/{donation_id}/receipt", headers=staff_headers)
         assert resp.status_code == 200

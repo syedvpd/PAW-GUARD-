@@ -4,7 +4,7 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
@@ -104,23 +104,29 @@ class DashboardRepository:
         total = (await self._session.execute(total_stmt)).scalar_one()
         if total == 0:
             return 0.0
-        adopted = (await self._session.execute(
-            select(func.count(DogProfile.id)).where(
-                DogProfile.deleted_at.is_(None), DogProfile.status == DogStatus.ADOPTED
+        adopted = (
+            await self._session.execute(
+                select(func.count(DogProfile.id)).where(
+                    DogProfile.deleted_at.is_(None), DogProfile.status == DogStatus.ADOPTED
+                )
             )
-        )).scalar_one()
+        ).scalar_one()
         return round(adopted / total * 100, 1)
 
     async def get_shelter_occupancy(self) -> dict[str, Any]:
-        total_capacity = (await self._session.execute(
-            select(func.coalesce(func.sum(ShelterFacility.total_capacity), 0))
-        )).scalar_one()
-        dogs_in_shelter = (await self._session.execute(
-            select(func.count(DogProfile.id)).where(
-                DogProfile.deleted_at.is_(None),
-                DogProfile.status.in_([DogStatus.SHELTER, DogStatus.CLINIC]),
+        total_capacity = (
+            await self._session.execute(
+                select(func.coalesce(func.sum(ShelterFacility.total_capacity), 0))
             )
-        )).scalar_one()
+        ).scalar_one()
+        dogs_in_shelter = (
+            await self._session.execute(
+                select(func.count(DogProfile.id)).where(
+                    DogProfile.deleted_at.is_(None),
+                    DogProfile.status.in_([DogStatus.SHELTER, DogStatus.CLINIC]),
+                )
+            )
+        ).scalar_one()
         occupancy_pct = round(dogs_in_shelter / total_capacity * 100, 1) if total_capacity else 0.0
         return {
             "capacity": total_capacity,
@@ -129,9 +135,11 @@ class DashboardRepository:
         }
 
     async def get_inventory_alerts(self) -> list[dict[str, Any]]:
-        stmt = select(InventoryItem).where(
-            InventoryItem.quantity <= InventoryItem.reorder_threshold
-        ).order_by(InventoryItem.quantity.asc())
+        stmt = (
+            select(InventoryItem)
+            .where(InventoryItem.quantity <= InventoryItem.reorder_threshold)
+            .order_by(InventoryItem.quantity.asc())
+        )
         items = (await self._session.execute(stmt)).scalars().all()
         return [
             {
@@ -146,6 +154,7 @@ class DashboardRepository:
 
     async def count_expiring_inventory(self, days: int = 30) -> int:
         from datetime import date, timedelta
+
         threshold = date.today() + timedelta(days=days)
         stmt = select(func.count(InventoryItem.id)).where(
             InventoryItem.expiry_date.isnot(None),
@@ -168,23 +177,29 @@ class DashboardRepository:
         ]
 
     async def get_rescue_kpis(self) -> dict[str, Any]:
-        total = (await self._session.execute(
-            select(func.count(RescueRequest.id)).where(RescueRequest.deleted_at.is_(None))
-        )).scalar_one()
-        resolved = (await self._session.execute(
-            select(func.count(RescueRequest.id)).where(
-                RescueRequest.deleted_at.is_(None),
-                RescueRequest.status == RescueStatus.ADMITTED,
+        total = (
+            await self._session.execute(
+                select(func.count(RescueRequest.id)).where(RescueRequest.deleted_at.is_(None))
             )
-        )).scalar_one()
-        rejection_rate = 0.0
-        if total > 0:
-            rejected = (await self._session.execute(
+        ).scalar_one()
+        resolved = (
+            await self._session.execute(
                 select(func.count(RescueRequest.id)).where(
                     RescueRequest.deleted_at.is_(None),
-                    RescueRequest.status == RescueStatus.REJECTED,
+                    RescueRequest.status == RescueStatus.ADMITTED,
                 )
-            )).scalar_one()
+            )
+        ).scalar_one()
+        rejection_rate = 0.0
+        if total > 0:
+            rejected = (
+                await self._session.execute(
+                    select(func.count(RescueRequest.id)).where(
+                        RescueRequest.deleted_at.is_(None),
+                        RescueRequest.status == RescueStatus.REJECTED,
+                    )
+                )
+            ).scalar_one()
             rejection_rate = round(rejected / total * 100, 1)
         avg_response = await self._get_avg_rescue_response_time()
         return {
@@ -196,6 +211,7 @@ class DashboardRepository:
 
     async def _get_avg_rescue_response_time(self) -> float | None:
         from pawguard.modules.rescue.models import RescueDispatch
+
         stmt = select(
             func.avg(
                 func.extract("epoch", RescueDispatch.located_at - RescueDispatch.dispatched_at) / 60
@@ -208,15 +224,13 @@ class DashboardRepository:
         return float(result) if result is not None else None
 
     async def get_medical_stats(self) -> dict[str, Any]:
-        exams = (await self._session.execute(
-            select(func.count(ClinicalExam.id))
-        )).scalar_one()
-        treatments = (await self._session.execute(
-            select(func.count(MedicalTreatment.id))
-        )).scalar_one()
-        vaccinations = (await self._session.execute(
-            select(func.count(VaccinationRecord.id))
-        )).scalar_one()
+        exams = (await self._session.execute(select(func.count(ClinicalExam.id)))).scalar_one()
+        treatments = (
+            await self._session.execute(select(func.count(MedicalTreatment.id)))
+        ).scalar_one()
+        vaccinations = (
+            await self._session.execute(select(func.count(VaccinationRecord.id)))
+        ).scalar_one()
         return {
             "total_exams": exams,
             "total_treatments": treatments,
@@ -262,14 +276,18 @@ class DashboardRepository:
         return {"active_lost": lost, "active_found": found}
 
     async def get_foster_stats(self) -> dict[str, Any]:
-        total_profiles = (await self._session.execute(
-            select(func.count(FosterProfile.id)).where(FosterProfile.deleted_at.is_(None))
-        )).scalar_one()
-        available = (await self._session.execute(
-            select(func.count(FosterProfile.id)).where(
-                FosterProfile.deleted_at.is_(None), FosterProfile.is_available.is_(True)
+        total_profiles = (
+            await self._session.execute(
+                select(func.count(FosterProfile.id)).where(FosterProfile.deleted_at.is_(None))
             )
-        )).scalar_one()
+        ).scalar_one()
+        available = (
+            await self._session.execute(
+                select(func.count(FosterProfile.id)).where(
+                    FosterProfile.deleted_at.is_(None), FosterProfile.is_available.is_(True)
+                )
+            )
+        ).scalar_one()
         active = await self.get_active_fosters()
         return {
             "total_fosters": total_profiles,
@@ -279,51 +297,63 @@ class DashboardRepository:
 
     async def get_monthly_adoption_trend(self, months: int = 6) -> list[dict[str, Any]]:
         from sqlalchemy import extract
+
         since = datetime.now(UTC) - timedelta(days=months * 30)
-        stmt = select(
-            extract("year", AdoptionApplication.created_at).label("year"),
-            extract("month", AdoptionApplication.created_at).label("month"),
-            func.count(AdoptionApplication.id),
-        ).where(
-            AdoptionApplication.deleted_at.is_(None),
-            AdoptionApplication.created_at >= since,
-        ).group_by("year", "month").order_by("year", "month")
+        stmt = (
+            select(
+                extract("year", AdoptionApplication.created_at).label("year"),
+                extract("month", AdoptionApplication.created_at).label("month"),
+                func.count(AdoptionApplication.id),
+            )
+            .where(
+                AdoptionApplication.deleted_at.is_(None),
+                AdoptionApplication.created_at >= since,
+            )
+            .group_by("year", "month")
+            .order_by("year", "month")
+        )
         rows = (await self._session.execute(stmt)).all()
-        return [
-            {"year": int(r.year), "month": int(r.month), "count": r.count}
-            for r in rows
-        ]
+        return [{"year": int(r.year), "month": int(r.month), "count": r.count} for r in rows]
 
     async def get_monthly_rescue_trend(self, months: int = 6) -> list[dict[str, Any]]:
         from sqlalchemy import extract
+
         since = datetime.now(UTC) - timedelta(days=months * 30)
-        stmt = select(
-            extract("year", RescueRequest.created_at).label("year"),
-            extract("month", RescueRequest.created_at).label("month"),
-            func.count(RescueRequest.id),
-        ).where(
-            RescueRequest.deleted_at.is_(None),
-            RescueRequest.created_at >= since,
-        ).group_by("year", "month").order_by("year", "month")
+        stmt = (
+            select(
+                extract("year", RescueRequest.created_at).label("year"),
+                extract("month", RescueRequest.created_at).label("month"),
+                func.count(RescueRequest.id),
+            )
+            .where(
+                RescueRequest.deleted_at.is_(None),
+                RescueRequest.created_at >= since,
+            )
+            .group_by("year", "month")
+            .order_by("year", "month")
+        )
         rows = (await self._session.execute(stmt)).all()
-        return [
-            {"year": int(r.year), "month": int(r.month), "count": r.count}
-            for r in rows
-        ]
+        return [{"year": int(r.year), "month": int(r.month), "count": r.count} for r in rows]
 
     async def get_monthly_donation_trend(self, months: int = 6) -> list[dict[str, Any]]:
         from sqlalchemy import extract
+
         since = datetime.now(UTC) - timedelta(days=months * 30)
-        stmt = select(
-            extract("year", Donation.created_at).label("year"),
-            extract("month", Donation.created_at).label("month"),
-            func.count(Donation.id),
-            func.coalesce(
-                func.sum(Donation.amount).filter(Donation.status == DonationStatus.SUCCESS), 0
-            ),
-        ).where(
-            Donation.created_at >= since,
-        ).group_by("year", "month").order_by("year", "month")
+        stmt = (
+            select(
+                extract("year", Donation.created_at).label("year"),
+                extract("month", Donation.created_at).label("month"),
+                func.count(Donation.id),
+                func.coalesce(
+                    func.sum(Donation.amount).filter(Donation.status == DonationStatus.SUCCESS), 0
+                ),
+            )
+            .where(
+                Donation.created_at >= since,
+            )
+            .group_by("year", "month")
+            .order_by("year", "month")
+        )
         rows = (await self._session.execute(stmt)).all()
         return [
             {"year": int(r.year), "month": int(r.month), "count": r.count, "amount": float(r[3])}
@@ -331,19 +361,24 @@ class DashboardRepository:
         ]
 
     async def get_dog_breed_distribution(self) -> list[dict[str, Any]]:
-        stmt = select(DogProfile.breed, func.count(DogProfile.id)).where(
-            DogProfile.deleted_at.is_(None)
-        ).group_by(DogProfile.breed).order_by(func.count(DogProfile.id).desc())
+        stmt = (
+            select(DogProfile.breed, func.count(DogProfile.id))
+            .where(DogProfile.deleted_at.is_(None))
+            .group_by(DogProfile.breed)
+            .order_by(func.count(DogProfile.id).desc())
+        )
         rows = (await self._session.execute(stmt)).all()
         return [{"breed": r.breed, "count": r.count} for r in rows]
 
     async def get_feedback_summary(self) -> dict[str, Any]:
-        total = (await self._session.execute(
-            select(func.count(ServiceFeedback.id)).where(ServiceFeedback.deleted_at.is_(None))
-        )).scalar_one()
-        avg_rating = (await self._session.execute(
-            select(func.coalesce(func.avg(ServiceFeedback.rating), 0))
-        )).scalar_one()
+        total = (
+            await self._session.execute(
+                select(func.count(ServiceFeedback.id)).where(ServiceFeedback.deleted_at.is_(None))
+            )
+        ).scalar_one()
+        avg_rating = (
+            await self._session.execute(select(func.coalesce(func.avg(ServiceFeedback.rating), 0)))
+        ).scalar_one()
         return {"total_feedback": total, "average_rating": round(float(avg_rating), 1)}
 
     async def get_total_dogs_count(self) -> int:
@@ -372,9 +407,7 @@ class DashboardRepository:
         return (await self._session.execute(stmt)).scalar_one()
 
     async def get_total_volunteers_count(self) -> int:
-        stmt = select(func.count(VolunteerProfile.id)).where(
-            VolunteerProfile.deleted_at.is_(None)
-        )
+        stmt = select(func.count(VolunteerProfile.id)).where(VolunteerProfile.deleted_at.is_(None))
         return (await self._session.execute(stmt)).scalar_one()
 
     async def get_total_facilities_count(self) -> int:

@@ -34,17 +34,25 @@ from pawguard.services.audit_service import AuditService
 def _make_vehicle(**kw):
     now = datetime.now(UTC)
     vals = dict(
-        make_model="", license_plate="", status=VehicleStatus.ACTIVE,
-        mileage=0, created_at=now, updated_at=now,
+        make_model="",
+        license_plate="",
+        status=VehicleStatus.ACTIVE,
+        mileage=0,
+        created_at=now,
+        updated_at=now,
     )
     vals.update(kw)
     return Vehicle(**vals)
 
+
 def _make_maint(**kw):
     now = datetime.now(UTC)
     vals = dict(
-        vehicle_id=uuid.uuid4(), service_date=date.today(),
-        description="", cost=0.0, created_at=now,
+        vehicle_id=uuid.uuid4(),
+        service_date=date.today(),
+        description="",
+        cost=0.0,
+        created_at=now,
     )
     vals.update(kw)
     return FleetMaintenance(**vals)
@@ -70,8 +78,11 @@ class TestFleetService:
         mock_repo.get_vehicle_by_plate.return_value = None
         vehicle_id = uuid.uuid4()
         mock_repo.create_vehicle.return_value = Vehicle(
-            id=vehicle_id, make_model="Toyota Hilux", license_plate="ABC-123",
-            status=VehicleStatus.ACTIVE, mileage=0,
+            id=vehicle_id,
+            make_model="Toyota Hilux",
+            license_plate="ABC-123",
+            status=VehicleStatus.ACTIVE,
+            mileage=0,
         )
         payload = VehicleCreate(make_model="Toyota Hilux", license_plate="ABC-123")
         result = await service.create_vehicle(payload, actor_id=uuid.uuid4())
@@ -80,8 +91,11 @@ class TestFleetService:
     @pytest.mark.asyncio
     async def test_create_vehicle_duplicate_plate(self, service, mock_repo):
         mock_repo.get_vehicle_by_plate.return_value = Vehicle(
-            id=uuid.uuid4(), make_model="Existing", license_plate="ABC-123",
-            status=VehicleStatus.ACTIVE, mileage=0,
+            id=uuid.uuid4(),
+            make_model="Existing",
+            license_plate="ABC-123",
+            status=VehicleStatus.ACTIVE,
+            mileage=0,
         )
         payload = VehicleCreate(make_model="Toyota", license_plate="ABC-123")
         with pytest.raises(ConflictError, match="already exists"):
@@ -103,8 +117,11 @@ class TestFleetService:
         """New vehicles default to a sensible vehicle_type (PRR 3.13)."""
         mock_repo.get_vehicle_by_plate.return_value = None
         mock_repo.create_vehicle.return_value = Vehicle(
-            id=uuid.uuid4(), make_model="Ford Transit", license_plate="AMB-01",
-            status=VehicleStatus.ACTIVE, mileage=0,
+            id=uuid.uuid4(),
+            make_model="Ford Transit",
+            license_plate="AMB-01",
+            status=VehicleStatus.ACTIVE,
+            mileage=0,
         )
         payload = VehicleCreate(make_model="Ford Transit", license_plate="AMB-01")
         await service.create_vehicle(payload, actor_id=uuid.uuid4())
@@ -115,11 +132,15 @@ class TestFleetService:
     async def test_create_vehicle_with_explicit_vehicle_type(self, service, mock_repo):
         mock_repo.get_vehicle_by_plate.return_value = None
         mock_repo.create_vehicle.return_value = Vehicle(
-            id=uuid.uuid4(), make_model="Vet Truck", license_plate="VET-01",
-            status=VehicleStatus.ACTIVE, mileage=0,
+            id=uuid.uuid4(),
+            make_model="Vet Truck",
+            license_plate="VET-01",
+            status=VehicleStatus.ACTIVE,
+            mileage=0,
         )
         payload = VehicleCreate(
-            make_model="Vet Truck", license_plate="VET-01",
+            make_model="Vet Truck",
+            license_plate="VET-01",
             vehicle_type=VehicleType.MOBILE_VET_UNIT,
         )
         await service.create_vehicle(payload, actor_id=uuid.uuid4())
@@ -130,8 +151,11 @@ class TestFleetService:
     async def test_update_vehicle_vehicle_type(self, service, mock_repo):
         vehicle_id = uuid.uuid4()
         vehicle = Vehicle(
-            id=vehicle_id, make_model="V", license_plate="P-001",
-            status=VehicleStatus.ACTIVE, mileage=0,
+            id=vehicle_id,
+            make_model="V",
+            license_plate="P-001",
+            status=VehicleStatus.ACTIVE,
+            mileage=0,
         )
         mock_repo.get_vehicle.return_value = vehicle
         payload = VehicleUpdate(vehicle_type=VehicleType.AMBULANCE)
@@ -141,7 +165,9 @@ class TestFleetService:
     @pytest.mark.asyncio
     async def test_list_vehicles_paginated_by_vehicle_type(self, service, mock_repo):
         vehicle = _make_vehicle(
-            id=uuid.uuid4(), make_model="Ambulance", license_plate="AMB-01",
+            id=uuid.uuid4(),
+            make_model="Ambulance",
+            license_plate="AMB-01",
         )
         mock_repo.paginate_vehicles.return_value = ([vehicle], 1)
         result = await service.list_vehicles_paginated(
@@ -161,8 +187,11 @@ class TestFleetService:
     async def test_update_vehicle(self, service, mock_repo):
         vehicle_id = uuid.uuid4()
         vehicle = Vehicle(
-            id=vehicle_id, make_model="Old Model", license_plate="OLD-001",
-            status=VehicleStatus.ACTIVE, mileage=1000,
+            id=vehicle_id,
+            make_model="Old Model",
+            license_plate="OLD-001",
+            status=VehicleStatus.ACTIVE,
+            mileage=1000,
         )
         mock_repo.get_vehicle.return_value = vehicle
         payload = VehicleUpdate(make_model="New Model", mileage=2000)
@@ -179,13 +208,19 @@ class TestFleetService:
     async def test_update_vehicle_plate_conflict(self, service, mock_repo):
         vehicle_id = uuid.uuid4()
         vehicle = Vehicle(
-            id=vehicle_id, make_model="V", license_plate="OLD-001",
-            status=VehicleStatus.ACTIVE, mileage=0,
+            id=vehicle_id,
+            make_model="V",
+            license_plate="OLD-001",
+            status=VehicleStatus.ACTIVE,
+            mileage=0,
         )
         mock_repo.get_vehicle.return_value = vehicle
         mock_repo.get_vehicle_by_plate.return_value = Vehicle(
-            id=uuid.uuid4(), make_model="Other", license_plate="NEW-001",
-            status=VehicleStatus.ACTIVE, mileage=0,
+            id=uuid.uuid4(),
+            make_model="Other",
+            license_plate="NEW-001",
+            status=VehicleStatus.ACTIVE,
+            mileage=0,
         )
         payload = VehicleUpdate(license_plate="NEW-001")
         with pytest.raises(ConflictError, match="already exists"):
@@ -195,8 +230,11 @@ class TestFleetService:
     async def test_get_vehicle_found(self, service, mock_repo):
         vehicle_id = uuid.uuid4()
         mock_repo.get_vehicle.return_value = Vehicle(
-            id=vehicle_id, make_model="Toyota", license_plate="ABC-123",
-            status=VehicleStatus.ACTIVE, mileage=0,
+            id=vehicle_id,
+            make_model="Toyota",
+            license_plate="ABC-123",
+            status=VehicleStatus.ACTIVE,
+            mileage=0,
         )
         result = await service.get_vehicle(vehicle_id)
         assert result.id == vehicle_id
@@ -211,7 +249,9 @@ class TestFleetService:
     async def test_checkout_equipment_defaults_expected_return_at(self, service, mock_repo):
         """Checkout without an explicit due date gets the default window (PRR 3.13)."""
         mock_repo.create_equipment_checkout.return_value = EquipmentCheckout(
-            id=uuid.uuid4(), equipment_name="Net Gun", checked_out_at=datetime.now(UTC),
+            id=uuid.uuid4(),
+            equipment_name="Net Gun",
+            checked_out_at=datetime.now(UTC),
         )
         payload = EquipmentCheckoutCreate(equipment_name="Net Gun")
         await service.checkout_equipment(payload, actor_id=uuid.uuid4())
@@ -222,7 +262,9 @@ class TestFleetService:
     @pytest.mark.asyncio
     async def test_checkout_equipment_honours_explicit_expected_return_at(self, service, mock_repo):
         mock_repo.create_equipment_checkout.return_value = EquipmentCheckout(
-            id=uuid.uuid4(), equipment_name="Net Gun", checked_out_at=datetime.now(UTC),
+            id=uuid.uuid4(),
+            equipment_name="Net Gun",
+            checked_out_at=datetime.now(UTC),
         )
         due = datetime.now(UTC) + timedelta(days=5)
         payload = EquipmentCheckoutCreate(equipment_name="Net Gun", expected_return_at=due)
@@ -241,14 +283,19 @@ class TestFleetService:
         mock_repo.create_equipment_checkout.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_checkout_equipment_for_dispatch_sets_expected_return_at(self, service, mock_repo):
+    async def test_checkout_equipment_for_dispatch_sets_expected_return_at(
+        self, service, mock_repo
+    ):
         """Auto-checked-out dispatch equipment still gets a due date (PRR 3.13)."""
         dispatch_id = uuid.uuid4()
         mock_repo.create_equipment_checkout.return_value = EquipmentCheckout(
-            id=uuid.uuid4(), equipment_name="Net Gun", checked_out_at=datetime.now(UTC),
+            id=uuid.uuid4(),
+            equipment_name="Net Gun",
+            checked_out_at=datetime.now(UTC),
         )
         records = await service.checkout_equipment_for_dispatch(
-            rescue_dispatch_id=dispatch_id, equipment_names=["Net Gun"],
+            rescue_dispatch_id=dispatch_id,
+            equipment_names=["Net Gun"],
         )
         assert len(records) == 1
         created = mock_repo.create_equipment_checkout.call_args.args[0]
@@ -260,7 +307,8 @@ class TestFleetService:
         """Late returns are allowed but flagged on the ledger notes (PRR 3.13)."""
         checkout_id = uuid.uuid4()
         mock_repo.get_equipment_checkout.return_value = EquipmentCheckout(
-            id=checkout_id, equipment_name="Net Gun",
+            id=checkout_id,
+            equipment_name="Net Gun",
             checked_out_at=datetime.now(UTC) - timedelta(days=5),
             expected_return_at=datetime.now(UTC) - timedelta(days=2),
         )
@@ -274,7 +322,8 @@ class TestFleetService:
     async def test_return_equipment_on_time_no_late_flag(self, service, mock_repo):
         checkout_id = uuid.uuid4()
         mock_repo.get_equipment_checkout.return_value = EquipmentCheckout(
-            id=checkout_id, equipment_name="Net Gun",
+            id=checkout_id,
+            equipment_name="Net Gun",
             checked_out_at=datetime.now(UTC),
             expected_return_at=datetime.now(UTC) + timedelta(days=2),
         )
@@ -287,7 +336,9 @@ class TestFleetService:
         """Legacy checkouts without a due date are never flagged as late."""
         checkout_id = uuid.uuid4()
         mock_repo.get_equipment_checkout.return_value = EquipmentCheckout(
-            id=checkout_id, equipment_name="Net Gun", checked_out_at=datetime.now(UTC),
+            id=checkout_id,
+            equipment_name="Net Gun",
+            checked_out_at=datetime.now(UTC),
             expected_return_at=None,
         )
         result = await service.return_equipment(checkout_id, EquipmentReturnRequest())
@@ -297,7 +348,9 @@ class TestFleetService:
     @pytest.mark.asyncio
     async def test_list_vehicles_paginated(self, service, mock_repo):
         vehicle = _make_vehicle(
-            id=uuid.uuid4(), make_model="Toyota", license_plate="ABC-123",
+            id=uuid.uuid4(),
+            make_model="Toyota",
+            license_plate="ABC-123",
         )
         mock_repo.paginate_vehicles.return_value = ([vehicle], 1)
         page = PageParams(page=1, page_size=20)
@@ -310,16 +363,25 @@ class TestFleetService:
     async def test_log_maintenance(self, service, mock_repo):
         vehicle_id = uuid.uuid4()
         mock_repo.get_vehicle.return_value = Vehicle(
-            id=vehicle_id, make_model="Toyota", license_plate="ABC-123",
-            status=VehicleStatus.ACTIVE, mileage=0,
+            id=vehicle_id,
+            make_model="Toyota",
+            license_plate="ABC-123",
+            status=VehicleStatus.ACTIVE,
+            mileage=0,
         )
         maint_id = uuid.uuid4()
         mock_repo.create_maintenance.return_value = FleetMaintenance(
-            id=maint_id, vehicle_id=vehicle_id, service_date=date.today(),
-            description="Oil change", cost=150.0,
+            id=maint_id,
+            vehicle_id=vehicle_id,
+            service_date=date.today(),
+            description="Oil change",
+            cost=150.0,
         )
         payload = MaintenanceCreate(
-            vehicle_id=vehicle_id, service_date=date.today(), description="Oil change", cost=150.0,
+            vehicle_id=vehicle_id,
+            service_date=date.today(),
+            description="Oil change",
+            cost=150.0,
         )
         result = await service.log_maintenance(payload, actor_id=uuid.uuid4())
         assert result.description == "Oil change"
@@ -328,7 +390,9 @@ class TestFleetService:
     async def test_log_maintenance_vehicle_not_found(self, service, mock_repo):
         mock_repo.get_vehicle.return_value = None
         payload = MaintenanceCreate(
-            vehicle_id=uuid.uuid4(), service_date=date.today(), description="Oil change",
+            vehicle_id=uuid.uuid4(),
+            service_date=date.today(),
+            description="Oil change",
         )
         with pytest.raises(NotFoundError):
             await service.log_maintenance(payload)
@@ -336,7 +400,10 @@ class TestFleetService:
     @pytest.mark.asyncio
     async def test_list_maintenance_paginated(self, service, mock_repo):
         maint = _make_maint(
-            id=uuid.uuid4(), vehicle_id=uuid.uuid4(), description="Repair", cost=500.0,
+            id=uuid.uuid4(),
+            vehicle_id=uuid.uuid4(),
+            description="Repair",
+            cost=500.0,
         )
         mock_repo.paginate_maintenance.return_value = ([maint], 1)
         page = PageParams()
@@ -349,22 +416,33 @@ class TestFleetService:
     async def test_update_vehicle_status(self, service, mock_repo):
         vehicle_id = uuid.uuid4()
         mock_repo.get_vehicle.return_value = Vehicle(
-            id=vehicle_id, make_model="V", license_plate="P-001",
-            status=VehicleStatus.ACTIVE, mileage=0,
+            id=vehicle_id,
+            make_model="V",
+            license_plate="P-001",
+            status=VehicleStatus.ACTIVE,
+            mileage=0,
         )
         mock_repo.update_vehicle_status.return_value = Vehicle(
-            id=vehicle_id, make_model="V", license_plate="P-001",
-            status=VehicleStatus.IN_MAINTENANCE, mileage=0,
+            id=vehicle_id,
+            make_model="V",
+            license_plate="P-001",
+            status=VehicleStatus.IN_MAINTENANCE,
+            mileage=0,
         )
-        result = await service.update_vehicle_status(vehicle_id, VehicleStatus.IN_MAINTENANCE, actor_id=uuid.uuid4())
+        result = await service.update_vehicle_status(
+            vehicle_id, VehicleStatus.IN_MAINTENANCE, actor_id=uuid.uuid4()
+        )
         assert result.status == VehicleStatus.IN_MAINTENANCE
 
     @pytest.mark.asyncio
     async def test_soft_delete_vehicle(self, service, mock_repo):
         vehicle_id = uuid.uuid4()
         mock_repo.get_vehicle.return_value = Vehicle(
-            id=vehicle_id, make_model="V", license_plate="P-001",
-            status=VehicleStatus.ACTIVE, mileage=0,
+            id=vehicle_id,
+            make_model="V",
+            license_plate="P-001",
+            status=VehicleStatus.ACTIVE,
+            mileage=0,
         )
         mock_repo.soft_delete_vehicle.return_value = None
         await service.soft_delete_vehicle(vehicle_id, actor_id=uuid.uuid4())
@@ -380,7 +458,9 @@ class TestFleetService:
     async def test_checkout_equipment(self, service, mock_repo):
         checkout_id = uuid.uuid4()
         mock_repo.create_equipment_checkout.return_value = EquipmentCheckout(
-            id=checkout_id, equipment_name="Net Gun", checked_out_at=datetime.now(UTC),
+            id=checkout_id,
+            equipment_name="Net Gun",
+            checked_out_at=datetime.now(UTC),
         )
         payload = EquipmentCheckoutCreate(equipment_name="Net Gun")
         result = await service.checkout_equipment(payload, actor_id=uuid.uuid4())
@@ -390,7 +470,9 @@ class TestFleetService:
     @pytest.mark.asyncio
     async def test_checkout_equipment_vehicle_not_found(self, service, mock_repo):
         mock_repo.get_vehicle.return_value = None
-        payload = EquipmentCheckoutCreate(equipment_name="Net Gun", assigned_to_vehicle_id=uuid.uuid4())
+        payload = EquipmentCheckoutCreate(
+            equipment_name="Net Gun", assigned_to_vehicle_id=uuid.uuid4()
+        )
         with pytest.raises(NotFoundError):
             await service.checkout_equipment(payload)
 
@@ -398,7 +480,9 @@ class TestFleetService:
     async def test_return_equipment(self, service, mock_repo):
         checkout_id = uuid.uuid4()
         mock_repo.get_equipment_checkout.return_value = EquipmentCheckout(
-            id=checkout_id, equipment_name="Net Gun", checked_out_at=datetime.now(UTC),
+            id=checkout_id,
+            equipment_name="Net Gun",
+            checked_out_at=datetime.now(UTC),
         )
         result = await service.return_equipment(
             checkout_id, EquipmentReturnRequest(), actor_id=uuid.uuid4()
@@ -415,7 +499,9 @@ class TestFleetService:
     async def test_return_equipment_already_returned(self, service, mock_repo):
         checkout_id = uuid.uuid4()
         mock_repo.get_equipment_checkout.return_value = EquipmentCheckout(
-            id=checkout_id, equipment_name="Net Gun", checked_out_at=datetime.now(UTC),
+            id=checkout_id,
+            equipment_name="Net Gun",
+            checked_out_at=datetime.now(UTC),
             returned_at=datetime.now(UTC),
         )
         with pytest.raises(ConflictError, match="already been returned"):
@@ -428,9 +514,15 @@ class TestFleetService:
         dispatch_id = uuid.uuid4()
         agent_id = uuid.uuid4()
         mock_repo.create_equipment_checkout.side_effect = [
-            EquipmentCheckout(id=uuid.uuid4(), equipment_name="Net Gun", checked_out_at=datetime.now(UTC)),
-            EquipmentCheckout(id=uuid.uuid4(), equipment_name="Crate", checked_out_at=datetime.now(UTC)),
-            EquipmentCheckout(id=uuid.uuid4(), equipment_name="Trap", checked_out_at=datetime.now(UTC)),
+            EquipmentCheckout(
+                id=uuid.uuid4(), equipment_name="Net Gun", checked_out_at=datetime.now(UTC)
+            ),
+            EquipmentCheckout(
+                id=uuid.uuid4(), equipment_name="Crate", checked_out_at=datetime.now(UTC)
+            ),
+            EquipmentCheckout(
+                id=uuid.uuid4(), equipment_name="Trap", checked_out_at=datetime.now(UTC)
+            ),
         ]
         records = await service.checkout_equipment_for_dispatch(
             rescue_dispatch_id=dispatch_id,
@@ -450,7 +542,8 @@ class TestFleetService:
     async def test_checkout_equipment_for_dispatch_empty_names(self, service, mock_repo):
         """No equipment names means no checkout rows."""
         records = await service.checkout_equipment_for_dispatch(
-            rescue_dispatch_id=uuid.uuid4(), equipment_names=[],
+            rescue_dispatch_id=uuid.uuid4(),
+            equipment_names=[],
         )
         assert records == []
         mock_repo.create_equipment_checkout.assert_not_called()
@@ -472,14 +565,17 @@ class TestFleetService:
         dispatch_id = uuid.uuid4()
         mock_repo.release_equipment_for_dispatch.return_value = 3
         count = await service.release_equipment_for_dispatch(
-            rescue_dispatch_id=dispatch_id, actor_id=uuid.uuid4(),
+            rescue_dispatch_id=dispatch_id,
+            actor_id=uuid.uuid4(),
         )
         assert count == 3
         assert mock_repo.release_equipment_for_dispatch.call_args[0][0] == dispatch_id
         mock_audit.record.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_release_equipment_for_dispatch_none_outstanding(self, service, mock_repo, mock_audit):
+    async def test_release_equipment_for_dispatch_none_outstanding(
+        self, service, mock_repo, mock_audit
+    ):
         """No outstanding equipment for the dispatch -> no audit noise."""
         mock_repo.release_equipment_for_dispatch.return_value = 0
         count = await service.release_equipment_for_dispatch(rescue_dispatch_id=uuid.uuid4())
@@ -489,7 +585,9 @@ class TestFleetService:
     @pytest.mark.asyncio
     async def test_list_equipment_checkouts_paginated(self, service, mock_repo):
         record = EquipmentCheckout(
-            id=uuid.uuid4(), equipment_name="Trap", checked_out_at=datetime.now(UTC),
+            id=uuid.uuid4(),
+            equipment_name="Trap",
+            checked_out_at=datetime.now(UTC),
             created_at=datetime.now(UTC),
         )
         mock_repo.paginate_equipment_checkouts.return_value = ([record], 1)
@@ -517,19 +615,31 @@ class TestFleetFuelLogs:
     async def test_log_fuel_success(self, service, mock_repo):
         vehicle_id = uuid.uuid4()
         mock_repo.get_vehicle.return_value = Vehicle(
-            id=vehicle_id, make_model="Toyota Hilux", license_plate="ABC-123",
-            status=VehicleStatus.ACTIVE, mileage=5000,
+            id=vehicle_id,
+            make_model="Toyota Hilux",
+            license_plate="ABC-123",
+            status=VehicleStatus.ACTIVE,
+            mileage=5000,
         )
         log_id = uuid.uuid4()
         filled_at = datetime.now(UTC)
         mock_repo.create_fuel_log.return_value = FuelLog(
-            id=log_id, vehicle_id=vehicle_id, filled_by_id=uuid.uuid4(),
-            fuel_type="diesel", volume_litres=50.0, cost=7500.0,
-            mileage_at_fill=5100, filled_at=filled_at,
-            created_at=filled_at, updated_at=filled_at,
+            id=log_id,
+            vehicle_id=vehicle_id,
+            filled_by_id=uuid.uuid4(),
+            fuel_type="diesel",
+            volume_litres=50.0,
+            cost=7500.0,
+            mileage_at_fill=5100,
+            filled_at=filled_at,
+            created_at=filled_at,
+            updated_at=filled_at,
         )
         payload = FuelLogCreate(
-            fuel_type="diesel", volume_litres=50.0, cost=7500.0, mileage_at_fill=5100,
+            fuel_type="diesel",
+            volume_litres=50.0,
+            cost=7500.0,
+            mileage_at_fill=5100,
         )
         result = await service.log_fuel(vehicle_id, payload, actor_id=uuid.uuid4())
         assert result.fuel_type == "diesel"
@@ -539,18 +649,30 @@ class TestFleetFuelLogs:
     async def test_log_fuel_updates_mileage(self, service, mock_repo):
         vehicle_id = uuid.uuid4()
         vehicle = Vehicle(
-            id=vehicle_id, make_model="Toyota Hilux", license_plate="ABC-123",
-            status=VehicleStatus.ACTIVE, mileage=5000,
+            id=vehicle_id,
+            make_model="Toyota Hilux",
+            license_plate="ABC-123",
+            status=VehicleStatus.ACTIVE,
+            mileage=5000,
         )
         mock_repo.get_vehicle.return_value = vehicle
         payload = FuelLogCreate(
-            fuel_type="petrol", volume_litres=40.0, cost=6000.0, mileage_at_fill=5500,
+            fuel_type="petrol",
+            volume_litres=40.0,
+            cost=6000.0,
+            mileage_at_fill=5500,
         )
         mock_repo.create_fuel_log.return_value = FuelLog(
-            id=uuid.uuid4(), vehicle_id=vehicle_id, filled_by_id=uuid.uuid4(),
-            fuel_type="petrol", volume_litres=40.0, cost=6000.0,
-            mileage_at_fill=5500, filled_at=datetime.now(UTC),
-            created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
+            id=uuid.uuid4(),
+            vehicle_id=vehicle_id,
+            filled_by_id=uuid.uuid4(),
+            fuel_type="petrol",
+            volume_litres=40.0,
+            cost=6000.0,
+            mileage_at_fill=5500,
+            filled_at=datetime.now(UTC),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
         await service.log_fuel(vehicle_id, payload, actor_id=uuid.uuid4())
         assert vehicle.mileage == 5500
@@ -559,7 +681,10 @@ class TestFleetFuelLogs:
     async def test_log_fuel_vehicle_not_found(self, service, mock_repo):
         mock_repo.get_vehicle.return_value = None
         payload = FuelLogCreate(
-            fuel_type="diesel", volume_litres=50.0, cost=7500.0, mileage_at_fill=5100,
+            fuel_type="diesel",
+            volume_litres=50.0,
+            cost=7500.0,
+            mileage_at_fill=5100,
         )
         with pytest.raises(NotFoundError):
             await service.log_fuel(uuid.uuid4(), payload)

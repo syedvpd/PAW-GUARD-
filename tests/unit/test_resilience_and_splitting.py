@@ -1,14 +1,15 @@
 import asyncio
+
 import pytest
-from fastapi import FastAPI, Depends, Request
+from fastapi import Depends, FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.resilience import CircuitBreaker, CircuitBreakerOpenException, retry_with_backoff
-from pawguard.db.session import get_db, engine, replica_engine
-
+from pawguard.db.session import get_db, replica_engine
 
 # --- 1. Resilience Tests ---
+
 
 @pytest.mark.asyncio
 async def test_retry_with_backoff_success() -> None:
@@ -83,6 +84,7 @@ async def test_circuit_breaker_transitions() -> None:
 
 # --- 2. Database Read/Write Splitting Tests ---
 
+
 @pytest.fixture
 def splitting_app() -> FastAPI:
     app = FastAPI()
@@ -90,12 +92,12 @@ def splitting_app() -> FastAPI:
     @app.get("/test-read")
     async def read_endpoint(session: AsyncSession = Depends(get_db)) -> dict[str, str]:
         # Expose the database engine name bound to this session
-        is_replica = (session.bind == replica_engine)
+        is_replica = session.bind == replica_engine
         return {"bind": "replica" if is_replica else "primary"}
 
     @app.post("/test-write")
     async def write_endpoint(session: AsyncSession = Depends(get_db)) -> dict[str, str]:
-        is_replica = (session.bind == replica_engine)
+        is_replica = session.bind == replica_engine
         return {"bind": "replica" if is_replica else "primary"}
 
     return app

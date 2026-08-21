@@ -57,7 +57,6 @@ from pawguard.workers.pool import get_arq_pool
 router = APIRouter(prefix="/adoptions", tags=["adoptions"])
 
 
-
 def get_adoption_service(
     db: AsyncSession = Depends(get_db),
     redis: RedisClient = Depends(get_redis),
@@ -71,8 +70,13 @@ def get_adoption_service(
     notification_repo = NotificationRepository(db)
     notification_svc = NotificationService(repository=notification_repo, arq_pool=arq_pool)
     return AdoptionService(
-        repo, dog_repo, redis_client=redis, audit_service=audit, storage_service=storage_svc,
-        shelter_repo=shelter_repo, notification_service=notification_svc,
+        repo,
+        dog_repo,
+        redis_client=redis,
+        audit_service=audit,
+        storage_service=storage_svc,
+        shelter_repo=shelter_repo,
+        notification_service=notification_svc,
     )
 
 
@@ -81,8 +85,12 @@ def get_adoption_service(
     response_model=ApiResponse[list[NearbyShelterResponse]],
 )
 async def find_nearby_shelters(
-    latitude: float = Query(..., ge=-90.0, le=90.0, description="Latitude of the search point (WGS-84)"),
-    longitude: float = Query(..., ge=-180.0, le=180.0, description="Longitude of the search point (WGS-84)"),
+    latitude: float = Query(
+        ..., ge=-90.0, le=90.0, description="Latitude of the search point (WGS-84)"
+    ),
+    longitude: float = Query(
+        ..., ge=-180.0, le=180.0, description="Longitude of the search point (WGS-84)"
+    ),
     radius: float = Query(5.0, gt=0.0, le=100.0, description="Search radius in kilometers"),
     current_user: CurrentUser = Depends(get_current_user),
     service: AdoptionService = Depends(get_adoption_service),
@@ -94,7 +102,6 @@ async def find_nearby_shelters(
         data=[NearbyShelterResponse.model_validate(s) for s in result],
         message=f"{len(result)} shelter(s) found within {radius} km.",
     )
-
 
 
 @router.post(
@@ -203,6 +210,7 @@ async def get_adoption_agreement(
         raise ForbiddenError("You do not have permission to view this agreement.")
     if not app.adoption_agreement_url:
         from pawguard.core.exceptions import NotFoundError
+
         raise NotFoundError("Agreement not yet generated for this application.")
     storage = StorageService()
     download_url = storage.generate_presigned_download_url(object_key=app.adoption_agreement_url)
@@ -353,8 +361,7 @@ async def create_follow_up(
         AdoptionFollowUp(
             adoption_application_id=app_id,
             due_day=payload.due_day,
-            due_at=app.completed_at
-            + timedelta(days=payload.due_day)
+            due_at=app.completed_at + timedelta(days=payload.due_day)
             if app.completed_at
             else datetime.now(UTC) + timedelta(days=payload.due_day),
             status=FollowUpStatus.PENDING,
@@ -379,9 +386,7 @@ async def get_follow_ups(
     if app.adopter_id != current_user.user.id and not has_permission(
         current_user.user, "adoption:read"
     ):
-        raise ForbiddenError(
-            "You do not have permission to view follow-ups for this application."
-        )
+        raise ForbiddenError("You do not have permission to view follow-ups for this application.")
     follow_ups = await service.get_follow_ups(app_id)
     return ApiResponse(
         data=[AdoptionFollowUpResponse.model_validate(fu) for fu in follow_ups],
@@ -401,13 +406,10 @@ async def submit_follow_up_proof(
     service: AdoptionService = Depends(get_adoption_service),
 ) -> ApiResponse[AdoptionFollowUpResponse]:
     app = await service.get_application(app_id)
-    if (
-        app.adopter_id != current_user.user.id
-        and not has_permission(current_user.user, "adoption:process")
+    if app.adopter_id != current_user.user.id and not has_permission(
+        current_user.user, "adoption:process"
     ):
-        raise ForbiddenError(
-            "You do not have permission to submit proof for this follow-up."
-        )
+        raise ForbiddenError("You do not have permission to submit proof for this follow-up.")
     follow_up = await service.record_followup_proof(
         follow_up_id,
         media_keys=payload.media_keys,

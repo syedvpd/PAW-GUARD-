@@ -139,8 +139,7 @@ class ShelterService:
         existing = await self._repo.list_kennels_by_section(section_id)
         if len(existing) >= section.capacity:
             raise ConflictError(
-                f"Cannot add kennel. Section capacity limit "
-                f"({section.capacity}) reached."
+                f"Cannot add kennel. Section capacity limit ({section.capacity}) reached."
             )
 
         kennel = Kennel(
@@ -189,8 +188,7 @@ class ShelterService:
         )
         if kennel.sanitation_state in bad_states:
             raise ConflictError(
-                f"Cannot assign dog. Kennel is currently "
-                f"{kennel.sanitation_state}."
+                f"Cannot assign dog. Kennel is currently {kennel.sanitation_state}."
             )
 
         occupancy = await self._dog_repo.count_by_kennel(kennel.id, exclude_dog_id=dog.id)
@@ -359,8 +357,7 @@ class ShelterService:
         same_actor = other_confirmed_by is not None and other_confirmed_by == actor_id
         if actor_id is not None and same_actor:
             raise ConflictError(
-                "The same user cannot confirm both the sending and receiving side "
-                "of a transfer."
+                "The same user cannot confirm both the sending and receiving side of a transfer."
             )
 
         now = datetime.now(UTC)
@@ -475,8 +472,13 @@ class ShelterService:
         facility_type: str | None = None,
     ) -> PaginatedResponse[ShelterFacilityResponse]:
         facilities, total = await self._repo.list_facilities_paginated(
-            page_params, sort, search_term=search_term, status=status,
-            facility_type=FacilityType(facility_type) if isinstance(facility_type, str) else facility_type,
+            page_params,
+            sort,
+            search_term=search_term,
+            status=status,
+            facility_type=FacilityType(facility_type)
+            if isinstance(facility_type, str)
+            else facility_type,
         )
         return PaginatedResponse(
             data=list(facilities),
@@ -492,7 +494,10 @@ class ShelterService:
         search_term: str | None = None,
     ) -> PaginatedResponse[ShelterSectionResponse]:
         sections, total = await self._repo.list_sections_paginated(
-            page_params, sort, facility_id=facility_id, section_type=section_type,
+            page_params,
+            sort,
+            facility_id=facility_id,
+            section_type=section_type,
             search_term=search_term,
         )
         return PaginatedResponse(
@@ -507,7 +512,9 @@ class ShelterService:
         kennel_id: uuid.UUID,
     ) -> PaginatedResponse[KennelCleaningLogResponse]:
         logs, total = await self._repo.list_cleaning_logs_paginated(
-            page_params, sort, kennel_id=kennel_id,
+            page_params,
+            sort,
+            kennel_id=kennel_id,
         )
         return PaginatedResponse(
             data=list(logs),
@@ -521,7 +528,9 @@ class ShelterService:
         section_id: uuid.UUID | None = None,
     ) -> PaginatedResponse[KennelResponse]:
         kennels, total = await self._repo.list_kennels_paginated(
-            page_params, sort, section_id=section_id,
+            page_params,
+            sort,
+            section_id=section_id,
         )
         return PaginatedResponse(
             data=list(kennels),

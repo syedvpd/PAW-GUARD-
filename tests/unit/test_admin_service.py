@@ -27,6 +27,7 @@ class _FakeRedis:
 
     async def scan_iter(self, match: str = "", count: int | None = None):
         import fnmatch
+
         for key in list(self._store):
             if fnmatch.fnmatch(key, match):
                 yield key
@@ -93,9 +94,7 @@ class TestAdminAuditActorThreading:
         svc = _make_service(user_repo=user_repo, audit_service=audit)
         actor_id = uuid.uuid4()
 
-        await svc.update_user(
-            user.id, is_active=False, actor_id=actor_id, ip_address="10.0.0.7"
-        )
+        await svc.update_user(user.id, is_active=False, actor_id=actor_id, ip_address="10.0.0.7")
 
         kwargs = audit.record.call_args.kwargs
         assert kwargs["event_type"] == AuthAuditEventType.ADMIN_USER_UPDATED
@@ -132,13 +131,9 @@ class TestRbacCacheInvalidation:
         perm.code = "rescue:delete"
         permission_repo.get_by_codes.return_value = [perm]
         fake_redis = _FakeRedis()
-        svc = _make_service(
-            role_repo=role_repo, permission_repo=permission_repo, redis=fake_redis
-        )
+        svc = _make_service(role_repo=role_repo, permission_repo=permission_repo, redis=fake_redis)
 
-        await svc.update_role(
-            role.id, description=None, permission_codes=["rescue:delete"]
-        )
+        await svc.update_role(role.id, description=None, permission_codes=["rescue:delete"])
 
         # Both scanned rbac:roles:* keys were purged.
         assert sorted(fake_redis.deleted) == ["rbac:roles:a:b", "rbac:roles:c"]
@@ -165,6 +160,4 @@ class TestRbacCacheInvalidation:
         permission_repo.get_by_codes.return_value = [perm]
         svc = _make_service(role_repo=role_repo, permission_repo=permission_repo)
 
-        await svc.update_role(
-            role.id, description=None, permission_codes=["rescue:delete"]
-        )
+        await svc.update_role(role.id, description=None, permission_codes=["rescue:delete"])

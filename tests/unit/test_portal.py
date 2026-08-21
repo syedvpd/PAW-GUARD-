@@ -60,7 +60,10 @@ class TestPortalService:
     async def test_create_story(self, service, mock_repo):
         story_id = uuid.uuid4()
         mock_repo.create_story.return_value = SuccessStory(
-            id=story_id, title="Happy Tail", summary="Summary", body="Body",
+            id=story_id,
+            title="Happy Tail",
+            summary="Summary",
+            body="Body",
             status=ContentStatus.DRAFT,
         )
         payload = SuccessStoryCreate(title="Happy Tail", summary="Summary", body="Body")
@@ -71,10 +74,16 @@ class TestPortalService:
     async def test_create_story_published(self, service, mock_repo):
         story_id = uuid.uuid4()
         mock_repo.create_story.return_value = SuccessStory(
-            id=story_id, title="Story", summary="Sum", body="Body",
-            status=ContentStatus.PUBLISHED, published_at=datetime.now(UTC),
+            id=story_id,
+            title="Story",
+            summary="Sum",
+            body="Body",
+            status=ContentStatus.PUBLISHED,
+            published_at=datetime.now(UTC),
         )
-        payload = SuccessStoryCreate(title="Story", summary="Sum", body="Body", status=ContentStatus.PUBLISHED)
+        payload = SuccessStoryCreate(
+            title="Story", summary="Sum", body="Body", status=ContentStatus.PUBLISHED
+        )
         result = await service.create_story(payload)
         assert result.status == ContentStatus.PUBLISHED
 
@@ -82,7 +91,10 @@ class TestPortalService:
     async def test_update_story(self, service, mock_repo):
         story_id = uuid.uuid4()
         story = SuccessStory(
-            id=story_id, title="Old", summary="Sum", body="Body",
+            id=story_id,
+            title="Old",
+            summary="Sum",
+            body="Body",
             status=ContentStatus.DRAFT,
         )
         mock_repo.get_story.return_value = story
@@ -100,7 +112,10 @@ class TestPortalService:
     async def test_get_story(self, service, mock_repo):
         story_id = uuid.uuid4()
         mock_repo.get_story.return_value = SuccessStory(
-            id=story_id, title="T", summary="S", body="B",
+            id=story_id,
+            title="T",
+            summary="S",
+            body="B",
             status=ContentStatus.PUBLISHED,
         )
         result = await service.get_story(story_id, published_only=True)
@@ -109,7 +124,10 @@ class TestPortalService:
     @pytest.mark.asyncio
     async def test_get_story_not_found_published_only(self, service, mock_repo):
         story = SuccessStory(
-            id=uuid.uuid4(), title="T", summary="S", body="B",
+            id=uuid.uuid4(),
+            title="T",
+            summary="S",
+            body="B",
             status=ContentStatus.DRAFT,
         )
         mock_repo.get_story.return_value = story
@@ -118,14 +136,18 @@ class TestPortalService:
 
     @pytest.mark.asyncio
     async def test_list_stories(self, service, mock_repo):
-        story = SuccessStory(id=uuid.uuid4(), title="T", summary="S", body="B", status=ContentStatus.PUBLISHED)
+        story = SuccessStory(
+            id=uuid.uuid4(), title="T", summary="S", body="B", status=ContentStatus.PUBLISHED
+        )
         mock_repo.list_stories.return_value = [story]
         results = await service.list_stories(published_only=True)
         assert len(results) == 1
 
     @pytest.mark.asyncio
     async def test_list_stories_paginated(self, service, mock_repo):
-        story = SuccessStory(id=uuid.uuid4(), title="T", summary="S", body="B", status=ContentStatus.DRAFT)
+        story = SuccessStory(
+            id=uuid.uuid4(), title="T", summary="S", body="B", status=ContentStatus.DRAFT
+        )
         mock_repo.count_stories.return_value = 1
         mock_repo.list_stories.return_value = [story]
         stories, meta = await service.list_stories_paginated()
@@ -137,8 +159,13 @@ class TestPortalService:
         mock_repo.get_blog_by_slug.return_value = None
         blog_id = uuid.uuid4()
         mock_repo.create_blog.return_value = BlogPost(
-            id=blog_id, title="Post", slug="my-post", excerpt="Exc",
-            body="Body", category="awareness", status=ContentStatus.DRAFT,
+            id=blog_id,
+            title="Post",
+            slug="my-post",
+            excerpt="Exc",
+            body="Body",
+            category="awareness",
+            status=ContentStatus.DRAFT,
         )
         payload = BlogPostCreate(title="Post", slug="my-post", excerpt="Exc", body="Body")
         result = await service.create_blog(payload)
@@ -147,8 +174,13 @@ class TestPortalService:
     @pytest.mark.asyncio
     async def test_create_blog_duplicate_slug(self, service, mock_repo):
         mock_repo.get_blog_by_slug.return_value = BlogPost(
-            id=uuid.uuid4(), title="Existing", slug="my-post", excerpt="E",
-            body="B", category="a", status=ContentStatus.DRAFT,
+            id=uuid.uuid4(),
+            title="Existing",
+            slug="my-post",
+            excerpt="E",
+            body="B",
+            category="a",
+            status=ContentStatus.DRAFT,
         )
         payload = BlogPostCreate(title="Post", slug="my-post", excerpt="Exc", body="Body")
         with pytest.raises(ConflictError, match="slug.*already exists"):
@@ -158,8 +190,13 @@ class TestPortalService:
     async def test_update_blog(self, service, mock_repo):
         post_id = uuid.uuid4()
         post = BlogPost(
-            id=post_id, title="Old", slug="old-post", excerpt="E",
-            body="B", category="a", status=ContentStatus.DRAFT,
+            id=post_id,
+            title="Old",
+            slug="old-post",
+            excerpt="E",
+            body="B",
+            category="a",
+            status=ContentStatus.DRAFT,
         )
         mock_repo.get_blog_by_id.return_value = post
         payload = BlogPostUpdate(title="Updated")
@@ -170,13 +207,23 @@ class TestPortalService:
     async def test_update_blog_slug_conflict(self, service, mock_repo):
         post_id = uuid.uuid4()
         post = BlogPost(
-            id=post_id, title="Old", slug="old-slug", excerpt="E",
-            body="B", category="a", status=ContentStatus.DRAFT,
+            id=post_id,
+            title="Old",
+            slug="old-slug",
+            excerpt="E",
+            body="B",
+            category="a",
+            status=ContentStatus.DRAFT,
         )
         mock_repo.get_blog_by_id.return_value = post
         mock_repo.get_blog_by_slug.return_value = BlogPost(
-            id=uuid.uuid4(), title="Other", slug="new-slug", excerpt="E",
-            body="B", category="a", status=ContentStatus.DRAFT,
+            id=uuid.uuid4(),
+            title="Other",
+            slug="new-slug",
+            excerpt="E",
+            body="B",
+            category="a",
+            status=ContentStatus.DRAFT,
         )
         payload = BlogPostUpdate(slug="new-slug")
         with pytest.raises(ConflictError, match="slug.*already exists"):
@@ -186,8 +233,13 @@ class TestPortalService:
     async def test_get_blog(self, service, mock_repo):
         post_id = uuid.uuid4()
         mock_repo.get_blog_by_id.return_value = BlogPost(
-            id=post_id, title="P", slug="p", excerpt="E", body="B",
-            category="a", status=ContentStatus.PUBLISHED,
+            id=post_id,
+            title="P",
+            slug="p",
+            excerpt="E",
+            body="B",
+            category="a",
+            status=ContentStatus.PUBLISHED,
         )
         result = await service.get_blog(post_id, published_only=True)
         assert result.id == post_id
@@ -195,8 +247,13 @@ class TestPortalService:
     @pytest.mark.asyncio
     async def test_get_blog_by_slug(self, service, mock_repo):
         mock_repo.get_blog_by_slug.return_value = BlogPost(
-            id=uuid.uuid4(), title="P", slug="my-slug", excerpt="E", body="B",
-            category="a", status=ContentStatus.PUBLISHED,
+            id=uuid.uuid4(),
+            title="P",
+            slug="my-slug",
+            excerpt="E",
+            body="B",
+            category="a",
+            status=ContentStatus.PUBLISHED,
         )
         result = await service.get_blog_by_slug("my-slug", published_only=True)
         assert result.title == "P"
@@ -205,8 +262,12 @@ class TestPortalService:
     async def test_create_vet(self, service, mock_repo):
         vet_id = uuid.uuid4()
         mock_repo.create_vet.return_value = VeterinaryPartner(
-            id=vet_id, name="Vet Clinic", address="Addr", phone="+12345",
-            is_emergency=False, is_active=True,
+            id=vet_id,
+            name="Vet Clinic",
+            address="Addr",
+            phone="+12345",
+            is_emergency=False,
+            is_active=True,
         )
         payload = VeterinaryPartnerCreate(name="Vet Clinic", address="Addr", phone="+12345")
         result = await service.create_vet(payload)
@@ -216,8 +277,12 @@ class TestPortalService:
     async def test_update_vet(self, service, mock_repo):
         vet_id = uuid.uuid4()
         vet = VeterinaryPartner(
-            id=vet_id, name="Old", address="A", phone="+12345",
-            is_emergency=False, is_active=True,
+            id=vet_id,
+            name="Old",
+            address="A",
+            phone="+12345",
+            is_emergency=False,
+            is_active=True,
         )
         mock_repo.get_vet.return_value = vet
         payload = VeterinaryPartnerUpdate(name="Updated")
@@ -234,7 +299,10 @@ class TestPortalService:
     async def test_create_contact(self, service, mock_repo):
         loc_id = uuid.uuid4()
         mock_repo.create_contact.return_value = ContactLocation(
-            id=loc_id, name="Office", address="Addr", phone="+12345",
+            id=loc_id,
+            name="Office",
+            address="Addr",
+            phone="+12345",
         )
         payload = ContactLocationCreate(name="Office", address="Addr", phone="+12345")
         result = await service.create_contact(payload)
@@ -253,7 +321,10 @@ class TestPortalService:
     async def test_create_faq(self, service, mock_repo):
         faq_id = uuid.uuid4()
         mock_repo.create_faq.return_value = FAQEntry(
-            id=faq_id, question="Q?", answer="A!", category="general",
+            id=faq_id,
+            question="Q?",
+            answer="A!",
+            category="general",
             is_published=True,
         )
         payload = FAQEntryCreate(question="Q?", answer="A!")
@@ -286,7 +357,9 @@ class TestPortalService:
 
     @pytest.mark.asyncio
     async def test_get_setting(self, service, mock_repo):
-        mock_repo.get_setting.return_value = SystemSetting(key="app.name", value="PawGuard", description="App")
+        mock_repo.get_setting.return_value = SystemSetting(
+            key="app.name", value="PawGuard", description="App"
+        )
         result = await service.get_setting("app.name")
         assert result.value == "PawGuard"
 
@@ -300,7 +373,11 @@ class TestPortalService:
     async def test_soft_delete_story(self, service, mock_repo):
         story_id = uuid.uuid4()
         mock_repo.get_story.return_value = SuccessStory(
-            id=story_id, title="T", summary="S", body="B", status=ContentStatus.DRAFT,
+            id=story_id,
+            title="T",
+            summary="S",
+            body="B",
+            status=ContentStatus.DRAFT,
         )
         mock_repo.soft_delete_story.return_value = None
         await service.soft_delete_story(story_id)
@@ -310,8 +387,13 @@ class TestPortalService:
     async def test_soft_delete_blog(self, service, mock_repo):
         post_id = uuid.uuid4()
         mock_repo.get_blog_by_id.return_value = BlogPost(
-            id=post_id, title="P", slug="p", excerpt="E", body="B",
-            category="a", status=ContentStatus.DRAFT,
+            id=post_id,
+            title="P",
+            slug="p",
+            excerpt="E",
+            body="B",
+            category="a",
+            status=ContentStatus.DRAFT,
         )
         mock_repo.soft_delete_blog.return_value = None
         await service.soft_delete_blog(post_id)
@@ -321,7 +403,11 @@ class TestPortalService:
     async def test_soft_delete_faq(self, service, mock_repo):
         faq_id = uuid.uuid4()
         mock_repo.get_faq.return_value = FAQEntry(
-            id=faq_id, question="Q?", answer="A!", category="general", is_published=True,
+            id=faq_id,
+            question="Q?",
+            answer="A!",
+            category="general",
+            is_published=True,
         )
         mock_repo.soft_delete_faq.return_value = None
         await service.soft_delete_faq(faq_id)
@@ -375,12 +461,14 @@ class TestPortalService:
         mock_repo.get_legal_doc_by_slug.return_value = None
         doc_id = uuid.uuid4()
         mock_repo.create_legal_doc.return_value = LegalDocument(
-            id=doc_id, slug="terms-of-service", title="Terms", body="Body",
-            document_type=LegalDocumentType.TERMS, status=ContentStatus.DRAFT,
+            id=doc_id,
+            slug="terms-of-service",
+            title="Terms",
+            body="Body",
+            document_type=LegalDocumentType.TERMS,
+            status=ContentStatus.DRAFT,
         )
-        payload = LegalDocumentCreate(
-            slug="terms-of-service", title="Terms", body="Body"
-        )
+        payload = LegalDocumentCreate(slug="terms-of-service", title="Terms", body="Body")
         result = await service.create_legal_doc(payload)
         assert result.title == "Terms"
 
@@ -392,20 +480,26 @@ class TestPortalService:
         svc = PortalService(mock_repo, mock_session, cache_service=cache)
         mock_repo.get_legal_doc_by_slug.return_value = None
         mock_repo.create_legal_doc.return_value = LegalDocument(
-            id=uuid.uuid4(), slug="privacy", title="Privacy", body="B",
-            document_type=LegalDocumentType.PRIVACY, status=ContentStatus.DRAFT,
+            id=uuid.uuid4(),
+            slug="privacy",
+            title="Privacy",
+            body="B",
+            document_type=LegalDocumentType.PRIVACY,
+            status=ContentStatus.DRAFT,
         )
-        await svc.create_legal_doc(
-            LegalDocumentCreate(slug="privacy", title="Privacy", body="B")
-        )
+        await svc.create_legal_doc(LegalDocumentCreate(slug="privacy", title="Privacy", body="B"))
         deleted = {c.args[0] for c in cache.delete.await_args_list}
         assert deleted == {"hero_stats", "transparency_stats"}
 
     @pytest.mark.asyncio
     async def test_create_legal_doc_duplicate_slug(self, service, mock_repo):
         mock_repo.get_legal_doc_by_slug.return_value = LegalDocument(
-            id=uuid.uuid4(), slug="terms", title="Existing", body="B",
-            document_type=LegalDocumentType.OTHER, status=ContentStatus.DRAFT,
+            id=uuid.uuid4(),
+            slug="terms",
+            title="Existing",
+            body="B",
+            document_type=LegalDocumentType.OTHER,
+            status=ContentStatus.DRAFT,
         )
         payload = LegalDocumentCreate(slug="terms", title="New", body="B")
         with pytest.raises(ConflictError, match="slug.*already exists"):
@@ -415,8 +509,12 @@ class TestPortalService:
     async def test_update_legal_doc(self, service, mock_repo):
         doc_id = uuid.uuid4()
         doc = LegalDocument(
-            id=doc_id, slug="terms", title="Old", body="B",
-            document_type=LegalDocumentType.TERMS, status=ContentStatus.DRAFT,
+            id=doc_id,
+            slug="terms",
+            title="Old",
+            body="B",
+            document_type=LegalDocumentType.TERMS,
+            status=ContentStatus.DRAFT,
         )
         mock_repo.get_legal_doc.return_value = doc
         payload = LegalDocumentUpdate(title="Updated")
@@ -432,8 +530,12 @@ class TestPortalService:
     @pytest.mark.asyncio
     async def test_get_legal_doc_published_only(self, service, mock_repo):
         doc = LegalDocument(
-            id=uuid.uuid4(), slug="privacy", title="Privacy", body="B",
-            document_type=LegalDocumentType.PRIVACY, status=ContentStatus.PUBLISHED,
+            id=uuid.uuid4(),
+            slug="privacy",
+            title="Privacy",
+            body="B",
+            document_type=LegalDocumentType.PRIVACY,
+            status=ContentStatus.PUBLISHED,
         )
         mock_repo.get_legal_doc_by_slug.return_value = doc
         result = await service.get_legal_doc_by_slug("privacy", published_only=True)
@@ -442,8 +544,12 @@ class TestPortalService:
     @pytest.mark.asyncio
     async def test_get_legal_doc_hidden_when_draft(self, service, mock_repo):
         doc = LegalDocument(
-            id=uuid.uuid4(), slug="terms", title="T", body="B",
-            document_type=LegalDocumentType.OTHER, status=ContentStatus.DRAFT,
+            id=uuid.uuid4(),
+            slug="terms",
+            title="T",
+            body="B",
+            document_type=LegalDocumentType.OTHER,
+            status=ContentStatus.DRAFT,
         )
         mock_repo.get_legal_doc_by_slug.return_value = doc
         with pytest.raises(NotFoundError):
@@ -452,8 +558,12 @@ class TestPortalService:
     @pytest.mark.asyncio
     async def test_list_legal_docs_paginated(self, service, mock_repo):
         doc = LegalDocument(
-            id=uuid.uuid4(), slug="terms", title="T", body="B",
-            document_type=LegalDocumentType.OTHER, status=ContentStatus.DRAFT,
+            id=uuid.uuid4(),
+            slug="terms",
+            title="T",
+            body="B",
+            document_type=LegalDocumentType.OTHER,
+            status=ContentStatus.DRAFT,
         )
         mock_repo.count_legal_docs.return_value = 1
         mock_repo.list_legal_docs.return_value = [doc]
@@ -465,8 +575,12 @@ class TestPortalService:
     async def test_soft_delete_legal_doc(self, service, mock_repo):
         doc_id = uuid.uuid4()
         mock_repo.get_legal_doc.return_value = LegalDocument(
-            id=doc_id, slug="terms", title="T", body="B",
-            document_type=LegalDocumentType.OTHER, status=ContentStatus.DRAFT,
+            id=doc_id,
+            slug="terms",
+            title="T",
+            body="B",
+            document_type=LegalDocumentType.OTHER,
+            status=ContentStatus.DRAFT,
         )
         mock_repo.soft_delete_legal_doc.return_value = None
         await service.soft_delete_legal_doc(doc_id)
@@ -478,8 +592,11 @@ class TestPortalService:
     async def test_create_urgent_alert(self, service, mock_repo):
         alert_id = uuid.uuid4()
         mock_repo.create_urgent_alert.return_value = UrgentAlert(
-            id=alert_id, title="Flood", message="Roads flooded.",
-            severity=AlertSeverity.WARNING, is_active=True,
+            id=alert_id,
+            title="Flood",
+            message="Roads flooded.",
+            severity=AlertSeverity.WARNING,
+            is_active=True,
         )
         payload = UrgentAlertCreate(title="Flood", message="Roads flooded.")
         result = await service.create_urgent_alert(payload)
@@ -491,12 +608,13 @@ class TestPortalService:
         cache = AsyncMock(spec=CacheService)
         svc = PortalService(mock_repo, mock_session, cache_service=cache)
         mock_repo.get_urgent_alert.return_value = UrgentAlert(
-            id=uuid.uuid4(), title="Flood", message="Old",
-            severity=AlertSeverity.INFO, is_active=True,
+            id=uuid.uuid4(),
+            title="Flood",
+            message="Old",
+            severity=AlertSeverity.INFO,
+            is_active=True,
         )
-        await svc.update_urgent_alert(
-            uuid.uuid4(), UrgentAlertUpdate(message="New")
-        )
+        await svc.update_urgent_alert(uuid.uuid4(), UrgentAlertUpdate(message="New"))
         deleted = {c.args[0] for c in cache.delete.await_args_list}
         assert deleted == {"hero_stats", "transparency_stats"}
 
@@ -504,8 +622,11 @@ class TestPortalService:
     async def test_update_urgent_alert(self, service, mock_repo):
         alert_id = uuid.uuid4()
         alert = UrgentAlert(
-            id=alert_id, title="Flood", message="Old",
-            severity=AlertSeverity.INFO, is_active=True,
+            id=alert_id,
+            title="Flood",
+            message="Old",
+            severity=AlertSeverity.INFO,
+            is_active=True,
         )
         mock_repo.get_urgent_alert.return_value = alert
         payload = UrgentAlertUpdate(message="New")
@@ -521,8 +642,11 @@ class TestPortalService:
     @pytest.mark.asyncio
     async def test_get_active_alerts(self, service, mock_repo):
         alert = UrgentAlert(
-            id=uuid.uuid4(), title="Alert", message="M",
-            severity=AlertSeverity.CRITICAL, is_active=True,
+            id=uuid.uuid4(),
+            title="Alert",
+            message="M",
+            severity=AlertSeverity.CRITICAL,
+            is_active=True,
         )
         mock_repo.list_active_alerts.return_value = [alert]
         alerts = await service.get_active_alerts()
@@ -532,8 +656,11 @@ class TestPortalService:
     async def test_soft_delete_urgent_alert(self, service, mock_repo):
         alert_id = uuid.uuid4()
         mock_repo.get_urgent_alert.return_value = UrgentAlert(
-            id=alert_id, title="A", message="M",
-            severity=AlertSeverity.INFO, is_active=True,
+            id=alert_id,
+            title="A",
+            message="M",
+            severity=AlertSeverity.INFO,
+            is_active=True,
         )
         mock_repo.soft_delete_urgent_alert.return_value = None
         await service.soft_delete_urgent_alert(alert_id)
@@ -562,12 +689,14 @@ class TestPortalService:
         cache = AsyncMock(spec=CacheService)
         svc = PortalService(mock_repo, mock_session, cache_service=cache)
         mock_repo.create_vet.return_value = VeterinaryPartner(
-            id=uuid.uuid4(), name="Vet", address="A", phone="+12345",
-            is_emergency=False, is_active=True,
+            id=uuid.uuid4(),
+            name="Vet",
+            address="A",
+            phone="+12345",
+            is_emergency=False,
+            is_active=True,
         )
-        await svc.create_vet(
-            VeterinaryPartnerCreate(name="Vet", address="A", phone="+12345")
-        )
+        await svc.create_vet(VeterinaryPartnerCreate(name="Vet", address="A", phone="+12345"))
         deleted = {c.args[0] for c in cache.delete.await_args_list}
         assert deleted == {"hero_stats", "transparency_stats"}
 
