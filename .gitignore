@@ -262,3 +262,8 @@ uv.lock
 openapi.json
 PawGuard.postman_collection.json
 
+# SonarScanner / SonarLint
+.scannerwork/
+.sonarlint/
+.sonartmp/
+
