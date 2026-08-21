@@ -10,44 +10,49 @@
     {
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
       "id": 1,
-      "title": "Requests Per Second (RPS)",
+      "title": "Total HTTP Requests & Rate",
       "type": "timeseries",
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(http_requests_total[1m]))",
-          "legendFormat": "Total RPS"
+          "expr": "sum(http_requests_total)",
+          "legendFormat": "Total Requests"
+        },
+        {
+          "datasource": null,
+          "expr": "sum(rate(http_requests_total[5m]))",
+          "legendFormat": "RPS (5m Rate)"
         }
       ]
     },
     {
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
       "id": 2,
-      "title": "API Latency (Average ms)",
+      "title": "Database Queries & Slow Queries",
       "type": "timeseries",
       "targets": [
         {
           "datasource": null,
-          "expr": "rate(http_request_duration_ms_sum[1m]) / rate(http_request_duration_ms_count[1m])",
-          "legendFormat": "Avg Latency (ms)"
+          "expr": "sum(db_queries_total)",
+          "legendFormat": "DB Queries"
+        },
+        {
+          "datasource": null,
+          "expr": "sum(db_slow_queries_total)",
+          "legendFormat": "Slow DB Queries"
         }
       ]
     },
     {
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
       "id": 3,
-      "title": "HTTP Error Rates (5xx / 4xx)",
+      "title": "HTTP Error Rates (4xx & 5xx Errors)",
       "type": "timeseries",
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(http_requests_total{status=~\"5..\"}[1m]))",
-          "legendFormat": "5xx Internal Errors"
-        },
-        {
-          "datasource": null,
-          "expr": "sum(rate(http_requests_total{status=~\"4..\"}[1m]))",
-          "legendFormat": "4xx Client Errors"
+          "expr": "sum(http_requests_errors_total)",
+          "legendFormat": "HTTP Errors"
         }
       ]
     },
@@ -59,12 +64,12 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(auth_login_attempts_total[1m]))",
+          "expr": "sum(auth_login_attempts_total)",
           "legendFormat": "Login Attempts"
         },
         {
           "datasource": null,
-          "expr": "sum(rate(fcm_push_dispatches_total[1m]))",
+          "expr": "sum(fcm_push_dispatches_total)",
           "legendFormat": "FCM Push Dispatches"
         }
       ]
@@ -74,7 +79,7 @@
   "schemaVersion": 38,
   "style": "dark",
   "tags": ["pawguard", "backend", "production"],
-  "time": { "from": "now-1h", "to": "now" },
+  "time": { "from": "now-6h", "to": "now" },
   "timepicker": {},
   "timezone": "browser",
   "title": "PawGuard Production Overview",
