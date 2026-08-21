@@ -221,6 +221,18 @@ def create_app() -> FastAPI:
     async def prometheus_buildinfo() -> dict:
         return {"status": "success", "data": {"version": "2.47.0"}}
 
+    @app.api_route("/api/v1/query", methods=["GET", "POST"], include_in_schema=False)
+    @app.api_route("/metrics/api/v1/query", methods=["GET", "POST"], include_in_schema=False)
+    @app.api_route("/api/v1/query_range", methods=["GET", "POST"], include_in_schema=False)
+    @app.api_route("/metrics/api/v1/query_range", methods=["GET", "POST"], include_in_schema=False)
+    async def prometheus_query_stub() -> dict:
+        return {"status": "success", "data": {"resultType": "vector", "result": []}}
+
+    @app.api_route("/api/v1/labels", methods=["GET", "POST"], include_in_schema=False)
+    @app.api_route("/metrics/api/v1/labels", methods=["GET", "POST"], include_in_schema=False)
+    async def prometheus_labels_stub() -> dict:
+        return {"status": "success", "data": []}
+
     return app
 
 
