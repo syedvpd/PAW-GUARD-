@@ -718,3 +718,73 @@ class TestPortalService:
         assert stats.total_funds_raised == 100.5
         assert stats.total_donations == 12
         mock_session.execute.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_story_by_slug(self, service, mock_repo):
+        story_id = uuid.uuid4()
+        story = SuccessStory(
+            id=story_id,
+            title="Barnaby",
+            summary="S",
+            body="B",
+            slug="barnaby-story",
+            status=ContentStatus.PUBLISHED,
+        )
+        mock_repo.get_story_by_slug.return_value = story
+        result = await service.get_story_by_slug("barnaby-story", published_only=True)
+        assert result.title == "Barnaby"
+
+    @pytest.mark.asyncio
+    async def test_get_story_by_slug_draft_hidden(self, service, mock_repo):
+        story_id = uuid.uuid4()
+        story = SuccessStory(
+            id=story_id,
+            title="Barnaby",
+            summary="S",
+            body="B",
+            slug="barnaby-story",
+            status=ContentStatus.DRAFT,
+        )
+        mock_repo.get_story_by_slug.return_value = story
+        with pytest.raises(NotFoundError):
+            await service.get_story_by_slug("barnaby-story", published_only=True)
+
+    @pytest.mark.asyncio
+    async def test_get_faq_by_id(self, service, mock_repo):
+        faq_id = uuid.uuid4()
+        faq = FAQEntry(id=faq_id, question="Q?", answer="A!", category="general")
+        mock_repo.get_faq.return_value = faq
+        result = await service.get_faq(faq_id)
+        assert result.question == "Q?"
+
+    @pytest.mark.asyncio
+    async def test_get_contact_by_id(self, service, mock_repo):
+        loc_id = uuid.uuid4()
+        loc = ContactLocation(id=loc_id, name="HQ", address="123 St", phone="555")
+        mock_repo.get_contact.return_value = loc
+        result = await service.get_contact(loc_id)
+        assert result.name == "HQ"
+
+    @pytest.mark.asyncio
+    async def test_get_vet_by_id(self, service, mock_repo):
+        vet_id = uuid.uuid4()
+        vet = VeterinaryPartner(id=vet_id, name="VetClinic", address="Road 1", phone="123")
+        mock_repo.get_vet.return_value = vet
+        result = await service.get_vet(vet_id)
+        assert result.name == "VetClinic"
+
+    @pytest.mark.asyncio
+    async def test_soft_delete_contact(self, service, mock_repo):
+        loc_id = uuid.uuid4()
+        mock_repo.get_contact.return_value = ContactLocation(id=loc_id, name="HQ")
+        mock_repo.soft_delete_contact.return_value = None
+        await service.soft_delete_contact(loc_id)
+        mock_repo.soft_delete_contact.assert_called_once_with(loc_id)
+
+    @pytest.mark.asyncio
+    async def test_soft_delete_vet(self, service, mock_repo):
+        vet_id = uuid.uuid4()
+        mock_repo.get_vet.return_value = VeterinaryPartner(id=vet_id, name="VetClinic")
+        mock_repo.soft_delete_vet.return_value = None
+        await service.soft_delete_vet(vet_id)
+        mock_repo.soft_delete_vet.assert_called_once_with(vet_id)

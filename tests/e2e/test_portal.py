@@ -92,6 +92,22 @@ class TestPortalPublicEndpoints:
                 client, "portal", "GET", f"/api/v1/portal/success-stories/{story_id}", expected=200
             )
 
+    async def test_portal_success_story_by_slug(self, client, setup):
+        create_r = await client.post(
+            "/api/v1/portal/admin/success-stories",
+            json={
+                "title": f"SlugStory_{uid()}",
+                "content": "Success story content",
+            },
+            headers=setup.admin_headers,
+        )
+        if create_r.status_code in (200, 201):
+            slug = create_r.json()["data"].get("slug")
+            if slug:
+                await call(
+                    client, "portal", "GET", f"/api/v1/portal/success-stories/slug/{slug}", expected=200
+                )
+
 
 @pytest.mark.asyncio
 class TestPortalCmsEndpoints:
@@ -813,3 +829,52 @@ class TestPortalAdminCmsEndpoints:
 
     async def test_public_cms_page(self, client):
         await call(client, "portal", "GET", "/api/v1/portal/cms/pages/about", expected=200)
+
+    async def test_request_cms_media_upload_url(self, client, setup):
+        r = await call(
+            client,
+            "portal_admin",
+            "POST",
+            "/api/v1/portal/admin/cms/media/upload-url",
+            headers=setup.admin_headers,
+            json={
+                "original_filename": "hero-banner.jpg",
+                "mime_type": "image/jpeg",
+                "file_size": 204800,
+                "folder": "cms",
+            },
+            expected=201,
+        )
+        data = r.json()["data"]
+        assert "upload_url" in data and "object_key" in data and "file_id" in data
+
+    async def test_request_cms_media_upload_url_requires_admin(self, client):
+        await call(
+            client,
+            "portal",
+            "POST",
+            "/api/v1/portal/admin/cms/media/upload-url",
+            json={
+                "original_filename": "hero-banner.jpg",
+                "mime_type": "image/jpeg",
+                "file_size": 204800,
+                "folder": "cms",
+            },
+            expected=403,
+        )
+
+    async def test_request_cms_media_rejects_bad_mime(self, client, setup):
+        await call(
+            client,
+            "portal_admin",
+            "POST",
+            "/api/v1/portal/admin/cms/media/upload-url",
+            headers=setup.admin_headers,
+            json={
+                "original_filename": "malware.exe",
+                "mime_type": "application/x-msdownload",
+                "file_size": 1024,
+                "folder": "cms",
+            },
+            expected=422,
+        )

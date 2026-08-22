@@ -30,6 +30,9 @@ class SuccessStoryCreate(BaseModel):
     )
     dog_id: uuid.UUID | None = None
     status: ContentStatus = ContentStatus.DRAFT
+    slug: str | None = Field(None, pattern=r"^[a-z0-9-]+$", examples=["from-stray-to-star-barnaby"])
+    is_featured: bool = False
+    sort_order: int = 0
 
 
 class SuccessStoryUpdate(BaseModel):
@@ -41,6 +44,9 @@ class SuccessStoryUpdate(BaseModel):
     )
     dog_id: uuid.UUID | None = None
     status: ContentStatus | None = Field(None, examples=["published"])
+    slug: str | None = Field(None, pattern=r"^[a-z0-9-]+$", examples=["updated-slug"])
+    is_featured: bool | None = None
+    sort_order: int | None = None
 
 
 class SuccessStoryResponse(BaseModel):
@@ -70,6 +76,9 @@ class SuccessStoryResponse(BaseModel):
     published_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    slug: str | None = None
+    is_featured: bool = False
+    sort_order: int = 0
 
     @model_validator(mode="after")
     def _sync_image_fields(self) -> "SuccessStoryResponse":
@@ -93,6 +102,12 @@ class SuccessStoryResponse(BaseModel):
             or (self.images[0] if self.images else None)
         )
         if img:
+            if not img.startswith("http"):
+                try:
+                    from pawguard.services.storage_service import get_storage_service
+                    img = get_storage_service().generate_presigned_download_url(object_key=img)
+                except Exception:
+                    pass
             self.hero_image_url = img
             self.cover_image_url = img
             self.image_url = img
@@ -140,6 +155,8 @@ class BlogPostCreate(BaseModel):
     )
     category: str = Field("awareness", max_length=128, examples=["pet_care"])
     status: ContentStatus = ContentStatus.DRAFT
+    tags: str | None = Field(None, max_length=255, examples=["pet_care, vet_visit"])
+    author: str | None = Field(None, max_length=255, examples=["Dr. Jane Smith"])
 
 
 class BlogPostUpdate(BaseModel):
@@ -154,6 +171,8 @@ class BlogPostUpdate(BaseModel):
     )
     category: str | None = Field(None, max_length=128, examples=["pet_care"])
     status: ContentStatus | None = Field(None, examples=["published"])
+    tags: str | None = Field(None, max_length=255, examples=["pet_care, vet_visit"])
+    author: str | None = Field(None, max_length=255, examples=["Dr. Jane Smith"])
 
 
 class BlogPostResponse(BaseModel):
@@ -184,6 +203,8 @@ class BlogPostResponse(BaseModel):
     published_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    tags: str | None = None
+    author: str | None = None
 
     @model_validator(mode="after")
     def _sync_image_fields(self) -> "BlogPostResponse":
@@ -207,6 +228,12 @@ class BlogPostResponse(BaseModel):
             or (self.images[0] if self.images else None)
         )
         if img:
+            if not img.startswith("http"):
+                try:
+                    from pawguard.services.storage_service import get_storage_service
+                    img = get_storage_service().generate_presigned_download_url(object_key=img)
+                except Exception:
+                    pass
             self.cover_image_url = img
             self.image_url = img
             self.photo_url = img
@@ -520,8 +547,46 @@ class CmsFieldResponse(BaseModel):
     field_type: str
     published_value: str | None
     draft_value: str | None
+    published_url: str | None = None
+    draft_url: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def _resolve_urls(self) -> "CmsFieldResponse":
+        if self.field_type in ("image", "video", "media", "file"):
+            import contextlib
+
+            try:
+                from pawguard.services.storage_service import get_storage_service
+
+                s3 = get_storage_service()
+            except Exception:
+                s3 = None
+
+            if s3:
+                if self.published_value and not self.published_value.startswith("http"):
+                    with contextlib.suppress(Exception):
+                        self.published_url = s3.generate_presigned_download_url(
+                            object_key=self.published_value
+                        )
+                else:
+                    self.published_url = self.published_value
+
+                if self.draft_value and not self.draft_value.startswith("http"):
+                    with contextlib.suppress(Exception):
+                        self.draft_url = s3.generate_presigned_download_url(
+                            object_key=self.draft_value
+                        )
+                else:
+                    self.draft_url = self.draft_value
+            else:
+                self.published_url = self.published_value
+                self.draft_url = self.draft_value
+        else:
+            self.published_url = self.published_value
+            self.draft_url = self.draft_value
+        return self
 
 
 class CmsSectionResponse(BaseModel):

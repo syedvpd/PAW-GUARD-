@@ -62,9 +62,18 @@ from pawguard.modules.portal.schemas import (
     VeterinaryPartnerUpdate,
 )
 from pawguard.modules.portal.service import PortalService
+from pawguard.modules.storage.models import FileFolder
+from pawguard.modules.storage.repository import StorageRepository
+from pawguard.modules.storage.schemas import (
+    StoredFileCreate,
+    StoredFileResponse,
+    UploadUrlResponse,
+)
+from pawguard.modules.storage.service import StorageService as StorageModuleService
 from pawguard.redis.client import RedisClient, get_redis
 from pawguard.services.audit_service import AuditService
 from pawguard.services.cache_service import CacheService
+from pawguard.services.storage_service import StorageService as S3StorageService
 from pawguard.workers.pool import get_arq_pool
 
 router = APIRouter(prefix="/portal", tags=["portal"])
@@ -120,6 +129,15 @@ async def get_published_story(
     service: PortalService = Depends(get_portal_service),
 ) -> ApiResponse[SuccessStoryResponse]:
     story = await service.get_story(story_id, published_only=True)
+    return ApiResponse(data=SuccessStoryResponse.model_validate(story))
+
+
+@router.get("/success-stories/slug/{slug}", response_model=ApiResponse[SuccessStoryResponse])
+async def get_published_story_by_slug(
+    slug: str,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[SuccessStoryResponse]:
+    story = await service.get_story_by_slug(slug, published_only=True)
     return ApiResponse(data=SuccessStoryResponse.model_validate(story))
 
 
@@ -1145,3 +1163,344 @@ async def discard_admin_cms_page(
         ctx=ctx,
     )
     return ApiResponse(data=page, message="CMS draft discarded successfully.")
+
+
+# ── Admin Single GET details by ID endpoints ──────────────────────────────────
+
+@router.get(
+    "/admin/success-stories/{story_id}",
+    response_model=ApiResponse[SuccessStoryResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def get_admin_story(
+    story_id: uuid.UUID,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[SuccessStoryResponse]:
+    story = await service.get_story(story_id, published_only=False)
+    return ApiResponse(data=SuccessStoryResponse.model_validate(story))
+
+
+@router.get(
+    "/admin/blog/{post_id}",
+    response_model=ApiResponse[BlogPostResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def get_admin_blog(
+    post_id: uuid.UUID,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[BlogPostResponse]:
+    post = await service.get_blog(post_id, published_only=False)
+    return ApiResponse(data=BlogPostResponse.model_validate(post))
+
+
+@router.get(
+    "/admin/faq/{entry_id}",
+    response_model=ApiResponse[FAQEntryResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def get_admin_faq(
+    entry_id: uuid.UUID,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[FAQEntryResponse]:
+    entry = await service.get_faq(entry_id)
+    return ApiResponse(data=FAQEntryResponse.model_validate(entry))
+
+
+@router.get(
+    "/admin/legal/{doc_id}",
+    response_model=ApiResponse[LegalDocumentResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def get_admin_legal_doc(
+    doc_id: uuid.UUID,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[LegalDocumentResponse]:
+    doc = await service.get_legal_doc(doc_id)
+    return ApiResponse(data=LegalDocumentResponse.model_validate(doc))
+
+
+@router.get(
+    "/admin/contact/{location_id}",
+    response_model=ApiResponse[ContactLocationResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def get_admin_contact(
+    location_id: uuid.UUID,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[ContactLocationResponse]:
+    loc = await service.get_contact(location_id)
+    return ApiResponse(data=ContactLocationResponse.model_validate(loc))
+
+
+@router.get(
+    "/admin/veterinary-network/{partner_id}",
+    response_model=ApiResponse[VeterinaryPartnerResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def get_admin_vet(
+    partner_id: uuid.UUID,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[VeterinaryPartnerResponse]:
+    partner = await service.get_vet(partner_id)
+    return ApiResponse(data=VeterinaryPartnerResponse.model_validate(partner))
+
+
+# ── Contact Location and Veterinary Network Admin DELETE endpoints ────────────
+
+@router.delete(
+    "/admin/contact/{location_id}",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def delete_admin_contact(
+    location_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[None]:
+    ip = request.client.host if request.client else None
+    await service.soft_delete_contact(
+        location_id,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(message="Contact location deleted successfully.")
+
+
+@router.delete(
+    "/admin/veterinary-network/{partner_id}",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def delete_admin_vet(
+    partner_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[None]:
+    ip = request.client.host if request.client else None
+    await service.soft_delete_vet(
+        partner_id,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(message="Veterinary partner deleted successfully.")
+
+
+# ── Structured Content Admin Publish / Discard endpoints ─────────────────────
+
+@router.post(
+    "/admin/success-stories/{story_id}/publish",
+    response_model=ApiResponse[SuccessStoryResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def publish_admin_story(
+    story_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[SuccessStoryResponse]:
+    ip = request.client.host if request.client else None
+    story = await service.update_story(
+        story_id,
+        SuccessStoryUpdate(status=ContentStatus.PUBLISHED),
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=SuccessStoryResponse.model_validate(story),
+        message="Success story published successfully.",
+    )
+
+
+@router.post(
+    "/admin/success-stories/{story_id}/discard",
+    response_model=ApiResponse[SuccessStoryResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def discard_admin_story(
+    story_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[SuccessStoryResponse]:
+    ip = request.client.host if request.client else None
+    story = await service.update_story(
+        story_id,
+        SuccessStoryUpdate(status=ContentStatus.DRAFT),
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=SuccessStoryResponse.model_validate(story),
+        message="Success story draft discarded/unpublished successfully.",
+    )
+
+
+@router.post(
+    "/admin/blog/{post_id}/publish",
+    response_model=ApiResponse[BlogPostResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def publish_admin_blog(
+    post_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[BlogPostResponse]:
+    ip = request.client.host if request.client else None
+    post = await service.update_blog(
+        post_id,
+        BlogPostUpdate(status=ContentStatus.PUBLISHED),
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=BlogPostResponse.model_validate(post),
+        message="Blog post published successfully.",
+    )
+
+
+@router.post(
+    "/admin/blog/{post_id}/discard",
+    response_model=ApiResponse[BlogPostResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def discard_admin_blog(
+    post_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[BlogPostResponse]:
+    ip = request.client.host if request.client else None
+    post = await service.update_blog(
+        post_id,
+        BlogPostUpdate(status=ContentStatus.DRAFT),
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=BlogPostResponse.model_validate(post),
+        message="Blog post draft discarded/unpublished successfully.",
+    )
+
+
+@router.post(
+    "/admin/legal/{doc_id}/publish",
+    response_model=ApiResponse[LegalDocumentResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def publish_admin_legal_doc(
+    doc_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[LegalDocumentResponse]:
+    ip = request.client.host if request.client else None
+    doc = await service.update_legal_doc(
+        doc_id,
+        LegalDocumentUpdate(status=ContentStatus.PUBLISHED),
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=LegalDocumentResponse.model_validate(doc),
+        message="Legal document published successfully.",
+    )
+
+
+@router.post(
+    "/admin/legal/{doc_id}/discard",
+    response_model=ApiResponse[LegalDocumentResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def discard_admin_legal_doc(
+    doc_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[LegalDocumentResponse]:
+    ip = request.client.host if request.client else None
+    doc = await service.update_legal_doc(
+        doc_id,
+        LegalDocumentUpdate(status=ContentStatus.DRAFT),
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=LegalDocumentResponse.model_validate(doc),
+        message="Legal document draft discarded/unpublished successfully.",
+    )
+
+
+# ── CMS media (secure admin upload, reuses S3 storage architecture) ──────────
+
+
+@router.post(
+    "/admin/cms/media/upload-url",
+    response_model=ApiResponse[UploadUrlResponse],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def request_cms_media_upload_url(
+    payload: StoredFileCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
+    db: AsyncSession = Depends(get_db),
+) -> ApiResponse[UploadUrlResponse]:
+    """Request a presigned S3 upload URL for CMS media (image/video/PDF).
+
+    Reuses the shared storage architecture: declared MIME type and size are
+    validated up front, an object key is reserved in the ``cms`` folder, and
+    the caller PUTs bytes straight to S3 before confirming. The returned
+    ``object_key`` is what admins persist inside CMS content fields; public
+    read-time resolution generates presigned URLs on demand and never stores
+    them permanently.
+    """
+    storage_service = StorageModuleService(StorageRepository(db), S3StorageService())
+    result = await storage_service.request_upload_url(
+        StoredFileCreate(
+            original_filename=payload.original_filename,
+            mime_type=payload.mime_type,
+            file_size=payload.file_size,
+            folder=FileFolder.CMS,
+            entity_type="cms",
+            entity_id=None,
+        ),
+        user_id=current_user.id,
+    )
+    return ApiResponse(data=result, message="CMS media upload URL generated.")
+
+
+@router.post(
+    "/admin/cms/media/{file_id}/confirm",
+    response_model=ApiResponse[StoredFileResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def confirm_cms_media_upload(
+    file_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ApiResponse[StoredFileResponse]:
+    """Confirm a CMS media upload after the bytes reach S3.
+
+    Re-verifies the real file size and magic-bytes signature before trusting
+    the object, then marks it uploaded. Returns the stored file metadata; the
+    ``object_key`` is what the admin saves in a CMS content field.
+    """
+    storage_service = StorageModuleService(StorageRepository(db), S3StorageService())
+    stored = await storage_service.confirm_upload(file_id)
+    return ApiResponse(
+        data=StoredFileResponse.model_validate(stored),
+        message="CMS media confirmed.",
+    )

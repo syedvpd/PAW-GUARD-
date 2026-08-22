@@ -172,7 +172,23 @@ class PortalService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> SuccessStory:
-        story = SuccessStory(**payload.model_dump())
+        slug = payload.slug
+        if not slug:
+            import re
+            slug = re.sub(r'[^a-z0-9]+', '-', payload.title.lower()).strip('-')
+            if not slug:
+                slug = "story"
+            # Ensure slug is unique
+            existing = await self._repo.get_story_by_slug(slug)
+            if existing is not None:
+                slug = f"{slug}-{str(uuid.uuid4())[:8]}"
+        else:
+            existing = await self._repo.get_story_by_slug(slug)
+            if existing is not None:
+                raise ConflictError(f"Success story slug '{slug}' already exists.")
+
+        story = SuccessStory(**payload.model_dump(exclude={"slug"}))
+        story.slug = slug
         self._apply_publish(story.status, story)
         return await self._repo.create_story(story)
 
@@ -186,15 +202,15 @@ class PortalService:
         story = await self._repo.get_story(story_id)
         if story is None:
             raise NotFoundError("Success story not found.")
+        if payload.slug is not None and payload.slug != story.slug:
+            existing = await self._repo.get_story_by_slug(payload.slug)
+            if existing is not None:
+                raise ConflictError(f"Success story slug '{payload.slug}' already exists.")
         for field, value in payload.model_dump(exclude_unset=True).items():
             setattr(story, field, value)
         if payload.status is not None:
             self._apply_publish(payload.status, story)
         await self._session.flush()
-        # updated_at has onupdate=func.now() (server-computed) - after
-        # flush() it's expired, and reading it during response
-        # serialization triggers an implicit refresh that's unsafe outside
-        # an explicit awaited context on an AsyncSession (MissingGreenlet).
         await self._session.refresh(story)
         return story
 
@@ -205,6 +221,17 @@ class PortalService:
         published_only: bool,
     ) -> SuccessStory:
         story = await self._repo.get_story(story_id)
+        if story is None or (published_only and story.status != ContentStatus.PUBLISHED):
+            raise NotFoundError("Success story not found.")
+        return story
+
+    async def get_story_by_slug(
+        self,
+        slug: str,
+        *,
+        published_only: bool,
+    ) -> SuccessStory:
+        story = await self._repo.get_story_by_slug(slug)
         if story is None or (published_only and story.status != ContentStatus.PUBLISHED):
             raise NotFoundError("Success story not found.")
         return story
@@ -531,6 +558,31 @@ class PortalService:
         if entry is None:
             raise NotFoundError("FAQ entry not found.")
         await self._repo.soft_delete_faq(entry_id)
+
+    async def soft_delete_contact(
+        self,
+        location_id: uuid.UUID,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> None:
+        loc = await self._repo.get_contact(location_id)
+        if loc is None:
+            raise NotFoundError("Contact location not found.")
+        await self._repo.soft_delete_contact(location_id)
+        await self._session.flush()
+
+    async def soft_delete_vet(
+        self,
+        partner_id: uuid.UUID,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> None:
+        partner = await self._repo.get_vet(partner_id)
+        if partner is None:
+            raise NotFoundError("Veterinary partner not found.")
+        await self._repo.soft_delete_vet(partner_id)
+        await self._session.flush()
+        await self._invalidate_stats_cache()
 
     # ── Bulk operations ─────────────────────────────────────────────────────
 
@@ -988,6 +1040,30 @@ class PortalService:
                 metadata={"legal_doc_id": str(doc_id)},
             )
 
+    async def get_legal_doc(self, doc_id: uuid.UUID) -> LegalDocument:
+        doc = await self._repo.get_legal_doc(doc_id)
+        if doc is None:
+            raise NotFoundError("Legal document not found.")
+        return doc
+
+    async def get_faq(self, entry_id: uuid.UUID) -> FAQEntry:
+        entry = await self._repo.get_faq(entry_id)
+        if entry is None:
+            raise NotFoundError("FAQ entry not found.")
+        return entry
+
+    async def get_contact(self, location_id: uuid.UUID) -> ContactLocation:
+        loc = await self._repo.get_contact(location_id)
+        if loc is None:
+            raise NotFoundError("Contact location not found.")
+        return loc
+
+    async def get_vet(self, partner_id: uuid.UUID) -> VeterinaryPartner:
+        partner = await self._repo.get_vet(partner_id)
+        if partner is None:
+            raise NotFoundError("Veterinary partner not found.")
+        return partner
+
     # ── Urgent alerts ───────────────────────────────────────────────────────
 
     async def create_urgent_alert(
@@ -1364,7 +1440,14 @@ class PortalService:
                 continue
             sec_fields: dict[str, Any] = {}
             for f in sec.fields:
-                sec_fields[f.field_key] = f.published_value
+                val = f.published_value
+                if f.field_type in ("image", "video", "media", "file") and val and not val.startswith("http"):
+                    try:
+                        from pawguard.services.storage_service import get_storage_service
+                        val = get_storage_service().generate_presigned_download_url(object_key=val)
+                    except Exception:
+                        pass
+                sec_fields[f.field_key] = val
             sections_dict[sec.section_key] = sec_fields
 
         return PublicCmsPageResponse(

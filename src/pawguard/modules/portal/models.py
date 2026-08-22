@@ -26,6 +26,7 @@ class LegalDocumentType(StrEnum):
     FOSTER = "foster"
     VOLUNTEER = "volunteer"
     DONATION = "donation"
+    DATA_USAGE = "data_usage"
     OTHER = "other"
 
 
@@ -52,6 +53,9 @@ class SuccessStory(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Bas
         String(32), default=ContentStatus.DRAFT, nullable=False, index=True
     )
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    slug: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True, index=True)
+    is_featured: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
 
 class BlogPost(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
@@ -69,6 +73,8 @@ class BlogPost(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
         String(32), default=ContentStatus.DRAFT, nullable=False, index=True
     )
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    tags: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    author: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
 class VeterinaryPartner(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):

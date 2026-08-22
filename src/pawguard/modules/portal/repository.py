@@ -74,6 +74,12 @@ class PortalRepository:
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    async def get_story_by_slug(self, slug: str) -> SuccessStory | None:
+        stmt = select(SuccessStory).where(
+            SuccessStory.slug == slug, SuccessStory.deleted_at.is_(None)
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
     async def count_stories(
         self,
         *,
@@ -118,12 +124,15 @@ class PortalRepository:
                     SuccessStory.summary.ilike(like),
                 )
             )
-        valid_sort = {"created_at", "updated_at", "published_at", "title", "status"}
+        valid_sort = {"created_at", "updated_at", "published_at", "title", "status", "sort_order", "is_featured"}
         if sort:
             stmt = apply_sorting(stmt, sort, valid_sort, default_field="created_at")
         else:
             stmt = stmt.order_by(
-                SuccessStory.published_at.desc().nullslast(), SuccessStory.created_at.desc()
+                SuccessStory.is_featured.desc(),
+                SuccessStory.sort_order.asc(),
+                SuccessStory.published_at.desc().nullslast(),
+                SuccessStory.created_at.desc()
             )
         if page_params:
             stmt = stmt.offset(page_params.offset).limit(page_params.limit)
@@ -362,6 +371,24 @@ class PortalRepository:
     async def soft_delete_faq(self, entry_id: uuid.UUID) -> None:
         now = datetime.now(UTC)
         stmt = select(FAQEntry).where(FAQEntry.id == entry_id, FAQEntry.deleted_at.is_(None))
+        obj = (await self._session.execute(stmt)).scalar_one_or_none()
+        if obj:
+            obj.deleted_at = now
+
+    async def soft_delete_contact(self, location_id: uuid.UUID) -> None:
+        now = datetime.now(UTC)
+        stmt = select(ContactLocation).where(
+            ContactLocation.id == location_id, ContactLocation.deleted_at.is_(None)
+        )
+        obj = (await self._session.execute(stmt)).scalar_one_or_none()
+        if obj:
+            obj.deleted_at = now
+
+    async def soft_delete_vet(self, partner_id: uuid.UUID) -> None:
+        now = datetime.now(UTC)
+        stmt = select(VeterinaryPartner).where(
+            VeterinaryPartner.id == partner_id, VeterinaryPartner.deleted_at.is_(None)
+        )
         obj = (await self._session.execute(stmt)).scalar_one_or_none()
         if obj:
             obj.deleted_at = now

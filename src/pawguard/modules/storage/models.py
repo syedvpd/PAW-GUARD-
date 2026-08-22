@@ -26,6 +26,7 @@ class FileFolder(StrEnum):
     ADOPTIONS = "adoptions"
     GENERAL = "general"
     BLOG = "blog"
+    CMS = "cms"
 
 
 class StoredFile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
