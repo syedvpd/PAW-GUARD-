@@ -175,7 +175,8 @@ class PortalService:
         slug = payload.slug
         if not slug:
             import re
-            slug = re.sub(r'[^a-z0-9]+', '-', payload.title.lower()).strip('-')
+
+            slug = re.sub(r"[^a-z0-9]+", "-", payload.title.lower()).strip("-")
             if not slug:
                 slug = "story"
             # Ensure slug is unique
@@ -1441,9 +1442,14 @@ class PortalService:
             sec_fields: dict[str, Any] = {}
             for f in sec.fields:
                 val = f.published_value
-                if f.field_type in ("image", "video", "media", "file") and val and not val.startswith("http"):
+                if (
+                    f.field_type in ("image", "video", "media", "file")
+                    and val
+                    and not val.startswith("http")
+                ):
                     try:
                         from pawguard.services.storage_service import get_storage_service
+
                         val = get_storage_service().generate_presigned_download_url(object_key=val)
                     except Exception:
                         pass

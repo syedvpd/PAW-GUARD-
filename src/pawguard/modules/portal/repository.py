@@ -124,7 +124,15 @@ class PortalRepository:
                     SuccessStory.summary.ilike(like),
                 )
             )
-        valid_sort = {"created_at", "updated_at", "published_at", "title", "status", "sort_order", "is_featured"}
+        valid_sort = {
+            "created_at",
+            "updated_at",
+            "published_at",
+            "title",
+            "status",
+            "sort_order",
+            "is_featured",
+        }
         if sort:
             stmt = apply_sorting(stmt, sort, valid_sort, default_field="created_at")
         else:
@@ -132,7 +140,7 @@ class PortalRepository:
                 SuccessStory.is_featured.desc(),
                 SuccessStory.sort_order.asc(),
                 SuccessStory.published_at.desc().nullslast(),
-                SuccessStory.created_at.desc()
+                SuccessStory.created_at.desc(),
             )
         if page_params:
             stmt = stmt.offset(page_params.offset).limit(page_params.limit)

@@ -55,5 +55,11 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras --dev
 
+      - name: Generate dummy JWT keys for testing
+        run: |
+          mkdir -p secrets
+          openssl genrsa -out secrets/private_key.pem 2048
+          openssl rsa -in secrets/private_key.pem -pubout -out secrets/public_key.pem
+
       - name: Run Core PawGuard Unit Tests
         run: uv run pytest tests/unit/ --ignore=tests/unit/test_outbox.py --ignore=tests/unit/test_notification_governance.py

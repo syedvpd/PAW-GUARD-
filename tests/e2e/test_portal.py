@@ -105,7 +105,11 @@ class TestPortalPublicEndpoints:
             slug = create_r.json()["data"].get("slug")
             if slug:
                 await call(
-                    client, "portal", "GET", f"/api/v1/portal/success-stories/slug/{slug}", expected=200
+                    client,
+                    "portal",
+                    "GET",
+                    f"/api/v1/portal/success-stories/slug/{slug}",
+                    expected=200,
                 )
 
 

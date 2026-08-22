@@ -1167,6 +1167,7 @@ async def discard_admin_cms_page(
 
 # ── Admin Single GET details by ID endpoints ──────────────────────────────────
 
+
 @router.get(
     "/admin/success-stories/{story_id}",
     response_model=ApiResponse[SuccessStoryResponse],
@@ -1247,6 +1248,7 @@ async def get_admin_vet(
 
 # ── Contact Location and Veterinary Network Admin DELETE endpoints ────────────
 
+
 @router.delete(
     "/admin/contact/{location_id}",
     response_model=ApiResponse[None],
@@ -1290,6 +1292,7 @@ async def delete_admin_vet(
 
 
 # ── Structured Content Admin Publish / Discard endpoints ─────────────────────
+
 
 @router.post(
     "/admin/success-stories/{story_id}/publish",

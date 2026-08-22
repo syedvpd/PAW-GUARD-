@@ -105,6 +105,7 @@ class SuccessStoryResponse(BaseModel):
             if not img.startswith("http"):
                 try:
                     from pawguard.services.storage_service import get_storage_service
+
                     img = get_storage_service().generate_presigned_download_url(object_key=img)
                 except Exception:
                     pass
@@ -231,6 +232,7 @@ class BlogPostResponse(BaseModel):
             if not img.startswith("http"):
                 try:
                     from pawguard.services.storage_service import get_storage_service
+
                     img = get_storage_service().generate_presigned_download_url(object_key=img)
                 except Exception:
                     pass
