@@ -220,11 +220,11 @@ uv run python -m scripts.seed_roles_and_permissions
 ## Testing
 
 ```bash
-# Run all tests with coverage
-uv run pytest --cov=src/ --cov-report=term-missing -v
+# Run all unit tests
+uv run pytest tests/unit/ -v
 
-# Run specific test file
-uv run pytest tests/test_auth.py -v
+# Run a specific unit test file
+uv run pytest tests/unit/test_portal.py -v
 
 # Run tests matching a keyword
 uv run pytest -k "test_login" -v

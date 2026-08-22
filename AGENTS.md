@@ -121,6 +121,14 @@ Generated code SHALL follow existing project conventions.
 
 Never introduce a second implementation style.
 
+RULE-008
+
+Every generated change or commit SHALL pass all linting, formatting, type checking, and unit testing checks. The AI/Developer SHALL run the following verification steps locally before declaring a task done or pushing changes:
+- `uv run ruff check src/ tests/` (Lint check)
+- `uv run ruff format --check src/ tests/` (Format check)
+- `uv run mypy src/` (Type check)
+- `uv run pytest tests/unit/` (Unit tests)
+
 ---
 
 # ARCHITECTURE CONTRACT
