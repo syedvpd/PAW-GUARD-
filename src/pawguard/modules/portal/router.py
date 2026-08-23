@@ -13,6 +13,7 @@ from pawguard.core.bulk import (
     BulkStatusUpdateResponse,
 )
 from pawguard.core.cache_utils import etag_cache_response
+from pawguard.core.cache_decorator import cache_response
 from pawguard.core.exceptions import parse_enum
 from pawguard.core.pagination import PageParams, build_pagination_meta, page_params
 from pawguard.core.rate_limiter import rate_limit
@@ -112,6 +113,7 @@ def get_portal_service(
     "/stats",
     response_model=ApiResponse[PublicHeroStats],
 )
+@cache_response(ttl_seconds=300, namespace="portal")
 async def get_hero_stats(
     request: Request,
     service: PortalService = Depends(get_portal_service),
@@ -121,6 +123,7 @@ async def get_hero_stats(
 
 
 @router.get("/success-stories", response_model=PaginatedResponse[SuccessStorySummaryResponse])
+@cache_response(ttl_seconds=300, namespace="portal")
 async def list_published_stories(
     request: Request,
     page: PageParams = Depends(page_params),
@@ -138,6 +141,7 @@ async def list_published_stories(
 
 
 @router.get("/success-stories/{story_id}", response_model=ApiResponse[SuccessStoryResponse])
+@cache_response(ttl_seconds=300, namespace="portal")
 async def get_published_story(
     request: Request,
     story_id: uuid.UUID,
@@ -151,6 +155,7 @@ async def get_published_story(
 
 
 @router.get("/success-stories/slug/{slug}", response_model=ApiResponse[SuccessStoryResponse])
+@cache_response(ttl_seconds=300, namespace="portal")
 async def get_published_story_by_slug(
     request: Request,
     slug: str,
@@ -164,6 +169,7 @@ async def get_published_story_by_slug(
 
 
 @router.get("/blog", response_model=PaginatedResponse[BlogPostSummaryResponse])
+@cache_response(ttl_seconds=300, namespace="portal")
 async def list_published_blog(
     request: Request,
     page: PageParams = Depends(page_params),
@@ -183,6 +189,7 @@ async def list_published_blog(
 
 
 @router.get("/blog/related", response_model=PaginatedResponse[BlogPostSummaryResponse])
+@cache_response(ttl_seconds=300, namespace="portal")
 async def list_related_blog_posts(
     request: Request,
     post_id: uuid.UUID = Query(
@@ -200,6 +207,7 @@ async def list_related_blog_posts(
 
 
 @router.get("/blog/slug/{slug}", response_model=ApiResponse[BlogPostResponse])
+@cache_response(ttl_seconds=300, namespace="portal")
 async def get_blog_by_slug(
     request: Request,
     slug: str,
@@ -213,6 +221,7 @@ async def get_blog_by_slug(
 
 
 @router.get("/veterinary-network", response_model=PaginatedResponse[VeterinaryPartnerResponse])
+@cache_response(ttl_seconds=300, namespace="portal")
 async def list_veterinary_partners(
     request: Request,
     emergency_only: bool = False,
@@ -232,6 +241,7 @@ async def list_veterinary_partners(
 
 
 @router.get("/contact", response_model=ApiResponse[list[ContactLocationResponse]])
+@cache_response(ttl_seconds=300, namespace="portal")
 async def list_contact_locations(
     request: Request,
     service: PortalService = Depends(get_portal_service),
@@ -338,6 +348,7 @@ async def list_active_urgent_alerts(
 
 
 @router.get("/transparency", response_model=ApiResponse[TransparencyStats])
+@cache_response(ttl_seconds=300, namespace="portal")
 async def get_transparency_stats(
     request: Request,
     service: PortalService = Depends(get_portal_service),
@@ -349,7 +360,9 @@ async def get_transparency_stats(
 
 
 @router.get("/me/dashboard", response_model=ApiResponse[UserDashboardSummary])
+@cache_response(ttl_seconds=60, namespace="user_dashboard")
 async def get_user_dashboard(
+    request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: PortalService = Depends(get_portal_service),
 ) -> ApiResponse[UserDashboardSummary]:

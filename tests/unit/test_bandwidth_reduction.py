@@ -373,14 +373,14 @@ async def test_outbound_metrics():
     assert counters[total_key] >= 1
 
     sent_key = next(
-        (k for k in counters if "pawguard_outbound_bytes_total" in k and "direction=sent" in k),
+        (k for k in counters if "pawguard_outbound_bytes_total" in k and "direction=sent" in k and "destination=s3" in k),
         None,
     )
     assert sent_key is not None, "outbound bytes sent counter missing"
     assert counters[sent_key] >= 1000
 
     received_key = next(
-        (k for k in counters if "pawguard_outbound_bytes_total" in k and "direction=received" in k),
+        (k for k in counters if "pawguard_outbound_bytes_total" in k and "direction=received" in k and "destination=s3" in k),
         None,
     )
     assert received_key is not None, "outbound bytes received counter missing"

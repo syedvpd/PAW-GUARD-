@@ -17,6 +17,7 @@ from pawguard.core.bulk import (
     BulkStatusUpdateRequest,
     BulkStatusUpdateResponse,
 )
+from pawguard.core.cache_decorator import cache_response
 from pawguard.core.exceptions import (
     ForbiddenError,
     NotFoundError,
@@ -620,7 +621,9 @@ async def get_sponsorship(
     "/campaigns",
     response_model=ApiResponse[list[DonationCampaignResponse]],
 )
+@cache_response(ttl_seconds=120, namespace="donation")
 async def list_public_campaigns(
+    request: Request,
     service: DonationService = Depends(get_donation_service),
 ) -> ApiResponse[list[DonationCampaignResponse]]:
     """Public listing of currently accepting donation campaigns."""
@@ -679,7 +682,9 @@ async def create_campaign(
     "/campaigns/{campaign_id}",
     response_model=ApiResponse[DonationCampaignResponse],
 )
+@cache_response(ttl_seconds=120, namespace="donation")
 async def get_campaign(
+    request: Request,
     campaign_id: uuid.UUID,
     current_user: CurrentUser | None = Depends(get_optional_current_user),
     service: DonationService = Depends(get_donation_service),

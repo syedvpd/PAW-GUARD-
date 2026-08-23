@@ -13,6 +13,7 @@ from pawguard.core.bulk import (
     BulkStatusUpdateResponse,
 )
 from pawguard.core.exceptions import NotFoundError, parse_enum
+from pawguard.core.cache_decorator import cache_response
 from pawguard.core.logging import get_logger
 from pawguard.core.pagination import PageParams, page_params
 from pawguard.core.rate_limiter import rate_limit, resolve_client_ip
@@ -114,7 +115,9 @@ async def register_dog(
     "",
     response_model=PaginatedResponse[DogProfileResponse],
 )
+@cache_response(ttl_seconds=120, namespace="dog")
 async def list_dogs(
+    request: Request,
     page: PageParams = Depends(page_params),
     sort: SortParams = Depends(sort_params),
     search: str | None = Query(None, description="Search by name, breed, registration number"),

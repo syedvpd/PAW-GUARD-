@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.bulk import BulkDeleteRequest, BulkDeleteResponse
 from pawguard.core.exceptions import ForbiddenError, NotFoundError, ValidationFailedError
+from pawguard.core.cache_decorator import cache_response
 from pawguard.core.pagination import PageParams, page_params
 from pawguard.core.pii import mask_email, mask_full_name, mask_phone
 from pawguard.core.rate_limiter import rate_limit
@@ -250,7 +251,9 @@ async def report_found_pet(
     "/lost",
     response_model=PaginatedResponse[LostReportResponse],
 )
+@cache_response(ttl_seconds=120, namespace="lost_found")
 async def list_lost_reports(
+    request: Request,
     page: PageParams = Depends(page_params),
     sort: SortParams = Depends(sort_params),
     search: str | None = None,
@@ -280,7 +283,9 @@ async def list_lost_reports(
     "/found",
     response_model=PaginatedResponse[FoundReportResponse],
 )
+@cache_response(ttl_seconds=120, namespace="lost_found")
 async def list_found_reports(
+    request: Request,
     page: PageParams = Depends(page_params),
     sort: SortParams = Depends(sort_params),
     search: str | None = None,
@@ -359,7 +364,9 @@ async def get_found_report(
     "/reports/{report_id}",
     response_model=ApiResponse[UnifiedReportResponse],
 )
+@cache_response(ttl_seconds=120, namespace="lost_found")
 async def get_unified_report(
+    request: Request,
     report_id: uuid.UUID,
     current_user: CurrentUser | None = Depends(get_optional_current_user),
     service: LostFoundService = Depends(get_lost_found_service),
