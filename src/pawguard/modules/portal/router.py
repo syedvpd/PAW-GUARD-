@@ -3,7 +3,7 @@
 import uuid
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.bulk import (
@@ -12,8 +12,9 @@ from pawguard.core.bulk import (
     BulkStatusUpdateRequest,
     BulkStatusUpdateResponse,
 )
+from pawguard.core.cache_utils import etag_cache_response
 from pawguard.core.exceptions import parse_enum
-from pawguard.core.pagination import PageParams, page_params
+from pawguard.core.pagination import PageParams, build_pagination_meta, page_params
 from pawguard.core.rate_limiter import rate_limit
 from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.core.search import SortParams, sort_params
@@ -30,6 +31,7 @@ from pawguard.modules.portal.repository import PortalRepository
 from pawguard.modules.portal.schemas import (
     BlogPostCreate,
     BlogPostResponse,
+    BlogPostSummaryResponse,
     BlogPostUpdate,
     CmsPageResponse,
     CmsPageUpdate,
@@ -49,6 +51,7 @@ from pawguard.modules.portal.schemas import (
     PublicHeroStats,
     SuccessStoryCreate,
     SuccessStoryResponse,
+    SuccessStorySummaryResponse,
     SuccessStoryUpdate,
     SystemSettingResponse,
     SystemSettingUpsert,
@@ -110,70 +113,134 @@ def get_portal_service(
     response_model=ApiResponse[PublicHeroStats],
 )
 async def get_hero_stats(
+    request: Request,
     service: PortalService = Depends(get_portal_service),
-) -> ApiResponse[PublicHeroStats]:
-    return ApiResponse(data=await service.get_hero_stats())
+) -> Response:
+    res_data: ApiResponse[PublicHeroStats] = ApiResponse(data=await service.get_hero_stats())
+    return etag_cache_response(request, res_data)
 
 
-@router.get("/success-stories", response_model=ApiResponse[list[SuccessStoryResponse]])
+@router.get("/success-stories", response_model=PaginatedResponse[SuccessStorySummaryResponse])
 async def list_published_stories(
+    request: Request,
+    page: PageParams = Depends(page_params),
     service: PortalService = Depends(get_portal_service),
-) -> ApiResponse[list[SuccessStoryResponse]]:
-    stories = await service.list_stories(published_only=True)
-    return ApiResponse(data=[SuccessStoryResponse.model_validate(s) for s in stories])
+) -> Response:
+    stories, meta = await service.list_stories_paginated(
+        page_params=page,
+        status=ContentStatus.PUBLISHED,
+    )
+    res_data: PaginatedResponse[SuccessStorySummaryResponse] = PaginatedResponse(
+        data=[SuccessStorySummaryResponse.model_validate(s) for s in stories],
+        meta=meta,
+    )
+    return etag_cache_response(request, res_data)
 
 
 @router.get("/success-stories/{story_id}", response_model=ApiResponse[SuccessStoryResponse])
 async def get_published_story(
+    request: Request,
     story_id: uuid.UUID,
     service: PortalService = Depends(get_portal_service),
-) -> ApiResponse[SuccessStoryResponse]:
+) -> Response:
     story = await service.get_story(story_id, published_only=True)
-    return ApiResponse(data=SuccessStoryResponse.model_validate(story))
+    res_data: ApiResponse[SuccessStoryResponse] = ApiResponse(
+        data=SuccessStoryResponse.model_validate(story)
+    )
+    return etag_cache_response(request, res_data)
 
 
 @router.get("/success-stories/slug/{slug}", response_model=ApiResponse[SuccessStoryResponse])
 async def get_published_story_by_slug(
+    request: Request,
     slug: str,
     service: PortalService = Depends(get_portal_service),
-) -> ApiResponse[SuccessStoryResponse]:
+) -> Response:
     story = await service.get_story_by_slug(slug, published_only=True)
-    return ApiResponse(data=SuccessStoryResponse.model_validate(story))
+    res_data: ApiResponse[SuccessStoryResponse] = ApiResponse(
+        data=SuccessStoryResponse.model_validate(story)
+    )
+    return etag_cache_response(request, res_data)
 
 
-@router.get("/blog", response_model=ApiResponse[list[BlogPostResponse]])
+@router.get("/blog", response_model=PaginatedResponse[BlogPostSummaryResponse])
 async def list_published_blog(
+    request: Request,
+    page: PageParams = Depends(page_params),
     category: str | None = None,
     service: PortalService = Depends(get_portal_service),
-) -> ApiResponse[list[BlogPostResponse]]:
-    posts = await service.list_blogs(published_only=True, category=category)
-    return ApiResponse(data=[BlogPostResponse.model_validate(p) for p in posts])
+) -> Response:
+    posts, meta = await service.list_blogs_paginated(
+        page_params=page,
+        status=ContentStatus.PUBLISHED,
+        category=category,
+    )
+    res_data: PaginatedResponse[BlogPostSummaryResponse] = PaginatedResponse(
+        data=[BlogPostSummaryResponse.model_validate(p) for p in posts],
+        meta=meta,
+    )
+    return etag_cache_response(request, res_data)
+
+
+@router.get("/blog/related", response_model=PaginatedResponse[BlogPostSummaryResponse])
+async def list_related_blog_posts(
+    request: Request,
+    post_id: uuid.UUID = Query(
+        ..., description="Source post id to find related posts for (excluded from results)"
+    ),
+    limit: int = Query(3, ge=1, le=12, description="Maximum related posts (server-enforced cap)"),
+    service: PortalService = Depends(get_portal_service),
+) -> Response:
+    posts = await service.get_related_blogs(post_id, limit)
+    res_data: PaginatedResponse[BlogPostSummaryResponse] = PaginatedResponse(
+        data=[BlogPostSummaryResponse.model_validate(p) for p in posts],
+        meta=build_pagination_meta(total=len(posts), params=PageParams(page=1, page_size=limit)),
+    )
+    return etag_cache_response(request, res_data)
 
 
 @router.get("/blog/slug/{slug}", response_model=ApiResponse[BlogPostResponse])
 async def get_blog_by_slug(
+    request: Request,
     slug: str,
     service: PortalService = Depends(get_portal_service),
-) -> ApiResponse[BlogPostResponse]:
+) -> Response:
     post = await service.get_blog_by_slug(slug, published_only=True)
-    return ApiResponse(data=BlogPostResponse.model_validate(post))
+    res_data: ApiResponse[BlogPostResponse] = ApiResponse(
+        data=BlogPostResponse.model_validate(post)
+    )
+    return etag_cache_response(request, res_data)
 
 
-@router.get("/veterinary-network", response_model=ApiResponse[list[VeterinaryPartnerResponse]])
+@router.get("/veterinary-network", response_model=PaginatedResponse[VeterinaryPartnerResponse])
 async def list_veterinary_partners(
+    request: Request,
     emergency_only: bool = False,
+    page: PageParams = Depends(page_params),
     service: PortalService = Depends(get_portal_service),
-) -> ApiResponse[list[VeterinaryPartnerResponse]]:
-    partners = await service.list_vets(active_only=True, emergency_only=emergency_only)
-    return ApiResponse(data=[VeterinaryPartnerResponse.model_validate(p) for p in partners])
+) -> Response:
+    partners, meta = await service.list_vets_paginated(
+        active_only=True,
+        emergency_only=emergency_only,
+        page_params=page,
+    )
+    res_data: PaginatedResponse[VeterinaryPartnerResponse] = PaginatedResponse(
+        data=[VeterinaryPartnerResponse.model_validate(p) for p in partners],
+        meta=meta,
+    )
+    return etag_cache_response(request, res_data)
 
 
 @router.get("/contact", response_model=ApiResponse[list[ContactLocationResponse]])
 async def list_contact_locations(
+    request: Request,
     service: PortalService = Depends(get_portal_service),
-) -> ApiResponse[list[ContactLocationResponse]]:
+) -> Response:
     locations = await service.list_contacts()
-    return ApiResponse(data=[ContactLocationResponse.model_validate(loc) for loc in locations])
+    res_data: ApiResponse[list[ContactLocationResponse]] = ApiResponse(
+        data=[ContactLocationResponse.model_validate(loc) for loc in locations]
+    )
+    return etag_cache_response(request, res_data)
 
 
 @router.post(
@@ -220,43 +287,65 @@ async def subscribe_newsletter(
 
 @router.get("/faq", response_model=ApiResponse[list[FAQEntryResponse]])
 async def list_faq(
+    request: Request,
     category: str | None = None,
     service: PortalService = Depends(get_portal_service),
-) -> ApiResponse[list[FAQEntryResponse]]:
+) -> Response:
     entries = await service.list_faqs(published_only=True, category=category)
-    return ApiResponse(data=[FAQEntryResponse.model_validate(e) for e in entries])
+    res_data: ApiResponse[list[FAQEntryResponse]] = ApiResponse(
+        data=[FAQEntryResponse.model_validate(e) for e in entries]
+    )
+    return etag_cache_response(request, res_data)
 
 
 @router.get("/legal", response_model=ApiResponse[list[LegalDocumentResponse]])
 async def list_published_legal_docs(
+    request: Request,
     service: PortalService = Depends(get_portal_service),
-) -> ApiResponse[list[LegalDocumentResponse]]:
+) -> Response:
     docs = await service.list_legal_docs(published_only=True)
-    return ApiResponse(data=[LegalDocumentResponse.model_validate(d) for d in docs])
+    res_data: ApiResponse[list[LegalDocumentResponse]] = ApiResponse(
+        data=[LegalDocumentResponse.model_validate(d) for d in docs]
+    )
+    return etag_cache_response(request, res_data)
 
 
 @router.get("/legal/{slug}", response_model=ApiResponse[LegalDocumentResponse])
 async def get_published_legal_doc(
+    request: Request,
     slug: str,
     service: PortalService = Depends(get_portal_service),
-) -> ApiResponse[LegalDocumentResponse]:
+) -> Response:
     doc = await service.get_legal_doc_by_slug(slug, published_only=True)
-    return ApiResponse(data=LegalDocumentResponse.model_validate(doc))
+    res_data: ApiResponse[LegalDocumentResponse] = ApiResponse(
+        data=LegalDocumentResponse.model_validate(doc)
+    )
+    return etag_cache_response(request, res_data)
 
 
-@router.get("/urgent-alerts", response_model=ApiResponse[list[UrgentAlertResponse]])
+@router.get("/urgent-alerts", response_model=PaginatedResponse[UrgentAlertResponse])
 async def list_active_urgent_alerts(
+    request: Request,
+    page: PageParams = Depends(page_params),
     service: PortalService = Depends(get_portal_service),
-) -> ApiResponse[list[UrgentAlertResponse]]:
-    alerts = await service.get_active_alerts()
-    return ApiResponse(data=[UrgentAlertResponse.model_validate(a) for a in alerts])
+) -> Response:
+    alerts, meta = await service.get_active_alerts_paginated(page_params=page)
+    res_data: PaginatedResponse[UrgentAlertResponse] = PaginatedResponse(
+        data=[UrgentAlertResponse.model_validate(a) for a in alerts],
+        meta=meta,
+    )
+    return etag_cache_response(request, res_data)
 
 
 @router.get("/transparency", response_model=ApiResponse[TransparencyStats])
 async def get_transparency_stats(
+    request: Request,
     service: PortalService = Depends(get_portal_service),
-) -> ApiResponse[TransparencyStats]:
-    return ApiResponse(data=await service.get_transparency_stats())
+) -> Response:
+    res_data: ApiResponse[TransparencyStats] = ApiResponse(
+        data=await service.get_transparency_stats()
+    )
+    return etag_cache_response(request, res_data)
 
 
 @router.get("/me/dashboard", response_model=ApiResponse[UserDashboardSummary])

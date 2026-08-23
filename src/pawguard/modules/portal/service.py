@@ -379,6 +379,19 @@ class PortalService:
         meta = build_pagination_meta(total=total, params=page_params or PageParams())
         return list(blogs), meta
 
+    async def get_related_blogs(
+        self,
+        post_id: uuid.UUID,
+        limit: int,
+    ) -> list[BlogPost]:
+        """Return up to ``limit`` published posts related to ``post_id``.
+
+        See :meth:`PortalRepository.get_related_blogs` for the selection rules.
+        """
+        return list(
+            await self._repo.get_related_blogs(post_id=post_id, limit=limit, published_only=True)
+        )
+
     # ── Veterinary partners ──────────────────────────────────────────────────
 
     async def create_vet(
@@ -423,6 +436,22 @@ class PortalService:
                 emergency_only=emergency_only,
             )
         )
+
+    async def list_vets_paginated(
+        self,
+        *,
+        active_only: bool,
+        emergency_only: bool = False,
+        page_params: PageParams | None = None,
+    ) -> tuple[list[VeterinaryPartner], PaginationMeta]:
+        total = await self._repo.count_vets(active_only=active_only, emergency_only=emergency_only)
+        vets = await self._repo.list_vets(
+            active_only=active_only,
+            emergency_only=emergency_only,
+            page_params=page_params,
+        )
+        meta = build_pagination_meta(total=total, params=page_params or PageParams())
+        return list(vets), meta
 
     # ── Contact locations ────────────────────────────────────────────────────
 
@@ -485,10 +514,12 @@ class PortalService:
         published_only: bool,
         category: str | None = None,
     ) -> list[FAQEntry]:
+        page_params = PageParams(page=1, page_size=50)
         return list(
             await self._repo.list_faqs(
                 published_only=published_only,
                 category=category,
+                page_params=page_params,
             )
         )
 
@@ -994,7 +1025,13 @@ class PortalService:
         *,
         published_only: bool,
     ) -> list[LegalDocument]:
-        return list(await self._repo.list_legal_docs(published_only=published_only))
+        page_params = PageParams(page=1, page_size=50)
+        return list(
+            await self._repo.list_legal_docs(
+                published_only=published_only,
+                page_params=page_params,
+            )
+        )
 
     async def list_legal_docs_paginated(
         self,
@@ -1114,6 +1151,16 @@ class PortalService:
 
     async def get_active_alerts(self) -> list[UrgentAlert]:
         return list(await self._repo.list_active_alerts())
+
+    async def get_active_alerts_paginated(
+        self,
+        *,
+        page_params: PageParams | None = None,
+    ) -> tuple[list[UrgentAlert], PaginationMeta]:
+        total = await self._repo.count_active_alerts()
+        alerts = await self._repo.list_active_alerts(page_params=page_params)
+        meta = build_pagination_meta(total=total, params=page_params or PageParams())
+        return list(alerts), meta
 
     async def list_urgent_alerts_paginated(
         self,

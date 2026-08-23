@@ -1,5 +1,4 @@
 import asyncio
-import os
 import uuid
 from datetime import UTC, date, datetime
 from typing import Any
@@ -40,7 +39,6 @@ from pawguard.modules.medical.models import (
     VaccinationRecord,
 )
 from pawguard.modules.reports.renderers import (
-    ensure_reports_dir,
     generate_csv,
     generate_excel,
     generate_pdf,
@@ -113,14 +111,17 @@ class ReportService:
             content_type = "application/pdf"
 
         fname = report_filename(report_type.value, ext)
-        reports_dir = ensure_reports_dir()
-        filepath = os.path.join(reports_dir, fname)
+        object_key = f"reports/{fname}"
 
-        def _write_file(path: str, data: bytes) -> None:
-            with open(path, "wb") as f:
-                f.write(data)
+        from pawguard.services.storage_service import get_storage_service
 
-        await asyncio.to_thread(_write_file, filepath, content)
+        s3 = get_storage_service()
+        await asyncio.to_thread(
+            s3.put_object,
+            object_key=object_key,
+            content=content,
+            content_type=content_type,
+        )
 
         return {
             "report_type": report_type.value,

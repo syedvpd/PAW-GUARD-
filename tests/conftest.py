@@ -128,10 +128,30 @@ class FakeArqPool:
         pass
 
 
+def ensure_local_test_db(url: str) -> None:
+    """Refuse to run tests against anything but a local database.
+
+    Production/Supabase URLs must never receive test traffic; override only
+    with TEST_ALLOW_REMOTE_DB=1 for deliberate remote integration runs.
+    """
+    from sqlalchemy.engine import make_url
+
+    host = (make_url(url).host or "").lower()
+    allowed_hosts = {"localhost", "127.0.0.1", "::1"}
+    if host not in allowed_hosts and os.environ.get("TEST_ALLOW_REMOTE_DB") != "1":
+        raise RuntimeError(
+            "Refusing to run tests against non-local database host "
+            f"'{host}'. Point DATABASE_URL at a local test database "
+            "(e.g. postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/pawguard_test) "
+            "or export TEST_ALLOW_REMOTE_DB=1 to override explicitly."
+        )
+
+
 @pytest_asyncio.fixture(scope="session")
 async def engine() -> AsyncGenerator[AsyncEngine]:
     settings = get_settings()
     test_url = settings.database_url_frontend or settings.database_url
+    ensure_local_test_db(test_url)
     eng = create_async_engine(
         test_url,
         echo=False,

@@ -148,7 +148,10 @@ def create_app() -> FastAPI:
 
     app.openapi = custom_openapi
 
+    from fastapi.middleware.gzip import GZipMiddleware
+
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts_list)
+    app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5)
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(RequestBodySizeMiddleware)
     app.add_middleware(IdempotencyMiddleware)

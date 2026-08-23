@@ -70,6 +70,13 @@ async def send_push_notification(
     if app is None:
         return False
 
+    import time
+
+    from pawguard.core.metrics import track_outbound_request
+
+    start = time.perf_counter()
+    req_size = len(title) + len(body) + len(str(data or {}))
+
     try:
         from firebase_admin import messaging  # type: ignore[import-untyped]
 
@@ -83,6 +90,15 @@ async def send_push_notification(
             ),
         )
         response = await asyncio.to_thread(messaging.send, message, app=app)
+        duration_ms = (time.perf_counter() - start) * 1000
+        track_outbound_request(
+            destination="fcm",
+            operation="send_message",
+            request_bytes=req_size,
+            response_bytes=len(str(response)),
+            duration_ms=duration_ms,
+            status="success",
+        )
         logger.debug(
             "push_sent",
             message_id=response,
@@ -90,6 +106,15 @@ async def send_push_notification(
         )
         return True
     except Exception as exc:
+        duration_ms = (time.perf_counter() - start) * 1000
+        track_outbound_request(
+            destination="fcm",
+            operation="send_message",
+            request_bytes=req_size,
+            response_bytes=0,
+            duration_ms=duration_ms,
+            status="failed",
+        )
         logger.warning(
             "push_send_failed",
             error=str(exc),
@@ -106,27 +131,109 @@ async def send_push_notification_to_users(
     data: dict[str, str] | None = None,
     max_concurrency: int = 10,
 ) -> int:
-    """Send the same push notification to multiple devices concurrently.
+    """Send the same push notification to multiple devices concurrently using FCM Multicast API.
 
-    ``user_tokens`` is a list of (user_id, fcm_token) tuples.
-    Returns the count of successfully sent messages.
+    Deduplicates tokens, handles chunks of 500, and cleans up unregistered tokens in the database.
     """
     app = _get_firebase_app()
     if app is None:
         return 0
 
-    valid_tokens = [(uid, tok) for uid, tok in user_tokens if tok]
-    if not valid_tokens:
+    # 1. Deduplicate tokens and filter out empty ones
+    seen_tokens = set()
+    deduped_tokens: list[tuple[uuid.UUID, str]] = []
+    for uid, tok in user_tokens:
+        if tok and tok not in seen_tokens:
+            seen_tokens.add(tok)
+            deduped_tokens.append((uid, tok))
+
+    if not deduped_tokens:
         return 0
 
-    sem = asyncio.Semaphore(max_concurrency)
+    from firebase_admin import messaging
 
-    async def _send_one(uid: uuid.UUID, tok: str) -> bool:
-        async with sem:
-            return await send_push_notification(tok, title=title, body=body, data=data, user_id=uid)
+    success_count = 0
+    chunk_size = 500
+    unregistered_uids: list[uuid.UUID] = []
 
-    results = await asyncio.gather(
-        *[_send_one(uid, tok) for uid, tok in valid_tokens],
-        return_exceptions=True,
-    )
-    return sum(1 for r in results if r is True)
+    for i in range(0, len(deduped_tokens), chunk_size):
+        chunk = deduped_tokens[i : i + chunk_size]
+        tokens_only = [tok for _, tok in chunk]
+
+        message = messaging.MulticastMessage(
+            notification=messaging.Notification(title=title, body=body),
+            data=data or {},
+            tokens=tokens_only,
+            android=messaging.AndroidConfig(priority="high"),
+            apns=messaging.APNSConfig(
+                payload=messaging.APNSPayload(aps=messaging.Aps(sound="default", badge=1))
+            ),
+        )
+
+        import time
+
+        from pawguard.core.metrics import track_outbound_request
+
+        start = time.perf_counter()
+        req_size = (len(title) + len(body) + len(str(data or {}))) * len(tokens_only)
+
+        try:
+            response = await asyncio.to_thread(messaging.send_multicast, message, app=app)
+            duration_ms = (time.perf_counter() - start) * 1000
+            track_outbound_request(
+                destination="fcm",
+                operation="send_multicast",
+                request_bytes=req_size,
+                response_bytes=100 * len(response.responses),
+                duration_ms=duration_ms,
+                status="success",
+            )
+            success_count += response.success_count
+
+            # Find unregistered tokens to clean up
+            if response.failure_count > 0:
+                for idx, resp in enumerate(response.responses):
+                    if not resp.success:
+                        # Unregistered tokens fail with unregistered error code
+                        if (
+                            getattr(resp, "exception", None)
+                            and "unregistered" in str(resp.exception).lower()
+                        ) or (
+                            getattr(resp, "error", None)
+                            and getattr(resp.error, "code", None) == "unregistered"
+                        ):
+                            unregistered_uids.append(chunk[idx][0])
+        except Exception as exc:
+            duration_ms = (time.perf_counter() - start) * 1000
+            track_outbound_request(
+                destination="fcm",
+                operation="send_multicast",
+                request_bytes=req_size,
+                response_bytes=0,
+                duration_ms=duration_ms,
+                status="failed",
+            )
+            logger.warning("fcm_multicast_chunk_failed", error=str(exc))
+
+    # Clean up unregistered tokens in a background task to avoid blocking the HTTP pipeline/workers
+    if unregistered_uids:
+
+        async def _cleanup_unregistered():
+            try:
+                from sqlalchemy import update
+
+                from pawguard.db.session import AsyncSessionLocal
+                from pawguard.modules.auth.models import User
+
+                async with AsyncSessionLocal() as session:
+                    await session.execute(
+                        update(User).where(User.id.in_(unregistered_uids)).values(fcm_token=None)
+                    )
+                    await session.commit()
+                    logger.info("cleaned_unregistered_fcm_tokens", count=len(unregistered_uids))
+            except Exception as e:
+                logger.warning("fcm_cleanup_failed", error=str(e))
+
+        asyncio.create_task(_cleanup_unregistered())
+
+    return success_count

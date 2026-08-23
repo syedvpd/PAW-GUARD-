@@ -131,6 +131,87 @@ class SuccessStoryResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class SuccessStorySummaryResponse(BaseModel):
+    id: uuid.UUID
+    title: str
+    summary: str
+    hero_image_url: str | None = None
+    cover_image_url: str | None = None
+    image_url: str | None = None
+    photo_url: str | None = None
+    image: str | None = None
+    media_url: str | None = None
+    imageUrl: str | None = None
+    photoUrl: str | None = None
+    coverImage: str | None = None
+    story_image: str | None = None
+    banner_url: str | None = None
+    thumbnail_url: str | None = None
+    thumbnail: str | None = None
+    image_urls: list[str] = Field(default_factory=list)
+    photo_gallery_urls: list[str] = Field(default_factory=list)
+    photos: list[str] = Field(default_factory=list)
+    images: list[str] = Field(default_factory=list)
+    dog_id: uuid.UUID | None
+    status: ContentStatus
+    published_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+    slug: str | None = None
+    is_featured: bool = False
+    sort_order: int = 0
+
+    @model_validator(mode="after")
+    def _sync_image_fields(self) -> "SuccessStorySummaryResponse":
+        img = (
+            self.hero_image_url
+            or self.cover_image_url
+            or self.image_url
+            or self.photo_url
+            or self.image
+            or self.media_url
+            or self.imageUrl
+            or self.photoUrl
+            or self.coverImage
+            or self.story_image
+            or self.banner_url
+            or self.thumbnail_url
+            or self.thumbnail
+            or (self.image_urls[0] if self.image_urls else None)
+            or (self.photo_gallery_urls[0] if self.photo_gallery_urls else None)
+            or (self.photos[0] if self.photos else None)
+            or (self.images[0] if self.images else None)
+        )
+        if img:
+            if not img.startswith("http"):
+                try:
+                    from pawguard.services.storage_service import get_storage_service
+
+                    img = get_storage_service().generate_presigned_download_url(object_key=img)
+                except Exception:
+                    pass
+            self.hero_image_url = img
+            self.cover_image_url = img
+            self.image_url = img
+            self.photo_url = img
+            self.image = img
+            self.media_url = img
+            self.imageUrl = img
+            self.photoUrl = img
+            self.coverImage = img
+            self.story_image = img
+            self.banner_url = img
+            self.thumbnail_url = img
+            self.thumbnail = img
+            self.image_urls = [img]
+            self.photo_gallery_urls = [img]
+            self.photos = [img]
+            self.images = [img]
+        return self
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class BlogPostCreate(BaseModel):
     title: str = Field(
         ...,
@@ -209,6 +290,87 @@ class BlogPostResponse(BaseModel):
 
     @model_validator(mode="after")
     def _sync_image_fields(self) -> "BlogPostResponse":
+        img = (
+            self.cover_image_url
+            or self.image_url
+            or self.photo_url
+            or self.image
+            or self.hero_image_url
+            or self.media_url
+            or self.imageUrl
+            or self.photoUrl
+            or self.coverImage
+            or self.story_image
+            or self.banner_url
+            or self.thumbnail_url
+            or self.thumbnail
+            or (self.image_urls[0] if self.image_urls else None)
+            or (self.photo_gallery_urls[0] if self.photo_gallery_urls else None)
+            or (self.photos[0] if self.photos else None)
+            or (self.images[0] if self.images else None)
+        )
+        if img:
+            if not img.startswith("http"):
+                try:
+                    from pawguard.services.storage_service import get_storage_service
+
+                    img = get_storage_service().generate_presigned_download_url(object_key=img)
+                except Exception:
+                    pass
+            self.cover_image_url = img
+            self.image_url = img
+            self.photo_url = img
+            self.image = img
+            self.hero_image_url = img
+            self.media_url = img
+            self.imageUrl = img
+            self.photoUrl = img
+            self.coverImage = img
+            self.story_image = img
+            self.banner_url = img
+            self.thumbnail_url = img
+            self.thumbnail = img
+            self.image_urls = [img]
+            self.photo_gallery_urls = [img]
+            self.photos = [img]
+            self.images = [img]
+        return self
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class BlogPostSummaryResponse(BaseModel):
+    id: uuid.UUID
+    title: str
+    slug: str
+    excerpt: str
+    cover_image_url: str | None = None
+    image_url: str | None = None
+    photo_url: str | None = None
+    image: str | None = None
+    hero_image_url: str | None = None
+    media_url: str | None = None
+    imageUrl: str | None = None
+    photoUrl: str | None = None
+    coverImage: str | None = None
+    story_image: str | None = None
+    banner_url: str | None = None
+    thumbnail_url: str | None = None
+    thumbnail: str | None = None
+    image_urls: list[str] = Field(default_factory=list)
+    photo_gallery_urls: list[str] = Field(default_factory=list)
+    photos: list[str] = Field(default_factory=list)
+    images: list[str] = Field(default_factory=list)
+    category: str
+    status: ContentStatus
+    published_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+    tags: str | None = None
+    author: str | None = None
+
+    @model_validator(mode="after")
+    def _sync_image_fields(self) -> "BlogPostSummaryResponse":
         img = (
             self.cover_image_url
             or self.image_url

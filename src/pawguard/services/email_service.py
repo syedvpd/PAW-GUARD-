@@ -53,6 +53,11 @@ class EmailService:
             self._send_via_smtp(to=to, subject=subject, html_body=html_body)
 
     def _send_via_brevo_api(self, *, to: str, subject: str, html_body: str) -> None:
+        import time
+
+        from pawguard.core.metrics import track_outbound_request
+
+        start = time.perf_counter()
         payload = json.dumps(
             {
                 "sender": {"name": "PawGuard", "email": self._settings.mail_from_email},
@@ -75,47 +80,103 @@ class EmailService:
         try:
             with urllib.request.urlopen(req, timeout=15) as resp:  # noqa: S310 - fixed https Brevo endpoint
                 status = resp.status
+            duration_ms = (time.perf_counter() - start) * 1000
+            track_outbound_request(
+                destination="brevo",
+                operation="send_email_api",
+                request_bytes=len(payload),
+                response_bytes=100,
+                duration_ms=duration_ms,
+                status="success",
+            )
         except urllib.error.HTTPError as exc:
+            duration_ms = (time.perf_counter() - start) * 1000
+            track_outbound_request(
+                destination="brevo",
+                operation="send_email_api",
+                request_bytes=len(payload),
+                response_bytes=0,
+                duration_ms=duration_ms,
+                status="failed",
+            )
             body = exc.read().decode(errors="replace")[:300]
             logger.error("brevo_api_error", to=to, subject=subject, status=exc.code, body=body)
             raise
         except urllib.error.URLError as exc:
+            duration_ms = (time.perf_counter() - start) * 1000
+            track_outbound_request(
+                destination="brevo",
+                operation="send_email_api",
+                request_bytes=len(payload),
+                response_bytes=0,
+                duration_ms=duration_ms,
+                status="failed",
+            )
             logger.error("brevo_api_network_error", to=to, subject=subject, error=str(exc.reason))
             raise
 
         logger.info("email_sent", to=to, subject=subject, method="brevo_api", status=status)
 
     def _send_via_smtp(self, *, to: str, subject: str, html_body: str) -> None:
+        import time
+
+        from pawguard.core.metrics import track_outbound_request
+
+        start = time.perf_counter()
         message = EmailMessage()
         message["From"] = self._settings.mail_from
         message["To"] = to
         message["Subject"] = subject
         message.set_content("This email requires an HTML-capable client.")
         message.add_alternative(html_body, subtype="html")
+        msg_bytes = len(message.as_bytes())
 
         smtp_kwargs: dict[str, object] = {
             "host": self._settings.mail_host,
             "port": self._settings.mail_port,
             "timeout": 10,
         }
-        with smtplib.SMTP(**smtp_kwargs) as smtp:
-            if self._settings.mail_use_ssl:
-                context = ssl.create_default_context()
-                with smtplib.SMTP_SSL(
-                    self._settings.mail_host,
-                    self._settings.mail_port,
-                    context=context,
-                    timeout=10,
-                ) as smtp_ssl:
+        try:
+            with smtplib.SMTP(**smtp_kwargs) as smtp:
+                if self._settings.mail_use_ssl:
+                    context = ssl.create_default_context()
+                    with smtplib.SMTP_SSL(
+                        self._settings.mail_host,
+                        self._settings.mail_port,
+                        context=context,
+                        timeout=10,
+                    ) as smtp_ssl:
+                        if self._settings.mail_username:
+                            smtp_ssl.login(
+                                self._settings.mail_username, self._settings.mail_password
+                            )
+                        smtp_ssl.send_message(message)
+                else:
+                    if self._settings.mail_use_tls:
+                        smtp.starttls()
                     if self._settings.mail_username:
-                        smtp_ssl.login(self._settings.mail_username, self._settings.mail_password)
-                    smtp_ssl.send_message(message)
-            else:
-                if self._settings.mail_use_tls:
-                    smtp.starttls()
-                if self._settings.mail_username:
-                    smtp.login(self._settings.mail_username, self._settings.mail_password)
-                smtp.send_message(message)
+                        smtp.login(self._settings.mail_username, self._settings.mail_password)
+                    smtp.send_message(message)
+            duration_ms = (time.perf_counter() - start) * 1000
+            track_outbound_request(
+                destination="smtp",
+                operation="send_email_smtp",
+                request_bytes=msg_bytes,
+                response_bytes=0,
+                duration_ms=duration_ms,
+                status="success",
+            )
+        except Exception:
+            duration_ms = (time.perf_counter() - start) * 1000
+            track_outbound_request(
+                destination="smtp",
+                operation="send_email_smtp",
+                request_bytes=msg_bytes,
+                response_bytes=0,
+                duration_ms=duration_ms,
+                status="failed",
+            )
+            raise
 
         logger.info("email_sent", to=to, subject=subject, method="smtp")
 

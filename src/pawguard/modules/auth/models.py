@@ -156,6 +156,7 @@ class AuthAuditEventType(StrEnum):
     PET_APPOINTMENT_CANCELLED = "pet_appointment_cancelled"
     PET_APPOINTMENT_STATUS_CHANGED = "pet_appointment_status_changed"
     LOST_FOUND_BROADCAST_QUEUED = "lost_found_broadcast_queued"
+    REPORT_DOWNLOADED = "report_downloaded"
 
 
 class Role(UUIDPkMixin, TimestampMixin, AuditMixin, Base):

@@ -67,14 +67,37 @@ class StorageService:
         content validation still happens in ``StorageService.confirm_upload``
         (magic bytes + size).
         """
+        import time
+
+        from pawguard.core.metrics import track_outbound_request
+
+        start = time.perf_counter()
         try:
             url: str = self._client.generate_presigned_url(
                 "put_object",
                 Params={"Bucket": self._bucket, "Key": object_key},
                 ExpiresIn=expires_in,
             )
+            duration_ms = (time.perf_counter() - start) * 1000
+            track_outbound_request(
+                destination="s3",
+                operation="generate_presigned_upload_url",
+                request_bytes=0,
+                response_bytes=0,
+                duration_ms=duration_ms,
+                status="success",
+            )
             return url
         except Exception as exc:
+            duration_ms = (time.perf_counter() - start) * 1000
+            track_outbound_request(
+                destination="s3",
+                operation="generate_presigned_upload_url",
+                request_bytes=0,
+                response_bytes=0,
+                duration_ms=duration_ms,
+                status="failed",
+            )
             logger.error(
                 "presigned_upload_url_generation_failed",
                 bucket=self._bucket,
@@ -86,44 +109,208 @@ class StorageService:
             ) from exc
 
     def generate_presigned_download_url(
-        self, *, object_key: str, expires_in: int = PRESIGNED_URL_EXPIRY_SECONDS
+        self,
+        *,
+        object_key: str,
+        expires_in: int = PRESIGNED_URL_EXPIRY_SECONDS,
+        filename: str | None = None,
+        content_type: str | None = None,
     ) -> str:
+        import time
+
+        from pawguard.core.metrics import track_outbound_request
+
+        start = time.perf_counter()
         bucket = self._bucket or "pawguard-media"
+        params = {"Bucket": bucket, "Key": object_key}
+        if filename:
+            params["ResponseContentDisposition"] = f'attachment; filename="{filename}"'
+        if content_type:
+            params["ResponseContentType"] = content_type
+
         try:
             url: str = self._client.generate_presigned_url(
                 "get_object",
-                Params={"Bucket": bucket, "Key": object_key},
+                Params=params,
                 ExpiresIn=expires_in,
+            )
+            duration_ms = (time.perf_counter() - start) * 1000
+            track_outbound_request(
+                destination="s3",
+                operation="generate_presigned_download_url",
+                request_bytes=0,
+                response_bytes=0,
+                duration_ms=duration_ms,
+                status="success",
             )
             return url
         except Exception:
+            duration_ms = (time.perf_counter() - start) * 1000
+            track_outbound_request(
+                destination="s3",
+                operation="generate_presigned_download_url",
+                request_bytes=0,
+                response_bytes=0,
+                duration_ms=duration_ms,
+                status="failed",
+            )
             endpoint = (self._endpoint or "https://pawguard-media.s3.amazonaws.com").rstrip("/")
             return f"{endpoint}/{bucket}/{object_key}?token={uuid.uuid4()}"
 
     def get_object_size(self, *, object_key: str) -> int:
-        response = self._client.head_object(Bucket=self._bucket, Key=object_key)
-        size: int = response["ContentLength"]
-        return size
+        import time
+
+        from pawguard.core.metrics import track_outbound_request
+
+        start = time.perf_counter()
+        try:
+            response = self._client.head_object(Bucket=self._bucket, Key=object_key)
+            size: int = response["ContentLength"]
+            duration_ms = (time.perf_counter() - start) * 1000
+            track_outbound_request(
+                destination="s3",
+                operation="head_object",
+                request_bytes=0,
+                response_bytes=100,
+                duration_ms=duration_ms,
+                status="success",
+            )
+            return size
+        except Exception:
+            duration_ms = (time.perf_counter() - start) * 1000
+            track_outbound_request(
+                destination="s3",
+                operation="head_object",
+                request_bytes=0,
+                response_bytes=0,
+                duration_ms=duration_ms,
+                status="failed",
+            )
+            raise
 
     def get_object_prefix_bytes(self, *, object_key: str, num_bytes: int = 4096) -> bytes:
-        response = self._client.get_object(
-            Bucket=self._bucket, Key=object_key, Range=f"bytes=0-{num_bytes - 1}"
-        )
-        body: bytes = response["Body"].read()
-        return body
+        import time
+
+        from pawguard.core.metrics import track_outbound_request
+
+        start = time.perf_counter()
+        try:
+            response = self._client.get_object(
+                Bucket=self._bucket, Key=object_key, Range=f"bytes=0-{num_bytes - 1}"
+            )
+            body: bytes = response["Body"].read()
+            duration_ms = (time.perf_counter() - start) * 1000
+            track_outbound_request(
+                destination="s3",
+                operation="get_object_prefix",
+                request_bytes=0,
+                response_bytes=len(body),
+                duration_ms=duration_ms,
+                status="success",
+            )
+            return body
+        except Exception:
+            duration_ms = (time.perf_counter() - start) * 1000
+            track_outbound_request(
+                destination="s3",
+                operation="get_object_prefix",
+                request_bytes=0,
+                response_bytes=0,
+                duration_ms=duration_ms,
+                status="failed",
+            )
+            raise
 
     def get_object(self, *, object_key: str) -> bytes:
-        response = self._client.get_object(Bucket=self._bucket, Key=object_key)
-        body: bytes = response["Body"].read()
-        return body
+        import time
+
+        from pawguard.core.metrics import track_outbound_request
+
+        start = time.perf_counter()
+        try:
+            response = self._client.get_object(Bucket=self._bucket, Key=object_key)
+            body: bytes = response["Body"].read()
+            duration_ms = (time.perf_counter() - start) * 1000
+            track_outbound_request(
+                destination="s3",
+                operation="get_object",
+                request_bytes=0,
+                response_bytes=len(body),
+                duration_ms=duration_ms,
+                status="success",
+            )
+            return body
+        except Exception:
+            duration_ms = (time.perf_counter() - start) * 1000
+            track_outbound_request(
+                destination="s3",
+                operation="get_object",
+                request_bytes=0,
+                response_bytes=0,
+                duration_ms=duration_ms,
+                status="failed",
+            )
+            raise
 
     def put_object(self, *, object_key: str, content: bytes, content_type: str) -> None:
-        self._client.put_object(
-            Bucket=self._bucket, Key=object_key, Body=content, ContentType=content_type
-        )
+        import time
+
+        from pawguard.core.metrics import track_outbound_request
+
+        start = time.perf_counter()
+        try:
+            self._client.put_object(
+                Bucket=self._bucket, Key=object_key, Body=content, ContentType=content_type
+            )
+            duration_ms = (time.perf_counter() - start) * 1000
+            track_outbound_request(
+                destination="s3",
+                operation="put_object",
+                request_bytes=len(content),
+                response_bytes=0,
+                duration_ms=duration_ms,
+                status="success",
+            )
+        except Exception:
+            duration_ms = (time.perf_counter() - start) * 1000
+            track_outbound_request(
+                destination="s3",
+                operation="put_object",
+                request_bytes=len(content),
+                response_bytes=0,
+                duration_ms=duration_ms,
+                status="failed",
+            )
+            raise
 
     def delete_object(self, *, object_key: str) -> None:
-        self._client.delete_object(Bucket=self._bucket, Key=object_key)
+        import time
+
+        from pawguard.core.metrics import track_outbound_request
+
+        start = time.perf_counter()
+        try:
+            self._client.delete_object(Bucket=self._bucket, Key=object_key)
+            duration_ms = (time.perf_counter() - start) * 1000
+            track_outbound_request(
+                destination="s3",
+                operation="delete_object",
+                request_bytes=0,
+                response_bytes=0,
+                duration_ms=duration_ms,
+                status="success",
+            )
+        except Exception:
+            duration_ms = (time.perf_counter() - start) * 1000
+            track_outbound_request(
+                destination="s3",
+                operation="delete_object",
+                request_bytes=0,
+                response_bytes=0,
+                duration_ms=duration_ms,
+                status="failed",
+            )
+            raise
 
 
 _storage_service_instance: StorageService | None = None

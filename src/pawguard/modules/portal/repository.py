@@ -158,6 +158,44 @@ class PortalRepository:
         stmt = select(BlogPost).where(BlogPost.id == post_id, BlogPost.deleted_at.is_(None))
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    async def get_related_blogs(
+        self,
+        *,
+        post_id: uuid.UUID,
+        limit: int,
+        published_only: bool = True,
+        category: str | None = None,
+    ) -> Sequence[BlogPost]:
+        """Server-side related-blog lookup.
+
+        Excludes the source post, prefers same-category matches, then falls
+        back to the most recently published posts. ``limit`` is enforced at the
+        query level so the response stays small (no full collection scan).
+        """
+        source = await self.get_blog_by_id(post_id)
+        source_category = source.category if source is not None else None
+        stmt = select(BlogPost).where(
+            BlogPost.deleted_at.is_(None),
+            BlogPost.id != post_id,
+        )
+        if published_only:
+            stmt = stmt.where(BlogPost.status == ContentStatus.PUBLISHED)
+        if category:
+            stmt = stmt.where(BlogPost.category == category)
+        if source_category:
+            stmt = stmt.order_by(
+                (BlogPost.category == source_category).desc(),
+                BlogPost.published_at.desc().nullslast(),
+                BlogPost.created_at.desc(),
+            )
+        else:
+            stmt = stmt.order_by(
+                BlogPost.published_at.desc().nullslast(),
+                BlogPost.created_at.desc(),
+            )
+        stmt = stmt.limit(limit)
+        return (await self._session.execute(stmt)).scalars().all()
+
     async def get_blog_by_slug(self, slug: str) -> BlogPost | None:
         stmt = select(BlogPost).where(BlogPost.slug == slug, BlogPost.deleted_at.is_(None))
         return (await self._session.execute(stmt)).scalar_one_or_none()
@@ -239,8 +277,22 @@ class PortalRepository:
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    async def count_vets(self, *, active_only: bool, emergency_only: bool = False) -> int:
+        stmt = select(func.count(VeterinaryPartner.id)).where(
+            VeterinaryPartner.deleted_at.is_(None)
+        )
+        if active_only:
+            stmt = stmt.where(VeterinaryPartner.is_active.is_(True))
+        if emergency_only:
+            stmt = stmt.where(VeterinaryPartner.is_emergency.is_(True))
+        return (await self._session.execute(stmt)).scalar() or 0
+
     async def list_vets(
-        self, *, active_only: bool, emergency_only: bool = False
+        self,
+        *,
+        active_only: bool,
+        emergency_only: bool = False,
+        page_params: PageParams | None = None,
     ) -> Sequence[VeterinaryPartner]:
         stmt = select(VeterinaryPartner).where(VeterinaryPartner.deleted_at.is_(None))
         if active_only:
@@ -248,6 +300,8 @@ class PortalRepository:
         if emergency_only:
             stmt = stmt.where(VeterinaryPartner.is_emergency.is_(True))
         stmt = stmt.order_by(VeterinaryPartner.name.asc())
+        if page_params:
+            stmt = stmt.offset(page_params.offset).limit(page_params.limit)
         return (await self._session.execute(stmt)).scalars().all()
 
     # ── Contact locations ────────────────────────────────────────────────────
@@ -269,6 +323,7 @@ class PortalRepository:
             select(ContactLocation)
             .where(ContactLocation.deleted_at.is_(None))
             .order_by(ContactLocation.sort_order.asc(), ContactLocation.name.asc())
+            .limit(50)
         )
         return (await self._session.execute(stmt)).scalars().all()
 

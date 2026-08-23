@@ -854,9 +854,23 @@ class AuthService:
             valid_auds = [aud.strip() for aud in expected_aud.split(",") if aud.strip()]
             async with httpx.AsyncClient() as client:
                 if token.startswith("ya29."):
+                    import time
+
+                    from pawguard.core.metrics import track_outbound_request
+
+                    start = time.perf_counter()
                     info_resp = await client.get(
                         f"https://oauth2.googleapis.com/tokeninfo?access_token={token}",
                         timeout=10,
+                    )
+                    duration_ms = (time.perf_counter() - start) * 1000
+                    track_outbound_request(
+                        destination="google_oauth",
+                        operation="tokeninfo",
+                        request_bytes=0,
+                        response_bytes=len(info_resp.content),
+                        duration_ms=duration_ms,
+                        status="success" if info_resp.status_code == 200 else "failed",
                     )
                     if info_resp.status_code != 200:
                         raise InvalidCredentialsError("Invalid Google access token.")
@@ -866,10 +880,20 @@ class AuthService:
                         raise InvalidCredentialsError(
                             "Google token was not issued for this application."
                         )
+                    start = time.perf_counter()
                     userinfo_resp = await client.get(
                         "https://www.googleapis.com/oauth2/v3/userinfo",
                         headers={"Authorization": f"Bearer {token}"},
                         timeout=10,
+                    )
+                    duration_ms = (time.perf_counter() - start) * 1000
+                    track_outbound_request(
+                        destination="google_oauth",
+                        operation="userinfo",
+                        request_bytes=0,
+                        response_bytes=len(userinfo_resp.content),
+                        duration_ms=duration_ms,
+                        status="success" if userinfo_resp.status_code == 200 else "failed",
                     )
                     user_data = userinfo_resp.json() if userinfo_resp.status_code == 200 else {}
                     sub = info_data.get("sub") or user_data.get("sub")
@@ -883,9 +907,23 @@ class AuthService:
                         "picture": user_data.get("picture", ""),
                     }
                 else:
+                    import time
+
+                    from pawguard.core.metrics import track_outbound_request
+
+                    start = time.perf_counter()
                     resp = await client.get(
                         f"https://oauth2.googleapis.com/tokeninfo?id_token={token}",
                         timeout=10,
+                    )
+                    duration_ms = (time.perf_counter() - start) * 1000
+                    track_outbound_request(
+                        destination="google_oauth",
+                        operation="tokeninfo_id",
+                        request_bytes=0,
+                        response_bytes=len(resp.content),
+                        duration_ms=duration_ms,
+                        status="success" if resp.status_code == 200 else "failed",
                     )
                     if resp.status_code != 200:
                         raise InvalidCredentialsError("Invalid Google token.")

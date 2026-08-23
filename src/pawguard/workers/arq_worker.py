@@ -81,8 +81,10 @@ async def outbox_poller_loop(ctx: dict[str, Any]) -> None:
     from pawguard.workers.pool import _ensure_pool
 
     pool = await _ensure_pool()
+    current_delay = 2
 
     while True:
+        processed = 0
         try:
             async with AsyncSessionLocal() as session, session.begin():
                 processed = await OutboxService.process_pending_events(session, pool)
@@ -90,8 +92,21 @@ async def outbox_poller_loop(ctx: dict[str, Any]) -> None:
                     logger.debug(f"Outbox processed {processed} events.")
         except Exception as e:
             logger.error("outbox_poller_loop_error", error=str(e))
+            processed = 0
 
-        await asyncio.sleep(2)
+        if processed > 0:
+            current_delay = 2
+        else:
+            if current_delay == 2:
+                current_delay = 5
+            elif current_delay == 5:
+                current_delay = 10
+            elif current_delay == 10:
+                current_delay = 20
+            else:
+                current_delay = 30
+
+        await asyncio.sleep(current_delay)
 
 
 async def startup(ctx: dict[str, object]) -> None:
@@ -104,7 +119,7 @@ async def startup(ctx: dict[str, object]) -> None:
 async def shutdown(ctx: dict[str, object]) -> None:
     logger.info("arq_worker_shutdown")
     task = ctx.get("outbox_task")
-    if task and not task.done():
+    if isinstance(task, asyncio.Task) and not task.done():
         task.cancel()
         try:
             await task

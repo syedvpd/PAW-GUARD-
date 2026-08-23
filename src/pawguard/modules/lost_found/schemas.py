@@ -291,3 +291,18 @@ class PetSightingResponse(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class UnifiedReportResponse(BaseModel):
+    """Unified lookup wrapper for a lost or found report resolved by id.
+
+    ``kind`` discriminates the resolved report type; ``report`` carries the
+    typed response. Reuses the existing per-type responses so PII masking
+    (applied in the router) and photo-URL resolution stay identical to the
+    per-type endpoints.
+    """
+
+    kind: str = Field(..., description="Resolved report type: 'lost' or 'found'")
+    report: LostReportResponse | FoundReportResponse
+
+    model_config = ConfigDict(from_attributes=True)

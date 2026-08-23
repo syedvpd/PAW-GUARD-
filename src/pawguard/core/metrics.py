@@ -8,6 +8,7 @@ Outputs Prometheus standard exposition format.
 import threading
 import time
 from collections import defaultdict
+from collections.abc import AsyncGenerator
 from typing import Any
 
 DEFAULT_BUCKETS_MS: tuple[float, ...] = (
@@ -240,3 +241,255 @@ def generate_prometheus_metrics() -> str:
 
 def create_timer(name: str, labels: dict[str, str] | None = None) -> MetricsTimer:
     return MetricsTimer(name, labels)
+
+
+def track_outbound_request(
+    destination: str,
+    operation: str,
+    request_bytes: int = 0,
+    response_bytes: int = 0,
+    duration_ms: float = 0.0,
+    status: str = "success",
+) -> None:
+    """Record outbound request count, bytes sent/received, and duration."""
+    labels = {
+        "destination": destination,
+        "operation": operation,
+        "status": status,
+    }
+    increment_counter("pawguard_outbound_requests_total", labels)
+    if request_bytes > 0:
+        increment_counter(
+            "pawguard_outbound_bytes_total", {**labels, "direction": "sent"}, request_bytes
+        )
+    if response_bytes > 0:
+        increment_counter(
+            "pawguard_outbound_bytes_total", {**labels, "direction": "received"}, response_bytes
+        )
+    if duration_ms > 0.0:
+        observe_histogram("pawguard_outbound_duration_seconds", duration_ms / 1000.0, labels)
+
+
+class InstrumentedRedisClient:
+    """Wraps a Redis client instance to monitor query operations, count traffic, and measure duration."""
+
+    def __init__(self, client: Any) -> None:
+        self._client = client
+
+    def pubsub(self, *args: Any, **kwargs: Any) -> Any:
+        track_outbound_request(
+            destination="redis",
+            operation="pubsub",
+            request_bytes=0,
+            response_bytes=0,
+            status="success",
+        )
+        return self._client.pubsub(*args, **kwargs)
+
+    async def get(self, key: str) -> Any:
+        start = time.perf_counter()
+        try:
+            res = await self._client.get(key)
+            status = "success"
+        except Exception:
+            status = "failed"
+            raise
+        finally:
+            duration_ms = (time.perf_counter() - start) * 1000
+            res_len = len(str(res)) if (status == "success" and res is not None) else 0
+            track_outbound_request(
+                destination="redis",
+                operation="get",
+                request_bytes=len(key),
+                response_bytes=res_len,
+                duration_ms=duration_ms,
+                status=status,
+            )
+        return res
+
+    async def set(
+        self,
+        key: str,
+        value: Any,
+        ex: int | None = None,
+        px: int | None = None,
+        nx: bool | None = None,
+    ) -> Any:
+        start = time.perf_counter()
+        val_str = str(value)
+        try:
+            res = await self._client.set(key, value, ex=ex, px=px, nx=nx)
+            status = "success"
+        except Exception:
+            status = "failed"
+            raise
+        finally:
+            duration_ms = (time.perf_counter() - start) * 1000
+            track_outbound_request(
+                destination="redis",
+                operation="set",
+                request_bytes=len(key) + len(val_str),
+                response_bytes=0,
+                duration_ms=duration_ms,
+                status=status,
+            )
+        return res
+
+    async def delete(self, key: str) -> None:
+        start = time.perf_counter()
+        try:
+            await self._client.delete(key)
+            status = "success"
+        except Exception:
+            status = "failed"
+            raise
+        finally:
+            duration_ms = (time.perf_counter() - start) * 1000
+            track_outbound_request(
+                destination="redis",
+                operation="delete",
+                request_bytes=len(key),
+                response_bytes=0,
+                duration_ms=duration_ms,
+                status=status,
+            )
+
+    async def incr(self, key: str) -> int:
+        start = time.perf_counter()
+        try:
+            res = await self._client.incr(key)
+            status = "success"
+        except Exception:
+            status = "failed"
+            raise
+        finally:
+            duration_ms = (time.perf_counter() - start) * 1000
+            track_outbound_request(
+                destination="redis",
+                operation="incr",
+                request_bytes=len(key),
+                response_bytes=8,
+                duration_ms=duration_ms,
+                status=status,
+            )
+        return res  # type: ignore[no-any-return]
+
+    async def expire(self, key: str, seconds: int) -> None:
+        start = time.perf_counter()
+        try:
+            await self._client.expire(key, seconds)
+            status = "success"
+        except Exception:
+            status = "failed"
+            raise
+        finally:
+            duration_ms = (time.perf_counter() - start) * 1000
+            track_outbound_request(
+                destination="redis",
+                operation="expire",
+                request_bytes=len(key) + 4,
+                response_bytes=0,
+                duration_ms=duration_ms,
+                status=status,
+            )
+
+    async def eval(self, script: str, numkeys: int, *keys_and_args: Any) -> Any:
+        start = time.perf_counter()
+        try:
+            res = await self._client.eval(script, numkeys, *keys_and_args)
+            status = "success"
+        except Exception:
+            status = "failed"
+            raise
+        finally:
+            duration_ms = (time.perf_counter() - start) * 1000
+            res_len = len(str(res)) if (status == "success" and res is not None) else 0
+            track_outbound_request(
+                destination="redis",
+                operation="eval",
+                request_bytes=len(script) + len(str(keys_and_args)),
+                response_bytes=res_len,
+                duration_ms=duration_ms,
+                status=status,
+            )
+        return res
+
+    async def ping(self) -> bool:
+        start = time.perf_counter()
+        try:
+            res = await self._client.ping()
+            status = "success"
+        except Exception:
+            status = "failed"
+            raise
+        finally:
+            duration_ms = (time.perf_counter() - start) * 1000
+            track_outbound_request(
+                destination="redis",
+                operation="ping",
+                request_bytes=0,
+                response_bytes=4,
+                duration_ms=duration_ms,
+                status=status,
+            )
+        return bool(res)
+
+    async def scan_iter(self, match: str = "", count: int | None = None) -> AsyncGenerator[Any]:
+        start = time.perf_counter()
+        try:
+            async for item in self._client.scan_iter(match=match, count=count):
+                yield item
+            status = "success"
+        except Exception:
+            status = "failed"
+            raise
+        finally:
+            duration_ms = (time.perf_counter() - start) * 1000
+            track_outbound_request(
+                destination="redis",
+                operation="scan_iter",
+                request_bytes=len(match),
+                response_bytes=0,
+                duration_ms=duration_ms,
+                status=status,
+            )
+
+    async def geoadd(self, name: str, *args: Any, **kwargs: Any) -> int:
+        start = time.perf_counter()
+        try:
+            res = await self._client.geoadd(name, *args, **kwargs)
+            status = "success"
+        except Exception:
+            status = "failed"
+            raise
+        finally:
+            duration_ms = (time.perf_counter() - start) * 1000
+            track_outbound_request(
+                destination="redis",
+                operation="geoadd",
+                request_bytes=len(name) + len(str(args)),
+                response_bytes=8,
+                duration_ms=duration_ms,
+                status=status,
+            )
+        return res  # type: ignore[no-any-return]
+
+    async def geosearch(self, name: str, *args: Any, **kwargs: Any) -> list[Any]:
+        start = time.perf_counter()
+        try:
+            res = await self._client.geosearch(name, *args, **kwargs)
+            status = "success"
+        except Exception:
+            status = "failed"
+            raise
+        finally:
+            duration_ms = (time.perf_counter() - start) * 1000
+            track_outbound_request(
+                destination="redis",
+                operation="geosearch",
+                request_bytes=len(name) + len(str(args)),
+                response_bytes=len(str(res)),
+                duration_ms=duration_ms,
+                status=status,
+            )
+        return res  # type: ignore[no-any-return]

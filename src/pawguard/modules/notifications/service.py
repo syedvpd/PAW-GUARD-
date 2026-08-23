@@ -367,7 +367,18 @@ class NotificationService:
             return 0
 
         data = {"action_url": action_url} if action_url else None
-        return await send_push_notification_to_users(tokens, title=title, body=body, data=data)
+
+        # Deliver push notifications asynchronously in a background task to prevent blocking
+        async def _async_send():
+            try:
+                await send_push_notification_to_users(tokens, title=title, body=body, data=data)
+            except Exception as e:
+                logger.warning("background_push_failed", error=str(e))
+
+        import asyncio
+
+        asyncio.create_task(_async_send())
+        return len(tokens)
 
     async def broadcast_to_all_users(
         self,

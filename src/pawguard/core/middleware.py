@@ -94,6 +94,21 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             }
             increment_counter("http_requests_total", red_labels)
 
+            content_length = response.headers.get("content-length")
+            if content_length:
+                resp_bytes = int(content_length)
+            elif hasattr(response, "body"):
+                resp_bytes = len(response.body)
+            else:
+                resp_bytes = 0
+
+            if resp_bytes > 0:
+                increment_counter(
+                    "pawguard_http_response_bytes_total",
+                    {"method": method, "route": route_path, "status": str(status_code)},
+                    resp_bytes,
+                )
+
             if status_code >= 400:
                 increment_counter(
                     "http_requests_errors_total",
@@ -174,7 +189,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             response.headers["Content-Security-Policy"] = _STRICT_CSP
 
         if request.url.path.startswith(("/api/", "/auth/")):
-            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+            if "Cache-Control" not in response.headers:
+                response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
         return response
 
 

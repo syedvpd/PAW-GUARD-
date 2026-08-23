@@ -84,13 +84,19 @@ class _NullRedis:
 _redis_available: bool | None = None
 
 
+_client_wrapped: RedisClient | None = None
+
+
 async def _ensure_client() -> RedisClient:
-    global _pool, _client, _redis_available
-    if _client is not None:
-        return _client
+    global _pool, _client, _redis_available, _client_wrapped
+    if _client_wrapped is not None:
+        return _client_wrapped
     if _redis_available is False:
         _client = cast(RedisClient, _NullRedis())
-        return _client
+        from pawguard.core.metrics import InstrumentedRedisClient
+
+        _client_wrapped = cast(RedisClient, InstrumentedRedisClient(_client))
+        return _client_wrapped
     try:
         test_client = Redis.from_url(
             _settings.redis_url,
@@ -105,7 +111,10 @@ async def _ensure_client() -> RedisClient:
     except Exception:
         _redis_available = False
         _client = cast(RedisClient, _NullRedis())
-    return _client
+    from pawguard.core.metrics import InstrumentedRedisClient
+
+    _client_wrapped = cast(RedisClient, InstrumentedRedisClient(_client))
+    return _client_wrapped
 
 
 async def get_redis() -> AsyncGenerator[RedisClient]:

@@ -36,6 +36,7 @@ from pawguard.modules.lost_found.schemas import (
     PetSightingCreate,
     PetSightingResponse,
     ReportMatchResponse,
+    UnifiedReportResponse,
 )
 from pawguard.modules.lost_found.service import LostFoundService
 from pawguard.modules.notifications.router import get_notification_service
@@ -352,6 +353,33 @@ async def get_found_report(
     item = FoundReportResponse.model_validate(report)
     _mask_reporter_identity(item, current_user)
     return ApiResponse(data=item)
+
+
+@router.get(
+    "/reports/{report_id}",
+    response_model=ApiResponse[UnifiedReportResponse],
+)
+async def get_unified_report(
+    report_id: uuid.UUID,
+    current_user: CurrentUser | None = Depends(get_optional_current_user),
+    service: LostFoundService = Depends(get_lost_found_service),
+) -> ApiResponse[UnifiedReportResponse]:
+    """Resolve a lost OR found report by id through a single endpoint.
+
+    Preserves the existing per-type authorization (public read with optional
+    auth) and PII masking. Returns 404 only when the id matches neither table.
+    """
+    lost_report = await service._repo.get_lost_report_by_id(report_id)
+    if lost_report is not None:
+        item = LostReportResponse.model_validate(lost_report)
+        _mask_reporter_identity(item, current_user)
+        return ApiResponse(data=UnifiedReportResponse(kind="lost", report=item))
+    found_report = await service._repo.get_found_report_by_id(report_id)
+    if found_report is not None:
+        item = FoundReportResponse.model_validate(found_report)
+        _mask_reporter_identity(item, current_user)
+        return ApiResponse(data=UnifiedReportResponse(kind="found", report=item))
+    raise NotFoundError("Report not found.")
 
 
 @router.get(

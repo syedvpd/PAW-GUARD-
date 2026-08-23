@@ -32,18 +32,41 @@ class RazorpayGateway(PaymentGateway):
     async def create_order(
         self, *, amount: float, currency: str, receipt: str, notes: dict[str, str] | None = None
     ) -> PaymentOrder:
+        import time
+
+        from pawguard.core.metrics import track_outbound_request
+
+        start = time.perf_counter()
         # Razorpay expects the smallest currency unit (e.g. paise for INR).
         amount_subunits = int(round(amount * 100))
+        payload_data = {
+            "amount": amount_subunits,
+            "currency": currency.upper(),
+            "receipt": receipt,
+            "notes": notes or {},
+        }
+        req_bytes = len(json.dumps(payload_data))
         try:
-            order: dict[str, Any] = self._client.order.create(
-                {
-                    "amount": amount_subunits,
-                    "currency": currency.upper(),
-                    "receipt": receipt,
-                    "notes": notes or {},
-                }
+            order: dict[str, Any] = self._client.order.create(payload_data)
+            duration_ms = (time.perf_counter() - start) * 1000
+            track_outbound_request(
+                destination="razorpay",
+                operation="create_order",
+                request_bytes=req_bytes,
+                response_bytes=len(json.dumps(order)),
+                duration_ms=duration_ms,
+                status="success",
             )
         except Exception as exc:  # razorpay raises provider-specific errors
+            duration_ms = (time.perf_counter() - start) * 1000
+            track_outbound_request(
+                destination="razorpay",
+                operation="create_order",
+                request_bytes=req_bytes,
+                response_bytes=0,
+                duration_ms=duration_ms,
+                status="failed",
+            )
             raise PaymentGatewayError(f"Razorpay order creation failed: {exc}") from exc
 
         return PaymentOrder(

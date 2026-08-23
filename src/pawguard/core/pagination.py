@@ -24,7 +24,7 @@ class PageParams:
 
 def page_params(
     page: Annotated[int, Query(ge=1, description="Page number (1-indexed)")] = 1,
-    page_size: Annotated[int, Query(ge=1, le=100, description="Number of items per page")] = 20,
+    page_size: Annotated[int, Query(ge=1, le=50, description="Number of items per page")] = 20,
 ) -> PageParams:
     return PageParams(page=page, page_size=page_size)
 

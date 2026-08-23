@@ -42,7 +42,6 @@ api_v1_router.include_router(public_rescue_router)
 api_v1_router.include_router(rescue_centre_router)
 api_v1_router.include_router(dog_router)
 api_v1_router.include_router(companion_pet_router)
-api_v1_router.include_router(companion_pet_router, prefix="/veterinary", tags=["veterinary"])
 
 api_v1_router.include_router(adoption_router)
 api_v1_router.include_router(volunteer_router)

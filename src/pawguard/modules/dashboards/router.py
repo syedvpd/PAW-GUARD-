@@ -4,7 +4,7 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -58,7 +58,7 @@ async def get_rescue_operations_dashboard(
 )
 async def stream_rescue_dashboard(
     request: Request,
-    interval: int = Query(10, ge=5, le=300, description="Snapshot interval (seconds)"),
+    interval: int = Query(30, ge=5, le=300, description="Snapshot interval (seconds)"),
     db: AsyncSession = Depends(get_db),
     redis: RedisClient = Depends(get_redis),
     current_user: CurrentUser = Depends(get_current_user),
@@ -94,24 +94,32 @@ async def stream_rescue_dashboard(
                 if await request.is_disconnected():
                     break
 
+                received_event = False
                 if pubsub is not None:
                     try:
-                        # Wait for next event via pub/sub or timeout (acts as interval/heartbeat fallback)
-                        await pubsub.get_message(ignore_subscribe_messages=True, timeout=interval)
+                        # Wait for next event via pub/sub or timeout
+                        msg = await pubsub.get_message(
+                            ignore_subscribe_messages=True, timeout=interval
+                        )
+                        if msg is not None:
+                            received_event = True
                     except Exception:
                         await asyncio.sleep(interval)
                 else:
                     await asyncio.sleep(interval)
 
-                try:
-                    data = await dasvc.rescue_dashboard(db)
-                    payload = json.dumps(
-                        {"data": data, "ts": datetime.now(UTC).isoformat()},
-                        default=str,
-                    )
-                    yield f"event: snapshot\ndata: {payload}\n\n"
-                except Exception:
-                    yield ": snapshot unavailable, stream alive\n\n"
+                if received_event:
+                    try:
+                        data = await dasvc.rescue_dashboard(db)
+                        payload = json.dumps(
+                            {"data": data, "ts": datetime.now(UTC).isoformat()},
+                            default=str,
+                        )
+                        yield f"event: snapshot\ndata: {payload}\n\n"
+                    except Exception:
+                        yield ": snapshot unavailable, stream alive\n\n"
+                else:
+                    yield ": heartbeat\n\n"
         finally:
             if pubsub is not None:
                 with contextlib.suppress(Exception):
@@ -274,11 +282,15 @@ async def get_executive_dashboard(
     response_model=ApiResponse[dict[str, Any]],
 )
 async def get_public_dashboard(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     redis: RedisClient = Depends(get_redis),
-) -> ApiResponse[dict[str, Any]]:
+) -> Response:
     data = await dasvc.public_dashboard(db, redis=redis)
-    return ApiResponse(data=data)
+    res_data: ApiResponse[dict[str, Any]] = ApiResponse(data=data)
+    from pawguard.core.cache_utils import etag_cache_response
+
+    return etag_cache_response(request, res_data)
 
 
 @router.get(
