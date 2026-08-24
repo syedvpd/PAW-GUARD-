@@ -30,7 +30,7 @@ DEFAULT_TRIGGERS = [
     ("rescue_admitted", "rescue", "Animal Admitted to Shelter", True, True, False, "HIGH"),
     ("rescue_emergency", "rescue", "Emergency Rescue Escalated", True, True, False, "HIGH"),
     # Lost & Found
-    ("lost_found_broadcast", "lost_found", "Lost Dog Area Broadcast", True, True, True, "HIGH"),
+    ("lost_found_broadcast", "lost_found", "Lost Dog Area Broadcast", True, True, False, "HIGH"),
     ("lost_found_sighting", "lost_found", "Pet Sighting Reported", True, True, False, "HIGH"),
     ("lost_found_match", "lost_found", "Lost & Found Match Detected", True, True, False, "HIGH"),
     ("lost_found_claim", "lost_found", "Ownership Claim Update", True, True, False, "NORMAL"),

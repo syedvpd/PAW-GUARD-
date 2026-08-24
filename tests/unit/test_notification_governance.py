@@ -36,6 +36,13 @@ async def admin_user(db_session: AsyncSession) -> User:
 async def gov_service(db_session: AsyncSession) -> NotificationGovernanceService:
     service = NotificationGovernanceService(db_session)
     await service.ensure_seed_defaults()
+    # Explicitly set requires_approval = True for lost_found_broadcast in tests
+    # to preserve the approval queue unit tests while the app defaults to False.
+    await db_session.execute(
+        NotificationTriggerConfig.__table__.update()
+        .where(NotificationTriggerConfig.trigger_code == "lost_found_broadcast")
+        .values(requires_approval=True)
+    )
     return service
 
 
