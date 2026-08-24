@@ -76,17 +76,25 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         if request.method not in ("POST", "PUT", "PATCH", "DELETE"):
             return await call_next(request)
 
+        # Check if the path corresponds to one of the financial endpoints
+        from pawguard.core.config import get_settings
+
+        settings = get_settings()
+        prefix = settings.api_v1_prefix
+
+        financial_paths = {
+            f"{prefix}/donations/checkout",
+            f"{prefix}/donations/sponsorships",
+            f"{prefix}/donations/recurring",
+        }
+
+        is_financial_route = request.method == "POST" and request.url.path in financial_paths
+
         idempotency_key = request.headers.get("idempotency-key") or request.headers.get(
             "x-idempotency-key"
         )
-        if not idempotency_key:
+        if not idempotency_key and not is_financial_route:
             return await call_next(request)
-
-        if not (10 <= len(idempotency_key) <= 128):
-            return JSONResponse(
-                status_code=400,
-                content={"success": False, "error": "Invalid Idempotency-Key format."},
-            )
 
         redis = await _resolve_redis(request)
         if isinstance(redis, _NullRedis):
@@ -108,6 +116,15 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         payload_hash = hashlib.sha256(
             f"{request.method}:{request.url.path}:{query_str}:".encode() + body_bytes
         ).hexdigest()
+
+        if not idempotency_key:
+            idempotency_key = f"auto-idempotency:{payload_hash}"
+
+        if not (10 <= len(idempotency_key) <= 128):
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "error": "Invalid Idempotency-Key format."},
+            )
 
         redis_key = f"{idempotency_key}:{user_id}"
         cached = await cache_service.get(redis_key)

@@ -4,8 +4,11 @@ from typing import Any
 
 from pawguard.core.config import get_settings
 from pawguard.core.logging import get_logger
+from pawguard.core.resilience import CircuitBreaker
 
 logger = get_logger(__name__)
+
+fcm_breaker = CircuitBreaker(failure_threshold=5, recovery_timeout=30.0)
 
 _firebase_initialized = False
 _firebase_app: Any = None
@@ -89,7 +92,12 @@ async def send_push_notification(
                 payload=messaging.APNSPayload(aps=messaging.Aps(sound="default", badge=1))
             ),
         )
-        response = await asyncio.to_thread(messaging.send, message, app=app)
+
+        @fcm_breaker
+        async def _call_fcm():
+            return await asyncio.to_thread(messaging.send, message, app=app)
+
+        response = await _call_fcm()
         duration_ms = (time.perf_counter() - start) * 1000
         track_outbound_request(
             destination="fcm",
@@ -178,7 +186,12 @@ async def send_push_notification_to_users(
         req_size = (len(title) + len(body) + len(str(data or {}))) * len(tokens_only)
 
         try:
-            response = await asyncio.to_thread(messaging.send_multicast, message, app=app)
+
+            @fcm_breaker
+            async def _call_multicast(msg):
+                return await asyncio.to_thread(messaging.send_multicast, msg, app=app)
+
+            response = await _call_multicast(message)
             duration_ms = (time.perf_counter() - start) * 1000
             track_outbound_request(
                 destination="fcm",

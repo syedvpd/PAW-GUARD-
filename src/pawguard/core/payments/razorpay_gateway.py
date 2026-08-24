@@ -14,6 +14,9 @@ from pawguard.core.payments.base import (
     PaymentVerificationResult,
     WebhookEvent,
 )
+from pawguard.core.resilience import CircuitBreaker, CircuitBreakerOpenException
+
+razorpay_breaker = CircuitBreaker(failure_threshold=5, recovery_timeout=30.0)
 
 
 class RazorpayGateway(PaymentGateway):
@@ -47,7 +50,12 @@ class RazorpayGateway(PaymentGateway):
         }
         req_bytes = len(json.dumps(payload_data))
         try:
-            order: dict[str, Any] = self._client.order.create(payload_data)
+
+            @razorpay_breaker
+            async def _create():
+                return self._client.order.create(payload_data)
+
+            order: dict[str, Any] = await _create()
             duration_ms = (time.perf_counter() - start) * 1000
             track_outbound_request(
                 destination="razorpay",
@@ -57,6 +65,8 @@ class RazorpayGateway(PaymentGateway):
                 duration_ms=duration_ms,
                 status="success",
             )
+        except CircuitBreakerOpenException as exc:
+            raise PaymentGatewayError(f"Payment gateway is temporarily unavailable: {exc}") from exc
         except Exception as exc:  # razorpay raises provider-specific errors
             duration_ms = (time.perf_counter() - start) * 1000
             track_outbound_request(

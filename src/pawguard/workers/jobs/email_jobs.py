@@ -8,6 +8,7 @@ from typing import Any
 from arq import Retry
 
 from pawguard.core.logging import get_logger
+from pawguard.core.resilience import CircuitBreakerOpenException
 from pawguard.services.email_service import EmailService
 from pawguard.workers.jobs.retry import retry_defer
 
@@ -30,6 +31,7 @@ _TRANSIENT = (
     smtplib.SMTPException,
     urllib.error.URLError,
     urllib.error.HTTPError,
+    CircuitBreakerOpenException,
 )
 
 

@@ -41,6 +41,12 @@ def test_app(fake_redis) -> FastAPI:
         MUTATE_EXECUTION_COUNT += 1
         return {"attempt": MUTATE_EXECUTION_COUNT}
 
+    @app.post("/api/v1/donations/checkout")
+    async def checkout_endpoint(payload: dict):
+        global MUTATE_EXECUTION_COUNT
+        MUTATE_EXECUTION_COUNT += 1
+        return {"attempt": MUTATE_EXECUTION_COUNT, "data": payload.get("value")}
+
     return app
 
 
@@ -148,3 +154,29 @@ async def test_idempotency_lock_cleared_on_exception(test_app, fake_redis):
         # Lock key in Redis namespace must be deleted
         redis_val = await fake_redis.get("idempotency:valid-idempotency-key-string:anonymous")
         assert redis_val is None
+
+
+@pytest.mark.asyncio
+async def test_auto_idempotency_for_financial_routes(test_app):
+    """POST requests to financial endpoints without headers should automatically resolve idempotency using payload hashing."""
+    transport = ASGITransport(app=test_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        payload = {"value": "donation-100"}
+
+        # Attempt 1: MISS (Auto-generated idempotency key)
+        r1 = await client.post("/api/v1/donations/checkout", json=payload)
+        assert r1.status_code == 200
+        assert r1.json()["attempt"] == 1
+        assert r1.headers.get("X-Cache-Idempotency") == "MISS"
+
+        # Attempt 2: HIT (Reuses the auto-generated key since payload matches)
+        r2 = await client.post("/api/v1/donations/checkout", json=payload)
+        assert r2.status_code == 200
+        assert r2.json()["attempt"] == 1
+        assert r2.headers.get("X-Cache-Idempotency") == "HIT"
+
+        # Attempt 3: Different payload => MISS (Generates a different key hash)
+        r3 = await client.post("/api/v1/donations/checkout", json={"value": "donation-200"})
+        assert r3.status_code == 200
+        assert r3.json()["attempt"] == 2
+        assert r3.headers.get("X-Cache-Idempotency") == "MISS"

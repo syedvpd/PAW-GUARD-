@@ -21,8 +21,11 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from pawguard.core.config import get_settings
 from pawguard.core.logging import get_logger
+from pawguard.core.resilience import CircuitBreaker
 
 logger = get_logger(__name__)
+
+email_breaker = CircuitBreaker(failure_threshold=5, recovery_timeout=30.0)
 
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates" / "email"
 
@@ -52,6 +55,7 @@ class EmailService:
         else:
             self._send_via_smtp(to=to, subject=subject, html_body=html_body)
 
+    @email_breaker
     def _send_via_brevo_api(self, *, to: str, subject: str, html_body: str) -> None:
         import time
 
@@ -117,6 +121,7 @@ class EmailService:
 
         logger.info("email_sent", to=to, subject=subject, method="brevo_api", status=status)
 
+    @email_breaker
     def _send_via_smtp(self, *, to: str, subject: str, html_body: str) -> None:
         import time
 

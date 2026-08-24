@@ -82,6 +82,45 @@ async def test_circuit_breaker_transitions() -> None:
     assert breaker.failure_count == 0
 
 
+@pytest.mark.asyncio
+async def test_sync_circuit_breaker_transitions() -> None:
+    breaker = CircuitBreaker(failure_threshold=2, recovery_timeout=0.05)
+    call_count = 0
+
+    @breaker
+    def test_sync_func(should_fail: bool) -> str:
+        nonlocal call_count
+        call_count += 1
+        if should_fail:
+            raise ValueError("Fail")
+        return "OK"
+
+    # First attempt: failure recorded
+    with pytest.raises(ValueError):
+        test_sync_func(should_fail=True)
+    assert breaker.failure_count == 1
+    assert breaker.state.value == "closed"
+
+    # Second attempt: failure threshold reached, trips to OPEN
+    with pytest.raises(ValueError):
+        test_sync_func(should_fail=True)
+    assert breaker.failure_count == 2
+    assert breaker.state.value == "open"
+
+    # Third attempt: OPEN circuit should fail fast
+    with pytest.raises(CircuitBreakerOpenException):
+        test_sync_func(should_fail=False)
+
+    # Await recovery timeout to allow HALF-OPEN transition
+    await asyncio.sleep(0.06)
+
+    # Next attempt succeeds: state transitions back to CLOSED
+    res = test_sync_func(should_fail=False)
+    assert res == "OK"
+    assert breaker.state.value == "closed"
+    assert breaker.failure_count == 0
+
+
 # --- 2. Database Read/Write Splitting Tests ---
 
 

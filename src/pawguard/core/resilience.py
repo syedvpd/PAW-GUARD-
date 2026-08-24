@@ -1,10 +1,15 @@
 import asyncio
+import inspect
 import random
 import time
 from collections.abc import Callable
 from enum import Enum
 from functools import wraps
 from typing import Any, ParamSpec, TypeVar
+
+from fastapi import status
+
+from pawguard.core.exceptions import AppException
 
 T = TypeVar("T")
 P = ParamSpec("P")
@@ -16,10 +21,11 @@ class CircuitState(Enum):
     HALF_OPEN = "half_open"
 
 
-class CircuitBreakerOpenException(Exception):
+class CircuitBreakerOpenException(AppException):
     """Raised when the circuit breaker is OPEN and fails fast."""
 
-    pass
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    code = "SERVICE_UNAVAILABLE"
 
 
 class CircuitBreaker:
@@ -40,24 +46,44 @@ class CircuitBreaker:
             self.state = CircuitState.OPEN
             self.last_state_change = time.time()
 
-    def __call__(self, func: Callable[P, Any]) -> Callable[P, Any]:
-        @wraps(func)
-        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> Any:
-            if self.state == CircuitState.OPEN:
-                if time.time() - self.last_state_change > self.recovery_timeout:
-                    self.state = CircuitState.HALF_OPEN
-                else:
-                    raise CircuitBreakerOpenException("Circuit is OPEN. Failing fast.")
-            try:
-                res = await func(*args, **kwargs)
-                if self.state == CircuitState.HALF_OPEN:
-                    self.record_success()
-                return res
-            except Exception as e:
-                self.record_failure()
-                raise e
+    def _check_state(self) -> None:
+        if self.state == CircuitState.OPEN:
+            if time.time() - self.last_state_change > self.recovery_timeout:
+                self.state = CircuitState.HALF_OPEN
+            else:
+                raise CircuitBreakerOpenException("Circuit is OPEN. Failing fast.")
 
-        return wrapper
+    def __call__(self, func: Callable[P, Any]) -> Callable[P, Any]:
+        if inspect.iscoroutinefunction(func):
+
+            @wraps(func)
+            async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> Any:
+                self._check_state()
+                try:
+                    res = await func(*args, **kwargs)
+                    if self.state == CircuitState.HALF_OPEN:
+                        self.record_success()
+                    return res
+                except Exception as e:
+                    self.record_failure()
+                    raise e
+
+            return async_wrapper  # type: ignore[return-value]
+        else:
+
+            @wraps(func)
+            def sync_wrapper(*args: P.args, **kwargs: P.kwargs) -> Any:
+                self._check_state()
+                try:
+                    res = func(*args, **kwargs)
+                    if self.state == CircuitState.HALF_OPEN:
+                        self.record_success()
+                    return res
+                except Exception as e:
+                    self.record_failure()
+                    raise e
+
+            return sync_wrapper  # type: ignore[return-value]
 
 
 def retry_with_backoff(
