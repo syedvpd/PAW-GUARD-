@@ -1,19 +1,23 @@
-import json
+import contextlib
 import functools
 import hashlib
+import json
 from typing import Any
+
 from fastapi import Request, Response
 from fastapi.encoders import jsonable_encoder
 
 from pawguard.redis.client import _ensure_client
 from pawguard.services.cache_service import CacheService
 
+
 def cache_response(ttl_seconds: int = 300, namespace: str = "route_cache"):
     """FastAPI route decorator to cache GET responses in Redis with support for ETags and cache partitioning.
-    
+
     Partitions the cache using the Authorization header and access_token cookie to prevent
     privilege escalation and PII leakage between authenticated and anonymous users.
     """
+
     def decorator(func):
         @functools.wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -29,6 +33,7 @@ def cache_response(ttl_seconds: int = 300, namespace: str = "route_cache"):
             # 3. Get Redis client and check if available
             redis = await _ensure_client()
             from pawguard.redis.client import _NullRedis
+
             if isinstance(redis, _NullRedis):
                 return await func(*args, **kwargs)
 
@@ -43,7 +48,7 @@ def cache_response(ttl_seconds: int = 300, namespace: str = "route_cache"):
             if auth_header:
                 token_hash = hashlib.sha256(auth_header.encode("utf-8")).hexdigest()[:16]
                 cache_key += f":auth:{token_hash}"
-                
+
             cookie_token = request.cookies.get("access_token")
             if cookie_token:
                 cookie_hash = hashlib.sha256(cookie_token.encode("utf-8")).hexdigest()[:16]
@@ -69,10 +74,12 @@ def cache_response(ttl_seconds: int = 300, namespace: str = "route_cache"):
                         return Response(
                             status_code=304,
                             headers={
-                                "Cache-Control": headers.get("Cache-Control", f"public, max-age={ttl_seconds}"),
+                                "Cache-Control": headers.get(
+                                    "Cache-Control", f"public, max-age={ttl_seconds}"
+                                ),
                                 "ETag": etag,
-                                "X-Cache-Status": "HIT-304"
-                            }
+                                "X-Cache-Status": "HIT-304",
+                            },
                         )
 
                 headers["X-Cache-Status"] = "HIT"
@@ -80,7 +87,7 @@ def cache_response(ttl_seconds: int = 300, namespace: str = "route_cache"):
                     content=content,
                     media_type="application/json",
                     status_code=status_code,
-                    headers=headers
+                    headers=headers,
                 )
 
             # 6. Execute actual handler
@@ -96,38 +103,31 @@ def cache_response(ttl_seconds: int = 300, namespace: str = "route_cache"):
                     cache_payload = {
                         "content": content_bytes.decode("utf-8"),
                         "headers": headers_dict,
-                        "status_code": status_code
+                        "status_code": status_code,
                     }
-                    try:
+                    with contextlib.suppress(Exception):
                         await cache.set(cache_key, cache_payload, ttl_seconds=ttl_seconds)
-                    except Exception:
-                        pass
                 return response
             else:
                 serializable = jsonable_encoder(response)
                 content_str = json.dumps(serializable)
                 etag = f'W/"{hashlib.sha256(content_str.encode("utf-8")).hexdigest()}"'
 
-                headers_dict = {
-                    "Cache-Control": f"public, max-age={ttl_seconds}",
-                    "ETag": etag
-                }
+                headers_dict = {"Cache-Control": f"public, max-age={ttl_seconds}", "ETag": etag}
 
                 cache_payload = {
                     "content": content_str,
                     "headers": headers_dict,
-                    "status_code": 200
+                    "status_code": 200,
                 }
-                try:
+                with contextlib.suppress(Exception):
                     await cache.set(cache_key, cache_payload, ttl_seconds=ttl_seconds)
-                except Exception:
-                    pass
 
                 headers_dict["X-Cache-Status"] = "MISS"
                 return Response(
-                    content=content_str,
-                    media_type="application/json",
-                    headers=headers_dict
+                    content=content_str, media_type="application/json", headers=headers_dict
                 )
+
         return wrapper
+
     return decorator

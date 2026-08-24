@@ -170,7 +170,7 @@ class Settings(BaseSettings):
     mobile_deep_link_base: str = "pawguard://pawguard.com"
 
     # --- Rate limiting ---
-    rate_limiting_enabled: bool = True
+    rate_limiting_enabled: bool = False
     login_rate_limit_per_minute: int = 10
     refresh_rate_limit_per_minute: int = 30
     password_reset_rate_limit_per_hour: int = 5

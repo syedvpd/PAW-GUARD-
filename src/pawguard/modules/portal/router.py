@@ -12,8 +12,8 @@ from pawguard.core.bulk import (
     BulkStatusUpdateRequest,
     BulkStatusUpdateResponse,
 )
-from pawguard.core.cache_utils import etag_cache_response
 from pawguard.core.cache_decorator import cache_response
+from pawguard.core.cache_utils import etag_cache_response
 from pawguard.core.exceptions import parse_enum
 from pawguard.core.pagination import PageParams, build_pagination_meta, page_params
 from pawguard.core.rate_limiter import rate_limit
