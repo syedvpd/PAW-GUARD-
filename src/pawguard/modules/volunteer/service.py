@@ -812,6 +812,11 @@ class VolunteerService:
     ) -> int:
         return await self._repo.bulk_update_profile_status(ids, status)
 
+    async def list_all_attendance_for_volunteer(
+        self, volunteer_id: uuid.UUID
+    ) -> list[ShiftAttendance]:
+        return list(await self._repo.list_all_attendance_for_volunteer(volunteer_id))
+
     # --- Service certificates (PRR 3.9) ------------------------------------
 
     async def get_service_summary(self, profile_id: uuid.UUID) -> VolunteerServiceSummary:

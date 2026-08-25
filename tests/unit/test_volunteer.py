@@ -879,3 +879,16 @@ class TestServiceCertificate:
         mock_repo.get_profile_by_id.return_value = None
         with pytest.raises(NotFoundError):
             await service.issue_service_certificate(uuid.uuid4())
+
+    @pytest.mark.asyncio
+    async def test_list_all_attendance_for_volunteer(self, service, mock_repo):
+        profile = self._profile()
+        expected = [
+            self._attendance(profile.id, 2.0, role="Walking"),
+            self._attendance(profile.id, 0.0, role="Feeding"),
+        ]
+        mock_repo.list_all_attendance_for_volunteer.return_value = expected
+        result = await service.list_all_attendance_for_volunteer(profile.id)
+        assert len(result) == 2
+        assert result == expected
+        mock_repo.list_all_attendance_for_volunteer.assert_called_once_with(profile.id)

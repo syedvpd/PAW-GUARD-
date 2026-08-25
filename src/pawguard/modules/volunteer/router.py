@@ -33,6 +33,7 @@ from pawguard.modules.volunteer.schemas import (
     ShiftAttendanceCancel,
     ShiftAttendanceNoShow,
     ShiftAttendanceResponse,
+    ShiftAttendanceWithShiftResponse,
     VolunteerApplicationReject,
     VolunteerApplicationResponse,
     VolunteerLifecycleStatus,
@@ -98,6 +99,24 @@ async def get_my_volunteer_status(
     """Get the current user's volunteer lifecycle status."""
     status_data = await service.get_volunteer_lifecycle_status(current_user.id)
     return ApiResponse(data=status_data)
+
+
+@router.get(
+    "/me/attendance",
+    response_model=ApiResponse[list[ShiftAttendanceWithShiftResponse]],
+)
+async def get_my_attendance(
+    current_user: CurrentUser = Depends(get_current_user),
+    service: VolunteerService = Depends(get_volunteer_service),
+) -> ApiResponse[list[ShiftAttendanceWithShiftResponse]]:
+    """Get the current user's shift registration and attendance history."""
+    profile = await service.get_profile_by_user(current_user.id)
+    if profile is None:
+        from pawguard.core.exceptions import NotFoundError
+
+        raise NotFoundError("Volunteer profile not found. Please apply to volunteer first.")
+    records = await service.list_all_attendance_for_volunteer(profile.id)
+    return ApiResponse(data=[ShiftAttendanceWithShiftResponse.model_validate(r) for r in records])
 
 
 @router.get(

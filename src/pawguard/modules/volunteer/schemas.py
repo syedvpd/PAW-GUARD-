@@ -96,6 +96,10 @@ class ShiftAttendanceResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ShiftAttendanceWithShiftResponse(ShiftAttendanceResponse):
+    shift: VolunteerShiftResponse | None = None
+
+
 class ShiftAttendanceNoShow(BaseModel):
     reason: str = Field(
         ..., min_length=1, max_length=1000, examples=["Did not arrive; no notice given."]

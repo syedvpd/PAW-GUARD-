@@ -284,6 +284,17 @@ class VolunteerRepository:
         )
         return (await self._session.execute(stmt)).scalars().all()
 
+    async def list_all_attendance_for_volunteer(
+        self, volunteer_id: uuid.UUID
+    ) -> Sequence[ShiftAttendance]:
+        stmt = (
+            select(ShiftAttendance)
+            .options(selectinload(ShiftAttendance.shift))
+            .where(ShiftAttendance.volunteer_id == volunteer_id)
+            .order_by(ShiftAttendance.created_at.desc())
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
     async def soft_delete_profile(self, profile_id: uuid.UUID) -> None:
         now = datetime.now(UTC)
         stmt = select(VolunteerProfile).where(
