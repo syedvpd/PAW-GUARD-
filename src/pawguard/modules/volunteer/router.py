@@ -36,6 +36,8 @@ from pawguard.modules.volunteer.schemas import (
     ShiftAttendanceWithShiftResponse,
     VolunteerApplicationReject,
     VolunteerApplicationResponse,
+    VolunteerCheckInRequest,
+    VolunteerCheckOutRequest,
     VolunteerLifecycleStatus,
     VolunteerProfileCreate,
     VolunteerProfileResponse,
@@ -315,11 +317,16 @@ async def join_shift(
 async def check_in(
     attendance_id: uuid.UUID,
     request: Request,
+    payload: VolunteerCheckInRequest | None = None,
     current_user: CurrentUser = Depends(get_current_user),
     service: VolunteerService = Depends(get_volunteer_service),
 ) -> ApiResponse[ShiftAttendanceResponse]:
     ip = request.client.host if request.client else None
-    attendance = await service.check_in(attendance_id, current_user.user, ip_address=ip)
+    lat = payload.latitude if payload else None
+    lng = payload.longitude if payload else None
+    attendance = await service.check_in(
+        attendance_id, current_user.user, latitude=lat, longitude=lng, ip_address=ip
+    )
     return ApiResponse(
         data=ShiftAttendanceResponse.model_validate(attendance),
         message="Checked in for shift.",
@@ -333,11 +340,16 @@ async def check_in(
 async def check_out(
     attendance_id: uuid.UUID,
     request: Request,
+    payload: VolunteerCheckOutRequest | None = None,
     current_user: CurrentUser = Depends(get_current_user),
     service: VolunteerService = Depends(get_volunteer_service),
 ) -> ApiResponse[ShiftAttendanceResponse]:
     ip = request.client.host if request.client else None
-    attendance = await service.check_out(attendance_id, current_user.user, ip_address=ip)
+    lat = payload.latitude if payload else None
+    lng = payload.longitude if payload else None
+    attendance = await service.check_out(
+        attendance_id, current_user.user, latitude=lat, longitude=lng, ip_address=ip
+    )
     return ApiResponse(
         data=ShiftAttendanceResponse.model_validate(attendance),
         message="Checked out from shift.",

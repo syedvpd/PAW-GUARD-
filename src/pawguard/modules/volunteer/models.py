@@ -5,7 +5,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -134,6 +134,10 @@ class VolunteerShift(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     capacity: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    location_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    latitude: Mapped[float | None] = mapped_column(Numeric(9, 6), nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Numeric(9, 6), nullable=True)
+    allowed_radius_meters: Mapped[int | None] = mapped_column(Integer, default=500, nullable=True)
 
     attendances: Mapped[list["ShiftAttendance"]] = relationship(
         back_populates="shift", cascade="all, delete-orphan"
@@ -159,6 +163,13 @@ class ShiftAttendance(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     check_in_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     check_out_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     hours_logged: Mapped[float | None] = mapped_column(nullable=True)
+
+    check_in_lat: Mapped[float | None] = mapped_column(Numeric(9, 6), nullable=True)
+    check_in_lng: Mapped[float | None] = mapped_column(Numeric(9, 6), nullable=True)
+    check_in_distance_meters: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
+    check_out_lat: Mapped[float | None] = mapped_column(Numeric(9, 6), nullable=True)
+    check_out_lng: Mapped[float | None] = mapped_column(Numeric(9, 6), nullable=True)
+    check_out_distance_meters: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
 
     status: Mapped[AttendanceStatus] = mapped_column(
         String(32), default=AttendanceStatus.CLAIMED, nullable=False, index=True

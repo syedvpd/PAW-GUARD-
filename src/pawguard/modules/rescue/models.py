@@ -77,6 +77,28 @@ class RescueEscalationType(StrEnum):
     OTHER = "other"
 
 
+class RescueEscalationStatus(StrEnum):
+    """Lifecycle state of an escalation raised against a dispatch (PRR 3.3).
+
+    NONE        — no escalation has been raised (default).
+    RAISED      — agent raised escalation; Centre Admin notified but not yet
+                  actioning it.
+    IN_PROGRESS — Centre Admin is handling the escalation (reassigning
+                  resources, coordinating support, etc.).
+    RESOLVED    — Centre Admin has resolved the escalation.  Resolved
+                  escalations are excluded from the active escalation count
+                  on the dashboard.
+
+    Escalation status is independent of the parent RescueRequest.status —
+    resolving an escalation does NOT advance the rescue lifecycle.
+    """
+
+    NONE = "none"
+    RAISED = "raised"
+    IN_PROGRESS = "in_progress"
+    RESOLVED = "resolved"
+
+
 class RescueFailureReason(StrEnum):
     """Standardized outcome codes for failed rescues (PRR 3.3).
 
@@ -103,6 +125,13 @@ class RescueRequest(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Ba
     reporter_alternate_phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
     reporter_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_anonymous: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Link to authenticated user account when reporter has a PawGuard account
+    reporter_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     location_address: Mapped[str] = mapped_column(Text, nullable=False)
     location_landmark: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -157,6 +186,11 @@ class RescueRequest(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Ba
         primaryjoin="RescueRequest.id == foreign(DogProfile.rescue_case_id)",
         uselist=False,
     )
+    reporter_user: Mapped[Any] = relationship(
+        "User",
+        foreign_keys=[reporter_user_id],
+        lazy="selectin",
+    )
 
 
 class RescueDispatch(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
@@ -204,6 +238,16 @@ class RescueDispatch(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
         String(32), nullable=True, index=True
     )  # RescueEscalationType request category
     escalation_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Escalation lifecycle (PRR 3.3): Centre Admin updates this as they
+    # handle the escalation.  Defaults to NONE; auto-transitions to RAISED
+    # when escalation_type is first set by the service layer.
+    escalation_status: Mapped[RescueEscalationStatus] = mapped_column(
+        String(32),
+        default=RescueEscalationStatus.NONE,
+        server_default="none",
+        nullable=False,
+        index=True,
+    )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     rescue_request: Mapped["RescueRequest"] = relationship(back_populates="dispatch")

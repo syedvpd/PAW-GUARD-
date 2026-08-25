@@ -37,6 +37,7 @@ from pawguard.modules.fleet.service import FleetService
 from pawguard.modules.rescue.models import (
     RescueDispatch,
     RescueDispatchAgent,
+    RescueEscalationStatus,
     RescueEscalationType,
     RescueFailureReason,
     RescuePhysicalCondition,
@@ -48,6 +49,7 @@ from pawguard.modules.rescue.models import (
 from pawguard.modules.rescue.repository import RescueRepository
 from pawguard.modules.rescue.schemas import (
     PublicRescueStatusResponse,
+    RescueDispatchCountsResponse,
     RescueDispatchResponse,
     RescueDispatchUpdate,
     RescueEventResponse,
@@ -58,6 +60,38 @@ from pawguard.redis.client import RedisClient
 from pawguard.services.audit_service import AuditService
 
 logger = getLogger(__name__)
+
+
+async def _send_governed_notification(
+    session,
+    *,
+    trigger_code: str,
+    module_name: str,
+    title: str,
+    body: str,
+    target_user_ids: list[uuid.UUID] | None = None,
+    action_url: str | None = None,
+    requested_by: uuid.UUID | None = None,
+) -> None:
+    """Send a push notification through the governance engine."""
+    try:
+        from pawguard.modules.notifications.governance_service import (
+            dispatch_governed_notification,
+        )
+
+        await dispatch_governed_notification(
+            session,
+            trigger_code=trigger_code,
+            module_name=module_name,
+            title=title,
+            body=body,
+            target_user_ids=target_user_ids,
+            action_url=action_url,
+            requested_by=requested_by,
+        )
+    except Exception as exc:
+        logger.warning("Failed to send governed rescue push notification: %s", exc)
+
 
 # Collisions on the 4-digit ticket suffix are rare but possible under high
 # intake volume; retry a bounded number of times before giving up cleanly.
@@ -190,6 +224,29 @@ class RescueService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> RescueRequest:
+        # Binds authenticated actor_id directly as reporter_user_id; falls back to email/phone lookup
+        reporter_user_id: uuid.UUID | None = actor_id if not is_anonymous else None
+        if reporter_user_id is None and not is_anonymous and (reporter_email or reporter_phone):
+            try:
+                from sqlalchemy import or_
+
+                user = await self._repo._session.scalar(
+                    select(User.id).where(
+                        User.is_active.is_(True),
+                        User.deleted_at.is_(None),
+                        or_(
+                            func.lower(User.email) == reporter_email.strip().lower()
+                            if reporter_email
+                            else False,
+                            User.phone == reporter_phone,
+                        ),
+                    )
+                )
+                if user:
+                    reporter_user_id = user
+            except Exception:
+                pass  # Non-blocking: if lookup fails, continue without linking
+
         # Allocate a unique ticket number (RES-YYYYMMDD-XXXX). The 4-digit
         # suffix yields 10k combinations per day, so under heavy intake volume
         # collisions are possible; retry with a fresh suffix rather than
@@ -207,6 +264,7 @@ class RescueService:
                 reporter_alternate_phone=reporter_alternate_phone,
                 reporter_email=reporter_email,
                 is_anonymous=is_anonymous,
+                reporter_user_id=reporter_user_id,
                 location_address=location_address,
                 location_landmark=location_landmark,
                 latitude=latitude,
@@ -251,25 +309,34 @@ class RescueService:
                     "rescue_id": str(res.id),
                     "ticket_number": ticket_number,
                     "is_anonymous": is_anonymous,
+                    "reporter_user_id": str(reporter_user_id) if reporter_user_id else None,
                     "media_count": len(media_evidence) if media_evidence else 0,
                 },
             )
 
         await self._publish_dispatch_event()
-
-        # Push notification to rescue coordinators about new incident
+        # Governed push notification to rescue coordinators & reporter about new incident
         try:
             from pawguard.modules.auth.repository import UserRepository
 
             user_repo = UserRepository(self._repo._session)
             coordinator_ids = await user_repo.get_user_ids_by_roles(["rescue_coordinator"])
-            if coordinator_ids:
+            target_ids = list(coordinator_ids) if coordinator_ids else []
+            rep_id = res.reporter_user_id or reporter_user_id
+            if rep_id and rep_id not in target_ids:
+                target_ids.append(rep_id)
+
+            if target_ids:
                 severity_label = "URGENT" if is_urgent else severity.value.upper()
-                await self._send_push(
-                    coordinator_ids,
-                    f"New Rescue Report [{severity_label}]",
-                    f"A new animal emergency ({ticket_number}) has been reported at {location_address}.",
-                    f"/rescue/{res.id}",
+                await _send_governed_notification(
+                    self._repo._session,
+                    trigger_code="rescue_incident_reported",
+                    module_name="rescue",
+                    title=f"New Rescue Report [{severity_label}]",
+                    body=f"A new animal emergency ({ticket_number}) has been reported at {location_address}.",
+                    target_user_ids=target_ids,
+                    action_url=f"/rescue/{res.id}",
+                    requested_by=actor_id,
                 )
         except Exception as exc:
             logger.warning("Failed to send rescue report push: %s", exc)
@@ -472,14 +539,22 @@ class RescueService:
 
         await self._publish_dispatch_event()
 
-        # Push notification to assigned agents about new dispatch
-        if agent_ids:
+        # Push notification to assigned agents & case reporter about new dispatch
+        target_ids = list(agent_ids) if agent_ids else []
+        if request.reporter_user_id and request.reporter_user_id not in target_ids:
+            target_ids.append(request.reporter_user_id)
+
+        if target_ids:
             try:
-                await self._send_push(
-                    agent_ids,
-                    "New Rescue Dispatch Assignment",
-                    f"You have been assigned to rescue case {request.ticket_number}. Please mobilize immediately.",
-                    f"/rescue/{request_id}",
+                await _send_governed_notification(
+                    self._repo._session,
+                    trigger_code="rescue_dispatched",
+                    module_name="rescue",
+                    title="Rescue Team Dispatched",
+                    body=f"A rescue officer has been dispatched for case {request.ticket_number}.",
+                    target_user_ids=target_ids,
+                    action_url=f"/rescue/{request_id}",
+                    requested_by=actor_id,
                 )
             except Exception as exc:
                 logger.warning("Failed to send dispatch push: %s", exc)
@@ -514,6 +589,21 @@ class RescueService:
             dispatch.escalation_notes = payload.escalation_notes
         if payload.escalation_type is not None:
             dispatch.escalation_type = parse_enum(RescueEscalationType, payload.escalation_type)
+            # Auto-transition to RAISED when escalation_type is first set
+            # via an update (mirrors the behaviour of the escalate() method).
+            if dispatch.escalation_status == RescueEscalationStatus.NONE:
+                dispatch.escalation_status = RescueEscalationStatus.RAISED
+        if payload.escalation_status is not None:
+            # Validate lifecycle: cannot mark as RAISED/IN_PROGRESS/RESOLVED
+            # when no escalation_type is set on the dispatch.
+            if (
+                payload.escalation_status != RescueEscalationStatus.NONE
+                and dispatch.escalation_type is None
+            ):
+                raise ValidationFailedError(
+                    "Cannot set escalation_status when no escalation_type is set."
+                )
+            dispatch.escalation_status = payload.escalation_status
         if payload.failure_reason is not None:
             dispatch.failure_reason = parse_enum(RescueFailureReason, payload.failure_reason)
         if payload.located_at is not None:
@@ -563,6 +653,8 @@ class RescueService:
 
         dispatch.escalation_type = escalation_type
         dispatch.escalation_notes = escalation_notes
+        # Auto-transition escalation lifecycle to RAISED on first escalation.
+        dispatch.escalation_status = RescueEscalationStatus.RAISED
         await self._repo._session.flush()
 
         if self._audit and actor_id:
@@ -582,7 +674,7 @@ class RescueService:
         if res is None:
             raise NotFoundError("Rescue request not found after escalation.")
 
-        # Push notification to admins about escalation
+        # Governed push notification to admins about escalation
         try:
             from pawguard.modules.auth.repository import UserRepository
 
@@ -591,11 +683,15 @@ class RescueService:
                 ["rescue_centre_admin", "super_admin"]
             )
             if admin_ids:
-                await self._send_push(
-                    admin_ids,
-                    f"Rescue Escalation: {escalation_type.value}",
-                    f"Rescue case {request.ticket_number} has been escalated. Notes: {escalation_notes or 'None'}",
-                    f"/rescue/{request_id}",
+                await _send_governed_notification(
+                    self._repo._session,
+                    trigger_code="rescue_emergency",
+                    module_name="rescue",
+                    title=f"Rescue Escalation: {escalation_type.value}",
+                    body=f"Rescue case {request.ticket_number} has been escalated. Notes: {escalation_notes or 'None'}",
+                    target_user_ids=admin_ids,
+                    action_url=f"/rescue/{request_id}",
+                    requested_by=actor_id,
                 )
         except Exception as exc:
             logger.warning("Failed to send escalation push: %s", exc)
@@ -712,6 +808,27 @@ class RescueService:
             dispatch.located_at = now
             request.status = RescueStatus.LOCATED
 
+            # Governed push notification for LOCATED
+            try:
+                agent_ids = [a.agent_id for a in dispatch.agents]
+                if dispatch.assigned_driver_id and dispatch.assigned_driver_id not in agent_ids:
+                    agent_ids.append(dispatch.assigned_driver_id)
+                if request.reporter_user_id and request.reporter_user_id not in agent_ids:
+                    agent_ids.append(request.reporter_user_id)
+                if agent_ids:
+                    await _send_governed_notification(
+                        self._repo._session,
+                        trigger_code="rescue_located",
+                        module_name="rescue",
+                        title="Rescue Location Reached",
+                        body=f"Rescue team has reached the location for case {request.ticket_number}.",
+                        target_user_ids=agent_ids,
+                        action_url=f"/rescue/{request_id}",
+                        requested_by=actor_id,
+                    )
+            except Exception as exc:
+                logger.warning("Failed to send rescue located push: %s", exc)
+
         elif status == RescueStatus.RESCUED:
             if request.status not in (RescueStatus.DISPATCHED, RescueStatus.LOCATED):
                 raise ValidationFailedError(
@@ -719,6 +836,27 @@ class RescueService:
                 )
             dispatch.rescued_at = now
             request.status = RescueStatus.RESCUED
+
+            # Governed push notification for RESCUED
+            try:
+                agent_ids = [a.agent_id for a in dispatch.agents]
+                if dispatch.assigned_driver_id and dispatch.assigned_driver_id not in agent_ids:
+                    agent_ids.append(dispatch.assigned_driver_id)
+                if request.reporter_user_id and request.reporter_user_id not in agent_ids:
+                    agent_ids.append(request.reporter_user_id)
+                if agent_ids:
+                    await _send_governed_notification(
+                        self._repo._session,
+                        trigger_code="rescue_rescued",
+                        module_name="rescue",
+                        title="Animal Secured",
+                        body=f"Animal from case {request.ticket_number} has been secured and is in transit.",
+                        target_user_ids=agent_ids,
+                        action_url=f"/rescue/{request_id}",
+                        requested_by=actor_id,
+                    )
+            except Exception as exc:
+                logger.warning("Failed to send rescue rescued push: %s", exc)
 
         elif status == RescueStatus.ADMITTED:
             if request.status != RescueStatus.RESCUED:
@@ -752,18 +890,24 @@ class RescueService:
                     request, now=now, actor_id=actor_id, ip_address=ip_address
                 )
 
-            # Push notification to veterinarians about new intake
+            # Governed push notification to veterinarians & reporter about new intake
             try:
                 from pawguard.modules.auth.repository import UserRepository
 
                 user_repo = UserRepository(self._repo._session)
-                vet_ids = await user_repo.get_user_ids_by_roles(["veterinarian"])
+                vet_ids = list(await user_repo.get_user_ids_by_roles(["veterinarian"]))
+                if request.reporter_user_id and request.reporter_user_id not in vet_ids:
+                    vet_ids.append(request.reporter_user_id)
                 if vet_ids:
-                    await self._send_push(
-                        vet_ids,
-                        "New Animal Admitted",
-                        f"Animal from case {request.ticket_number} has been admitted and requires intake examination.",
-                        f"/rescue/{request_id}",
+                    await _send_governed_notification(
+                        self._repo._session,
+                        trigger_code="rescue_admitted",
+                        module_name="rescue",
+                        title="Animal Admitted to Shelter",
+                        body=f"Animal from case {request.ticket_number} has been admitted to the shelter.",
+                        target_user_ids=vet_ids,
+                        action_url=f"/rescue/{request_id}",
+                        requested_by=actor_id,
                     )
             except Exception as exc:
                 logger.warning("Failed to send admission push: %s", exc)
@@ -782,6 +926,27 @@ class RescueService:
                 actor_id=agent_id,
                 ip_address=ip_address,
             )
+
+            # Governed push notification for REJECTED (failed rescue)
+            try:
+                agent_ids = [a.agent_id for a in dispatch.agents]
+                if dispatch.assigned_driver_id and dispatch.assigned_driver_id not in agent_ids:
+                    agent_ids.append(dispatch.assigned_driver_id)
+                if request.reporter_user_id and request.reporter_user_id not in agent_ids:
+                    agent_ids.append(request.reporter_user_id)
+                if agent_ids:
+                    await _send_governed_notification(
+                        self._repo._session,
+                        trigger_code="rescue_rejected",
+                        module_name="rescue",
+                        title="Rescue Operation Failed",
+                        body=f"Rescue case {request.ticket_number} has been marked as failed. Reason: {failure_reason or 'Unknown'}",
+                        target_user_ids=agent_ids,
+                        action_url=f"/rescue/{request_id}",
+                        requested_by=actor_id,
+                    )
+            except Exception as exc:
+                logger.warning("Failed to send rescue rejected push: %s", exc)
 
         else:
             raise ConflictError(f"Unsupported status update: {status}")
@@ -955,13 +1120,23 @@ class RescueService:
         return await self._repo.list_requests(status)
 
     async def list_dispatches_paginated(
-        self, page: PageParams, sort: SortParams
+        self,
+        page: PageParams,
+        sort: SortParams,
+        escalated_only: bool | None = None,
     ) -> PaginatedResponse[RescueDispatchResponse]:
-        dispatches, total = await self._repo.list_dispatches_paginated(page=page, sort=sort)
+        dispatches, total = await self._repo.list_dispatches_paginated(
+            page=page, sort=sort, escalated_only=escalated_only
+        )
         return PaginatedResponse(
             data=[RescueDispatchResponse.model_validate(d) for d in dispatches],
             meta=build_pagination_meta(total=total, params=page),
         )
+
+    async def get_dispatch_counts(self) -> RescueDispatchCountsResponse:
+        """Return centre-wide aggregate counts for the Rescue Admin dashboard."""
+        counts = await self._repo.get_dispatch_counts()
+        return RescueDispatchCountsResponse(**counts)
 
     async def list_requests_paginated(
         self,
@@ -1131,6 +1306,9 @@ class RescueService:
         longitude: float,
     ) -> None:
         """Update an agent's current coordinates in Redis with a heartbeat TTL (PRR 3.2)."""
+        if self._redis is None:
+            return
+
         key = "rescue:agent_locations"
         active_key = f"rescue:agent_active:{agent_id}"
 
@@ -1157,21 +1335,23 @@ class RescueService:
         key = "rescue:agent_locations"
         nearby_agents = []
 
-        try:
-            # Query Redis for members within radius
-            # redis-py geosearch returns [[member, distance, (lng, lat)], ...]
-            raw_results = await self._redis.geosearch(
-                key,
-                longitude=longitude,
-                latitude=latitude,
-                radius=radius_km,
-                unit="km",
-                withdist=True,
-                withcoord=True,
-            )
-        except Exception as exc:
-            logger.warning("Redis geosearch failed, using DB fallback: %s", exc)
-            raw_results = []
+        raw_results = []
+        if self._redis is not None:
+            try:
+                # Query Redis for members within radius
+                # redis-py geosearch returns [[member, distance, (lng, lat)], ...]
+                raw_results = await self._redis.geosearch(
+                    key,
+                    longitude=longitude,
+                    latitude=latitude,
+                    radius=radius_km,
+                    unit="km",
+                    withdist=True,
+                    withcoord=True,
+                )
+            except Exception as exc:
+                logger.warning("Redis geosearch failed, using DB fallback: %s", exc)
+                raw_results = []
 
         # Parse geosearch results: [[agent_id, distance_km, (lng, lat)], ...]
         agent_geo_data = {}
@@ -1187,7 +1367,11 @@ class RescueService:
                 continue
 
             # Check heartbeat liveness
-            active = await self._redis.get(f"rescue:agent_active:{member_id_str}")
+            active = (
+                await self._redis.get(f"rescue:agent_active:{member_id_str}")
+                if self._redis
+                else None
+            )
             if active:
                 agent_geo_data[member_uuid] = {
                     "distance_km": float(dist),
@@ -1228,7 +1412,7 @@ class RescueService:
                     }
                 )
             # Sort by distance
-            nearby_agents.sort(key=lambda x: x["distance_km"] or 0.0)
+            nearby_agents.sort(key=lambda x: float(x.get("distance_km") or 0.0))
 
         # Fallback: if no active agents found in Redis, list all active rescue agents from DB
         if not nearby_agents:

@@ -47,7 +47,7 @@ if ini_path:
     ini_url = parser.get(config.config_ini_section, "sqlalchemy.url", fallback="")
 current_url = config.get_main_option("sqlalchemy.url")
 if current_url == ini_url or not current_url:
-    config.set_main_option("sqlalchemy.url", settings.database_url)
+    config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
 
 target_metadata = Base.metadata
 

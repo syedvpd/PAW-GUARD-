@@ -58,12 +58,36 @@ class VolunteerProfileResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class VolunteerCheckInRequest(BaseModel):
+    latitude: float | None = Field(
+        None, ge=-90.0, le=90.0, description="Volunteer's current GPS latitude"
+    )
+    longitude: float | None = Field(
+        None, ge=-180.0, le=180.0, description="Volunteer's current GPS longitude"
+    )
+
+
+class VolunteerCheckOutRequest(BaseModel):
+    latitude: float | None = Field(
+        None, ge=-90.0, le=90.0, description="Volunteer's current GPS latitude"
+    )
+    longitude: float | None = Field(
+        None, ge=-180.0, le=180.0, description="Volunteer's current GPS longitude"
+    )
+
+
 class VolunteerShiftCreate(BaseModel):
     shelter_facility_id: uuid.UUID | None = None
     role_name: str = Field(..., min_length=1, max_length=64, examples=["Dog Walking"])
     start_at: datetime = Field(..., examples=["2026-08-01T09:00:00Z"])
     end_at: datetime = Field(..., examples=["2026-08-01T12:00:00Z"])
     capacity: int = Field(5, ge=1, examples=[5])
+    location_name: str | None = Field(None, max_length=255, examples=["Main Shelter Yard"])
+    latitude: float | None = Field(None, ge=-90.0, le=90.0, examples=[17.4482])
+    longitude: float | None = Field(None, ge=-180.0, le=180.0, examples=[78.3741])
+    allowed_radius_meters: int | None = Field(
+        500, ge=1, le=10000, description="Geofence radius in meters"
+    )
 
 
 class VolunteerShiftResponse(BaseModel):
@@ -73,6 +97,10 @@ class VolunteerShiftResponse(BaseModel):
     start_at: datetime
     end_at: datetime
     capacity: int
+    location_name: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    allowed_radius_meters: int | None = 500
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -92,6 +120,12 @@ class ShiftAttendanceResponse(BaseModel):
     cancelled_reason: str | None
     cancelled_by: uuid.UUID | None
     cancelled_at: datetime | None
+    check_in_lat: float | None = None
+    check_in_lng: float | None = None
+    check_in_distance_meters: float | None = None
+    check_out_lat: float | None = None
+    check_out_lng: float | None = None
+    check_out_distance_meters: float | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

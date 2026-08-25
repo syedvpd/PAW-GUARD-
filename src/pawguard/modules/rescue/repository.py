@@ -13,6 +13,7 @@ from pawguard.core.search import SortParams, apply_sorting, build_search_filter
 from pawguard.modules.rescue.models import (
     RescueDispatch,
     RescueDispatchAgent,
+    RescueEscalationStatus,
     RescueReport,
     RescueRequest,
     RescueSeverity,
@@ -204,12 +205,20 @@ class RescueRepository:
         self,
         page: PageParams,
         sort: SortParams,
+        escalated_only: bool | None = None,
     ) -> tuple[Sequence[RescueDispatch], int]:
         stmt = select(RescueDispatch).options(
             selectinload(RescueDispatch.agents).selectinload(RescueDispatchAgent.agent),
             selectinload(RescueDispatch.driver),
             selectinload(RescueDispatch.rescue_request),
         )
+
+        if escalated_only is True:
+            # Active escalations: type is set AND not yet resolved.
+            stmt = stmt.where(
+                RescueDispatch.escalation_type.is_not(None),
+                RescueDispatch.escalation_status != RescueEscalationStatus.RESOLVED,
+            )
 
         valid_fields = {
             "dispatched_at",
@@ -218,6 +227,7 @@ class RescueRepository:
             "admitted_at",
             "failed_at",
             "escalation_type",
+            "escalation_status",
             "created_at",
             "updated_at",
         }
@@ -230,6 +240,53 @@ class RescueRepository:
         results = (await self._session.execute(stmt)).scalars().all()
 
         return results, total
+
+    async def get_dispatch_counts(self) -> dict[str, int]:
+        """Return centre-wide aggregate counts for the Rescue Admin dashboard.
+
+        Single SQL query using conditional aggregation avoids N+1 queries.
+        Escalated count excludes RESOLVED escalations so the dashboard badge
+        reflects only *active* escalations.
+        """
+        from sqlalchemy import case, literal_column
+
+        total_col = func.count(RescueDispatch.id).label("total_dispatches")
+        active_col = func.sum(
+            case(
+                (
+                    RescueRequest.status.not_in([RescueStatus.ADMITTED, RescueStatus.REJECTED]),
+                    literal_column("1"),
+                ),
+                else_=literal_column("0"),
+            )
+        ).label("active_dispatches")
+        escalated_col = func.sum(
+            case(
+                (
+                    (RescueDispatch.escalation_type.is_not(None))
+                    & (RescueDispatch.escalation_status != RescueEscalationStatus.RESOLVED),
+                    literal_column("1"),
+                ),
+                else_=literal_column("0"),
+            )
+        ).label("escalated_dispatches")
+        failed_col = func.sum(
+            case(
+                (RescueDispatch.failed_at.is_not(None), literal_column("1")),
+                else_=literal_column("0"),
+            )
+        ).label("failed_dispatches")
+
+        stmt = select(total_col, active_col, escalated_col, failed_col).join(
+            RescueRequest, RescueDispatch.rescue_request_id == RescueRequest.id
+        )
+        row = (await self._session.execute(stmt)).one()
+        return {
+            "total_dispatches": int(row.total_dispatches or 0),
+            "active_dispatches": int(row.active_dispatches or 0),
+            "escalated_dispatches": int(row.escalated_dispatches or 0),
+            "failed_dispatches": int(row.failed_dispatches or 0),
+        }
 
     async def delete_dispatch(self, dispatch: RescueDispatch) -> None:
         await self._session.delete(dispatch)

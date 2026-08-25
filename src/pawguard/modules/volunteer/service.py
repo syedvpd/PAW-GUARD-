@@ -1,9 +1,11 @@
 """VolunteerService: owns volunteer shifts, attendance, and onboarding logic (RULE-003)."""
 
 import asyncio
+import math
 import uuid
 from datetime import UTC, datetime
 from logging import getLogger
+from typing import Any
 
 from pawguard.core.config import get_settings
 from pawguard.core.exceptions import (
@@ -44,6 +46,44 @@ from pawguard.services.audit_service import AuditService
 from pawguard.services.storage_service import StorageService
 
 logger = getLogger(__name__)
+
+
+def calculate_haversine_distance_meters(
+    lat1: float, lng1: float, lat2: float, lng2: float
+) -> float:
+    """Calculate the great-circle distance between two GPS points in meters."""
+    r_meters = 6371000.0
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lng2 - lng1)
+
+    a = (
+        math.sin(delta_phi / 2.0) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2.0) ** 2
+    )
+    c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
+    return r_meters * c
+
+
+def _to_float(val: Any) -> float | None:
+    if val is None:
+        return None
+    if isinstance(val, (int, float)):
+        return float(val)
+    if isinstance(val, str):
+        try:
+            return float(val)
+        except ValueError:
+            return None
+    try:
+        from decimal import Decimal
+
+        if isinstance(val, Decimal):
+            return float(val)
+    except Exception:
+        pass
+    return None
 
 
 class VolunteerService:
@@ -552,6 +592,10 @@ class VolunteerService:
             start_at=payload.start_at,
             end_at=payload.end_at,
             capacity=payload.capacity,
+            location_name=payload.location_name,
+            latitude=payload.latitude,
+            longitude=payload.longitude,
+            allowed_radius_meters=payload.allowed_radius_meters,
         )
         return await self._repo.create_shift(shift)
 
@@ -617,6 +661,42 @@ class VolunteerService:
         meta = build_pagination_meta(total=total, params=page_params or PageParams())
         return list(records), meta
 
+    async def _resolve_shift_location(
+        self, shift: VolunteerShift
+    ) -> tuple[float | None, float | None, int]:
+        """Resolve the target GPS coordinates and allowed geofence radius for a shift.
+
+        Returns (latitude, longitude, allowed_radius_meters). If no location is
+        configured on either the shift or its linked shelter facility, returns
+        (None, None, allowed_radius).
+        """
+        raw_radius = _to_float(getattr(shift, "allowed_radius_meters", None))
+        radius = int(raw_radius) if raw_radius is not None else 500
+
+        shift_lat = _to_float(getattr(shift, "latitude", None))
+        shift_lng = _to_float(getattr(shift, "longitude", None))
+        if shift_lat is not None and shift_lng is not None:
+            return shift_lat, shift_lng, radius
+
+        facility_id = getattr(shift, "shelter_facility_id", None)
+        if isinstance(facility_id, uuid.UUID):
+            from sqlalchemy import select
+
+            from pawguard.modules.shelter.models import ShelterFacility
+
+            stmt = select(ShelterFacility).where(
+                ShelterFacility.id == facility_id,
+                ShelterFacility.deleted_at.is_(None),
+            )
+            facility = (await self._repo._session.execute(stmt)).scalar_one_or_none()
+            if facility:
+                fac_lat = _to_float(getattr(facility, "latitude", None))
+                fac_lng = _to_float(getattr(facility, "longitude", None))
+                if fac_lat is not None and fac_lng is not None:
+                    return fac_lat, fac_lng, radius
+
+        return None, None, radius
+
     async def _authorize_attendance_action(
         self, attendance: ShiftAttendance, requesting_user: User
     ) -> bool:
@@ -640,6 +720,8 @@ class VolunteerService:
         attendance_id: uuid.UUID,
         requesting_user: User,
         *,
+        latitude: float | None = None,
+        longitude: float | None = None,
         ip_address: str | None = None,
     ) -> ShiftAttendance:
         attendance = await self._repo.get_attendance_by_id(attendance_id)
@@ -659,6 +741,29 @@ class VolunteerService:
                 raise ConflictError("Already checked in for this shift.")
             raise ConflictError(f"Cannot check in from status '{attendance.status}'.")
 
+        # Geofence location validation
+        shift = await self._repo.get_shift_by_id(attendance.shift_id)
+        if shift is not None:
+            target_lat, target_lng, allowed_radius = await self._resolve_shift_location(shift)
+            if target_lat is not None and target_lng is not None:
+                if latitude is None or longitude is None:
+                    raise ValidationFailedError(
+                        "Check-in rejected: GPS coordinates (latitude and longitude) are required for check-in at this shift location."
+                    )
+                distance_m = calculate_haversine_distance_meters(
+                    latitude, longitude, target_lat, target_lng
+                )
+                if distance_m > allowed_radius:
+                    raise ValidationFailedError(
+                        f"Check-in rejected: You are {round(distance_m)} meters away from the shift location, which exceeds the allowed geofence radius of {allowed_radius} meters."
+                    )
+                attendance.check_in_lat = latitude
+                attendance.check_in_lng = longitude
+                attendance.check_in_distance_meters = round(distance_m, 2)
+            elif latitude is not None and longitude is not None:
+                attendance.check_in_lat = latitude
+                attendance.check_in_lng = longitude
+
         attendance.check_in_at = datetime.now(UTC)
         attendance.status = AttendanceStatus.CHECKED_IN
 
@@ -672,6 +777,8 @@ class VolunteerService:
         attendance_id: uuid.UUID,
         requesting_user: User,
         *,
+        latitude: float | None = None,
+        longitude: float | None = None,
         ip_address: str | None = None,
     ) -> ShiftAttendance:
         attendance = await self._repo.get_attendance_by_id(attendance_id)
@@ -685,6 +792,29 @@ class VolunteerService:
 
         if attendance.status != AttendanceStatus.CHECKED_IN:
             raise ConflictError("Already checked out for this shift.")
+
+        # Geofence location validation
+        shift = await self._repo.get_shift_by_id(attendance.shift_id)
+        if shift is not None:
+            target_lat, target_lng, allowed_radius = await self._resolve_shift_location(shift)
+            if target_lat is not None and target_lng is not None:
+                if latitude is None or longitude is None:
+                    raise ValidationFailedError(
+                        "Check-out rejected: GPS coordinates (latitude and longitude) are required for check-out at this shift location."
+                    )
+                distance_m = calculate_haversine_distance_meters(
+                    latitude, longitude, target_lat, target_lng
+                )
+                if distance_m > allowed_radius:
+                    raise ValidationFailedError(
+                        f"Check-out rejected: You are {round(distance_m)} meters away from the shift location, which exceeds the allowed geofence radius of {allowed_radius} meters."
+                    )
+                attendance.check_out_lat = latitude
+                attendance.check_out_lng = longitude
+                attendance.check_out_distance_meters = round(distance_m, 2)
+            elif latitude is not None and longitude is not None:
+                attendance.check_out_lat = latitude
+                attendance.check_out_lng = longitude
 
         now = datetime.now(UTC)
         attendance.check_out_at = now

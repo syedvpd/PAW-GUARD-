@@ -38,6 +38,7 @@ from pawguard.modules.rescue.schemas import (
     NearbyAgentResponse,
     PublicRescueStatusResponse,
     RescueAssignCoordinator,
+    RescueDispatchCountsResponse,
     RescueDispatchCreate,
     RescueDispatchResponse,
     RescueDispatchUpdate,
@@ -613,6 +614,47 @@ async def get_public_status(
 
 
 @router.get(
+    "/dispatches/counts",
+    response_model=ApiResponse[RescueDispatchCountsResponse],
+    dependencies=[Depends(require_permission("rescue:read"))],
+    summary="Rescue dispatch aggregate counts",
+)
+@router.get(
+    "/dispatch/counts",
+    response_model=ApiResponse[RescueDispatchCountsResponse],
+    dependencies=[Depends(require_permission("rescue:read"))],
+)
+@router.get(
+    "/dispatches/summary",
+    response_model=ApiResponse[RescueDispatchCountsResponse],
+    dependencies=[Depends(require_permission("rescue:read"))],
+)
+@router.get(
+    "/dispatch/summary",
+    response_model=ApiResponse[RescueDispatchCountsResponse],
+    dependencies=[Depends(require_permission("rescue:read"))],
+)
+@router.get(
+    "/dispatches/stats",
+    response_model=ApiResponse[RescueDispatchCountsResponse],
+    dependencies=[Depends(require_permission("rescue:read"))],
+)
+@router.get(
+    "/dispatch/stats",
+    response_model=ApiResponse[RescueDispatchCountsResponse],
+    dependencies=[Depends(require_permission("rescue:read"))],
+)
+async def get_dispatch_counts(
+    service: RescueService = Depends(get_rescue_service),
+) -> ApiResponse[RescueDispatchCountsResponse]:
+    counts = await service.get_dispatch_counts()
+    return ApiResponse(
+        data=counts,
+        message="Rescue dispatch counts retrieved.",
+    )
+
+
+@router.get(
     "/dispatches",
     response_model=PaginatedResponse[RescueDispatchResponse],
     dependencies=[Depends(require_permission("rescue:read"))],
@@ -620,9 +662,17 @@ async def get_public_status(
 async def list_dispatches(
     page: PageParams = Depends(page_params),
     sort: SortParams = Depends(sort_params),
+    escalated: bool | None = Query(
+        None,
+        description=(
+            "Filter to active escalations only (escalation_type IS NOT NULL "
+            "AND escalation_status != resolved). "
+            "Returns authoritative meta.total for the dashboard badge."
+        ),
+    ),
     service: RescueService = Depends(get_rescue_service),
 ) -> PaginatedResponse[RescueDispatchResponse]:
-    result = await service.list_dispatches_paginated(page=page, sort=sort)
+    result = await service.list_dispatches_paginated(page=page, sort=sort, escalated_only=escalated)
     return result
 
 

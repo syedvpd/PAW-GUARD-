@@ -27,7 +27,10 @@ DEFAULT_TRIGGERS = [
     # Rescue
     ("rescue_incident_reported", "rescue", "Rescue Incident Reported", True, True, False, "HIGH"),
     ("rescue_dispatched", "rescue", "Rescue Officer Dispatched", True, True, False, "HIGH"),
+    ("rescue_located", "rescue", "Rescue Location Reached", True, True, False, "HIGH"),
+    ("rescue_rescued", "rescue", "Animal Secured", True, True, False, "HIGH"),
     ("rescue_admitted", "rescue", "Animal Admitted to Shelter", True, True, False, "HIGH"),
+    ("rescue_rejected", "rescue", "Rescue Operation Failed", True, True, False, "HIGH"),
     ("rescue_emergency", "rescue", "Emergency Rescue Escalated", True, True, False, "HIGH"),
     # Lost & Found
     ("lost_found_broadcast", "lost_found", "Lost Dog Area Broadcast", True, True, False, "HIGH"),

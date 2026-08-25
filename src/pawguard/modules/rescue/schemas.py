@@ -7,6 +7,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from pawguard.modules.rescue.models import (
+    RescueEscalationStatus,
     RescueEscalationType,
     RescueFailureReason,
     RescuePhysicalCondition,
@@ -223,6 +224,9 @@ class RescueDispatchUpdate(BaseModel):
     failure_reason: RescueFailureReason | str | None = None
     escalation_type: RescueEscalationType | str | None = None
     escalation_notes: str | None = None
+    # Centre Admin updates the escalation lifecycle (PRR 3.3).
+    # Cannot be set to a non-NONE value unless escalation_type exists.
+    escalation_status: RescueEscalationStatus | None = None
     notes: str | None = None
     located_at: datetime | None = None
     rescued_at: datetime | None = None
@@ -283,6 +287,7 @@ class RescueDispatchResponse(BaseModel):
     failure_reason: RescueFailureReason | None = None
     escalation_type: RescueEscalationType | None = None
     escalation_notes: str | None = None
+    escalation_status: RescueEscalationStatus = RescueEscalationStatus.NONE
     notes: str | None = None
     status: RescueStatus | None = None
     ticket_number: str | None = None
@@ -313,6 +318,8 @@ class RescueDispatchResponse(BaseModel):
             "failure_reason": getattr(data, "failure_reason", None),
             "escalation_type": getattr(data, "escalation_type", None),
             "escalation_notes": getattr(data, "escalation_notes", None),
+            "escalation_status": getattr(data, "escalation_status", None)
+            or RescueEscalationStatus.NONE,
             "notes": getattr(data, "notes", None),
             "status": getattr(data, "status", None),
             "ticket_number": getattr(data, "ticket_number", None),
@@ -544,3 +551,16 @@ class RescueEventResponse(BaseModel):
     actor_id: uuid.UUID | None = None
     created_at: str
     metadata: dict[str, Any] | None = None
+
+
+class RescueDispatchCountsResponse(BaseModel):
+    """Centre-wide aggregate counts for the Rescue Centre Admin dashboard.
+
+    escalated_dispatches counts only *active* (unresolved) escalations so
+    the dashboard badge matches the list returned by ?escalated=true.
+    """
+
+    total_dispatches: int
+    active_dispatches: int
+    escalated_dispatches: int
+    failed_dispatches: int
