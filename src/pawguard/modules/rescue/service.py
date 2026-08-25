@@ -1316,9 +1316,11 @@ class RescueService:
         await self._redis.geoadd(key, (longitude, latitude, str(agent_id)))
         # 2. Set liveness/active status heartbeat (5 minutes TTL)
         await self._redis.set(active_key, "1", ex=300)
-        # 3. Store timestamp for location retrieval endpoints
+        # 3. Store timestamp for location retrieval endpoints (5 minutes TTL)
         with contextlib.suppress(Exception):
-            await self._redis.set(f"rescue:agent_ts:{agent_id}", datetime.now(UTC).isoformat())
+            await self._redis.set(
+                f"rescue:agent_ts:{agent_id}", datetime.now(UTC).isoformat(), ex=300
+            )
 
     async def get_nearest_agents(
         self,
@@ -1576,7 +1578,7 @@ class RescueService:
         if self._redis is None:
             return
         with contextlib.suppress(Exception):
-            await self._redis.set(f"rescue:tracking:{request_id}", json.dumps(state))
+            await self._redis.set(f"rescue:tracking:{request_id}", json.dumps(state), ex=3600)
 
     async def start_tracking(
         self,
