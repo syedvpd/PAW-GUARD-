@@ -3,15 +3,21 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from pawguard.modules.grievance.models import GrievanceStatus
 
 
 class GrievanceCreate(BaseModel):
     reporter_name: str = Field(..., min_length=1, max_length=255, examples=["Priya Nair"])
-    reporter_phone: str = Field(..., min_length=5, max_length=32, examples=["+1-555-0177"])
-    reporter_email: str | None = Field(None, max_length=255, examples=["priya.nair@example.com"])
+    reporter_phone: str = Field(
+        ...,
+        min_length=5,
+        max_length=32,
+        pattern=r"^\+?[0-9\s\-()]+$",
+        examples=["+1-555-0177"],
+    )
+    reporter_email: EmailStr | None = Field(None, examples=["priya.nair@example.com"])
     complaint_type: str = Field(..., min_length=1, max_length=128, examples=["Rescue Delay"])
     details: str = Field(
         ...,

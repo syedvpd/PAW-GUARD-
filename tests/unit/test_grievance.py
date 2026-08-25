@@ -64,6 +64,18 @@ class TestGrievanceService:
         assert created_kwargs.sla_due_at is not None
 
     @pytest.mark.asyncio
+    async def test_submit_complaint_invalid_phone(self, service, mock_repo):
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            GrievanceCreate(
+                reporter_name="John",
+                reporter_phone="grievance",
+                complaint_type="service",
+                details="Bad experience",
+            )
+
+    @pytest.mark.asyncio
     async def test_update_ticket(self, service, mock_repo):
         ticket_id = uuid.uuid4()
         ticket = GrievanceTicket(
