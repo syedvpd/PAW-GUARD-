@@ -9,7 +9,7 @@ from pawguard.services.cache_service import CacheService
 
 # Admin overview metrics are read-heavy aggregates. A short TTL absorbs the
 # repeated polling typical of dashboard UIs without serving stale data for long.
-ADMIN_DASHBOARD_TTL = 30  # seconds
+ADMIN_DASHBOARD_TTL = 300  # seconds (5 minutes TTL saves 80%+ Upstash Redis quota)
 
 
 class DashboardService:
