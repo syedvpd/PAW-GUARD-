@@ -153,9 +153,23 @@ class DogProfileResponse(BaseModel):
     @model_validator(mode="after")
     def _sync_photo_fields(self) -> "DogProfileResponse":
         """Expose image_urls under photo_gallery_urls too so both field
-        names are available for different Flutter app consumers."""
-        if not self.photo_gallery_urls and self.image_urls:
-            self.photo_gallery_urls = self.image_urls
+        names are available for different Flutter app consumers, and
+        dynamically convert raw S3 keys to presigned download URLs."""
+        resolved = []
+        if self.image_urls:
+            from pawguard.services.storage_service import StorageService
+
+            s3 = StorageService()
+            for u in self.image_urls:
+                if u.startswith("http://") or u.startswith("https://"):
+                    resolved.append(u)
+                else:
+                    try:
+                        resolved.append(s3.generate_presigned_download_url(object_key=u))
+                    except Exception:
+                        resolved.append(u)
+        self.image_urls = resolved
+        self.photo_gallery_urls = resolved
         return self
 
     model_config = ConfigDict(from_attributes=True)
