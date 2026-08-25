@@ -33,6 +33,7 @@ from pawguard.modules.notifications.models import Notification
 from pawguard.modules.notifications.repository import NotificationRepository
 from pawguard.modules.notifications.schemas import NotificationCreate, NotificationSend
 from pawguard.modules.notifications.service import NotificationService
+from pawguard.modules.volunteer.repository import VolunteerRepository
 from pawguard.workers.jobs.retry import retry_defer
 
 logger = get_logger(__name__)
@@ -610,3 +611,61 @@ def _extract_adoption_id_from_action_url(url: str) -> uuid.UUID | None:
         return uuid.UUID(raw)
     except (ValueError, TypeError):
         return None
+
+
+async def send_volunteer_shift_reminders(ctx: dict[str, object]) -> int:
+    """Remind volunteers of shifts they've claimed and starting within 24h.
+
+    Mirrors `send_companion_pet_reminders`: a 24-hour lookahead window plus
+    a per-attendance `reminder_sent_at` flag makes re-running the job (a
+    retry, or the next scheduled tick before the shift's start time rolls
+    out of the window) safe - no duplicate reminder is ever sent.
+
+    Only CLAIMED attendance for an ACTIVE volunteer is eligible: a
+    cancelled or already-checked-in claim, or a claim for a volunteer who
+    has since gone inactive, is excluded by the repository query itself.
+    A notification failure for one attendance is logged and skipped rather
+    than aborting the rest of the batch or the whole job.
+    """
+    now = datetime.now(UTC)
+    window_end = now + timedelta(hours=24)
+    sent = 0
+
+    async with AsyncSessionLocal() as session:
+        repository = VolunteerRepository(session)
+        notification_svc = _notification_service(session, ctx)
+        due = await repository.list_claimed_attendance_due_for_reminder(now, window_end)
+
+        for attendance in due:
+            shift = attendance.shift
+            volunteer = attendance.volunteer
+            if shift is None or volunteer is None or volunteer.user is None:
+                continue
+            try:
+                await notification_svc.send_notification(
+                    payload=NotificationSend(
+                        user_id=volunteer.user_id,
+                        title="Upcoming Volunteer Shift Reminder",
+                        body=(
+                            f"Reminder: your '{shift.role_name}' shift starts at "
+                            f"{shift.start_at.isoformat()}."
+                        ),
+                        notification_type="volunteer_shift_reminder",
+                        action_url="/volunteers/my-shifts",
+                        send_email=True,
+                    ),
+                    user_email=volunteer.user.email,
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to send shift reminder for attendance %s",
+                    attendance.id,
+                    exc_info=True,
+                )
+                continue
+
+            attendance.reminder_sent_at = now
+            sent += 1
+            await session.commit()
+
+    return sent

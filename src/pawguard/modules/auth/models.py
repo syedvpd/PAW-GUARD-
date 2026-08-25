@@ -99,6 +99,7 @@ class AuthAuditEventType(StrEnum):
     VOLUNTEER_SHIFT_UPDATED = "volunteer_shift_updated"
     VOLUNTEER_DELETED = "volunteer_deleted"
     VOLUNTEER_CERTIFICATE_ISSUED = "volunteer_certificate_issued"
+    VOLUNTEER_ATTENDANCE_UPDATED = "volunteer_attendance_updated"
     DONATION_RECEIVED = "donation_received"
     DONATION_ORDER_CREATED = "donation_order_created"
     DONOR_REGISTERED = "donor_registered"

@@ -6,7 +6,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 from pawguard.modules.auth.schemas import UserProfile
-from pawguard.modules.volunteer.models import ApplicationStatus, VolunteerStatus
+from pawguard.modules.volunteer.models import ApplicationStatus, AttendanceStatus, VolunteerStatus
 
 
 class VolunteerProfileCreate(BaseModel):
@@ -85,8 +85,23 @@ class ShiftAttendanceResponse(BaseModel):
     check_in_at: datetime | None
     check_out_at: datetime | None
     hours_logged: float | None
+    status: AttendanceStatus
+    no_show_reason: str | None
+    no_show_marked_by: uuid.UUID | None
+    no_show_marked_at: datetime | None
+    cancelled_reason: str | None
+    cancelled_by: uuid.UUID | None
+    cancelled_at: datetime | None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ShiftAttendanceNoShow(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=1000, examples=["Did not arrive; no notice given."])
+
+
+class ShiftAttendanceCancel(BaseModel):
+    reason: str | None = Field(None, max_length=1000, examples=["Volunteer had a scheduling conflict."])
 
 
 class VolunteerServiceSummary(BaseModel):

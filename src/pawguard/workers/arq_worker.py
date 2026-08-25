@@ -27,6 +27,7 @@ from pawguard.workers.jobs.scheduled_jobs import (
     check_vaccination_renewals,
     post_adoption_followups,
     process_sponsorship_charges,
+    send_volunteer_shift_reminders,
 )
 
 logger = get_logger(__name__)
@@ -139,6 +140,7 @@ _post_adoption_followups = _track_failures(post_adoption_followups)
 _process_sponsorship_charges = _track_failures(process_sponsorship_charges)
 _send_companion_pet_reminders = _track_failures(send_companion_pet_reminders)
 _broadcast_lost_pet_alert = _track_failures(broadcast_lost_pet_alert)
+_send_volunteer_shift_reminders = _track_failures(send_volunteer_shift_reminders)
 
 
 class WorkerSettings:
@@ -155,6 +157,7 @@ class WorkerSettings:
         _process_sponsorship_charges,
         _send_companion_pet_reminders,
         _broadcast_lost_pet_alert,
+        _send_volunteer_shift_reminders,
     ]
     cron_jobs = [
         # Scheduled cron jobs: 2 tries is enough — a missed run just fires again
@@ -165,6 +168,7 @@ class WorkerSettings:
         cron(_post_adoption_followups, hour={10}, minute={0}, max_tries=2),
         cron(_process_sponsorship_charges, hour={8}, minute={0}, max_tries=2),
         cron(_send_companion_pet_reminders, hour={9}, minute={45}, max_tries=2),
+        cron(_send_volunteer_shift_reminders, hour={11}, minute={0}, max_tries=2),
     ]
     on_startup = startup
     on_shutdown = shutdown

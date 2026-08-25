@@ -16,12 +16,14 @@ from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.pdf_generation import generate_volunteer_certificate
 from pawguard.core.responses import PaginationMeta
 from pawguard.core.search import SortParams
-from pawguard.modules.auth.models import AuthAuditEventType
+from pawguard.modules.auth.models import AuthAuditEventType, User
+from pawguard.modules.auth.rbac import has_permission
 from pawguard.modules.auth.repository import RoleRepository, UserRoleRepository
 from pawguard.modules.notifications.service import NotificationService
 from pawguard.modules.storage.models import FileFolder, StoredFile
 from pawguard.modules.volunteer.models import (
     ApplicationStatus,
+    AttendanceStatus,
     ShiftAttendance,
     VolunteerApplication,
     VolunteerProfile,
@@ -327,12 +329,19 @@ class VolunteerService:
                 },
             )
 
+        # Approval only creates the profile at APPLIED - it does not grant
+        # shift-joining access. That happens at a separate activation step
+        # (a coordinator sets status=ACTIVE after background_check_completed
+        # is true, in update_profile below), so this wording must not claim
+        # shifts are available yet.
         await self._notify_volunteer(
             res,
             title="Volunteer application approved!",
             body=(
                 "Congratulations! Your volunteer application has been approved. "
-                "You can now access the volunteer portal and sign up for shifts."
+                "A coordinator will complete your background check next; "
+                "you'll be notified once your account is fully active and you "
+                "can sign up for shifts."
             ),
             notification_type="volunteer_approved",
             action_url="/volunteers/my-profile",
@@ -583,7 +592,11 @@ class VolunteerService:
             raise ConflictError("You have already joined this shift.")
 
         attendances = await self._repo.list_attendance_for_shift(shift_id)
-        if len(attendances) >= shift.capacity:
+        # A cancelled claim must free its capacity slot back up - otherwise
+        # cancelling would permanently waste it instead of letting another
+        # volunteer join.
+        active_attendances = [a for a in attendances if a.status != AttendanceStatus.CANCELLED]
+        if len(active_attendances) >= shift.capacity:
             raise ConflictError("This shift has reached its maximum volunteer capacity.")
 
         attendance = ShiftAttendance(
@@ -603,46 +616,184 @@ class VolunteerService:
         meta = build_pagination_meta(total=total, params=page_params or PageParams())
         return list(records), meta
 
+    async def _authorize_attendance_action(
+        self, attendance: ShiftAttendance, requesting_user: User
+    ) -> bool:
+        """Returns True if `requesting_user` is the volunteer this attendance
+        belongs to (self-service). Raises ForbiddenError if they're neither
+        the owning volunteer nor a coordinator/staff user with
+        `volunteer:update`. Unlike the old owner-only check, a staff caller
+        without their own volunteer profile is not 404'd here - they simply
+        fall through to the permission check.
+        """
+        own_profile = await self._repo.get_profile_by_user_id(requesting_user.id)
+        is_self = own_profile is not None and attendance.volunteer_id == own_profile.id
+        if not is_self and not has_permission(requesting_user, "volunteer:update"):
+            raise ForbiddenError("You do not have permission to manage this volunteer's attendance.")
+        return is_self
+
     async def check_in(
-        self, attendance_id: uuid.UUID, requesting_user_id: uuid.UUID
+        self,
+        attendance_id: uuid.UUID,
+        requesting_user: User,
+        *,
+        ip_address: str | None = None,
     ) -> ShiftAttendance:
         attendance = await self._repo.get_attendance_by_id(attendance_id)
         if attendance is None:
             raise NotFoundError("Attendance record not found.")
 
-        profile = await self.get_profile_by_user(requesting_user_id)
-        if attendance.volunteer_id != profile.id:
-            raise ForbiddenError("You can only check in for your own shifts.")
+        is_self = await self._authorize_attendance_action(attendance, requesting_user)
 
-        if attendance.check_in_at is not None:
-            raise ConflictError("Already checked in for this shift.")
+        target_profile = await self._repo.get_profile_by_id(attendance.volunteer_id)
+        if target_profile is None:
+            raise NotFoundError("Volunteer profile not found.")
+        if target_profile.status != VolunteerStatus.ACTIVE:
+            raise ForbiddenError("This volunteer is not active and cannot be checked in.")
+
+        if attendance.status != AttendanceStatus.CLAIMED:
+            if attendance.check_in_at is not None:
+                raise ConflictError("Already checked in for this shift.")
+            raise ConflictError(f"Cannot check in from status '{attendance.status}'.")
 
         attendance.check_in_at = datetime.now(UTC)
+        attendance.status = AttendanceStatus.CHECKED_IN
+
+        await self._record_coordinator_attendance_action(
+            attendance, requesting_user, is_self, "check_in", ip_address
+        )
         return attendance
 
     async def check_out(
-        self, attendance_id: uuid.UUID, requesting_user_id: uuid.UUID
+        self,
+        attendance_id: uuid.UUID,
+        requesting_user: User,
+        *,
+        ip_address: str | None = None,
     ) -> ShiftAttendance:
         attendance = await self._repo.get_attendance_by_id(attendance_id)
         if attendance is None:
             raise NotFoundError("Attendance record not found.")
 
-        profile = await self.get_profile_by_user(requesting_user_id)
-        if attendance.volunteer_id != profile.id:
-            raise ForbiddenError("You can only check out of your own shifts.")
+        is_self = await self._authorize_attendance_action(attendance, requesting_user)
 
         if attendance.check_in_at is None:
             raise ConflictError("Must check in before checking out.")
 
-        if attendance.check_out_at is not None:
+        if attendance.status != AttendanceStatus.CHECKED_IN:
             raise ConflictError("Already checked out for this shift.")
 
         now = datetime.now(UTC)
         attendance.check_out_at = now
+        attendance.status = AttendanceStatus.CHECKED_OUT
 
         delta = now - attendance.check_in_at
         attendance.hours_logged = round(delta.total_seconds() / 3600.0, 2)
+
+        await self._record_coordinator_attendance_action(
+            attendance, requesting_user, is_self, "check_out", ip_address
+        )
         return attendance
+
+    async def mark_no_show(
+        self,
+        attendance_id: uuid.UUID,
+        requesting_user: User,
+        reason: str,
+        *,
+        ip_address: str | None = None,
+    ) -> ShiftAttendance:
+        """Coordinator-only: a volunteer never marks themself a no-show, and
+        it's never inferred merely from a missing check-in - it's an
+        explicit coordinator judgment call after the shift.
+        """
+        if not has_permission(requesting_user, "volunteer:update"):
+            raise ForbiddenError("You do not have permission to mark a volunteer as a no-show.")
+
+        attendance = await self._repo.get_attendance_by_id(attendance_id)
+        if attendance is None:
+            raise NotFoundError("Attendance record not found.")
+
+        if attendance.status != AttendanceStatus.CLAIMED:
+            raise ConflictError(
+                f"Cannot mark as no-show from status '{attendance.status}'; "
+                "only a claimed-but-not-checked-in attendance can be a no-show."
+            )
+
+        attendance.status = AttendanceStatus.NO_SHOW
+        attendance.no_show_reason = reason
+        attendance.no_show_marked_by = requesting_user.id
+        attendance.no_show_marked_at = datetime.now(UTC)
+
+        if self._audit:
+            await self._audit.record(
+                event_type=AuthAuditEventType.VOLUNTEER_ATTENDANCE_UPDATED,
+                actor_id=requesting_user.id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "attendance_id": str(attendance_id),
+                    "volunteer_id": str(attendance.volunteer_id),
+                    "action": "no_show",
+                },
+            )
+        return attendance
+
+    async def cancel_attendance(
+        self,
+        attendance_id: uuid.UUID,
+        requesting_user: User,
+        reason: str | None = None,
+        *,
+        ip_address: str | None = None,
+    ) -> ShiftAttendance:
+        attendance = await self._repo.get_attendance_by_id(attendance_id)
+        if attendance is None:
+            raise NotFoundError("Attendance record not found.")
+
+        is_self = await self._authorize_attendance_action(attendance, requesting_user)
+
+        if attendance.status != AttendanceStatus.CLAIMED:
+            raise ConflictError(
+                f"Cannot cancel from status '{attendance.status}'; only a "
+                "claimed-but-not-started attendance can be cancelled."
+            )
+
+        attendance.status = AttendanceStatus.CANCELLED
+        attendance.cancelled_reason = reason
+        attendance.cancelled_by = requesting_user.id
+        attendance.cancelled_at = datetime.now(UTC)
+
+        await self._record_coordinator_attendance_action(
+            attendance, requesting_user, is_self, "cancel", ip_address
+        )
+        return attendance
+
+    async def _record_coordinator_attendance_action(
+        self,
+        attendance: ShiftAttendance,
+        requesting_user: User,
+        is_self: bool,
+        action: str,
+        ip_address: str | None,
+    ) -> None:
+        """Self-service check-in/out/cancel is routine and already covered
+        by request logging; only a coordinator/staff action taken on
+        someone else's attendance gets its own audit record.
+        """
+        if is_self or self._audit is None:
+            return
+        await self._audit.record(
+            event_type=AuthAuditEventType.VOLUNTEER_ATTENDANCE_UPDATED,
+            actor_id=requesting_user.id,
+            ip_address=ip_address or "",
+            user_agent="",
+            metadata={
+                "attendance_id": str(attendance.id),
+                "volunteer_id": str(attendance.volunteer_id),
+                "action": action,
+            },
+        )
 
     async def soft_delete_profile(self, profile_id: uuid.UUID) -> None:
         profile = await self._repo.get_profile_by_id(profile_id)

@@ -21,6 +21,7 @@ from pawguard.workers.jobs.scheduled_jobs import (
     post_adoption_followups,
     process_sponsorship_charges,
     send_post_service_feedback_surveys,
+    send_volunteer_shift_reminders,
 )
 
 
@@ -447,6 +448,104 @@ class TestScheduledJobs:
         payload = mock_notif.send_notification.call_args.kwargs["payload"]
         assert isinstance(payload, NotificationSend)
         assert payload.notification_type == "sponsorship_charge"
+
+    @pytest.mark.asyncio
+    @patch("pawguard.workers.jobs.scheduled_jobs.AsyncSessionLocal")
+    @patch("pawguard.workers.jobs.scheduled_jobs.NotificationService")
+    @patch("pawguard.workers.jobs.scheduled_jobs.VolunteerRepository")
+    async def test_send_volunteer_shift_reminders_eligible_shift(
+        self, mock_repo_cls, mock_notif_cls, mock_session_factory
+    ):
+        """A claimed attendance whose shift starts within the window gets
+        reminded, and the attendance is flagged so it won't be reminded
+        again."""
+        attendance_id = uuid.uuid4()
+        volunteer_user_id = uuid.uuid4()
+        shift = MagicMock(role_name="Dog Walking", start_at=datetime.now(UTC) + timedelta(hours=5))
+        user = MagicMock(email="vol@example.com")
+        volunteer = MagicMock(user_id=volunteer_user_id, user=user)
+        attendance = MagicMock(id=attendance_id, shift=shift, volunteer=volunteer, reminder_sent_at=None)
+
+        mock_repo = AsyncMock()
+        mock_repo.list_claimed_attendance_due_for_reminder.return_value = [attendance]
+        mock_repo_cls.return_value = mock_repo
+
+        mock_session = AsyncMock()
+        mock_session_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_notif = AsyncMock()
+        mock_notif_cls.return_value = mock_notif
+
+        sent = await send_volunteer_shift_reminders({})
+
+        assert sent == 1
+        mock_notif.send_notification.assert_awaited_once()
+        payload = mock_notif.send_notification.call_args.kwargs["payload"]
+        assert isinstance(payload, NotificationSend)
+        assert payload.notification_type == "volunteer_shift_reminder"
+        assert payload.user_id == volunteer_user_id
+        # The dedup flag must actually be set on the record that was sent.
+        assert attendance.reminder_sent_at is not None
+        mock_session.commit.assert_awaited()
+
+    @pytest.mark.asyncio
+    @patch("pawguard.workers.jobs.scheduled_jobs.AsyncSessionLocal")
+    @patch("pawguard.workers.jobs.scheduled_jobs.NotificationService")
+    @patch("pawguard.workers.jobs.scheduled_jobs.VolunteerRepository")
+    async def test_send_volunteer_shift_reminders_none_due(
+        self, mock_repo_cls, mock_notif_cls, mock_session_factory
+    ):
+        """No claimed attendance in the window (already reminded, cancelled,
+        checked-in, or for an inactive volunteer — all filtered by the
+        repository query itself) means no notification is sent."""
+        mock_repo = AsyncMock()
+        mock_repo.list_claimed_attendance_due_for_reminder.return_value = []
+        mock_repo_cls.return_value = mock_repo
+
+        mock_session = AsyncMock()
+        mock_session_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_notif = AsyncMock()
+        mock_notif_cls.return_value = mock_notif
+
+        sent = await send_volunteer_shift_reminders({})
+
+        assert sent == 0
+        mock_notif.send_notification.assert_not_called()
+
+    @pytest.mark.asyncio
+    @patch("pawguard.workers.jobs.scheduled_jobs.AsyncSessionLocal")
+    @patch("pawguard.workers.jobs.scheduled_jobs.NotificationService")
+    @patch("pawguard.workers.jobs.scheduled_jobs.VolunteerRepository")
+    async def test_send_volunteer_shift_reminders_failure_does_not_mark_sent(
+        self, mock_repo_cls, mock_notif_cls, mock_session_factory
+    ):
+        """A notification-send failure for one attendance must not crash the
+        job, must not be counted as sent, and must leave `reminder_sent_at`
+        unset so the next run retries it."""
+        attendance_id = uuid.uuid4()
+        shift = MagicMock(role_name="Dog Walking", start_at=datetime.now(UTC) + timedelta(hours=5))
+        volunteer = MagicMock(user_id=uuid.uuid4(), user=MagicMock(email="vol@example.com"))
+        attendance = MagicMock(id=attendance_id, shift=shift, volunteer=volunteer, reminder_sent_at=None)
+
+        mock_repo = AsyncMock()
+        mock_repo.list_claimed_attendance_due_for_reminder.return_value = [attendance]
+        mock_repo_cls.return_value = mock_repo
+
+        mock_session = AsyncMock()
+        mock_session_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_notif = AsyncMock()
+        mock_notif.send_notification.side_effect = RuntimeError("email provider down")
+        mock_notif_cls.return_value = mock_notif
+
+        sent = await send_volunteer_shift_reminders({})
+
+        assert sent == 0
+        assert attendance.reminder_sent_at is None
 
     @pytest.mark.asyncio
     async def test_arq_worker_startup_preserves_in_progress_locks(self):

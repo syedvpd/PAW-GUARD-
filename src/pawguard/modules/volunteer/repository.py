@@ -16,6 +16,7 @@ from pawguard.core.search import SortParams, apply_sorting
 from pawguard.modules.auth.models import User
 from pawguard.modules.volunteer.models import (
     ApplicationStatus,
+    AttendanceStatus,
     ShiftAttendance,
     VolunteerApplication,
     VolunteerProfile,
@@ -221,6 +222,30 @@ class VolunteerRepository:
             ShiftAttendance.volunteer_id == volunteer_id,
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def list_claimed_attendance_due_for_reminder(
+        self, window_start: datetime, window_end: datetime
+    ) -> Sequence[ShiftAttendance]:
+        """Claimed (not yet checked-in/no-show/cancelled) attendance for an
+        active volunteer whose shift starts within the window and who
+        hasn't already been reminded."""
+        stmt = (
+            select(ShiftAttendance)
+            .join(VolunteerShift, ShiftAttendance.shift_id == VolunteerShift.id)
+            .join(VolunteerProfile, ShiftAttendance.volunteer_id == VolunteerProfile.id)
+            .options(
+                selectinload(ShiftAttendance.shift),
+                selectinload(ShiftAttendance.volunteer).selectinload(VolunteerProfile.user),
+            )
+            .where(
+                ShiftAttendance.status == AttendanceStatus.CLAIMED,
+                ShiftAttendance.reminder_sent_at.is_(None),
+                VolunteerProfile.status == VolunteerStatus.ACTIVE,
+                VolunteerShift.start_at >= window_start,
+                VolunteerShift.start_at < window_end,
+            )
+        )
+        return (await self._session.execute(stmt)).scalars().all()
 
     async def count_attendance_for_shift(self, shift_id: uuid.UUID) -> int:
         stmt = select(func.count(ShiftAttendance.id)).where(ShiftAttendance.shift_id == shift_id)

@@ -34,6 +34,21 @@ class ApplicationStatus(StrEnum):
     WITHDRAWN = "withdrawn"
 
 
+class AttendanceStatus(StrEnum):
+    """Lifecycle of a single shift claim, per the documented workflow:
+
+    CLAIMED -> CHECKED_IN -> CHECKED_OUT
+    CLAIMED -> NO_SHOW  (coordinator-marked only, never inferred)
+    CLAIMED -> CANCELLED
+    """
+
+    CLAIMED = "claimed"
+    CHECKED_IN = "checked_in"
+    CHECKED_OUT = "checked_out"
+    NO_SHOW = "no_show"
+    CANCELLED = "cancelled"
+
+
 class VolunteerApplication(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     """Tracks volunteer applications through the approval workflow."""
 
@@ -144,6 +159,26 @@ class ShiftAttendance(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     check_in_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     check_out_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     hours_logged: Mapped[float | None] = mapped_column(nullable=True)
+
+    status: Mapped[AttendanceStatus] = mapped_column(
+        String(32), default=AttendanceStatus.CLAIMED, nullable=False, index=True
+    )
+    no_show_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    no_show_marked_by: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    no_show_marked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancelled_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cancelled_by: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Set once the shift-reminder job successfully notifies this volunteer;
+    # the NULL check is the dedup key so a re-run of the job (retry, or the
+    # next scheduled tick before the window rolls past this shift) never
+    # sends a second reminder for the same claimed attendance.
+    reminder_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     volunteer: Mapped["VolunteerProfile"] = relationship(back_populates="attendances")
     shift: Mapped["VolunteerShift"] = relationship(back_populates="attendances")

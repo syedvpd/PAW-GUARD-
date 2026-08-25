@@ -30,6 +30,8 @@ from pawguard.modules.storage.schemas import DownloadUrlResponse
 from pawguard.modules.volunteer.models import ApplicationStatus, VolunteerStatus
 from pawguard.modules.volunteer.repository import VolunteerRepository
 from pawguard.modules.volunteer.schemas import (
+    ShiftAttendanceCancel,
+    ShiftAttendanceNoShow,
     ShiftAttendanceResponse,
     VolunteerApplicationReject,
     VolunteerApplicationResponse,
@@ -293,10 +295,12 @@ async def join_shift(
 )
 async def check_in(
     attendance_id: uuid.UUID,
+    request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: VolunteerService = Depends(get_volunteer_service),
 ) -> ApiResponse[ShiftAttendanceResponse]:
-    attendance = await service.check_in(attendance_id, current_user.id)
+    ip = request.client.host if request.client else None
+    attendance = await service.check_in(attendance_id, current_user.user, ip_address=ip)
     return ApiResponse(
         data=ShiftAttendanceResponse.model_validate(attendance),
         message="Checked in for shift.",
@@ -309,13 +313,57 @@ async def check_in(
 )
 async def check_out(
     attendance_id: uuid.UUID,
+    request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: VolunteerService = Depends(get_volunteer_service),
 ) -> ApiResponse[ShiftAttendanceResponse]:
-    attendance = await service.check_out(attendance_id, current_user.id)
+    ip = request.client.host if request.client else None
+    attendance = await service.check_out(attendance_id, current_user.user, ip_address=ip)
     return ApiResponse(
         data=ShiftAttendanceResponse.model_validate(attendance),
         message="Checked out from shift.",
+    )
+
+
+@router.post(
+    "/attendance/{attendance_id}/no-show",
+    response_model=ApiResponse[ShiftAttendanceResponse],
+)
+async def mark_no_show(
+    attendance_id: uuid.UUID,
+    payload: ShiftAttendanceNoShow,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: VolunteerService = Depends(get_volunteer_service),
+) -> ApiResponse[ShiftAttendanceResponse]:
+    ip = request.client.host if request.client else None
+    attendance = await service.mark_no_show(
+        attendance_id, current_user.user, payload.reason, ip_address=ip
+    )
+    return ApiResponse(
+        data=ShiftAttendanceResponse.model_validate(attendance),
+        message="Volunteer marked as a no-show.",
+    )
+
+
+@router.post(
+    "/attendance/{attendance_id}/cancel",
+    response_model=ApiResponse[ShiftAttendanceResponse],
+)
+async def cancel_attendance(
+    attendance_id: uuid.UUID,
+    payload: ShiftAttendanceCancel,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: VolunteerService = Depends(get_volunteer_service),
+) -> ApiResponse[ShiftAttendanceResponse]:
+    ip = request.client.host if request.client else None
+    attendance = await service.cancel_attendance(
+        attendance_id, current_user.user, payload.reason, ip_address=ip
+    )
+    return ApiResponse(
+        data=ShiftAttendanceResponse.model_validate(attendance),
+        message="Shift claim cancelled.",
     )
 
 
