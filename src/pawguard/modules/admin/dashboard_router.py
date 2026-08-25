@@ -2,9 +2,10 @@
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from pawguard.core.cache_decorator import cache_response
 from pawguard.core.responses import ApiResponse
 from pawguard.db.session import get_db
 from pawguard.modules.admin.dashboard_repository import DashboardRepository
@@ -28,7 +29,9 @@ def get_dashboard_service(
     response_model=ApiResponse[dict[str, int]],
     dependencies=[Depends(require_permission("system:admin"))],
 )
+@cache_response(ttl_seconds=60, namespace="admin_dashboard")
 async def get_system_metrics(
+    request: Request,
     service: DashboardService = Depends(get_dashboard_service),
 ) -> ApiResponse[dict[str, int]]:
     metrics = await service.get_system_metrics()
@@ -40,7 +43,9 @@ async def get_system_metrics(
     response_model=ApiResponse[dict[str, Any]],
     dependencies=[Depends(require_permission("system:admin"))],
 )
+@cache_response(ttl_seconds=60, namespace="admin_dashboard")
 async def get_summary(
+    request: Request,
     service: DashboardService = Depends(get_dashboard_service),
 ) -> ApiResponse[dict[str, Any]]:
     data = await service.get_summary()
@@ -52,7 +57,9 @@ async def get_summary(
     response_model=ApiResponse[dict[str, Any]],
     dependencies=[Depends(require_permission("system:admin"))],
 )
+@cache_response(ttl_seconds=60, namespace="admin_dashboard")
 async def get_kpis(
+    request: Request,
     service: DashboardService = Depends(get_dashboard_service),
 ) -> ApiResponse[dict[str, Any]]:
     data = await service.get_kpis()
@@ -64,7 +71,9 @@ async def get_kpis(
     response_model=ApiResponse[dict[str, Any]],
     dependencies=[Depends(require_permission("system:admin"))],
 )
+@cache_response(ttl_seconds=60, namespace="admin_dashboard")
 async def get_charts(
+    request: Request,
     service: DashboardService = Depends(get_dashboard_service),
 ) -> ApiResponse[dict[str, Any]]:
     data = await service.get_charts()
@@ -76,7 +85,9 @@ async def get_charts(
     response_model=ApiResponse[list[dict[str, Any]]],
     dependencies=[Depends(require_permission("system:admin"))],
 )
+@cache_response(ttl_seconds=60, namespace="admin_dashboard")
 async def get_recent_activity(
+    request: Request,
     limit: int = Query(20, ge=1, le=100),
     service: DashboardService = Depends(get_dashboard_service),
 ) -> ApiResponse[list[dict[str, Any]]]:
@@ -89,9 +100,11 @@ async def get_recent_activity(
     response_model=ApiResponse[list[dict[str, Any]]],
     dependencies=[Depends(require_permission("system:admin"))],
 )
+@cache_response(ttl_seconds=60, namespace="admin_dashboard")
 async def get_inventory_alerts(
+    request: Request,
     service: DashboardService = Depends(get_dashboard_service),
-) -> ApiResponse[dict[str, Any]]:
+) -> ApiResponse[list[dict[str, Any]]]:
     data = await service.get_inventory_alerts()
     return ApiResponse(data=data)
 
@@ -101,7 +114,9 @@ async def get_inventory_alerts(
     response_model=ApiResponse[dict[str, Any]],
     dependencies=[Depends(require_permission("system:admin"))],
 )
+@cache_response(ttl_seconds=60, namespace="admin_dashboard")
 async def get_donation_summary(
+    request: Request,
     service: DashboardService = Depends(get_dashboard_service),
 ) -> ApiResponse[dict[str, Any]]:
     data = await service.get_donation_summary()
@@ -113,7 +128,9 @@ async def get_donation_summary(
     response_model=ApiResponse[dict[str, Any]],
     dependencies=[Depends(require_permission("system:admin"))],
 )
+@cache_response(ttl_seconds=60, namespace="admin_dashboard")
 async def get_rescue_stats(
+    request: Request,
     service: DashboardService = Depends(get_dashboard_service),
 ) -> ApiResponse[dict[str, Any]]:
     data = await service.get_rescue_stats()
@@ -125,7 +142,9 @@ async def get_rescue_stats(
     response_model=ApiResponse[dict[str, Any]],
     dependencies=[Depends(require_permission("system:admin"))],
 )
+@cache_response(ttl_seconds=60, namespace="admin_dashboard")
 async def get_medical_stats(
+    request: Request,
     service: DashboardService = Depends(get_dashboard_service),
 ) -> ApiResponse[dict[str, Any]]:
     data = await service.get_medical_stats()
@@ -137,7 +156,9 @@ async def get_medical_stats(
     response_model=ApiResponse[dict[str, Any]],
     dependencies=[Depends(require_permission("system:admin"))],
 )
+@cache_response(ttl_seconds=60, namespace="admin_dashboard")
 async def get_adoption_stats(
+    request: Request,
     service: DashboardService = Depends(get_dashboard_service),
 ) -> ApiResponse[dict[str, Any]]:
     data = await service.get_adoption_stats()
@@ -149,7 +170,9 @@ async def get_adoption_stats(
     response_model=ApiResponse[dict[str, Any]],
     dependencies=[Depends(require_permission("system:admin"))],
 )
+@cache_response(ttl_seconds=60, namespace="admin_dashboard")
 async def get_volunteer_stats(
+    request: Request,
     service: DashboardService = Depends(get_dashboard_service),
 ) -> ApiResponse[dict[str, Any]]:
     data = await service.get_volunteer_stats()
@@ -161,7 +184,9 @@ async def get_volunteer_stats(
     response_model=ApiResponse[dict[str, Any]],
     dependencies=[Depends(require_permission("system:admin"))],
 )
+@cache_response(ttl_seconds=60, namespace="admin_dashboard")
 async def get_notification_summary(
+    request: Request,
     service: DashboardService = Depends(get_dashboard_service),
 ) -> ApiResponse[dict[str, Any]]:
     data = await service.get_notification_summary()
@@ -173,7 +198,9 @@ async def get_notification_summary(
     response_model=ApiResponse[dict[str, Any]],
     dependencies=[Depends(require_permission("system:admin"))],
 )
+@cache_response(ttl_seconds=60, namespace="admin_dashboard")
 async def get_shelter_stats(
+    request: Request,
     service: DashboardService = Depends(get_dashboard_service),
 ) -> ApiResponse[dict[str, Any]]:
     data = await service.get_shelter_stats()
@@ -185,7 +212,9 @@ async def get_shelter_stats(
     response_model=ApiResponse[dict[str, Any]],
     dependencies=[Depends(require_permission("system:admin"))],
 )
+@cache_response(ttl_seconds=60, namespace="admin_dashboard")
 async def get_foster_stats(
+    request: Request,
     service: DashboardService = Depends(get_dashboard_service),
 ) -> ApiResponse[dict[str, Any]]:
     data = await service.get_foster_stats()
@@ -197,7 +226,9 @@ async def get_foster_stats(
     response_model=ApiResponse[dict[str, Any]],
     dependencies=[Depends(require_permission("system:admin"))],
 )
+@cache_response(ttl_seconds=60, namespace="admin_dashboard")
 async def get_lost_found_stats(
+    request: Request,
     service: DashboardService = Depends(get_dashboard_service),
 ) -> ApiResponse[dict[str, Any]]:
     data = await service.get_lost_found_stats()
@@ -209,7 +240,9 @@ async def get_lost_found_stats(
     response_model=ApiResponse[dict[str, Any]],
     dependencies=[Depends(require_permission("system:admin"))],
 )
+@cache_response(ttl_seconds=60, namespace="admin_dashboard")
 async def get_grievance_stats(
+    request: Request,
     service: DashboardService = Depends(get_dashboard_service),
 ) -> ApiResponse[dict[str, Any]]:
     data = await service.get_grievance_stats()

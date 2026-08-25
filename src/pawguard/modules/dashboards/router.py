@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from pawguard.core.cache_decorator import cache_response
 from pawguard.core.responses import ApiResponse
 from pawguard.db.session import get_db
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
@@ -23,7 +24,9 @@ router = APIRouter(prefix="/dashboards", tags=["dashboards"])
     response_model=ApiResponse[dict[str, Any]],
     dependencies=[Depends(require_permission("dashboard:rescue"))],
 )
+@cache_response(ttl_seconds=60, namespace="dashboards")
 async def get_rescue_dashboard(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     redis: RedisClient = Depends(get_redis),
     current_user: CurrentUser = Depends(get_current_user),
@@ -37,7 +40,9 @@ async def get_rescue_dashboard(
     response_model=ApiResponse[dict[str, Any]],
     dependencies=[Depends(require_permission("dashboard:rescue"))],
 )
+@cache_response(ttl_seconds=60, namespace="dashboards")
 async def get_rescue_operations_dashboard(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     redis: RedisClient = Depends(get_redis),
     current_user: CurrentUser = Depends(get_current_user),
@@ -142,7 +147,9 @@ async def stream_rescue_dashboard(
     response_model=ApiResponse[dict[str, Any]],
     dependencies=[Depends(require_permission("dashboard:shelter"))],
 )
+@cache_response(ttl_seconds=60, namespace="dashboards")
 async def get_shelter_dashboard(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     redis: RedisClient = Depends(get_redis),
     current_user: CurrentUser = Depends(get_current_user),
@@ -156,7 +163,9 @@ async def get_shelter_dashboard(
     response_model=ApiResponse[dict[str, Any]],
     dependencies=[Depends(require_permission("dashboard:medical"))],
 )
+@cache_response(ttl_seconds=60, namespace="dashboards")
 async def get_medical_dashboard(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     redis: RedisClient = Depends(get_redis),
     current_user: CurrentUser = Depends(get_current_user),
@@ -170,7 +179,9 @@ async def get_medical_dashboard(
     response_model=ApiResponse[dict[str, Any]],
     dependencies=[Depends(require_permission("dashboard:adoption"))],
 )
+@cache_response(ttl_seconds=60, namespace="dashboards")
 async def get_adoption_dashboard(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     redis: RedisClient = Depends(get_redis),
     current_user: CurrentUser = Depends(get_current_user),
@@ -184,7 +195,9 @@ async def get_adoption_dashboard(
     response_model=ApiResponse[dict[str, Any]],
     dependencies=[Depends(require_permission("dashboard:foster"))],
 )
+@cache_response(ttl_seconds=60, namespace="dashboards")
 async def get_foster_dashboard(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     redis: RedisClient = Depends(get_redis),
     current_user: CurrentUser = Depends(get_current_user),
@@ -198,7 +211,9 @@ async def get_foster_dashboard(
     response_model=ApiResponse[dict[str, Any]],
     dependencies=[Depends(require_permission("dashboard:volunteer"))],
 )
+@cache_response(ttl_seconds=60, namespace="dashboards")
 async def get_volunteer_dashboard(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     redis: RedisClient = Depends(get_redis),
     current_user: CurrentUser = Depends(get_current_user),
@@ -212,7 +227,9 @@ async def get_volunteer_dashboard(
     response_model=ApiResponse[dict[str, Any]],
     dependencies=[Depends(require_permission("dashboard:inventory"))],
 )
+@cache_response(ttl_seconds=60, namespace="dashboards")
 async def get_inventory_dashboard(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     redis: RedisClient = Depends(get_redis),
     current_user: CurrentUser = Depends(get_current_user),
@@ -226,7 +243,9 @@ async def get_inventory_dashboard(
     response_model=ApiResponse[dict[str, Any]],
     dependencies=[Depends(require_permission("dashboard:finance"))],
 )
+@cache_response(ttl_seconds=60, namespace="dashboards")
 async def get_finance_dashboard(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     redis: RedisClient = Depends(get_redis),
     current_user: CurrentUser = Depends(get_current_user),
@@ -240,7 +259,9 @@ async def get_finance_dashboard(
     response_model=ApiResponse[dict[str, Any]],
     dependencies=[Depends(require_permission("dashboard:donor"))],
 )
+@cache_response(ttl_seconds=60, namespace="dashboards")
 async def get_donor_dashboard(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     redis: RedisClient = Depends(get_redis),
     current_user: CurrentUser = Depends(get_current_user),
@@ -254,7 +275,9 @@ async def get_donor_dashboard(
     response_model=ApiResponse[dict[str, Any]],
     dependencies=[Depends(require_permission("system:admin"))],
 )
+@cache_response(ttl_seconds=60, namespace="dashboards")
 async def get_staff_dashboard(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     redis: RedisClient = Depends(get_redis),
     current_user: CurrentUser = Depends(get_current_user),
@@ -268,7 +291,9 @@ async def get_staff_dashboard(
     response_model=ApiResponse[dict[str, Any]],
     dependencies=[Depends(require_permission("system:admin"))],
 )
+@cache_response(ttl_seconds=60, namespace="dashboards")
 async def get_executive_dashboard(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     redis: RedisClient = Depends(get_redis),
     current_user: CurrentUser = Depends(get_current_user),
@@ -298,7 +323,9 @@ async def get_public_dashboard(
     response_model=ApiResponse[dict[str, Any]],
     dependencies=[Depends(require_permission("system:admin"))],
 )
+@cache_response(ttl_seconds=60, namespace="dashboards")
 async def get_operations_dashboard(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     redis: RedisClient = Depends(get_redis),
     current_user: CurrentUser = Depends(get_current_user),
