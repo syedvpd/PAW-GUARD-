@@ -3,8 +3,9 @@
 import uuid
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from pawguard.modules.adoption.models import AdoptionStatus, FollowUpStatus
 from pawguard.modules.auth.schemas import UserProfile
@@ -57,6 +58,13 @@ class AdoptionApplicationResponse(BaseModel):
     adopter_id: uuid.UUID
     status: AdoptionStatus
     version_id: int = Field(default=1, description="Version counter for optimistic locking")
+
+    @field_validator("version_id", mode="before")
+    @classmethod
+    def _coerce_version_id(cls, v: Any) -> int:
+        if v is None:
+            return 1
+        return int(v)
     residential_status: str
     has_landlord_approval: bool
     has_yard_fence: bool

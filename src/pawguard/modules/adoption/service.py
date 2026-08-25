@@ -299,8 +299,10 @@ class AdoptionService:
             )
 
         update_data = payload.model_dump(exclude_unset=True)
-        update_data.pop("version_id", None)
-        app.version_id += 1
+        if getattr(app, "version_id", None) is None:
+            app.version_id = 1
+        else:
+            app.version_id += 1
 
         if "status" in update_data:
             new_status = update_data["status"]

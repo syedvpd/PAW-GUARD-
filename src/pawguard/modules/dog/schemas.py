@@ -116,6 +116,13 @@ class DogProfileResponse(BaseModel):
     rescue_case_id: uuid.UUID | None
     microchip_id: str | None
     version_id: int = Field(default=1, description="Version counter for optimistic locking")
+
+    @field_validator("version_id", mode="before")
+    @classmethod
+    def _coerce_version_id(cls, v: Any) -> int:
+        if v is None:
+            return 1
+        return int(v)
     name: str
     breed: str
     breed_classification: DogBreedClassification
