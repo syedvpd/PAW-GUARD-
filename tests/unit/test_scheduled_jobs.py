@@ -464,7 +464,9 @@ class TestScheduledJobs:
         shift = MagicMock(role_name="Dog Walking", start_at=datetime.now(UTC) + timedelta(hours=5))
         user = MagicMock(email="vol@example.com")
         volunteer = MagicMock(user_id=volunteer_user_id, user=user)
-        attendance = MagicMock(id=attendance_id, shift=shift, volunteer=volunteer, reminder_sent_at=None)
+        attendance = MagicMock(
+            id=attendance_id, shift=shift, volunteer=volunteer, reminder_sent_at=None
+        )
 
         mock_repo = AsyncMock()
         mock_repo.list_claimed_attendance_due_for_reminder.return_value = [attendance]
@@ -528,7 +530,9 @@ class TestScheduledJobs:
         attendance_id = uuid.uuid4()
         shift = MagicMock(role_name="Dog Walking", start_at=datetime.now(UTC) + timedelta(hours=5))
         volunteer = MagicMock(user_id=uuid.uuid4(), user=MagicMock(email="vol@example.com"))
-        attendance = MagicMock(id=attendance_id, shift=shift, volunteer=volunteer, reminder_sent_at=None)
+        attendance = MagicMock(
+            id=attendance_id, shift=shift, volunteer=volunteer, reminder_sent_at=None
+        )
 
         mock_repo = AsyncMock()
         mock_repo.list_claimed_attendance_due_for_reminder.return_value = [attendance]

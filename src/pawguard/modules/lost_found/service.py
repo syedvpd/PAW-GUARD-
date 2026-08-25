@@ -825,6 +825,7 @@ class LostFoundService:
                     body=body,
                     notification_type="lost_found_contact_release",
                     send_email=False,
+                    send_push=True,
                 ),
                 user_email=getattr(to_user, "email", None),
             )

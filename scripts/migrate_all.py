@@ -27,7 +27,7 @@ def run_migration(label: str, database_url: str) -> None:
 
     print(f"RUN  [{label}]: Applying migrations to {database_url[:50]}...")
     alembic_cfg = Config(str(ALEMBIC_CFG_PATH))
-    alembic_cfg.set_main_option("sqlalchemy.url", database_url)
+    alembic_cfg.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
     command.upgrade(alembic_cfg, "head")
     print(f"DONE [{label}]: Migrations applied successfully.\n")
 

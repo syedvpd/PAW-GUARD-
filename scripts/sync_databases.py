@@ -60,11 +60,11 @@ def mask_db_url(url: str) -> str:
 
 
 async def sync_data(source_url: str, target_url: str) -> None:
-    print("=========================================================")
-    print(" Starting PawGuard Database Synchronization")
-    print("=========================================================")
-    print(f"Source DB: {mask_db_url(source_url)}")
-    print(f"Target DB: {mask_db_url(target_url)}\n")
+    print("=========================================================", flush=True)
+    print(" Starting PawGuard Database Synchronization", flush=True)
+    print("=========================================================", flush=True)
+    print(f"Source DB: {mask_db_url(source_url)}", flush=True)
+    print(f"Target DB: {mask_db_url(target_url)}\n", flush=True)
 
     # Connect to both databases with prepared statement caches disabled
     source_engine = create_async_engine(source_url, connect_args={"statement_cache_size": 0})
@@ -73,24 +73,24 @@ async def sync_data(source_url: str, target_url: str) -> None:
     try:
         # Retrieve all mapped ORM tables sorted topologically based on FK constraints
         tables = Base.metadata.sorted_tables
-        print(f"Found {len(tables)} tables to synchronize in ORM metadata.\n")
+        print(f"Found {len(tables)} tables to synchronize in ORM metadata.\n", flush=True)
 
         # Open transactional connections
         async with source_engine.connect() as src_conn, target_engine.begin() as tgt_conn:
             # 1. Disable constraints and triggers session-wide on target DB
-            print("--> Disabling target foreign keys & triggers...")
+            print("--> Disabling target foreign keys & triggers...", flush=True)
             await tgt_conn.execute(text("SET session_replication_role = 'replica';"))
 
             # 2. Clear target tables in reverse order to keep dependencies clean
-            print("--> Clearing target tables...")
+            print("--> Clearing target tables...", flush=True)
             for table in reversed(tables):
                 await tgt_conn.execute(table.delete())
-            print("    Target tables cleared.")
+            print("    Target tables cleared.", flush=True)
 
             # 3. Migrate data table-by-table
-            print("\n--> Syncing table data...")
+            print("\n--> Syncing table data...", flush=True)
             sync_report = []
-            for table in tables:
+            for idx, table in enumerate(tables, 1):
                 table_name = table.name
 
                 # Fetch all rows from source table
@@ -111,12 +111,13 @@ async def sync_data(source_url: str, target_url: str) -> None:
                     tgt_count = src_count
 
                 print(
-                    f"    Synced {table_name:<30} | Source Rows: {src_count:<5} | Target Rows: {tgt_count:<5}"
+                    f"    [{idx}/{len(tables)}] Synced {table_name:<30} | Source Rows: {src_count:<5} | Target Rows: {tgt_count:<5}",
+                    flush=True,
                 )
                 sync_report.append((table_name, src_count, tgt_count))
 
             # 4. Re-enable constraints and triggers
-            print("\n--> Restoring target foreign keys & triggers...")
+            print("\n--> Restoring target foreign keys & triggers...", flush=True)
             await tgt_conn.execute(text("SET session_replication_role = 'origin';"))
 
             # 5. Re-align PostgreSQL autoincrement sequences

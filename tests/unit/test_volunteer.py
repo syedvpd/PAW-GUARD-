@@ -391,7 +391,10 @@ class TestVolunteerService:
         volunteer_id = uuid.uuid4()
         user = self._user()
         attendance = ShiftAttendance(
-            id=att_id, shift_id=uuid.uuid4(), volunteer_id=volunteer_id, status=AttendanceStatus.CLAIMED
+            id=att_id,
+            shift_id=uuid.uuid4(),
+            volunteer_id=volunteer_id,
+            status=AttendanceStatus.CLAIMED,
         )
         mock_repo.get_attendance_by_id.return_value = attendance
         mock_repo.get_profile_by_user_id.return_value = VolunteerProfile(
@@ -409,14 +412,19 @@ class TestVolunteerService:
         assert result.status == AttendanceStatus.CHECKED_IN
 
     @pytest.mark.asyncio
-    async def test_check_in_another_volunteer_forbidden_without_permission(self, service, mock_repo):
+    async def test_check_in_another_volunteer_forbidden_without_permission(
+        self, service, mock_repo
+    ):
         """A volunteer with no `volunteer:update` permission cannot check in
         someone else's attendance - this is the ownership check that must
         stay intact; only a permitted coordinator/staff user bypasses it."""
         att_id = uuid.uuid4()
         user = self._user(can_manage_volunteers=False)
         attendance = ShiftAttendance(
-            id=att_id, shift_id=uuid.uuid4(), volunteer_id=uuid.uuid4(), status=AttendanceStatus.CLAIMED
+            id=att_id,
+            shift_id=uuid.uuid4(),
+            volunteer_id=uuid.uuid4(),
+            status=AttendanceStatus.CLAIMED,
         )
         mock_repo.get_attendance_by_id.return_value = attendance
         # The caller has no volunteer profile of their own at all - e.g. a
@@ -432,7 +440,10 @@ class TestVolunteerService:
         volunteer_id = uuid.uuid4()
         coordinator = self._user(can_manage_volunteers=True)
         attendance = ShiftAttendance(
-            id=att_id, shift_id=uuid.uuid4(), volunteer_id=volunteer_id, status=AttendanceStatus.CLAIMED
+            id=att_id,
+            shift_id=uuid.uuid4(),
+            volunteer_id=volunteer_id,
+            status=AttendanceStatus.CLAIMED,
         )
         mock_repo.get_attendance_by_id.return_value = attendance
         # The coordinator has no volunteer profile of their own.
@@ -451,7 +462,10 @@ class TestVolunteerService:
         volunteer_id = uuid.uuid4()
         coordinator = self._user(can_manage_volunteers=True)
         attendance = ShiftAttendance(
-            id=att_id, shift_id=uuid.uuid4(), volunteer_id=volunteer_id, status=AttendanceStatus.CLAIMED
+            id=att_id,
+            shift_id=uuid.uuid4(),
+            volunteer_id=volunteer_id,
+            status=AttendanceStatus.CLAIMED,
         )
         mock_repo.get_attendance_by_id.return_value = attendance
         mock_repo.get_profile_by_user_id.return_value = None
@@ -478,7 +492,10 @@ class TestVolunteerService:
         volunteer_id = uuid.uuid4()
         coordinator = self._user(can_manage_volunteers=True)
         attendance = ShiftAttendance(
-            id=att_id, shift_id=uuid.uuid4(), volunteer_id=volunteer_id, status=AttendanceStatus.CLAIMED
+            id=att_id,
+            shift_id=uuid.uuid4(),
+            volunteer_id=volunteer_id,
+            status=AttendanceStatus.CLAIMED,
         )
         mock_repo.get_attendance_by_id.return_value = attendance
         mock_repo.get_profile_by_user_id.return_value = None
@@ -623,7 +640,10 @@ class TestVolunteerService:
         att_id = uuid.uuid4()
         coordinator = self._user(can_manage_volunteers=True)
         attendance = ShiftAttendance(
-            id=att_id, shift_id=uuid.uuid4(), volunteer_id=uuid.uuid4(), status=AttendanceStatus.CLAIMED
+            id=att_id,
+            shift_id=uuid.uuid4(),
+            volunteer_id=uuid.uuid4(),
+            status=AttendanceStatus.CLAIMED,
         )
         mock_repo.get_attendance_by_id.return_value = attendance
 
@@ -640,7 +660,10 @@ class TestVolunteerService:
         att_id = uuid.uuid4()
         volunteer = self._user(can_manage_volunteers=False)
         attendance = ShiftAttendance(
-            id=att_id, shift_id=uuid.uuid4(), volunteer_id=uuid.uuid4(), status=AttendanceStatus.CLAIMED
+            id=att_id,
+            shift_id=uuid.uuid4(),
+            volunteer_id=uuid.uuid4(),
+            status=AttendanceStatus.CLAIMED,
         )
         mock_repo.get_attendance_by_id.return_value = attendance
         with pytest.raises(ForbiddenError):
@@ -667,7 +690,10 @@ class TestVolunteerService:
         volunteer_id = uuid.uuid4()
         user = self._user()
         attendance = ShiftAttendance(
-            id=att_id, shift_id=uuid.uuid4(), volunteer_id=volunteer_id, status=AttendanceStatus.CLAIMED
+            id=att_id,
+            shift_id=uuid.uuid4(),
+            volunteer_id=volunteer_id,
+            status=AttendanceStatus.CLAIMED,
         )
         mock_repo.get_attendance_by_id.return_value = attendance
         mock_repo.get_profile_by_user_id.return_value = VolunteerProfile(

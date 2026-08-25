@@ -97,11 +97,15 @@ class ShiftAttendanceResponse(BaseModel):
 
 
 class ShiftAttendanceNoShow(BaseModel):
-    reason: str = Field(..., min_length=1, max_length=1000, examples=["Did not arrive; no notice given."])
+    reason: str = Field(
+        ..., min_length=1, max_length=1000, examples=["Did not arrive; no notice given."]
+    )
 
 
 class ShiftAttendanceCancel(BaseModel):
-    reason: str | None = Field(None, max_length=1000, examples=["Volunteer had a scheduling conflict."])
+    reason: str | None = Field(
+        None, max_length=1000, examples=["Volunteer had a scheduling conflict."]
+    )
 
 
 class VolunteerServiceSummary(BaseModel):

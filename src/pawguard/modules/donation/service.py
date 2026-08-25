@@ -1073,6 +1073,16 @@ class DonationService:
                             notification_type="recurring_donation_charge",
                         )
                     )
+                    await self._notification_svc._send_push_to_users(
+                        [sub.donor.user_id],
+                        "Monthly Recurring Donation Charge",
+                        (
+                            f"Your recurring donation of {sub.amount} "
+                            f"{sub.currency} is now due. We'll let you "
+                            f"know once your payment has been received."
+                        ),
+                        "/donations/history",
+                    )
                 except Exception as notif_exc:
                     logger.warning(
                         "Failed to send notification for recurring charge %s: %s",

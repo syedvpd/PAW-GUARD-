@@ -81,6 +81,7 @@ class VolunteerService:
                     notification_type=notification_type,
                     action_url=action_url,
                     send_email=True,
+                    send_push=True,
                 ),
                 user_email=profile.user.email,
             )
@@ -629,7 +630,9 @@ class VolunteerService:
         own_profile = await self._repo.get_profile_by_user_id(requesting_user.id)
         is_self = own_profile is not None and attendance.volunteer_id == own_profile.id
         if not is_self and not has_permission(requesting_user, "volunteer:update"):
-            raise ForbiddenError("You do not have permission to manage this volunteer's attendance.")
+            raise ForbiddenError(
+                "You do not have permission to manage this volunteer's attendance."
+            )
         return is_self
 
     async def check_in(
