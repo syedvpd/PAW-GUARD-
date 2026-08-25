@@ -1497,7 +1497,7 @@ class PortalService:
                     try:
                         from pawguard.services.storage_service import get_storage_service
 
-                        val = get_storage_service().generate_presigned_download_url(object_key=val)
+                        val = get_storage_service().generate_public_url(object_key=val)
                     except Exception:
                         pass
                 sec_fields[f.field_key] = val

@@ -385,7 +385,7 @@ class DogService:
         result = await self._repo._session.execute(stmt)
         files = result.scalars().all()
         s3 = StorageService()
-        return [s3.generate_presigned_download_url(object_key=f.object_key) for f in files]
+        return [s3.generate_public_url(object_key=f.object_key) for f in files]
 
     async def update_dog(
         self,

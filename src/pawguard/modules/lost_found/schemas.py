@@ -113,7 +113,7 @@ class LostReportResponse(BaseModel):
             try:
                 from pawguard.services.storage_service import get_storage_service
 
-                self.photo_url = get_storage_service().generate_presigned_download_url(
+                self.photo_url = get_storage_service().generate_public_url(
                     object_key=self.photo_object_key
                 )
             except Exception:
@@ -196,7 +196,7 @@ class FoundReportResponse(BaseModel):
             try:
                 from pawguard.services.storage_service import get_storage_service
 
-                self.photo_url = get_storage_service().generate_presigned_download_url(
+                self.photo_url = get_storage_service().generate_public_url(
                     object_key=self.photo_object_key
                 )
             except Exception:

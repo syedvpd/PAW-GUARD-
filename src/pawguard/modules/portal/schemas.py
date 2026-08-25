@@ -106,7 +106,7 @@ class SuccessStoryResponse(BaseModel):
                 try:
                     from pawguard.services.storage_service import get_storage_service
 
-                    img = get_storage_service().generate_presigned_download_url(object_key=img)
+                    img = get_storage_service().generate_public_url(object_key=img)
                 except Exception:
                     pass
             self.hero_image_url = img
@@ -187,7 +187,7 @@ class SuccessStorySummaryResponse(BaseModel):
                 try:
                     from pawguard.services.storage_service import get_storage_service
 
-                    img = get_storage_service().generate_presigned_download_url(object_key=img)
+                    img = get_storage_service().generate_public_url(object_key=img)
                 except Exception:
                     pass
             self.hero_image_url = img
@@ -314,7 +314,7 @@ class BlogPostResponse(BaseModel):
                 try:
                     from pawguard.services.storage_service import get_storage_service
 
-                    img = get_storage_service().generate_presigned_download_url(object_key=img)
+                    img = get_storage_service().generate_public_url(object_key=img)
                 except Exception:
                     pass
             self.cover_image_url = img
@@ -395,7 +395,7 @@ class BlogPostSummaryResponse(BaseModel):
                 try:
                     from pawguard.services.storage_service import get_storage_service
 
-                    img = get_storage_service().generate_presigned_download_url(object_key=img)
+                    img = get_storage_service().generate_public_url(object_key=img)
                 except Exception:
                     pass
             self.cover_image_url = img

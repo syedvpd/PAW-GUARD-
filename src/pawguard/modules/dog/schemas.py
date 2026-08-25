@@ -154,7 +154,7 @@ class DogProfileResponse(BaseModel):
     def _sync_photo_fields(self) -> "DogProfileResponse":
         """Expose image_urls under photo_gallery_urls too so both field
         names are available for different Flutter app consumers, and
-        dynamically convert raw S3 keys to presigned download URLs."""
+        dynamically convert raw S3 keys to public download URLs."""
         resolved = []
         if self.image_urls:
             from pawguard.services.storage_service import StorageService
@@ -165,7 +165,7 @@ class DogProfileResponse(BaseModel):
                     resolved.append(u)
                 else:
                     try:
-                        resolved.append(s3.generate_presigned_download_url(object_key=u))
+                        resolved.append(s3.generate_public_url(object_key=u))
                     except Exception:
                         resolved.append(u)
         self.image_urls = resolved

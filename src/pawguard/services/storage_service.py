@@ -157,6 +157,27 @@ class StorageService:
             endpoint = (self._endpoint or "https://pawguard-media.s3.amazonaws.com").rstrip("/")
             return f"{endpoint}/{bucket}/{object_key}?token={uuid.uuid4()}"
 
+    def generate_public_url(self, object_key: str) -> str:
+        """Construct the direct, un-signed public URL for public bucket assets."""
+        if not object_key:
+            return ""
+        if object_key.startswith("http://") or object_key.startswith("https://"):
+            return object_key
+
+        bucket = self._bucket or "pawguard-media"
+        if not self._endpoint:
+            return f"https://{bucket}.s3.amazonaws.com/{object_key}"
+
+        # If it's a Supabase storage endpoint:
+        if "supabase.co" in self._endpoint:
+            base_url = self._endpoint.replace(".storage.supabase.co/storage/v1/s3", ".supabase.co")
+            base_url = base_url.replace("/storage/v1/s3", "")
+            return f"{base_url}/storage/v1/object/public/{bucket}/{object_key}"
+
+        # Generic S3 / path-style fallback:
+        endpoint = self._endpoint.rstrip("/")
+        return f"{endpoint}/{bucket}/{object_key}"
+
     def get_object_size(self, *, object_key: str) -> int:
         import time
 
