@@ -37,11 +37,17 @@ class AdoptionApplicationUpdate(BaseModel):
         None, examples=["Yard is securely fenced, home is clean and pet-ready."]
     )
     adoption_agreement_url: str | None = Field(None, examples=["documents/agreement_1a2b3c.pdf"])
+    version_id: int | None = Field(
+        None, description="Expected version_id for optimistic locking", examples=[1]
+    )
 
 
 class AdoptionStatusUpdate(BaseModel):
     status: AdoptionStatus = Field(
         ..., description="New status for the adoption application", examples=["approved"]
+    )
+    version_id: int | None = Field(
+        None, description="Expected version_id for optimistic locking", examples=[1]
     )
 
 
@@ -50,6 +56,7 @@ class AdoptionApplicationResponse(BaseModel):
     dog_id: uuid.UUID
     adopter_id: uuid.UUID
     status: AdoptionStatus
+    version_id: int = Field(default=1, description="Version counter for optimistic locking")
     residential_status: str
     has_landlord_approval: bool
     has_yard_fence: bool

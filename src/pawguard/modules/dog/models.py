@@ -109,6 +109,7 @@ class DogProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base)
     microchip_id: Mapped[str | None] = mapped_column(
         String(64), unique=True, nullable=True, index=True
     )
+    version_id: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     breed: Mapped[str] = mapped_column(String(128), default="indie_mix", nullable=False)

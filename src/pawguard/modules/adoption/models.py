@@ -66,6 +66,8 @@ class AdoptionApplication(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMix
         String(32), default=AdoptionStatus.SUBMITTED, nullable=False, index=True
     )
 
+    version_id: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+
     residential_status: Mapped[str] = mapped_column(String(32), nullable=False)  # owned, rented
     has_landlord_approval: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     has_yard_fence: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

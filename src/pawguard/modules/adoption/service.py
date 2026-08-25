@@ -293,7 +293,14 @@ class AdoptionService:
         if app is None:
             raise NotFoundError("Adoption application not found.")
 
+        if payload.version_id is not None and payload.version_id != app.version_id:
+            raise ConflictError(
+                f"Application record modified concurrently by another user (expected version {payload.version_id}, found {app.version_id}). Please refresh and try again."
+            )
+
         update_data = payload.model_dump(exclude_unset=True)
+        update_data.pop("version_id", None)
+        app.version_id += 1
 
         if "status" in update_data:
             new_status = update_data["status"]

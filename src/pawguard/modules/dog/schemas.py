@@ -115,6 +115,7 @@ class DogProfileResponse(BaseModel):
     registration_number: str
     rescue_case_id: uuid.UUID | None
     microchip_id: str | None
+    version_id: int = Field(default=1, description="Version counter for optimistic locking")
     name: str
     breed: str
     breed_classification: DogBreedClassification
