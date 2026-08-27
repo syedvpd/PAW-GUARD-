@@ -235,6 +235,9 @@ TEST_DOGS = [
             "https://images.dog.ceo/breeds/pomeranian/n02112018_7113.jpg",
         ],
     },
+]
+
+ADOPTED_SEED_DOGS = [
     {
         "registration_number": "DOG-2026-0011",
         "name": "Oscar",
@@ -292,8 +295,9 @@ async def seed_dogs() -> None:
             adopter_user.phone = "+91 98765 43210"
 
         # 2. Seed dogs
+        all_seed = TEST_DOGS + ADOPTED_SEED_DOGS
         adopted_dog_obj = None
-        for dog_data in TEST_DOGS:
+        for dog_data in all_seed:
             existing = (
                 await session.execute(
                     select(DogProfile).where(
