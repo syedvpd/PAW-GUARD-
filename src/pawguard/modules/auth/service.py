@@ -13,7 +13,7 @@ import pyotp
 
 from pawguard.core.config import get_settings
 from pawguard.core.constants import DeviceType
-from pawguard.core.exceptions import ForbiddenError, NotFoundError
+from pawguard.core.exceptions import NotFoundError
 from pawguard.core.logging import get_logger
 from pawguard.core.security import (
     TokenError,
@@ -199,32 +199,6 @@ class AuthService:
 
         if not user.is_active:
             raise AccountInactiveError("This account has been deactivated.")
-
-        # PAW-AUTH-004: Restrict operational staff logins on Public Web client interface
-        if client_type and client_type.lower() in ("web", "public", "public_web"):
-            operational_roles = {
-                "super_admin",
-                "rescue_admin",
-                "rescue_coordinator",
-                "rescue_agent",
-                "vet",
-                "shelter_manager",
-                "adoption_coordinator",
-                "foster_coordinator",
-                "volunteer_coordinator",
-                "inventory_manager",
-                "finance_user",
-            }
-            user_roles = {r.name.lower() for r in getattr(user, "roles", [])}
-            if user_roles and not user_roles.isdisjoint(operational_roles):
-                public_roles = {"app_user", "donor", "volunteer", "foster"}
-                if user_roles.isdisjoint(public_roles) or any(
-                    r in user_roles
-                    for r in ("super_admin", "rescue_admin", "rescue_coordinator", "rescue_agent")
-                ):
-                    raise ForbiddenError(
-                        "Operational staff accounts must log in via the Admin Portal."
-                    )
 
         user.failed_login_count = 0
         user.locked_until = None
