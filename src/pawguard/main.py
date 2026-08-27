@@ -64,10 +64,25 @@ def _build_custom_openapi(app: FastAPI) -> dict:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+    import asyncio
+    import contextlib
+
     configure_logging()
     logger.info("application_startup")
     await _seed_roles()
+
+    # Start in-process outbox poller so transactional email/notification jobs
+    # are dispatched immediately even when running directly under uvicorn.
+    from pawguard.workers.arq_worker import outbox_poller_loop
+
+    outbox_task = asyncio.create_task(outbox_poller_loop({}))
+
     yield
+
+    outbox_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await outbox_task
+
     await engine.dispose()
     logger.info("application_shutdown")
 

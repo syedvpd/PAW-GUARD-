@@ -841,8 +841,14 @@ class TestAdoptionScores:
 
 class TestAdoptionApplicationUpdateSchema:
     def test_home_inspection_type_accepts_physical_and_virtual(self):
-        assert AdoptionApplicationUpdate(home_inspection_type="physical").home_inspection_type == "physical"
-        assert AdoptionApplicationUpdate(home_inspection_type="virtual").home_inspection_type == "virtual"
+        assert (
+            AdoptionApplicationUpdate(home_inspection_type="physical").home_inspection_type
+            == "physical"
+        )
+        assert (
+            AdoptionApplicationUpdate(home_inspection_type="virtual").home_inspection_type
+            == "virtual"
+        )
         assert AdoptionApplicationUpdate(home_inspection_type=None).home_inspection_type is None
 
     def test_home_inspection_type_rejects_invalid_value(self):

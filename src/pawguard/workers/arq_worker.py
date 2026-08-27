@@ -98,17 +98,7 @@ async def outbox_poller_loop(ctx: dict[str, Any]) -> None:
             logger.error("outbox_poller_loop_error", error=str(e))
             processed = 0
 
-        if processed > 0:
-            current_delay = 5
-        else:
-            if current_delay == 5:
-                current_delay = 30
-            elif current_delay == 30:
-                current_delay = 120
-            elif current_delay == 120:
-                current_delay = 300
-            else:
-                current_delay = 300
+        current_delay = 2 if processed > 0 else min(current_delay + 2, 10)
 
         await asyncio.sleep(current_delay)
 

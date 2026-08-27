@@ -53,8 +53,8 @@ async def _ensure_pool() -> Any:
     try:
         settings = get_settings()
         redis_settings = RedisSettings.from_dsn(settings.redis_url)
-        redis_settings.conn_timeout = 0.1
-        redis_settings.conn_retries = 0
+        redis_settings.conn_timeout = 2.0
+        redis_settings.conn_retries = 2
         inner_pool = await create_pool(redis_settings)
         _pool = _SafeArqPool(inner_pool)  # type: ignore[assignment]
     except Exception:
