@@ -266,6 +266,8 @@ class VolunteerService:
                 status = "ACTIVE"
             elif profile.status == VolunteerStatus.INACTIVE:
                 status = "INACTIVE"
+            elif profile.status == VolunteerStatus.APPROVED:
+                status = "APPROVED"
             elif profile.status == VolunteerStatus.APPLIED:
                 status = "PENDING"
             else:
@@ -350,7 +352,7 @@ class VolunteerService:
             notes=application.notes,
             medical_conditions=application.medical_conditions,
             animal_handling_experience=application.animal_handling_experience,
-            status=VolunteerStatus.APPLIED,
+            status=VolunteerStatus.APPROVED,
         )
         await self._repo.create_profile(profile)
         await self._repo._session.flush()
