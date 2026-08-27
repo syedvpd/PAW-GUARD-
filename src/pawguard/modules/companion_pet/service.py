@@ -101,11 +101,13 @@ class CompanionPetService:
         *,
         storage: StorageService | None = None,
         audit: AuditService | None = None,
+        arq_pool: Any | None = None,
     ) -> None:
         self._repo = repository
         self._session = session
         self._storage = storage
         self._audit = audit
+        self._arq = arq_pool
 
     @staticmethod
     def _is_admin(current_user: CurrentUser) -> bool:
@@ -633,23 +635,36 @@ class CompanionPetService:
             {"tag_id": tag.id, "dog_id": tag.dog_id, "pet_id": tag.pet_id},
         )
 
-        # Push notification to pet owner when their safety tag is scanned
+        # Push notification to pet owner when their safety tag is scanned.
+        # Offloaded to a background worker so the (network-bound) FCM call does
+        # not block the scan response. Falls back to inline send when no ARQ
+        # pool is configured (e.g. local/dev without Redis).
         if owner_id:
-            try:
-                from pawguard.modules.notifications.repository import NotificationRepository
-                from pawguard.modules.notifications.service import NotificationService
+            title = "Your pet's safety tag was scanned!"
+            body = f"Someone scanned {pet_name}'s safety tag. Check the app for details."
+            action_url = f"/companion-pets/{pet.id if pet else tag.pet_id}"
+            if self._arq is not None:
+                try:
+                    await self._arq.enqueue_job(
+                        "notify_safety_tag_scan",
+                        str(owner_id),
+                        title,
+                        body,
+                        action_url,
+                    )
+                except Exception:
+                    logger.warning("arq_enqueue_failed_safety_tag_push", owner_id=str(owner_id))
+            else:
+                try:
+                    from pawguard.modules.notifications.repository import NotificationRepository
+                    from pawguard.modules.notifications.service import NotificationService
 
-                notification_svc = NotificationService(
-                    repository=NotificationRepository(self._session)
-                )
-                await notification_svc._send_push_to_users(
-                    [owner_id],
-                    "Your pet's safety tag was scanned!",
-                    f"Someone scanned {pet_name}'s safety tag. Check the app for details.",
-                    f"/companion-pets/{pet.id if pet else tag.pet_id}",
-                )
-            except Exception:
-                logger.debug("push_notification_skipped", action="safety_tag_scan")
+                    notification_svc = NotificationService(
+                        repository=NotificationRepository(self._session)
+                    )
+                    await notification_svc._send_push_to_users([owner_id], title, body, action_url)
+                except Exception:
+                    logger.debug("push_notification_skipped", action="safety_tag_scan")
 
         return tag, pet, lost_info
 

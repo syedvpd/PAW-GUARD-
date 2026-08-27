@@ -3,6 +3,7 @@
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -606,10 +607,26 @@ class PortalRepository:
             stmt = stmt.offset(page_params.offset).limit(page_params.limit)
         return (await self._session.execute(stmt)).scalars().all()
 
-    async def list_active_alerts(self) -> Sequence[UrgentAlert]:
-        """Active alerts inside their scheduled window (if any), highest
-        severity first, then sort order."""
+    @staticmethod
+    def _active_alert_filter(stmt: Any) -> Any:
+        """Shared WHERE clause for active alerts inside their scheduled window."""
         now = datetime.now(UTC)
+        return stmt.where(
+            UrgentAlert.deleted_at.is_(None),
+            UrgentAlert.is_active.is_(True),
+            or_(UrgentAlert.starts_at.is_(None), UrgentAlert.starts_at <= now),
+            or_(UrgentAlert.ends_at.is_(None), UrgentAlert.ends_at >= now),
+        )
+
+    async def count_active_alerts(self) -> int:
+        stmt = self._active_alert_filter(select(func.count(UrgentAlert.id)))
+        return int((await self._session.execute(stmt)).scalar_one())
+
+    async def list_active_alerts(
+        self, *, page_params: PageParams | None = None
+    ) -> Sequence[UrgentAlert]:
+        """Active alerts inside their scheduled window (if any), highest
+        severity first, then sort order. Optional pagination support."""
         severity_order = case(
             (UrgentAlert.severity == AlertSeverity.CRITICAL, 0),
             (UrgentAlert.severity == AlertSeverity.WARNING, 1),
@@ -617,18 +634,15 @@ class PortalRepository:
         )
         stmt = (
             select(UrgentAlert)
-            .where(
-                UrgentAlert.deleted_at.is_(None),
-                UrgentAlert.is_active.is_(True),
-                or_(UrgentAlert.starts_at.is_(None), UrgentAlert.starts_at <= now),
-                or_(UrgentAlert.ends_at.is_(None), UrgentAlert.ends_at >= now),
-            )
             .order_by(
                 severity_order,
                 UrgentAlert.sort_order.asc(),
                 UrgentAlert.created_at.desc(),
             )
         )
+        stmt = self._active_alert_filter(stmt)
+        if page_params is not None:
+            stmt = stmt.offset(page_params.offset).limit(page_params.limit)
         return (await self._session.execute(stmt)).scalars().all()
 
     async def soft_delete_urgent_alert(self, alert_id: uuid.UUID) -> None:

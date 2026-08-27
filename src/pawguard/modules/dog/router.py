@@ -248,8 +248,8 @@ async def public_scan_dog(
 
     adopter_name: str | None = None
     adopter_phone: str | None = None
-    if dog.status == DogStatus.ADOPTED:
-        adopter_name, adopter_phone = await service.get_adopter_contact(dog_id)
+    adopter_email: str | None = None
+    adopter_name, adopter_phone, adopter_email = await service.get_adopter_contact(dog_id)
 
     return ApiResponse(
         data=PublicDogScanResponse(
@@ -267,6 +267,7 @@ async def public_scan_dog(
             registration_number=public.registration_number,
             adopter_name=adopter_name,
             adopter_phone=adopter_phone,
+            adopter_email=adopter_email,
         )
     )
 

@@ -767,6 +767,6 @@ class DogService:
             )
         )
 
-    async def get_adopter_contact(self, dog_id: uuid.UUID) -> tuple[str | None, str | None]:
+    async def get_adopter_contact(self, dog_id: uuid.UUID) -> tuple[str | None, str | None, str | None]:
         """Fetch active adopter contact information for a dog."""
         return await self._repo.get_adopter_contact(dog_id)

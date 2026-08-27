@@ -14,7 +14,10 @@ from pawguard.core.logging import configure_logging, get_logger
 from pawguard.core.metrics import increment_counter, observe_histogram
 from pawguard.db.session import AsyncSessionLocal
 from pawguard.modules.outbox.service import OutboxService
-from pawguard.workers.jobs.companion_pet_jobs import send_companion_pet_reminders
+from pawguard.workers.jobs.companion_pet_jobs import (
+    notify_safety_tag_scan,
+    send_companion_pet_reminders,
+)
 from pawguard.workers.jobs.email_jobs import (
     send_email_verification_email_job,
     send_notification_email_job,
@@ -141,6 +144,7 @@ _process_sponsorship_charges = _track_failures(process_sponsorship_charges)
 _send_companion_pet_reminders = _track_failures(send_companion_pet_reminders)
 _broadcast_lost_pet_alert = _track_failures(broadcast_lost_pet_alert)
 _send_volunteer_shift_reminders = _track_failures(send_volunteer_shift_reminders)
+_notify_safety_tag_scan = _track_failures(notify_safety_tag_scan)
 
 
 class WorkerSettings:
@@ -159,6 +163,7 @@ class WorkerSettings:
         _send_companion_pet_reminders,
         _broadcast_lost_pet_alert,
         _send_volunteer_shift_reminders,
+        _notify_safety_tag_scan,
     ]
     cron_jobs = [
         # Scheduled cron jobs: 2 tries is enough — a missed run just fires again

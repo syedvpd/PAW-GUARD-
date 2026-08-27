@@ -123,6 +123,7 @@ class DogProfileResponse(BaseModel):
         if v is None:
             return 1
         return int(v)
+
     name: str
     breed: str
     breed_classification: DogBreedClassification
@@ -200,6 +201,7 @@ class PublicDogScanResponse(BaseModel):
     registration_number: str
     adopter_name: str | None = None
     adopter_phone: str | None = None
+    adopter_email: str | None = None
 
 
 class DogListQueryParams(BaseModel):

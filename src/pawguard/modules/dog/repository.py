@@ -272,13 +272,13 @@ class DogRepository:
         )
         return (await self._session.execute(stmt)).scalars().all()
 
-    async def get_adopter_contact(self, dog_id: uuid.UUID) -> tuple[str | None, str | None]:
-        """Retrieve active adopter full_name and phone for public QR scan."""
+    async def get_adopter_contact(self, dog_id: uuid.UUID) -> tuple[str | None, str | None, str | None]:
+        """Retrieve active adopter full_name, phone, and email for public QR scan."""
         from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
         from pawguard.modules.auth.models import User
 
         stmt = (
-            select(User.full_name, User.phone)
+            select(User.full_name, User.phone, User.email)
             .join(AdoptionApplication, AdoptionApplication.adopter_id == User.id)
             .where(
                 AdoptionApplication.dog_id == dog_id,
@@ -292,5 +292,5 @@ class DogRepository:
         )
         row = (await self._session.execute(stmt)).first()
         if row:
-            return row[0], row[1]
-        return None, None
+            return row[0], row[1], row[2]
+        return None, None, None

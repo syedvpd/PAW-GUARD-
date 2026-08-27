@@ -1,6 +1,7 @@
 """Versioned companion pet API. Routes authenticate, authorize and delegate."""
 
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Body, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,15 +49,20 @@ from pawguard.modules.storage.schemas import (
 from pawguard.modules.storage.service import StorageService
 from pawguard.services.audit_service import AuditService
 from pawguard.services.storage_service import StorageService as S3StorageService
+from pawguard.workers.pool import get_arq_pool
 
 router = APIRouter(prefix="/companion-pets", tags=["companion-pets"])
 
 
 def get_companion_pet_service(
-    db: AsyncSession = Depends(get_db), audit: AuditService = Depends(get_audit_service)
+    db: AsyncSession = Depends(get_db),
+    audit: AuditService = Depends(get_audit_service),
+    arq_pool: Any = Depends(get_arq_pool),
 ) -> CompanionPetService:
     storage = StorageService(StorageRepository(db), S3StorageService())
-    return CompanionPetService(CompanionPetRepository(db), db, storage=storage, audit=audit)
+    return CompanionPetService(
+        CompanionPetRepository(db), db, storage=storage, audit=audit, arq_pool=arq_pool
+    )
 
 
 @router.post(
