@@ -467,7 +467,8 @@ async def request_password_reset(
         email=payload.email, ctx=_build_request_context(request)
     )
     if raw_token is not None:
-        reset_url = f"{get_settings().web_app_url}/reset-password?token={raw_token}"
+        base_url = get_settings().web_app_url.strip().rstrip("/")
+        reset_url = f"{base_url}/reset-password?token={raw_token}"
         try:
             await OutboxService.enqueue_job(
                 db, "send_password_reset_email_job", to=payload.email, reset_url=reset_url
