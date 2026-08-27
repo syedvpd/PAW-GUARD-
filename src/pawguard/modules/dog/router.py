@@ -43,6 +43,8 @@ from pawguard.modules.dog.schemas import (
     DogProfileResponse,
     DogProfileUpdate,
     DogSafetyTagProvisionResponse,
+    DogSafetyTagResolveRequest,
+    DogSafetyTagResolveResponse,
     DogSafetyTagResponse,
     DogStatusUpdate,
     DogWeightLogCreate,
@@ -519,3 +521,37 @@ async def deactivate_dog_safety_tag(
         dog_id, current_user, ip_address=resolve_client_ip(request)
     )
     return ApiResponse(message="Safety Tag deactivated successfully.")
+
+
+@router.post(
+    "/safety-tag/resolve",
+    response_model=ApiResponse[DogSafetyTagResolveResponse],
+    dependencies=[Depends(require_permission("dog:read"))],
+    summary="Resolve a Safety Tag raw_token to its exact Dog Master profile",
+)
+async def resolve_dog_safety_tag(
+    payload: DogSafetyTagResolveRequest,
+    request: Request,
+    service: CompanionPetService = Depends(get_companion_pet_service),
+) -> ApiResponse[DogSafetyTagResolveResponse]:
+    tag, pet, lost_info = await service.scan_safety_tag(
+        payload.raw_token, resolve_client_ip(request)
+    )
+    dog = getattr(tag, "dog", None)
+    if dog is None and tag.dog_id:
+        dog_repo = DogRepository(service._session)
+        dog = await dog_repo.get_by_id(tag.dog_id)
+
+    if dog is None:
+        raise NotFoundError("Dog Master profile not found for this Safety Tag.")
+
+    data = DogSafetyTagResolveResponse(
+        tag_id=tag.id,
+        dog_id=dog.id,
+        token_prefix=tag.token_prefix,
+        is_active=tag.is_active,
+        last_scanned_at=tag.last_scanned_at,
+        scan_count=tag.scan_count,
+        dog=DogProfileResponse.model_validate(dog),
+    )
+    return ApiResponse(data=data)

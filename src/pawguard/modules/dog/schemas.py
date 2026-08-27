@@ -278,3 +278,21 @@ class DogSafetyTagProvisionResponse(DogSafetyTagResponse):
     """Response when a Safety Tag is provisioned; exposes raw_token ONLY once."""
 
     raw_token: str
+
+
+class DogSafetyTagResolveRequest(BaseModel):
+    """Request payload for authoritative Safety Tag token resolution."""
+
+    raw_token: str = Field(..., min_length=1, description="Complete raw Safety Tag token string")
+
+
+class DogSafetyTagResolveResponse(BaseModel):
+    """Authoritative E2E response mapping raw_token -> Safety Tag -> Dog Master."""
+
+    tag_id: uuid.UUID
+    dog_id: uuid.UUID
+    token_prefix: str
+    is_active: bool
+    last_scanned_at: datetime | None = None
+    scan_count: int = 0
+    dog: DogProfileResponse
