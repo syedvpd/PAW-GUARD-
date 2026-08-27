@@ -317,32 +317,23 @@ async def test_arq_polling_backoff():
     try:
         with pytest.raises(asyncio.CancelledError):
             await outbox_poller_loop(ctx)
-        # Verify delay was 5 seconds (since it processed 5 events)
-        assert 5 in sleep_calls
+        # Verify delay was 2 seconds (since it processed 5 events)
+        assert 2 in sleep_calls
 
         # Step 2: Simulate processed == 0 (idle)
         OutboxService.process_pending_events = AsyncMock(return_value=0)
         sleep_calls.clear()
 
         # Let's test the state machine manually to verify delays step up:
-        # Delays step up: 5 -> 30 -> 120 -> 300 -> 300
+        # Delays step up: 2 -> 4 -> 6 -> 8 -> 10 -> 10
         delays = []
-        current_delay = 5
+        current_delay = 2
         for _ in range(5):
-            if 0 > 0:  # Mock processed count logic
-                current_delay = 5
-            else:
-                if current_delay == 5:
-                    current_delay = 30
-                elif current_delay == 30:
-                    current_delay = 120
-                elif current_delay == 120:
-                    current_delay = 300
-                else:
-                    current_delay = 300
+            processed = 0
+            current_delay = 2 if processed > 0 else min(current_delay + 2, 10)
             delays.append(current_delay)
 
-        assert delays == [30, 120, 300, 300, 300]
+        assert delays == [4, 6, 8, 10, 10]
 
     finally:
         OutboxService.process_pending_events = original_process
