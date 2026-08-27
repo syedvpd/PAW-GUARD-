@@ -14,9 +14,8 @@ from sqlalchemy.orm import Mapped, deferred, mapped_column, relationship
 from pawguard.db.base import Base
 from pawguard.db.mixins import AuditMixin, SoftDeleteMixin, TimestampMixin, UUIDPkMixin
 
-if TYPE_CHECKING:
-    from pawguard.modules.auth.models import User
-    from pawguard.modules.dog.models import DogProfile
+from pawguard.modules.auth.models import User
+from pawguard.modules.dog.models import DogProfile
 
 
 class AdoptionStatus(StrEnum):

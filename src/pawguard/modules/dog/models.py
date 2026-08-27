@@ -13,8 +13,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from pawguard.db.base import Base
 from pawguard.db.mixins import AuditMixin, SoftDeleteMixin, TimestampMixin, UUIDPkMixin
 
-if TYPE_CHECKING:
-    from pawguard.modules.companion_pet.models import SafetyTag
+from pawguard.modules.companion_pet.models import SafetyTag
 
 
 class DogStatus(StrEnum):

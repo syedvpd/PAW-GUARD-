@@ -214,9 +214,7 @@ class AuthService:
             if not user_roles or user_roles.isdisjoint(allowed_public_roles):
                 from pawguard.core.exceptions import ForbiddenError
 
-                raise ForbiddenError(
-                    "Access denied. Operational staff and partner roles must sign in via the Admin Portal at https://pawguard-admin.vercel.app/."
-                )
+                raise ForbiddenError("Access denied. Account is not authorized for public portal access.")
 
         user.failed_login_count = 0
         user.locked_until = None
