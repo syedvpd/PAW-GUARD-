@@ -43,16 +43,38 @@ def cache_response(ttl_seconds: int = 300, namespace: str = "route_cache"):
             if query_str:
                 cache_key += f"?{query_str}"
 
-            # Partition cache for security (separate keys for different users/roles)
+            # Partition cache by user identity (stable across token rotations).
+            # We extract the `sub` (user_id) and `role` claims from the JWT payload
+            # WITHOUT re-verifying the signature — auth middleware already did that.
+            # This means the same user's cache entry survives token refresh, eliminating
+            # cache misses on every new login that were causing 300-900ms DB hits.
             auth_header = request.headers.get("authorization")
-            if auth_header:
-                token_hash = hashlib.sha256(auth_header.encode("utf-8")).hexdigest()[:16]
-                cache_key += f":auth:{token_hash}"
-
             cookie_token = request.cookies.get("access_token")
-            if cookie_token:
-                cookie_hash = hashlib.sha256(cookie_token.encode("utf-8")).hexdigest()[:16]
-                cache_key += f":cookie:{cookie_hash}"
+            raw_token = None
+            if auth_header and auth_header.lower().startswith("bearer "):
+                raw_token = auth_header[7:]
+            elif cookie_token:
+                raw_token = cookie_token
+
+            if raw_token:
+                try:
+                    import base64
+
+                    # Decode JWT payload (middle segment) without signature verification
+                    payload_b64 = raw_token.split(".")[1]
+                    # Pad to valid base64 length
+                    payload_b64 += "=" * (4 - len(payload_b64) % 4)
+                    payload = json.loads(base64.urlsafe_b64decode(payload_b64))
+                    user_id = str(payload.get("sub", ""))
+                    role = str(payload.get("role", payload.get("roles", "")))
+                    if user_id:
+                        cache_key += f":uid:{user_id[:16]}"
+                    if role:
+                        cache_key += f":role:{hashlib.sha256(role.encode()).hexdigest()[:8]}"
+                except Exception:
+                    # Fallback: hash the token as before if JWT decode fails
+                    token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()[:16]
+                    cache_key += f":auth:{token_hash}"
 
             # 5. Read from Cache
             cache = CacheService(redis, namespace=namespace)
