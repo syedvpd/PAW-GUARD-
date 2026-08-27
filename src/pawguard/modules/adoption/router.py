@@ -16,7 +16,7 @@ from pawguard.core.bulk import (
     BulkStatusUpdateRequest,
     BulkStatusUpdateResponse,
 )
-from pawguard.core.exceptions import ForbiddenError, parse_enum
+from pawguard.core.exceptions import ForbiddenError, ValidationFailedError, parse_enum
 from pawguard.core.pagination import PageParams, page_params
 from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.core.search import SortParams, sort_params
@@ -34,6 +34,8 @@ from pawguard.modules.adoption.schemas import (
     AdoptionFeeUpdate,
     AdoptionFollowUpCreate,
     AdoptionFollowUpResponse,
+    AdoptionFollowUpUploadUrlRequest,
+    AdoptionFollowUpUploadUrlResponse,
     AdoptionScoreCreate,
     AdoptionScoreResponse,
     AdoptionStatusUpdate,
@@ -420,6 +422,58 @@ async def submit_follow_up_proof(
     return ApiResponse(
         data=AdoptionFollowUpResponse.model_validate(follow_up),
         message="Follow-up proof submitted successfully.",
+    )
+
+
+_ADOPTION_EVIDENCE_ALLOWED_MIME_TYPES = {
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/webp",
+    "video/mp4",
+    "video/quicktime",
+    "video/webm",
+}
+_ADOPTION_EVIDENCE_MAX_BYTES = 100 * 1024 * 1024  # 100MB limit for photos/videos
+
+
+@router.post(
+    "/{app_id}/follow-ups/upload-url",
+    response_model=ApiResponse[AdoptionFollowUpUploadUrlResponse],
+)
+async def generate_follow_up_upload_url(
+    app_id: uuid.UUID,
+    payload: AdoptionFollowUpUploadUrlRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: AdoptionService = Depends(get_adoption_service),
+) -> ApiResponse[AdoptionFollowUpUploadUrlResponse]:
+    """Generate a presigned S3 upload URL for post-adoption follow-up evidence photos/videos."""
+    app = await service.get_application(app_id)
+    if app.adopter_id != current_user.user.id and not has_permission(
+        current_user.user, "adoption:process"
+    ):
+        raise ForbiddenError("You do not have permission to upload evidence for this application.")
+
+    if payload.mime_type not in _ADOPTION_EVIDENCE_ALLOWED_MIME_TYPES:
+        raise ValidationFailedError(
+            f"Unsupported media type '{payload.mime_type}'. Allowed types: JPEG, PNG, WEBP, MP4, MOV, WEBM."
+        )
+    if payload.file_size > _ADOPTION_EVIDENCE_MAX_BYTES:
+        raise ValidationFailedError(
+            "File size exceeds the maximum 100MB limit for follow-up evidence."
+        )
+
+    storage = StorageService()
+    object_key = storage.build_object_key(folder="documents", filename=payload.filename)
+    upload_url = storage.generate_presigned_upload_url(
+        object_key=object_key, content_type=payload.mime_type
+    )
+    return ApiResponse(
+        data=AdoptionFollowUpUploadUrlResponse(
+            upload_url=upload_url,
+            media_key=object_key,
+        ),
+        message="Presigned upload URL generated successfully.",
     )
 
 

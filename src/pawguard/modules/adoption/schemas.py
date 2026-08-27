@@ -65,6 +65,7 @@ class AdoptionApplicationResponse(BaseModel):
         if v is None:
             return 1
         return int(v)
+
     residential_status: str
     has_landlord_approval: bool
     has_yard_fence: bool
@@ -164,3 +165,26 @@ class AdoptionFollowUpCreate(BaseModel):
     """Create a post-adoption follow-up milestone."""
 
     due_day: int = Field(..., ge=30, le=180, examples=[30], description="Days after completion")
+
+
+class AdoptionFollowUpUploadUrlRequest(BaseModel):
+    """Payload to request a presigned upload URL for adoption follow-up evidence."""
+
+    filename: str = Field(..., examples=["welfare_assessment_photo.jpg"], max_length=255)
+    mime_type: str = Field(..., examples=["image/jpeg"])
+    file_size: int = Field(
+        ..., ge=1, le=100 * 1024 * 1024, description="File size in bytes (max 100MB)"
+    )
+
+
+class AdoptionFollowUpUploadUrlResponse(BaseModel):
+    """Response containing presigned upload URL and mediaKey for follow-up evidence."""
+
+    upload_url: str = Field(
+        ..., description="Presigned S3/storage PUT URL for direct client upload"
+    )
+    media_key: str = Field(
+        ...,
+        description="The object key / mediaKey to submit in FollowUpProofCreate payload",
+        examples=["documents/adoption_followup_1a2b3c4d5e6f.jpg"],
+    )
