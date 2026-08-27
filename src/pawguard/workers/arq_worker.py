@@ -96,16 +96,16 @@ async def outbox_poller_loop(ctx: dict[str, Any]) -> None:
             processed = 0
 
         if processed > 0:
-            current_delay = 2
+            current_delay = 5
         else:
-            if current_delay == 2:
-                current_delay = 5
-            elif current_delay == 5:
-                current_delay = 10
-            elif current_delay == 10:
-                current_delay = 20
-            else:
+            if current_delay == 5:
+                current_delay = 15
+            elif current_delay == 15:
                 current_delay = 30
+            elif current_delay == 30:
+                current_delay = 60
+            else:
+                current_delay = 60
 
         await asyncio.sleep(current_delay)
 
@@ -146,6 +146,7 @@ _send_volunteer_shift_reminders = _track_failures(send_volunteer_shift_reminders
 class WorkerSettings:
     # Async email jobs are retried up to 5 times with backoff (see email_jobs.py).
     max_tries = 5
+    poll_delay_seconds = float(settings.arq_poll_delay_seconds)
     functions: list[Any] = [
         _send_password_reset_email_job,
         _send_email_verification_email_job,

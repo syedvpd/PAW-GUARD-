@@ -147,6 +147,11 @@ class Settings(BaseSettings):
     # SMTP ports which are blocked on many free tiers (e.g. Render free).
     brevo_api_key: str = ""
 
+    # ARQ Worker & Outbox Poller configuration
+    # poll_delay_seconds controls how frequently background workers query Redis.
+    # Higher value (5.0s - 10.0s) reduces Redis command consumption by up to 90%.
+    arq_poll_delay_seconds: float = 5.0
+
     # --- Firebase Cloud Messaging (FCM) ---
     # Path or raw JSON string of the Firebase service account credentials.
     # When unset, push notifications silently degrade to in-app only.
