@@ -1,4 +1,3 @@
-import asyncio
 import json
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
@@ -77,22 +76,18 @@ async def rescue_dashboard(session: AsyncSession, redis: Any | None = None) -> d
     if cached is not None:
         return cached
 
-    total_res, pending_res, dispatched_res, rescued_res, recent_res = await asyncio.gather(
-        session.execute(select(func.count(RescueRequest.id))),
-        session.execute(
-            select(func.count(RescueRequest.id)).where(
-                RescueRequest.status == RescueStatus.REPORTED
-            )
-        ),
-        session.execute(
-            select(func.count(RescueRequest.id)).where(
-                RescueRequest.status == RescueStatus.DISPATCHED
-            )
-        ),
-        session.execute(
-            select(func.count(RescueRequest.id)).where(RescueRequest.status == RescueStatus.RESCUED)
-        ),
-        session.execute(select(RescueRequest).order_by(RescueRequest.created_at.desc()).limit(10)),
+    total_res = await session.execute(select(func.count(RescueRequest.id)))
+    pending_res = await session.execute(
+        select(func.count(RescueRequest.id)).where(RescueRequest.status == RescueStatus.REPORTED)
+    )
+    dispatched_res = await session.execute(
+        select(func.count(RescueRequest.id)).where(RescueRequest.status == RescueStatus.DISPATCHED)
+    )
+    rescued_res = await session.execute(
+        select(func.count(RescueRequest.id)).where(RescueRequest.status == RescueStatus.RESCUED)
+    )
+    recent_res = await session.execute(
+        select(RescueRequest).order_by(RescueRequest.created_at.desc()).limit(10)
     )
     recent_list = [
         {
@@ -131,62 +126,54 @@ async def rescue_operations_dashboard(
         RescueStatus.RESCUED,
     ]
 
-    (
-        status_res,
-        severity_res,
-        active_disp_res,
-        agents_busy_res,
-        agents_total_res,
-        veh_assigned_res,
-        veh_total_res,
-    ) = await asyncio.gather(
-        session.execute(
-            select(RescueRequest.status, func.count())
-            .where(RescueRequest.deleted_at.is_(None))
-            .group_by(RescueRequest.status)
-        ),
-        session.execute(
-            select(RescueRequest.severity, func.count())
-            .where(RescueRequest.deleted_at.is_(None))
-            .group_by(RescueRequest.severity)
-        ),
-        session.execute(
-            select(func.count(RescueDispatch.id))
-            .join(RescueRequest, RescueRequest.id == RescueDispatch.rescue_request_id)
-            .where(
-                RescueRequest.status.in_(active_statuses),
-                RescueRequest.deleted_at.is_(None),
-            )
-        ),
-        session.execute(
-            select(func.count(func.distinct(RescueDispatchAgent.agent_id)))
-            .join(RescueDispatch, RescueDispatch.id == RescueDispatchAgent.dispatch_id)
-            .join(RescueRequest, RescueRequest.id == RescueDispatch.rescue_request_id)
-            .where(
-                RescueRequest.status.in_(active_statuses),
-                RescueRequest.deleted_at.is_(None),
-            )
-        ),
-        session.execute(
-            select(func.count(func.distinct(User.id)))
-            .join(UserRole, UserRole.user_id == User.id)
-            .join(Role, Role.id == UserRole.role_id)
-            .where(
-                User.deleted_at.is_(None),
-                User.is_active.is_(True),
-                Role.name == "rescue_agent",
-            )
-        ),
-        session.execute(
-            select(func.count(func.distinct(RescueDispatch.assigned_vehicle_id)))
-            .join(RescueRequest, RescueRequest.id == RescueDispatch.rescue_request_id)
-            .where(
-                RescueDispatch.assigned_vehicle_id.isnot(None),
-                RescueRequest.status.in_(active_statuses),
-                RescueRequest.deleted_at.is_(None),
-            )
-        ),
-        session.execute(select(func.count(Vehicle.id)).where(Vehicle.deleted_at.is_(None))),
+    status_res = await session.execute(
+        select(RescueRequest.status, func.count())
+        .where(RescueRequest.deleted_at.is_(None))
+        .group_by(RescueRequest.status)
+    )
+    severity_res = await session.execute(
+        select(RescueRequest.severity, func.count())
+        .where(RescueRequest.deleted_at.is_(None))
+        .group_by(RescueRequest.severity)
+    )
+    active_disp_res = await session.execute(
+        select(func.count(RescueDispatch.id))
+        .join(RescueRequest, RescueRequest.id == RescueDispatch.rescue_request_id)
+        .where(
+            RescueRequest.status.in_(active_statuses),
+            RescueRequest.deleted_at.is_(None),
+        )
+    )
+    agents_busy_res = await session.execute(
+        select(func.count(func.distinct(RescueDispatchAgent.agent_id)))
+        .join(RescueDispatch, RescueDispatch.id == RescueDispatchAgent.dispatch_id)
+        .join(RescueRequest, RescueRequest.id == RescueDispatch.rescue_request_id)
+        .where(
+            RescueRequest.status.in_(active_statuses),
+            RescueRequest.deleted_at.is_(None),
+        )
+    )
+    agents_total_res = await session.execute(
+        select(func.count(func.distinct(User.id)))
+        .join(UserRole, UserRole.user_id == User.id)
+        .join(Role, Role.id == UserRole.role_id)
+        .where(
+            User.deleted_at.is_(None),
+            User.is_active.is_(True),
+            Role.name == "rescue_agent",
+        )
+    )
+    veh_assigned_res = await session.execute(
+        select(func.count(func.distinct(RescueDispatch.assigned_vehicle_id)))
+        .join(RescueRequest, RescueRequest.id == RescueDispatch.rescue_request_id)
+        .where(
+            RescueDispatch.assigned_vehicle_id.isnot(None),
+            RescueRequest.status.in_(active_statuses),
+            RescueRequest.deleted_at.is_(None),
+        )
+    )
+    veh_total_res = await session.execute(
+        select(func.count(Vehicle.id)).where(Vehicle.deleted_at.is_(None))
     )
 
     by_status: dict[str, int] = {str(row[0]): row[1] for row in status_res.all()}
@@ -225,39 +212,29 @@ async def shelter_dashboard(session: AsyncSession, redis: Any | None = None) -> 
     if cached is not None:
         return cached
 
-    (
-        facilities_res,
-        dogs_res,
-        adoptable_res,
-        kennels_res,
-        transfers_res,
-        isolation_res,
-        cleaning_res,
-    ) = await asyncio.gather(
-        session.execute(select(func.count(ShelterFacility.id))),
-        session.execute(select(func.count(DogProfile.id))),
-        session.execute(
-            select(func.count(DogProfile.id)).where(DogProfile.status == DogStatus.SHELTER)
-        ),
-        session.execute(select(func.count(Kennel.id))),
-        session.execute(
-            select(func.count(FacilityTransfer.id)).where(
-                FacilityTransfer.status == TransferStatus.PENDING
-            )
-        ),
-        session.execute(
-            select(func.count(DogProfile.id))
-            .join(ShelterSection, DogProfile.section_id == ShelterSection.id)
-            .where(
-                ShelterSection.section_type == SectionType.ISOLATION,
-                DogProfile.deleted_at.is_(None),
-            )
-        ),
-        session.execute(
-            select(func.count(Kennel.id)).where(
-                Kennel.sanitation_state == KennelSanitationState.NEEDS_CLEANING
-            )
-        ),
+    facilities_res = await session.execute(select(func.count(ShelterFacility.id)))
+    dogs_res = await session.execute(select(func.count(DogProfile.id)))
+    adoptable_res = await session.execute(
+        select(func.count(DogProfile.id)).where(DogProfile.status == DogStatus.SHELTER)
+    )
+    kennels_res = await session.execute(select(func.count(Kennel.id)))
+    transfers_res = await session.execute(
+        select(func.count(FacilityTransfer.id)).where(
+            FacilityTransfer.status == TransferStatus.PENDING
+        )
+    )
+    isolation_res = await session.execute(
+        select(func.count(DogProfile.id))
+        .join(ShelterSection, DogProfile.section_id == ShelterSection.id)
+        .where(
+            ShelterSection.section_type == SectionType.ISOLATION,
+            DogProfile.deleted_at.is_(None),
+        )
+    )
+    cleaning_res = await session.execute(
+        select(func.count(Kennel.id)).where(
+            Kennel.sanitation_state == KennelSanitationState.NEEDS_CLEANING
+        )
     )
 
     total_dogs = dogs_res.scalar_one()

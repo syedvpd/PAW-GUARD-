@@ -537,25 +537,14 @@ class DashboardRepository:
         }
 
     async def get_kpis(self) -> dict[str, Any]:
-        (
-            adoption_rate,
-            shelter,
-            rescue,
-            donations,
-            open_grievances,
-            unread,
-            active_fosters,
-            volunteer_hours,
-        ) = await asyncio.gather(
-            self.get_adoption_rate(),
-            self.get_shelter_occupancy(),
-            self.get_rescue_kpis(),
-            self.get_donation_totals(),
-            self.get_open_grievances(),
-            self.get_unread_notifications_count(),
-            self.get_active_fosters(),
-            self.get_volunteer_hours(),
-        )
+        adoption_rate = await self.get_adoption_rate()
+        shelter = await self.get_shelter_occupancy()
+        rescue = await self.get_rescue_kpis()
+        donations = await self.get_donation_totals()
+        open_grievances = await self.get_open_grievances()
+        unread = await self.get_unread_notifications_count()
+        active_fosters = await self.get_active_fosters()
+        volunteer_hours = await self.get_volunteer_hours()
         return {
             "adoption_rate_pct": adoption_rate,
             "shelter_occupancy_pct": shelter["occupancy_pct"],
@@ -569,17 +558,10 @@ class DashboardRepository:
         }
 
     async def get_charts(self) -> dict[str, Any]:
-        (
-            adoption_trend,
-            rescue_trend,
-            donation_trend,
-            breed_distribution,
-        ) = await asyncio.gather(
-            self.get_monthly_adoption_trend(),
-            self.get_monthly_rescue_trend(),
-            self.get_monthly_donation_trend(),
-            self.get_dog_breed_distribution(),
-        )
+        adoption_trend = await self.get_monthly_adoption_trend()
+        rescue_trend = await self.get_monthly_rescue_trend()
+        donation_trend = await self.get_monthly_donation_trend()
+        breed_distribution = await self.get_dog_breed_distribution()
         return {
             "adoption_trend": adoption_trend,
             "rescue_trend": rescue_trend,
@@ -588,11 +570,9 @@ class DashboardRepository:
         }
 
     async def get_donation_summary(self) -> dict[str, Any]:
-        totals, recent, trend = await asyncio.gather(
-            self.get_donation_totals(),
-            self.get_recent_donations(days=30),
-            self.get_monthly_donation_trend(months=6),
-        )
+        totals = await self.get_donation_totals()
+        recent = await self.get_recent_donations(days=30)
+        trend = await self.get_monthly_donation_trend(months=6)
         return {
             "total_donations": totals["total_donations"],
             "total_raised": totals["total_raised"],
@@ -601,10 +581,8 @@ class DashboardRepository:
         }
 
     async def get_rescue_stats(self) -> dict[str, Any]:
-        kpis, by_status = await asyncio.gather(
-            self.get_rescue_kpis(),
-            self.count_rescues_by_status(),
-        )
+        kpis = await self.get_rescue_kpis()
+        by_status = await self.count_rescues_by_status()
         return {
             "total_rescues": kpis["total_rescues"],
             "admitted": kpis["admitted"],
@@ -614,12 +592,10 @@ class DashboardRepository:
         }
 
     async def get_adoption_stats(self) -> dict[str, Any]:
-        by_status, rate, pending, trend = await asyncio.gather(
-            self.count_adoptions_by_status(),
-            self.get_adoption_rate(),
-            self.get_pending_adoptions_count(),
-            self.get_monthly_adoption_trend(),
-        )
+        by_status = await self.count_adoptions_by_status()
+        rate = await self.get_adoption_rate()
+        pending = await self.get_pending_adoptions_count()
+        trend = await self.get_monthly_adoption_trend()
         return {
             "by_status": by_status,
             "adoption_rate_pct": rate,
@@ -628,11 +604,9 @@ class DashboardRepository:
         }
 
     async def get_volunteer_stats(self) -> dict[str, Any]:
-        total, by_status, hours = await asyncio.gather(
-            self.get_total_volunteers_count(),
-            self.count_volunteers_by_status(),
-            self.get_volunteer_hours(),
-        )
+        total = await self.get_total_volunteers_count()
+        by_status = await self.count_volunteers_by_status()
+        hours = await self.get_volunteer_hours()
         return {
             "total_volunteers": total,
             "by_status": by_status,
@@ -640,10 +614,8 @@ class DashboardRepository:
         }
 
     async def get_notification_summary(self) -> dict[str, Any]:
-        unread, total = await asyncio.gather(
-            self.get_unread_notifications_count(),
-            self.get_total_notifications_count(),
-        )
+        unread = await self.get_unread_notifications_count()
+        total = await self.get_total_notifications_count()
         return {
             "total": total,
             "unread": unread,
@@ -651,10 +623,8 @@ class DashboardRepository:
         }
 
     async def get_shelter_stats(self) -> dict[str, Any]:
-        occupancy, total_facilities = await asyncio.gather(
-            self.get_shelter_occupancy(),
-            self.get_total_facilities_count(),
-        )
+        occupancy = await self.get_shelter_occupancy()
+        total_facilities = await self.get_total_facilities_count()
         return {
             "total_facilities": total_facilities,
             "capacity": occupancy["capacity"],

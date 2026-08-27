@@ -205,7 +205,12 @@ class AuthService:
         # All operational and partner roles are blocked on Public Web and directed to Admin Portal (https://pawguard-admin.vercel.app/).
         # Admin Portal permits ALL 15 roles.
         is_public_web = False
-        if origin and "pawguard-public-web" in origin.lower() or client_type and client_type.lower() in ("public", "public_web"):
+        if (
+            origin
+            and "pawguard-public-web" in origin.lower()
+            or client_type
+            and client_type.lower() in ("public", "public_web")
+        ):
             is_public_web = True
 
         if is_public_web:
@@ -214,7 +219,9 @@ class AuthService:
             if not user_roles or user_roles.isdisjoint(allowed_public_roles):
                 from pawguard.core.exceptions import ForbiddenError
 
-                raise ForbiddenError("Access denied. Account is not authorized for public portal access.")
+                raise ForbiddenError(
+                    "Access denied. Account is not authorized for public portal access."
+                )
 
         user.failed_login_count = 0
         user.locked_until = None
