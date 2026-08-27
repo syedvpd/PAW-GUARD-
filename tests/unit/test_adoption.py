@@ -243,6 +243,70 @@ class TestAdoptionService:
             await service.update_application_status(app_id, AdoptionStatus.APPROVED)
 
     @pytest.mark.asyncio
+    async def test_home_check_blocked_until_interview_call_completed(self, service, mock_repo):
+        app_id = uuid.uuid4()
+        app = AdoptionApplication(
+            id=app_id,
+            dog_id=uuid.uuid4(),
+            adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.INTERVIEW,
+            residential_status="owned",
+        )
+        mock_repo.get_by_id.return_value = app
+        with pytest.raises(ValidationFailedError, match="Complete the interview call"):
+            await service.update_application_status(app_id, AdoptionStatus.HOME_CHECK)
+
+    @pytest.mark.asyncio
+    async def test_home_check_via_update_application_blocked_until_interview_completed(
+        self, service, mock_repo
+    ):
+        app_id = uuid.uuid4()
+        app = AdoptionApplication(
+            id=app_id,
+            dog_id=uuid.uuid4(),
+            adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.INTERVIEW,
+            residential_status="owned",
+        )
+        mock_repo.get_by_id.return_value = app
+        payload = AdoptionApplicationUpdate(status=AdoptionStatus.HOME_CHECK)
+        with pytest.raises(ValidationFailedError, match="Complete the interview call"):
+            await service.update_application(app_id, payload)
+
+    @pytest.mark.asyncio
+    async def test_home_check_via_update_application_allowed_when_interview_completed_in_same_payload(
+        self, service, mock_repo, mock_dog_repo
+    ):
+        app_id = uuid.uuid4()
+        dog_id = uuid.uuid4()
+        app = AdoptionApplication(
+            id=app_id,
+            dog_id=dog_id,
+            adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.INTERVIEW,
+            residential_status="owned",
+        )
+        mock_repo.get_by_id.side_effect = [app, app, app]
+        mock_repo.get_approved_application_for_dog.return_value = None
+        dog = DogProfile(
+            id=dog_id,
+            registration_number="DOG-001",
+            name="B",
+            breed="Mix",
+            gender="female",
+            status=DogStatus.SHELTER,
+            is_adoptable=True,
+        )
+        mock_dog_repo.get_by_id.return_value = dog
+        mock_dog_repo.get_by_id_for_update.return_value = dog
+        payload = AdoptionApplicationUpdate(
+            status=AdoptionStatus.HOME_CHECK,
+            interview_completed_at=datetime.now(UTC),
+        )
+        result = await service.update_application(app_id, payload)
+        assert result.status == AdoptionStatus.HOME_CHECK
+
+    @pytest.mark.asyncio
     async def test_home_check_locks_dog_against_other_applications(
         self, service, mock_repo, mock_dog_repo
     ):
@@ -253,6 +317,7 @@ class TestAdoptionService:
             dog_id=dog_id,
             adopter_id=uuid.uuid4(),
             status=AdoptionStatus.INTERVIEW,
+            interview_completed_at=datetime.now(UTC),
             residential_status="owned",
         )
         mock_repo.get_by_id.side_effect = [app, app, app]
@@ -283,6 +348,7 @@ class TestAdoptionService:
             dog_id=dog_id,
             adopter_id=uuid.uuid4(),
             status=AdoptionStatus.INTERVIEW,
+            interview_completed_at=datetime.now(UTC),
             residential_status="owned",
         )
         other_app = AdoptionApplication(
@@ -422,6 +488,9 @@ class TestAdoptionService:
                     dog_id=dog_id,
                     adopter_id=uuid.uuid4(),
                     status=start_status,
+                    interview_completed_at=(
+                        datetime.now(UTC) if start_status == AdoptionStatus.INTERVIEW else None
+                    ),
                     residential_status="owned",
                 )
                 mock_repo.get_by_id.return_value = app
@@ -768,3 +837,16 @@ class TestAdoptionScores:
         mock_repo.get_scores_for_application.return_value = []
         result = await service.get_scores(app_id)
         assert result == []
+
+
+class TestAdoptionApplicationUpdateSchema:
+    def test_home_inspection_type_accepts_physical_and_virtual(self):
+        assert AdoptionApplicationUpdate(home_inspection_type="physical").home_inspection_type == "physical"
+        assert AdoptionApplicationUpdate(home_inspection_type="virtual").home_inspection_type == "virtual"
+        assert AdoptionApplicationUpdate(home_inspection_type=None).home_inspection_type is None
+
+    def test_home_inspection_type_rejects_invalid_value(self):
+        import pydantic
+
+        with pytest.raises(pydantic.ValidationError, match="physical.*virtual"):
+            AdoptionApplicationUpdate(home_inspection_type="drive-by")

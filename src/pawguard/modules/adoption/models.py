@@ -80,6 +80,14 @@ class AdoptionApplication(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMix
         DateTime(timezone=True), nullable=True
     )
     home_inspection_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    home_inspection_type: Mapped[str | None] = mapped_column(String(16), nullable=True)  # "physical" | "virtual"
+    interview_scheduled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    interview_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    interview_completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     adoption_agreement_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     fee_amount: Mapped[Decimal | None] = mapped_column(

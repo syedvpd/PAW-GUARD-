@@ -309,6 +309,15 @@ class AdoptionService:
             new_status = update_data["status"]
             self._check_transition(app.status, new_status)
 
+            if app.status == AdoptionStatus.INTERVIEW and new_status == AdoptionStatus.HOME_CHECK:
+                effective_interview_completed_at = update_data.get(
+                    "interview_completed_at", app.interview_completed_at
+                )
+                if effective_interview_completed_at is None:
+                    raise ValidationFailedError(
+                        "Complete the interview call before scheduling the home inspection."
+                    )
+
             if new_status in (
                 AdoptionStatus.HOME_CHECK,
                 AdoptionStatus.APPROVED,
@@ -391,6 +400,12 @@ class AdoptionService:
 
         old_status = app.status
         self._check_transition(old_status, status)
+
+        if old_status == AdoptionStatus.INTERVIEW and status == AdoptionStatus.HOME_CHECK:
+            if app.interview_completed_at is None:
+                raise ValidationFailedError(
+                    "Complete the interview call before scheduling the home inspection."
+                )
 
         if status in (AdoptionStatus.HOME_CHECK, AdoptionStatus.APPROVED, AdoptionStatus.COMPLETED):
             lock_token = str(uuid.uuid4())

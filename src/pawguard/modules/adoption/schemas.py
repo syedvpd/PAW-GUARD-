@@ -33,14 +33,29 @@ class AdoptionApplicationUpdate(BaseModel):
     vetting_officer_notes: str | None = Field(
         None, examples=["Phone interview completed, applicant is a strong candidate."]
     )
+    interview_scheduled_at: datetime | None = Field(None, examples=["2026-08-10T15:00:00Z"])
+    interview_notes: str | None = Field(
+        None, examples=["Called applicant, discussed household routine and yard setup."]
+    )
+    interview_completed_at: datetime | None = Field(None, examples=["2026-08-10T15:20:00Z"])
     home_inspection_scheduled_at: datetime | None = Field(None, examples=["2026-08-15T14:00:00Z"])
     home_inspection_notes: str | None = Field(
         None, examples=["Yard is securely fenced, home is clean and pet-ready."]
+    )
+    home_inspection_type: str | None = Field(
+        None, examples=["physical"], description="'physical' or 'virtual'"
     )
     adoption_agreement_url: str | None = Field(None, examples=["documents/agreement_1a2b3c.pdf"])
     version_id: int | None = Field(
         None, description="Expected version_id for optimistic locking", examples=[1]
     )
+
+    @field_validator("home_inspection_type")
+    @classmethod
+    def _validate_inspection_type(cls, v: str | None) -> str | None:
+        if v is not None and v not in ("physical", "virtual"):
+            raise ValueError("home_inspection_type must be 'physical' or 'virtual'")
+        return v
 
 
 class AdoptionStatusUpdate(BaseModel):
@@ -73,8 +88,12 @@ class AdoptionApplicationResponse(BaseModel):
     existing_pets_medical_details: str | None
     pet_care_experience: str | None
     vetting_officer_notes: str | None
+    interview_scheduled_at: datetime | None
+    interview_notes: str | None
+    interview_completed_at: datetime | None
     home_inspection_scheduled_at: datetime | None
     home_inspection_notes: str | None
+    home_inspection_type: str | None
     adoption_agreement_url: str | None
     fee_amount: Decimal | None = Field(None, description="Adoption fee amount")
     completed_at: datetime | None
