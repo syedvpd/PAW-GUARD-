@@ -123,6 +123,15 @@ def _build_verify_url(raw_token: str, client_type: str | None) -> str:
     return f"{base}/verify-email?token={raw_token}"
 
 
+def _build_reset_url(raw_token: str, client_type: str | None) -> str:
+    settings = get_settings()
+    if client_type == ClientType.MOBILE.value:
+        base = settings.mobile_deep_link_base.strip().rstrip("/")
+    else:
+        base = settings.web_app_url.strip().rstrip("/")
+    return f"{base}/reset-password?token={raw_token}"
+
+
 def _cookie_domain() -> str | None:
     """Return None so the browser treats auth cookies as host-only cookies
     without an explicit Domain attribute. This enables same-origin Vercel proxy
@@ -460,6 +469,7 @@ async def change_password(
 async def request_password_reset(
     payload: PasswordResetRequest,
     request: Request,
+    client_type: str | None = Header(default=None, alias=CLIENT_TYPE_HEADER),
     auth_service: AuthService = Depends(get_auth_service),
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[None]:
@@ -467,8 +477,7 @@ async def request_password_reset(
         email=payload.email, ctx=_build_request_context(request)
     )
     if raw_token is not None:
-        base_url = get_settings().web_app_url.strip().rstrip("/")
-        reset_url = f"{base_url}/reset-password?token={raw_token}"
+        reset_url = _build_reset_url(raw_token, client_type)
         try:
             await OutboxService.enqueue_job(
                 db, "send_password_reset_email_job", to=payload.email, reset_url=reset_url
