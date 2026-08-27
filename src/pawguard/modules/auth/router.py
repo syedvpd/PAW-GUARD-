@@ -245,6 +245,7 @@ async def login(
         password=payload.password,
         device=payload.device,
         ctx=_build_request_context(request),
+        client_type=client_type,
     )
 
     if isinstance(result, str):
