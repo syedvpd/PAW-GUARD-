@@ -66,6 +66,7 @@ class VolunteerApplication(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMi
     )
     emergency_contact_name: Mapped[str] = mapped_column(String(255), nullable=False)
     emergency_contact_phone: Mapped[str] = mapped_column(String(32), nullable=False)
+    applied_role: Mapped[str | None] = mapped_column(String(255), nullable=True)
     skills: Mapped[str | None] = mapped_column(Text, nullable=True)
     availability: Mapped[str | None] = mapped_column(String(255), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -103,6 +104,7 @@ class VolunteerProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin,
 
     emergency_contact_name: Mapped[str] = mapped_column(String(255), nullable=False)
     emergency_contact_phone: Mapped[str] = mapped_column(String(32), nullable=False)
+    applied_role: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # comma separated e.g. "Grooming,Transport,Photography,Training"
     skills: Mapped[str | None] = mapped_column(Text, nullable=True)

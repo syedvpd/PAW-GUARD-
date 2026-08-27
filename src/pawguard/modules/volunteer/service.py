@@ -144,6 +144,7 @@ class VolunteerService:
                 existing_app.status = ApplicationStatus.SUBMITTED
                 existing_app.emergency_contact_name = payload.emergency_contact_name
                 existing_app.emergency_contact_phone = payload.emergency_contact_phone
+                existing_app.applied_role = payload.applied_role
                 existing_app.skills = payload.skills
                 existing_app.availability = payload.availability
                 existing_app.notes = payload.notes
@@ -194,6 +195,7 @@ class VolunteerService:
             user_id=user_id,
             emergency_contact_name=payload.emergency_contact_name,
             emergency_contact_phone=payload.emergency_contact_phone,
+            applied_role=payload.applied_role,
             skills=payload.skills,
             availability=payload.availability,
             notes=payload.notes,
@@ -342,6 +344,7 @@ class VolunteerService:
             application_id=application.id,
             emergency_contact_name=application.emergency_contact_name,
             emergency_contact_phone=application.emergency_contact_phone,
+            applied_role=application.applied_role,
             skills=application.skills,
             availability=application.availability,
             notes=application.notes,

@@ -12,6 +12,11 @@ from pawguard.modules.volunteer.models import ApplicationStatus, AttendanceStatu
 class VolunteerProfileCreate(BaseModel):
     emergency_contact_name: str = Field(..., min_length=1, max_length=255, examples=["Jane Doe"])
     emergency_contact_phone: str = Field(..., min_length=1, max_length=32, examples=["+1-555-0100"])
+    applied_role: str | None = Field(
+        None,
+        max_length=255,
+        examples=["Foster Care", "Transport", "Events & Outreach", "Shelter Support"],
+    )
     skills: str | None = Field(None, examples=["Grooming, Transport, Photography"])
     availability: str | None = Field(None, max_length=255, examples=["Weekends, Evenings"])
     notes: str | None = Field(None, examples=["Available for emergency call-outs on weekends."])
@@ -27,6 +32,7 @@ class VolunteerProfileUpdate(BaseModel):
     status: VolunteerStatus | None = Field(None, examples=["active"])
     emergency_contact_name: str | None = Field(None, examples=["Jane Doe"])
     emergency_contact_phone: str | None = Field(None, examples=["+1-555-0100"])
+    applied_role: str | None = Field(None, max_length=255, examples=["Foster Care"])
     skills: str | None = Field(None, examples=["Grooming, Transport"])
     availability: str | None = Field(None, examples=["Weekends"])
     notes: str | None = Field(None, examples=["Onboarding completed."])
@@ -44,6 +50,7 @@ class VolunteerProfileResponse(BaseModel):
     status: VolunteerStatus
     emergency_contact_name: str
     emergency_contact_phone: str
+    applied_role: str | None = None
     skills: str | None
     availability: str | None
     notes: str | None
@@ -163,6 +170,7 @@ class VolunteerApplicationResponse(BaseModel):
     status: ApplicationStatus
     emergency_contact_name: str
     emergency_contact_phone: str
+    applied_role: str | None = None
     skills: str | None
     availability: str | None
     notes: str | None
