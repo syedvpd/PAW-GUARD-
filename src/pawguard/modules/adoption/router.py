@@ -151,7 +151,27 @@ async def list_my_applications(
 
 
 @router.get(
+    "/dashboard",
+    response_model=ApiResponse[dict[str, Any]],
+)
+async def get_adoption_dashboard_alias(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    redis: RedisClient = Depends(get_redis),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> ApiResponse[dict[str, Any]]:
+    from pawguard.modules.dashboards import service as dasvc
+
+    data = await dasvc.adoption_dashboard(db, redis=redis)
+    return ApiResponse(data=data)
+
+
+@router.get(
     "",
+    response_model=PaginatedResponse[AdoptionApplicationResponse],
+)
+@router.get(
+    "/applications",
     response_model=PaginatedResponse[AdoptionApplicationResponse],
 )
 async def list_applications(
