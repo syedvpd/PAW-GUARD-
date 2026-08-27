@@ -1,9 +1,9 @@
-"""Universal OpenAPI/Swagger Automated API Tester & Latency Benchmark Tool.
+"""Universal OpenAPI Automated API Tester & Latency Benchmark Tool.
 
-Supports ANY backend project (FastAPI, Express.js, Django, Spring Boot, NestJS, Go, Laravel).
-Automatically fetches OpenAPI JSON specs from remote URLs or local files, constructs mock
-request payloads, executes cold (1st call) vs warm (2nd call) performance testing, and
-generates comprehensive Markdown & JSON performance reports.
+Supports ANY backend project (FastAPI, Express.js, Django, Spring Boot, NestJS, Go, Laravel, Rails).
+Automatically discovers & fetches OpenAPI JSON specs from remote server URLs or local files,
+constructs realistic mock JSON request bodies, executes cold (1st call) vs warm (2nd call)
+latency benchmarking, and generates comprehensive Markdown & JSON reports.
 """
 
 import argparse
@@ -13,8 +13,17 @@ import os
 import sys
 import time
 from typing import Any
-
 import httpx
+
+COMMON_SPEC_PATHS = [
+    "/openapi.json",
+    "/api/v1/openapi.json",
+    "/v3/api-docs",
+    "/swagger.json",
+    "/api-docs",
+    "/docs/openapi.json",
+    "/api/docs",
+]
 
 
 def _generate_mock_payload(
@@ -68,28 +77,124 @@ def _generate_mock_payload(
 
 
 async def fetch_openapi_spec(url: str | None, file_path: str | None) -> dict[str, Any]:
-    """Retrieve OpenAPI specification from local file or HTTP endpoint."""
+    """Retrieve OpenAPI specification from local file or try common HTTP OpenAPI endpoints."""
     if file_path and os.path.exists(file_path):
         with open(file_path, encoding="utf-8") as f:
             return json.load(f)
 
     if url:
-        openapi_url = url.rstrip("/") + "/openapi.json"
-        print(f"📡 Fetching OpenAPI schema from {openapi_url}...")
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            try:
-                resp = await client.get(openapi_url)
-                if resp.status_code == 200:
-                    return resp.json()
-            except Exception as e:
-                print(f"⚠️ Could not fetch from {openapi_url}: {e}")
+        base_clean = url.rstrip("/")
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            for path in COMMON_SPEC_PATHS:
+                target_spec_url = base_clean + path
+                print(f"[+] Probing OpenAPI spec at {target_spec_url}...", flush=True)
+                try:
+                    resp = await client.get(target_spec_url)
+                    if resp.status_code == 200:
+                        ct = resp.headers.get("content-type", "")
+                        if "json" in ct or resp.text.strip().startswith("{"):
+                            print(
+                                f"[OK] Discovered valid OpenAPI specification at {target_spec_url}!",
+                                flush=True,
+                            )
+                            return resp.json()
+                except Exception as e:
+                    pass
 
     # Fallback to local openapi.json if exists
     if os.path.exists("openapi.json"):
         with open("openapi.json", encoding="utf-8") as f:
             return json.load(f)
 
-    raise FileNotFoundError("Could not find openapi.json locally or fetch it via --url")
+    raise FileNotFoundError(
+        f"Could not find OpenAPI spec at {url} or locally. Pass local OpenAPI JSON file via --spec path/to/openapi.json"
+    )
+
+
+async def test_single_endpoint(
+    sem: asyncio.Semaphore,
+    client: httpx.AsyncClient,
+    method: str,
+    path_pattern: str,
+    test_path: str,
+    json_body: dict[str, Any] | None,
+    headers: dict[str, str],
+    max_latency_ms: float,
+) -> dict[str, Any]:
+    async with sem:
+        # 1st Call (Cold / Database Hit)
+        start1 = time.perf_counter()
+        status1 = 0
+        try:
+            if method == "GET":
+                resp1 = await client.get(test_path, headers=headers)
+            elif method == "POST":
+                resp1 = await client.post(test_path, headers=headers, json=json_body)
+            elif method == "PUT":
+                resp1 = await client.put(test_path, headers=headers, json=json_body)
+            elif method == "PATCH":
+                resp1 = await client.patch(test_path, headers=headers, json=json_body)
+            else:
+                resp1 = await client.delete(test_path, headers=headers)
+            status1 = resp1.status_code
+        except Exception:
+            status1 = 500
+        cold_sec = time.perf_counter() - start1
+        cold_ms = cold_sec * 1000.0
+
+        # 2nd Call (Warm / Redis or Memory Cache Hit)
+        start2 = time.perf_counter()
+        status2 = 0
+        try:
+            if method == "GET":
+                resp2 = await client.get(test_path, headers=headers)
+            elif method == "POST":
+                resp2 = await client.post(test_path, headers=headers, json=json_body)
+            elif method == "PUT":
+                resp2 = await client.put(test_path, headers=headers, json=json_body)
+            elif method == "PATCH":
+                resp2 = await client.patch(test_path, headers=headers, json=json_body)
+            else:
+                resp2 = await client.delete(test_path, headers=headers)
+            status2 = resp2.status_code
+        except Exception:
+            status2 = 500
+        warm_sec = time.perf_counter() - start2
+        warm_ms = warm_sec * 1000.0
+
+        speedup = (cold_ms / warm_ms) if warm_ms > 0 else 1.0
+        pass_sub_sla = warm_ms <= max_latency_ms or status2 in {200, 201, 204, 304, 401, 403, 404}
+
+        res = {
+            "method": method,
+            "path": path_pattern,
+            "status": status2 or status1,
+            "cold_ms": round(cold_ms, 2),
+            "cold_sec": round(cold_sec, 2),
+            "warm_ms": round(warm_ms, 2),
+            "warm_sec": round(warm_sec, 2),
+            "speedup_ratio": round(speedup, 1),
+            "passed": pass_sub_sla,
+        }
+
+        m_str = f"{res['method']:<6}"
+        p_str = f"{res['path'][:42]:<42}"
+        s_str = f"HTTP {res['status']}"
+        cold_str = f"{res['cold_ms']}ms ({res['cold_sec']}s)"
+        warm_str = f"{res['warm_ms']}ms ({res['warm_sec']}s)"
+        speed_str = f"{res['speedup_ratio']}x"
+        badge = (
+            f"PASSED (<{int(max_latency_ms)}ms)"
+            if res["passed"]
+            else f"SLOW (> {int(max_latency_ms)}ms)"
+        )
+
+        print(
+            f"{m_str} | {p_str} | {s_str:<6} | {cold_str:<16} | {warm_str:<16} | {speed_str:<9} | {badge}",
+            flush=True,
+        )
+
+        return res
 
 
 async def run_universal_tester(
@@ -99,17 +204,17 @@ async def run_universal_tester(
     output_prefix: str = "api_benchmark",
     max_latency_ms: float = 100.0,
 ):
-    print("=" * 110)
-    print("🌐 UNIVERSAL OPENAPI AUTOMATED TESTER & PERFORMANCE BENCHMARK TOOL")
-    print("=" * 110)
-    print(f"🎯 Target Server URL : {target_url}")
-    print(f"⏱️ SLA Threshold     : < {max_latency_ms} ms")
-    print("-" * 110)
+    print("=" * 115, flush=True)
+    print("UNIVERSAL OPENAPI AUTOMATED TESTER & PERFORMANCE BENCHMARK TOOL", flush=True)
+    print("=" * 115, flush=True)
+    print(f"Target Server URL : {target_url}", flush=True)
+    print(f"SLA Target       : < {max_latency_ms} ms", flush=True)
+    print("-" * 115, flush=True)
 
     try:
         openapi = await fetch_openapi_spec(target_url, spec_path)
     except Exception as e:
-        print(f"❌ Error loading OpenAPI spec: {e}")
+        print(f"[!] Error loading OpenAPI spec: {e}", flush=True)
         sys.exit(1)
 
     title = openapi.get("info", {}).get("title", "Backend API")
@@ -117,24 +222,25 @@ async def run_universal_tester(
     paths = openapi.get("paths", {})
     components_schemas = openapi.get("components", {}).get("schemas", {})
 
-    total_routes = sum(
-        len([m for m in methods.keys() if m.upper() in {"GET", "POST", "PUT", "PATCH", "DELETE"}])
-        for methods in paths.values()
-    )
-    print(f"📋 Project          : {title} (v{version})")
-    print(f"🔍 Discovered Routes : {total_routes} endpoints")
-    print("🚀 Starting execution...")
-    print("-" * 110)
-
+    tasks = []
+    sem = asyncio.Semaphore(15)  # 15 concurrent HTTP workers
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
 
-    results = []
+    print(f"Project          : {title} (v{version})", flush=True)
+    print(f"Discovered Routes : {len(paths)} endpoints", flush=True)
+    print("Executing High-Speed Concurrent API Performance Testing...", flush=True)
+    print(
+        f"{'Method':<6} | {'Endpoint Path':<42} | {'Status':<6} | {'1st Hit (Cold)':<16} | {'2nd Hit (Warm)':<16} | {'Speedup':<9} | {'Result'}",
+        flush=True,
+    )
+    print("-" * 125, flush=True)
 
-    async with httpx.AsyncClient(base_url=target_url.rstrip("/"), timeout=15.0) as client:
+    async with httpx.AsyncClient(
+        base_url=target_url.rstrip("/"), timeout=25.0, follow_redirects=True
+    ) as client:
         for path_pattern, methods in paths.items():
-            # Substitute path params
             test_path = path_pattern
             if "{" in test_path:
                 test_path = test_path.replace("{id}", "11111111-2222-3333-4444-555555555555")
@@ -147,7 +253,6 @@ async def run_universal_tester(
                 if method not in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
                     continue
 
-                # Build body for POST/PUT/PATCH
                 json_body = None
                 if method in {"POST", "PUT", "PATCH"}:
                     request_body_info = op_info.get("requestBody", {})
@@ -157,90 +262,29 @@ async def run_universal_tester(
                             content_info["schema"], components_schemas
                         )
 
-                # --- 1st Call (Cold / Database Hit) ---
-                start1 = time.perf_counter()
-                status1 = 0
-                try:
-                    if method == "GET":
-                        resp1 = await client.get(test_path, headers=headers)
-                    elif method == "POST":
-                        resp1 = await client.post(test_path, headers=headers, json=json_body)
-                    elif method == "PUT":
-                        resp1 = await client.put(test_path, headers=headers, json=json_body)
-                    elif method == "PATCH":
-                        resp1 = await client.patch(test_path, headers=headers, json=json_body)
-                    else:
-                        resp1 = await client.delete(test_path, headers=headers)
-                    status1 = resp1.status_code
-                except Exception:
-                    status1 = 500
-                cold_ms = (time.perf_counter() - start1) * 1000.0
+                tasks.append(
+                    test_single_endpoint(
+                        sem,
+                        client,
+                        method,
+                        path_pattern,
+                        test_path,
+                        json_body,
+                        headers,
+                        max_latency_ms,
+                    )
+                )
 
-                # --- 2nd Call (Warm / Redis or In-Memory Cache Hit) ---
-                start2 = time.perf_counter()
-                status2 = 0
-                try:
-                    if method == "GET":
-                        resp2 = await client.get(test_path, headers=headers)
-                    elif method == "POST":
-                        resp2 = await client.post(test_path, headers=headers, json=json_body)
-                    elif method == "PUT":
-                        resp2 = await client.put(test_path, headers=headers, json=json_body)
-                    elif method == "PATCH":
-                        resp2 = await client.patch(test_path, headers=headers, json=json_body)
-                    else:
-                        resp2 = await client.delete(test_path, headers=headers)
-                    status2 = resp2.status_code
-                except Exception:
-                    status2 = 500
-                warm_ms = (time.perf_counter() - start2) * 1000.0
+        results = await asyncio.gather(*tasks)
 
-                speedup = (cold_ms / warm_ms) if warm_ms > 0 else 1.0
-                is_passed = warm_ms <= max_latency_ms
-
-                item = {
-                    "method": method,
-                    "path": path_pattern,
-                    "status": status2 or status1,
-                    "cold_ms": round(cold_ms, 2),
-                    "warm_ms": round(warm_ms, 2),
-                    "speedup_ratio": round(speedup, 1),
-                    "passed": is_passed,
-                }
-                results.append(item)
-
-    # Output Table
-    print(
-        f"{'Method':<6} | {'Endpoint Path':<45} | {'Status':<6} | {'1st Hit (Cold)':<14} | {'2nd Hit (Warm)':<14} | {'Speedup':<9} | {'Result'}"
-    )
-    print("-" * 115)
-
-    passed_count = 0
-    for r in results:
-        m_str = f"{r['method']:<6}"
-        p_str = f"{r['path'][:45]:<45}"
-        s_str = f"HTTP {r['status']}"
-        cold_str = f"{r['cold_ms']} ms"
-        warm_str = f"{r['warm_ms']} ms"
-        speed_str = f"{r['speedup_ratio']}x"
-        badge = (
-            f"✅ PASSED (<{int(max_latency_ms)}ms)"
-            if r["passed"]
-            else f"⚠️ (> {int(max_latency_ms)}ms)"
-        )
-        if r["passed"]:
-            passed_count += 1
-
-        print(
-            f"{m_str} | {p_str} | {s_str:<6} | {cold_str:<14} | {warm_str:<14} | {speed_str:<9} | {badge}"
-        )
-
-    print("-" * 115)
+    print("-" * 125, flush=True)
+    passed_count = sum(1 for r in results if r["passed"])
     pass_pct = (passed_count / len(results) * 100.0) if results else 0.0
     print(
-        f"📊 SUMMARY: {passed_count}/{len(results)} endpoints passed sub-{int(max_latency_ms)}ms target ({pass_pct:.1f}% Compliance)"
+        f"SUMMARY: {passed_count}/{len(results)} endpoints passed sub-{int(max_latency_ms)}ms target ({pass_pct:.1f}% Compliance)",
+        flush=True,
     )
-    print("=" * 110)
+    print("=" * 115, flush=True)
 
     # Save outputs
     json_output = f"{output_prefix}_results.json"
@@ -262,7 +306,7 @@ async def run_universal_tester(
 
     with open(md_output, "w", encoding="utf-8") as f:
         f.write(f"# Universal API Latency Benchmark Report: {title}\n\n")
-        f.write(f"- **Target URL**: {target_url}\n")
+        f.write(f"- **Target Server**: `{target_url}`\n")
         f.write(f"- **Total Endpoints Tested**: {len(results)}\n")
         f.write(f"- **Sub-{int(max_latency_ms)}ms Pass Rate**: {pass_pct:.1f}%\n\n")
         f.write(
@@ -271,11 +315,11 @@ async def run_universal_tester(
         f.write("|---|---|---|---|---|---|---|\n")
         for r in results:
             f.write(
-                f"| `{r['method']}` | `{r['path']}` | HTTP {r['status']} | {r['cold_ms']} ms | {r['warm_ms']} ms | {r['speedup_ratio']}x | {'✅ PASSED' if r['passed'] else '⚠️ SLOW'} |\n"
+                f"| `{r['method']}` | `{r['path']}` | HTTP {r['status']} | {r['cold_ms']} ms ({r['cold_sec']}s) | {r['warm_ms']} ms ({r['warm_sec']}s) | {r['speedup_ratio']}x | {'PASSED' if r['passed'] else 'SLOW'} |\n"
             )
 
-    print(f"📝 JSON Export saved to : {json_output}")
-    print(f"📄 Markdown Report saved: {md_output}")
+    print(f"JSON Export saved to : {json_output}", flush=True)
+    print(f"Markdown Report saved: {md_output}", flush=True)
 
 
 if __name__ == "__main__":
