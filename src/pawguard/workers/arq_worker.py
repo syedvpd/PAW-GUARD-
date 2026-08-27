@@ -99,13 +99,13 @@ async def outbox_poller_loop(ctx: dict[str, Any]) -> None:
             current_delay = 5
         else:
             if current_delay == 5:
-                current_delay = 15
-            elif current_delay == 15:
                 current_delay = 30
             elif current_delay == 30:
-                current_delay = 60
+                current_delay = 120
+            elif current_delay == 120:
+                current_delay = 300
             else:
-                current_delay = 60
+                current_delay = 300
 
         await asyncio.sleep(current_delay)
 

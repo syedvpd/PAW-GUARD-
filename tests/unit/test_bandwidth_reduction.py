@@ -293,7 +293,7 @@ async def test_fcm_multicast_sending():
 
 
 @pytest.mark.asyncio
-async def test_arq_polling_backoff(db_session: AsyncSession):
+async def test_arq_polling_backoff():
     """Verify outbox poller loop delay adjusts dynamically based on work processing."""
     # We mock OutboxService.process_pending_events
     original_process = OutboxService.process_pending_events
@@ -317,32 +317,32 @@ async def test_arq_polling_backoff(db_session: AsyncSession):
     try:
         with pytest.raises(asyncio.CancelledError):
             await outbox_poller_loop(ctx)
-        # Verify delay was 2 seconds (since it processed 5 events)
-        assert 2 in sleep_calls
+        # Verify delay was 5 seconds (since it processed 5 events)
+        assert 5 in sleep_calls
 
         # Step 2: Simulate processed == 0 (idle)
         OutboxService.process_pending_events = AsyncMock(return_value=0)
         sleep_calls.clear()
 
         # Let's test the state machine manually to verify delays step up:
-        # Delays step up: 2 -> 5 -> 10 -> 20 -> 30
+        # Delays step up: 5 -> 30 -> 120 -> 300 -> 300
         delays = []
-        current_delay = 2
+        current_delay = 5
         for _ in range(5):
             if 0 > 0:  # Mock processed count logic
-                current_delay = 2
+                current_delay = 5
             else:
-                if current_delay == 2:
-                    current_delay = 5
-                elif current_delay == 5:
-                    current_delay = 10
-                elif current_delay == 10:
-                    current_delay = 20
-                else:
+                if current_delay == 5:
                     current_delay = 30
+                elif current_delay == 30:
+                    current_delay = 120
+                elif current_delay == 120:
+                    current_delay = 300
+                else:
+                    current_delay = 300
             delays.append(current_delay)
 
-        assert delays == [5, 10, 20, 30, 30]
+        assert delays == [30, 120, 300, 300, 300]
 
     finally:
         OutboxService.process_pending_events = original_process
