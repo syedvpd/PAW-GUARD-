@@ -190,10 +190,10 @@ if TYPE_CHECKING:
 class SafetyTag(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "pet_safety_tags"
 
-    dog_id: Mapped[uuid.UUID] = mapped_column(
+    dog_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("dog_profiles.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
     pet_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -208,7 +208,9 @@ class SafetyTag(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     last_scanned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     scan_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
-    dog: Mapped["DogProfile"] = relationship("DogProfile", foreign_keys=[dog_id], lazy="joined")
+    dog: Mapped["DogProfile | None"] = relationship(
+        "DogProfile", foreign_keys=[dog_id], lazy="joined"
+    )
     pet: Mapped["CompanionPet | None"] = relationship(
         "CompanionPet", foreign_keys=[pet_id], lazy="joined"
     )

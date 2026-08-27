@@ -495,7 +495,7 @@ class CompanionPetService:
         if tag is None:
             tag = await self._repo.create_tag(
                 SafetyTag(
-                    dog_id=pet.id,
+                    dog_id=pet.original_dog_id,
                     pet_id=pet.id,
                     token_hash=_hash_tag_token(raw_token),
                     token_prefix=raw_token[:8],
