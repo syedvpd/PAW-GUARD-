@@ -7,7 +7,12 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
+from pawguard.modules.adoption.models import (
+    AdoptionApplication,
+    AdoptionFollowUp,
+    AdoptionStatus,
+    FollowUpStatus,
+)
 from pawguard.modules.auth.models import Role, User, UserRole
 from pawguard.modules.dog.models import DogProfile, DogStatus
 from pawguard.modules.donation.models import Donation, DonationStatus
@@ -314,11 +319,35 @@ async def adoption_dashboard(session: AsyncSession, redis: Any | None = None) ->
             AdoptionApplication.status == AdoptionStatus.COMPLETED
         )
     )
+    screening = await session.execute(
+        select(func.count(AdoptionApplication.id)).where(
+            AdoptionApplication.status == AdoptionStatus.SCREENING
+        )
+    )
+    interview = await session.execute(
+        select(func.count(AdoptionApplication.id)).where(
+            AdoptionApplication.status == AdoptionStatus.INTERVIEW
+        )
+    )
+    home_check = await session.execute(
+        select(func.count(AdoptionApplication.id)).where(
+            AdoptionApplication.status == AdoptionStatus.HOME_CHECK
+        )
+    )
+    overdue_follow_ups = await session.execute(
+        select(func.count(AdoptionFollowUp.id)).where(
+            AdoptionFollowUp.status == FollowUpStatus.OVERDUE
+        )
+    )
     result = {
         "total_applications": total.scalar_one(),
         "pending": pending.scalar_one(),
         "approved": approved.scalar_one(),
         "completed": completed.scalar_one(),
+        "screening": screening.scalar_one(),
+        "interview": interview.scalar_one(),
+        "home_check": home_check.scalar_one(),
+        "overdue_follow_ups": overdue_follow_ups.scalar_one(),
     }
     await _set_cache(redis, cache_key, result)
     return result

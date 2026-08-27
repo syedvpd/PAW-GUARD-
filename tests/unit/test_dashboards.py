@@ -106,12 +106,20 @@ class TestDashboards:
             _fake_result(scalar_one_val=20),
             _fake_result(scalar_one_val=15),
             _fake_result(scalar_one_val=60),
+            _fake_result(scalar_one_val=8),
+            _fake_result(scalar_one_val=5),
+            _fake_result(scalar_one_val=3),
+            _fake_result(scalar_one_val=4),
         ]
         result = await adoption_dashboard(session)
         assert result["total_applications"] == 100
         assert result["pending"] == 20
         assert result["approved"] == 15
         assert result["completed"] == 60
+        assert result["screening"] == 8
+        assert result["interview"] == 5
+        assert result["home_check"] == 3
+        assert result["overdue_follow_ups"] == 4
 
     async def test_foster_dashboard(self, session):
         session.execute.side_effect = [
@@ -207,11 +215,15 @@ class TestDashboards:
             _fake_result(scalar_one_val=10000.0),
             _fake_result(scalar_one_val=40000.0),
             _fake_result(scalar_one_val=2),
-            # adoption_dashboard (4 queries)
+            # adoption_dashboard (8 queries)
             _fake_result(scalar_one_val=150),
             _fake_result(scalar_one_val=20),
             _fake_result(scalar_one_val=15),
             _fake_result(scalar_one_val=60),
+            _fake_result(scalar_one_val=8),
+            _fake_result(scalar_one_val=5),
+            _fake_result(scalar_one_val=3),
+            _fake_result(scalar_one_val=4),
         ]
         result = await executive_dashboard(session)
         assert "rescue_overview" in result
