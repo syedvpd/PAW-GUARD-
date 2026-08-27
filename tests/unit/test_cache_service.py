@@ -8,7 +8,8 @@ cache invalidation and portal stats purges degrade gracefully without Redis.
 
 import pytest
 
-from pawguard.redis.client import _NullRedis
+from pawguard.core.metrics import InstrumentedRedisClient
+from pawguard.redis.client import _NullRedis, is_null_redis
 from pawguard.services.cache_service import CacheService
 
 
@@ -89,3 +90,26 @@ async def test_locks_fail_closed_without_redis() -> None:
     # Distributed lock must fail closed when Redis is unavailable to prevent race conditions
     assert await cache.acquire_lock("my_lock", "token") is False
     assert await cache.release_lock("my_lock", "token") is False
+
+
+def test_is_null_redis_sees_through_instrumented_wrapper() -> None:
+    # get_redis() always hands out an InstrumentedRedisClient, never a raw
+    # client — isinstance(client, _NullRedis) alone can never see past that
+    # wrapper, which made every Redis-unavailable fallback silently dead code.
+    assert is_null_redis(_NullRedis()) is True
+    assert is_null_redis(InstrumentedRedisClient(_NullRedis())) is True
+    assert is_null_redis(MockRedis()) is False
+    assert is_null_redis(InstrumentedRedisClient(MockRedis())) is False
+
+
+@pytest.mark.asyncio
+async def test_distributed_locks_work_through_instrumented_wrapper() -> None:
+    # Regression for the adoption home-check bug: a genuinely healthy Redis,
+    # wrapped the way production actually wraps it, must still acquire and
+    # release locks normally instead of always reporting "busy".
+    wrapped = InstrumentedRedisClient(MockRedis())
+    cache = CacheService(wrapped, namespace="test")
+
+    assert await cache.acquire_lock("dog_lock", "token_1") is True
+    assert await cache.acquire_lock("dog_lock", "token_2") is False
+    assert await cache.release_lock("dog_lock", "token_1") is True

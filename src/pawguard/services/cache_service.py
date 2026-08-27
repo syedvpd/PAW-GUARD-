@@ -118,9 +118,9 @@ class CacheService:
         """Acquire a distributed lock with NX PX options. Fails closed (False) if Redis is unavailable."""
         start = time.perf_counter()
         try:
-            from pawguard.redis.client import _NullRedis
+            from pawguard.redis.client import is_null_redis
 
-            if isinstance(self._redis, _NullRedis):
+            if is_null_redis(self._redis):
                 increment_counter(
                     "redis_operations_total",
                     {"op": "acquire_lock", "namespace": self._namespace, "status": "unavailable"},
@@ -153,9 +153,9 @@ class CacheService:
     async def release_lock(self, lock_key: str, token: str) -> bool:
         """Release a distributed lock atomically using Lua script to verify token ownership."""
         start = time.perf_counter()
-        from pawguard.redis.client import _NullRedis
+        from pawguard.redis.client import is_null_redis
 
-        if isinstance(self._redis, _NullRedis):
+        if is_null_redis(self._redis):
             increment_counter(
                 "redis_operations_total",
                 {"op": "release_lock", "namespace": self._namespace, "status": "unavailable"},

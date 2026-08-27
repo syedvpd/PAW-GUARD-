@@ -12,7 +12,7 @@ from starlette.responses import JSONResponse, Response
 
 from pawguard.core.constants import ACCESS_TOKEN_COOKIE_NAME
 from pawguard.core.security import parse_access_token_claims
-from pawguard.redis.client import RedisClient, _ensure_client, _NullRedis
+from pawguard.redis.client import RedisClient, _ensure_client, is_null_redis
 from pawguard.services.cache_service import CacheService
 
 logger = logging.getLogger(__name__)
@@ -97,7 +97,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         redis = await _resolve_redis(request)
-        if isinstance(redis, _NullRedis):
+        if is_null_redis(redis):
             logger.warning("Idempotency requested but Redis is unreachable. Falling back.")
             return await call_next(request)
 

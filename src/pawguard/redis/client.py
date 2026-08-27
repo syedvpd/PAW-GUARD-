@@ -81,6 +81,15 @@ class _NullRedis:
         return []
 
 
+def is_null_redis(client: Any) -> bool:
+    """True if `client` — raw or wrapped by InstrumentedRedisClient for metrics —
+    is the _NullRedis fallback. Callers used to do `isinstance(client, _NullRedis)`
+    directly, which silently always returned False once get_redis() started
+    wrapping every client, making every "Redis unavailable" fallback path dead
+    code (see AdoptionApplicationService's dog lock)."""
+    return isinstance(getattr(client, "_client", client), _NullRedis)
+
+
 _redis_available: bool | None = None
 
 

@@ -33,7 +33,7 @@ from pawguard.modules.notifications.service import NotificationService
 from pawguard.modules.shelter.repository import ShelterRepository
 from pawguard.modules.shelter.schemas import NearbyShelterResponse
 from pawguard.modules.storage.models import FileFolder, StoredFile
-from pawguard.redis.client import RedisClient, _NullRedis
+from pawguard.redis.client import RedisClient, is_null_redis
 from pawguard.services.audit_service import AuditService
 from pawguard.services.cache_service import CacheService
 from pawguard.services.storage_service import StorageService
@@ -228,7 +228,7 @@ class AdoptionService:
         lock_token = str(uuid.uuid4())
         lock_acquired = False
         cache_svc = None
-        if self._redis is not None and not isinstance(self._redis, _NullRedis):
+        if self._redis is not None and not is_null_redis(self._redis):
             cache_svc = CacheService(self._redis, namespace="adoptions")
             lock_acquired = await cache_svc.acquire_lock(
                 f"lock:dog:{payload.dog_id}", lock_token, expire_ms=10000
@@ -317,7 +317,7 @@ class AdoptionService:
                 lock_token = str(uuid.uuid4())
                 lock_acquired = False
                 cache_svc = None
-                if self._redis is not None and not isinstance(self._redis, _NullRedis):
+                if self._redis is not None and not is_null_redis(self._redis):
                     cache_svc = CacheService(self._redis, namespace="adoptions")
                     lock_acquired = await cache_svc.acquire_lock(
                         f"lock:dog:{app.dog_id}", lock_token, expire_ms=10000
@@ -396,7 +396,7 @@ class AdoptionService:
             lock_token = str(uuid.uuid4())
             lock_acquired = False
             cache_svc = None
-            if self._redis is not None and not isinstance(self._redis, _NullRedis):
+            if self._redis is not None and not is_null_redis(self._redis):
                 cache_svc = CacheService(self._redis, namespace="adoptions")
                 lock_acquired = await cache_svc.acquire_lock(
                     f"lock:dog:{app.dog_id}", lock_token, expire_ms=10000

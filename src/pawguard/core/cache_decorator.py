@@ -32,9 +32,9 @@ def cache_response(ttl_seconds: int = 300, namespace: str = "route_cache"):
 
             # 3. Get Redis client and check if available
             redis = await _ensure_client()
-            from pawguard.redis.client import _NullRedis
+            from pawguard.redis.client import is_null_redis
 
-            if isinstance(redis, _NullRedis):
+            if is_null_redis(redis):
                 return await func(*args, **kwargs)
 
             # 4. Build Cache Key
