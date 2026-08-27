@@ -249,29 +249,7 @@ async def public_scan_dog(
     adopter_name: str | None = None
     adopter_phone: str | None = None
     if dog.status == DogStatus.ADOPTED:
-        try:
-            from sqlalchemy import select
-
-            from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
-            from pawguard.modules.auth.models import User
-
-            stmt = (
-                select(AdoptionApplication, User.full_name, User.phone)
-                .join(User, AdoptionApplication.adopter_id == User.id)
-                .where(
-                    AdoptionApplication.dog_id == dog_id,
-                    AdoptionApplication.status == AdoptionStatus.COMPLETED,
-                    AdoptionApplication.deleted_at.is_(None),
-                )
-                .order_by(AdoptionApplication.completed_at.desc())
-                .limit(1)
-            )
-            row = (await db.execute(stmt)).first()
-            if row:
-                adopter_name = row[1]
-                adopter_phone = row[2]
-        except Exception:
-            logger.debug("public_scan_adopter_lookup_failed", dog_id=str(dog_id))
+        adopter_name, adopter_phone = await service.get_adopter_contact(dog_id)
 
     return ApiResponse(
         data=PublicDogScanResponse(

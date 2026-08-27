@@ -235,10 +235,32 @@ TEST_DOGS = [
             "https://images.dog.ceo/breeds/pomeranian/n02112018_7113.jpg",
         ],
     },
+    {
+        "registration_number": "DOG-2026-0011",
+        "name": "Oscar",
+        "breed": "Golden Retriever Mix",
+        "breed_classification": DogBreedClassification.MIX,
+        "gender": DogGender.MALE,
+        "estimated_age": "2 years",
+        "age_months": 24,
+        "weight": 24.0,
+        "color": "Golden Tan",
+        "temperament": DogTemperament.FRIENDLY,
+        "status": DogStatus.ADOPTED,
+        "is_adoptable": False,
+        "is_spayed_neutered": True,
+        "is_quarantine_passed": True,
+        "image_urls": [
+            "https://images.dog.ceo/breeds/retriever-golden/n02099601_1028.jpg",
+        ],
+    },
 ]
 
 
 async def seed_dogs() -> None:
+    from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
+    from pawguard.modules.auth.models import User
+
     settings = get_settings()
     engine = create_async_engine(
         settings.database_url, connect_args={"statement_cache_size": 0}
@@ -246,6 +268,31 @@ async def seed_dogs() -> None:
     session_factory = async_sessionmaker(bind=engine, expire_on_commit=False)
 
     async with session_factory() as session:
+        # 1. Ensure test adopter user exists
+        adopter_user = (
+            await session.execute(
+                select(User).where(User.email == "adopter@pawguard.org")
+            )
+        ).scalars().first()
+
+        if not adopter_user:
+            adopter_user = User(
+                id=uuid.uuid4(),
+                email="adopter@pawguard.org",
+                full_name="Syed Mohammed Zubair Khadri",
+                phone="+91 98765 43210",
+                hashed_password="pbkdf2_sha256$test$hashedpassword",
+                is_active=True,
+                is_verified=True,
+            )
+            session.add(adopter_user)
+            await session.flush()
+        else:
+            adopter_user.full_name = "Syed Mohammed Zubair Khadri"
+            adopter_user.phone = "+91 98765 43210"
+
+        # 2. Seed dogs
+        adopted_dog_obj = None
         for dog_data in TEST_DOGS:
             existing = (
                 await session.execute(
@@ -255,18 +302,50 @@ async def seed_dogs() -> None:
                 )
             ).scalars().first()
             if existing:
-                # Update image_urls on existing dogs so re-running the seed
-                # populates the new image_urls column for already-seeded dogs.
                 existing.image_urls = dog_data.get("image_urls")
+                existing.status = dog_data.get("status", existing.status)
+                if dog_data["registration_number"] == "DOG-2026-0011":
+                    adopted_dog_obj = existing
                 continue
             dog = DogProfile(
                 id=uuid.uuid4(),
                 **dog_data,
             )
             session.add(dog)
+            if dog_data["registration_number"] == "DOG-2026-0011":
+                adopted_dog_obj = dog
+
+        await session.flush()
+
+        # 3. Ensure active COMPLETED adoption record exists for DOG-2026-0011 (Oscar)
+        if adopted_dog_obj:
+            existing_app = (
+                await session.execute(
+                    select(AdoptionApplication).where(
+                        AdoptionApplication.dog_id == adopted_dog_obj.id,
+                        AdoptionApplication.adopter_id == adopter_user.id,
+                    )
+                )
+            ).scalars().first()
+
+            if not existing_app:
+                adoption_app = AdoptionApplication(
+                    id=uuid.uuid4(),
+                    dog_id=adopted_dog_obj.id,
+                    adopter_id=adopter_user.id,
+                    residential_status="owned",
+                    has_landlord_approval=True,
+                    has_yard_fence=True,
+                    household_members_count=3,
+                    status=AdoptionStatus.COMPLETED,
+                )
+                session.add(adoption_app)
+            else:
+                existing_app.status = AdoptionStatus.COMPLETED
+
         await session.commit()
     await engine.dispose()
-    print(f"Seed adoptable dogs completed ({len(TEST_DOGS)} dogs).")
+    print(f"Seed adoptable & adopted dogs completed ({len(TEST_DOGS)} dogs).")
 
 
 if __name__ == "__main__":

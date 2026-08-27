@@ -271,3 +271,26 @@ class DogRepository:
             .order_by(DogWeightLog.measured_at.asc())
         )
         return (await self._session.execute(stmt)).scalars().all()
+
+    async def get_adopter_contact(self, dog_id: uuid.UUID) -> tuple[str | None, str | None]:
+        """Retrieve active adopter full_name and phone for public QR scan."""
+        from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
+        from pawguard.modules.auth.models import User
+
+        stmt = (
+            select(User.full_name, User.phone)
+            .join(AdoptionApplication, AdoptionApplication.adopter_id == User.id)
+            .where(
+                AdoptionApplication.dog_id == dog_id,
+                AdoptionApplication.status.in_(
+                    [AdoptionStatus.COMPLETED, AdoptionStatus.APPROVED, AdoptionStatus.HOME_CHECK]
+                ),
+                AdoptionApplication.deleted_at.is_(None),
+            )
+            .order_by(AdoptionApplication.updated_at.desc())
+            .limit(1)
+        )
+        row = (await self._session.execute(stmt)).first()
+        if row:
+            return row[0], row[1]
+        return None, None
