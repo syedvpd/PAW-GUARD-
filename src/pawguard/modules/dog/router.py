@@ -26,7 +26,7 @@ from pawguard.modules.auth.dependencies import (
     get_current_user,
     get_optional_current_user,
 )
-from pawguard.modules.auth.permission_codes import SHELTER_READ
+from pawguard.modules.auth.permission_codes import FOSTER_APPROVE, SHELTER_READ
 from pawguard.modules.auth.rbac import has_permission, is_admin_role, require_permission
 from pawguard.modules.companion_pet.router import get_companion_pet_service
 from pawguard.modules.companion_pet.service import CompanionPetService
@@ -145,12 +145,16 @@ async def list_dogs(
     current_user: CurrentUser | None = Depends(get_optional_current_user),
     service: DogService = Depends(get_dog_service),
 ) -> PaginatedResponse[DogProfileResponse]:
-    # Public adoption directory: only shelter staff (holders of ``shelter:read``)
-    # and admins may browse the full dog catalogue. Every other caller - anonymous
-    # visitors AND authenticated adopters/app users - sees only adoptable dogs so
+    # Public adoption directory: only shelter staff (``shelter:read``), foster
+    # coordinators (``foster:approve`` - they place non-adoptable dogs into
+    # foster care, so they need the full catalogue too), and admins may browse
+    # the full dog catalogue. Every other caller - anonymous visitors AND
+    # authenticated adopters/app users - sees only adoptable dogs so
     # already-adopted animals never leak into the public adoption page.
     is_staff = current_user is not None and (
-        has_permission(current_user.user, SHELTER_READ) or is_admin_role(current_user.claims)
+        has_permission(current_user.user, SHELTER_READ)
+        or has_permission(current_user.user, FOSTER_APPROVE)
+        or is_admin_role(current_user.claims)
     )
     public_view = not is_staff
     if public_view:
@@ -196,7 +200,9 @@ async def get_dog(
     # everyone else (including authenticated adopters) may only view public
     # details for adoptable dogs.
     is_staff = current_user is not None and (
-        has_permission(current_user.user, SHELTER_READ) or is_admin_role(current_user.claims)
+        has_permission(current_user.user, SHELTER_READ)
+        or has_permission(current_user.user, FOSTER_APPROVE)
+        or is_admin_role(current_user.claims)
     )
 
     if not is_staff and not dog.is_adoptable:
