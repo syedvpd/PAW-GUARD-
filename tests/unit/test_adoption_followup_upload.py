@@ -2,12 +2,11 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi import status
-from httpx import ASGITransport, AsyncClient
 
-from pawguard.main import app
 from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
-from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
+from pawguard.modules.adoption.router import generate_follow_up_upload_url
+from pawguard.modules.adoption.schemas import AdoptionFollowUpUploadUrlRequest
+from pawguard.modules.auth.dependencies import CurrentUser
 
 
 @pytest.fixture
@@ -31,21 +30,13 @@ async def test_generate_follow_up_upload_url_success(mock_current_user):
     mock_service = MagicMock()
     mock_service.get_application = AsyncMock(return_value=mock_app)
 
-    app.dependency_overrides[get_current_user] = lambda: mock_current_user
+    payload = AdoptionFollowUpUploadUrlRequest(
+        filename="followup_welfare_photo.jpg",
+        mime_type="image/jpeg",
+        file_size=1024 * 1024,
+    )
 
-    payload = {
-        "filename": "followup_welfare_photo.jpg",
-        "mime_type": "image/jpeg",
-        "file_size": 1024 * 1024,
-    }
-
-    with (
-        patch(
-            "pawguard.modules.adoption.router.get_adoption_service",
-            return_value=mock_service,
-        ),
-        patch("pawguard.modules.adoption.router.StorageService") as MockStorageService,
-    ):
+    with patch("pawguard.modules.adoption.router.StorageService") as MockStorageService:
         mock_storage = MagicMock()
         mock_storage.build_object_key.return_value = "documents/followup_12345.jpg"
         mock_storage.generate_presigned_upload_url.return_value = (
@@ -53,14 +44,13 @@ async def test_generate_follow_up_upload_url_success(mock_current_user):
         )
         MockStorageService.return_value = mock_storage
 
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            resp = await client.post(
-                f"/api/v1/adoptions/{app_id}/follow-ups/upload-url", json=payload
-            )
+        res = await generate_follow_up_upload_url(
+            app_id=app_id,
+            payload=payload,
+            current_user=mock_current_user,
+            service=mock_service,
+        )
 
-    app.dependency_overrides.clear()
-
-    assert resp.status_code == status.HTTP_200_OK
-    data = resp.json()["data"]
-    assert data["upload_url"] == "https://s3.amazonaws.com/upload-url"
-    assert data["media_key"] == "documents/followup_12345.jpg"
+    assert res.data is not None
+    assert res.data.upload_url == "https://s3.amazonaws.com/upload-url"
+    assert res.data.media_key == "documents/followup_12345.jpg"
