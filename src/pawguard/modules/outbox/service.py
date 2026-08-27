@@ -16,11 +16,23 @@ logger = logging.getLogger(__name__)
 
 async def _dispatch_email_direct(job_name: str, payload: dict[str, Any]) -> None:
     email_svc = EmailService()
-    to = payload.get("to")
+    to = payload.get("to") or payload.get("recipient_email") or payload.get("email")
     if not to:
-        raise ValueError("Missing 'to' address in email payload.")
+        raise ValueError(f"Missing recipient email address in payload for job '{job_name}'.")
 
-    if job_name == "send_password_reset_email_job":
+    subject = payload.get("subject")
+    if "html_body" in payload and payload["html_body"]:
+        subject = subject or "PawGuard Notification"
+        await asyncio.to_thread(
+            email_svc.send, to=to, subject=subject, html_body=payload["html_body"]
+        )
+    elif "template_name" in payload and payload["template_name"]:
+        template_name = payload["template_name"]
+        context = payload.get("context") or payload
+        subject = subject or "PawGuard Notification"
+        html = email_svc.render(template_name, context)
+        await asyncio.to_thread(email_svc.send, to=to, subject=subject, html_body=html)
+    elif job_name == "send_password_reset_email_job":
         reset_url = payload.get("reset_url", "")
         html = email_svc.render("password_reset.html", {"reset_url": reset_url})
         await asyncio.to_thread(
@@ -32,13 +44,12 @@ async def _dispatch_email_direct(job_name: str, payload: dict[str, Any]) -> None
         await asyncio.to_thread(
             email_svc.send, to=to, subject="Verify your PawGuard email", html_body=html
         )
-    elif job_name == "send_notification_email_job":
-        subject = payload.get("subject", "PawGuard Notification")
-        body = payload.get("body", "")
+    else:
+        # Default notification template for all modules across PawGuard
+        subject = subject or "PawGuard Notification"
+        body = payload.get("body") or payload.get("message") or ""
         html = email_svc.render("notification.html", {"subject": subject, "body": body})
         await asyncio.to_thread(email_svc.send, to=to, subject=subject, html_body=html)
-    else:
-        raise ValueError(f"Unknown email job type: {job_name}")
 
 
 class OutboxService:
@@ -102,10 +113,10 @@ class OutboxService:
                     or type(arq_pool).__name__ == "_NullArqPool"
                     or getattr(arq_pool, "_inner", None).__class__.__name__ == "_NullArqPool"
                 )
-                is_email_job = event.job_name in (
-                    "send_password_reset_email_job",
-                    "send_email_verification_email_job",
-                    "send_notification_email_job",
+                is_email_job = (
+                    "email" in event.job_name
+                    or "notification" in event.job_name
+                    or event.job_name.startswith("send_")
                 )
 
                 if is_email_job and is_null_pool:

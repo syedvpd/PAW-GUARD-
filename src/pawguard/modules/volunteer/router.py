@@ -143,12 +143,17 @@ async def get_my_application(
 )
 async def list_applications(
     params: PageParams = Depends(page_params),
-    status: ApplicationStatus | None = Query(None, description="Filter by application status"),
+    status: str | None = Query(
+        None, description="Filter by application status ('all' for no filter)"
+    ),
     service: VolunteerService = Depends(get_volunteer_service),
 ) -> PaginatedResponse[VolunteerApplicationResponse]:
     """Coordinator review queue: applications submitted via POST /apply,
     not yet promoted to a VolunteerProfile by approve/reject."""
-    applications, meta = await service.list_applications(page_params=params, status=status)
+    parsed_status: ApplicationStatus | None = None
+    if status is not None and status.strip().lower() not in ("all", ""):
+        parsed_status = parse_enum(ApplicationStatus, status.strip().lower(), field_name="status")
+    applications, meta = await service.list_applications(page_params=params, status=parsed_status)
     return PaginatedResponse(
         data=[VolunteerApplicationResponse.model_validate(a) for a in applications],
         meta=meta,
@@ -422,14 +427,19 @@ async def list_shift_attendance(
 )
 async def list_profiles(
     params: PageParams = Depends(page_params),
-    status: VolunteerStatus | None = Query(None, description="Filter by volunteer status"),
+    status: str | None = Query(
+        None, description="Filter by volunteer status ('all' for no filter)"
+    ),
     search: str | None = Query(None, description="Search by skills or availability"),
     sort: SortParams = Depends(sort_params),
     service: VolunteerService = Depends(get_volunteer_service),
 ) -> PaginatedResponse[VolunteerProfileResponse]:
+    parsed_status: VolunteerStatus | None = None
+    if status is not None and status.strip().lower() not in ("all", ""):
+        parsed_status = parse_enum(VolunteerStatus, status.strip().lower(), field_name="status")
     profiles, meta = await service.list_profiles(
         page_params=params,
-        status=status,
+        status=parsed_status,
         search=search,
         sort=sort,
     )
