@@ -240,12 +240,14 @@ async def login(
     client_type: str | None = Header(default=None, alias=CLIENT_TYPE_HEADER),
     auth_service: AuthService = Depends(get_auth_service),
 ) -> ApiResponse[LoginResponse] | ApiResponse[MFARequiredResponse]:
+    origin = request.headers.get("origin") or request.headers.get("referer")
     result = await auth_service.login(
         email=payload.email,
         password=payload.password,
         device=payload.device,
         ctx=_build_request_context(request),
         client_type=client_type,
+        origin=origin,
     )
 
     if isinstance(result, str):

@@ -174,6 +174,7 @@ class AuthService:
         device: DeviceContext,
         ctx: RequestContext,
         client_type: str | None = None,
+        origin: str | None = None,
     ) -> AuthenticatedTokens | str:
         """Returns AuthenticatedTokens, or a pre-auth token (str) if MFA is required."""
         user = await self._users.get_by_email(email.lower())
@@ -199,6 +200,23 @@ class AuthService:
 
         if not user.is_active:
             raise AccountInactiveError("This account has been deactivated.")
+
+        # PAW-AUTH-004: Public Website (https://pawguard-public-web.vercel.app/) permits ONLY General Public users.
+        # All operational and partner roles are blocked on Public Web and directed to Admin Portal (https://pawguard-admin.vercel.app/).
+        # Admin Portal permits ALL 15 roles.
+        is_public_web = False
+        if origin and "pawguard-public-web" in origin.lower() or client_type and client_type.lower() in ("public", "public_web"):
+            is_public_web = True
+
+        if is_public_web:
+            user_roles = {r.name.lower() for r in getattr(user, "roles", [])}
+            allowed_public_roles = {"app_user", "general_public"}
+            if not user_roles or user_roles.isdisjoint(allowed_public_roles):
+                from pawguard.core.exceptions import ForbiddenError
+
+                raise ForbiddenError(
+                    "Access denied. Operational staff and partner roles must sign in via the Admin Portal at https://pawguard-admin.vercel.app/."
+                )
 
         user.failed_login_count = 0
         user.locked_until = None
