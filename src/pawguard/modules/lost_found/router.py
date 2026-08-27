@@ -56,6 +56,8 @@ router = APIRouter(prefix="/lost-found", tags=["lost-found"])
 # restricts uploads to images only.
 _LOST_FOUND_PHOTO_MIME_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
 _LOST_FOUND_PHOTO_MAX_BYTES = 50 * 1024 * 1024  # 50 MB
+_LOST_FOUND_VIDEO_MIME_TYPES = frozenset({"video/mp4", "video/webm", "video/quicktime"})
+_LOST_FOUND_VIDEO_MAX_BYTES = 100 * 1024 * 1024  # 100 MB
 _LOST_FOUND_PHOTO_FOLDER = "lost-found"
 
 
@@ -151,12 +153,16 @@ async def request_lost_found_photo_upload_url(
     key is scoped to the ``lost-found/`` folder with a random UUID, so a caller
     cannot overwrite or read arbitrary objects.
     """
-    if payload.mime_type not in _LOST_FOUND_PHOTO_MIME_TYPES:
+    is_photo = payload.mime_type in _LOST_FOUND_PHOTO_MIME_TYPES
+    is_video = payload.mime_type in _LOST_FOUND_VIDEO_MIME_TYPES
+    if not is_photo and not is_video:
         raise ValidationFailedError(
-            f"Unsupported image type '{payload.mime_type}'. Allowed types: JPEG, PNG, WEBP."
+            f"Unsupported file type '{payload.mime_type}'. Allowed types: JPEG, PNG, WEBP, MP4, WEBM, QUICKTIME."
         )
-    if payload.file_size > _LOST_FOUND_PHOTO_MAX_BYTES:
+    if is_photo and payload.file_size > _LOST_FOUND_PHOTO_MAX_BYTES:
         raise ValidationFailedError("File size exceeds the maximum 50MB limit for pet photos.")
+    if is_video and payload.file_size > _LOST_FOUND_VIDEO_MAX_BYTES:
+        raise ValidationFailedError("File size exceeds the maximum 100MB limit for pet videos.")
 
     storage = StorageService()
     object_key = storage.build_object_key(
@@ -170,7 +176,7 @@ async def request_lost_found_photo_upload_url(
             upload_url=upload_url,
             object_key=object_key,
         ),
-        message="Presigned photo upload URL generated successfully.",
+        message="Presigned media upload URL generated successfully.",
     )
 
 

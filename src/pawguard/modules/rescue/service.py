@@ -34,6 +34,7 @@ from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.fleet.models import VehicleStatus
 from pawguard.modules.fleet.repository import FleetRepository
 from pawguard.modules.fleet.service import FleetService
+from pawguard.modules.lost_found.models import ReportMedia
 from pawguard.modules.rescue.models import (
     RescueDispatch,
     RescueDispatchAgent,
@@ -219,11 +220,41 @@ class RescueService:
         severity: RescueSeverity = RescueSeverity.MEDIUM,
         is_urgent: bool = False,
         media_evidence: list[str] | None = None,
+        photo_object_keys: list[str] | None = None,
+        video_object_key: str | None = None,
         environmental_factors: str | None = None,
         reporter_notes: str | None = None,
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> RescueRequest:
+        from pawguard.services.storage_service import StorageService
+
+        # Determine photo keys and video key
+        photo_keys = photo_object_keys
+        video_key = video_object_key
+
+        if photo_keys is None and video_key is None and media_evidence is not None:
+            photo_keys = []
+            video_key = None
+            video_exts = (".mp4", ".webm", ".mov")
+            for key in media_evidence:
+                if any(key.lower().endswith(ext) for ext in video_exts):
+                    if not video_key:
+                        video_key = key
+                else:
+                    photo_keys.append(key)
+        else:
+            photo_keys = photo_keys or []
+
+        if photo_keys or video_key:
+            StorageService().validate_report_media(photo_keys, video_key)
+
+        combined_evidence = list(photo_keys)
+        if video_key:
+            combined_evidence.append(video_key)
+        if not combined_evidence and media_evidence:
+            combined_evidence = media_evidence
+
         # Binds authenticated actor_id directly as reporter_user_id; falls back to email/phone lookup
         reporter_user_id: uuid.UUID | None = actor_id if not is_anonymous else None
         if reporter_user_id is None and not is_anonymous and (reporter_email or reporter_phone):
@@ -274,7 +305,7 @@ class RescueService:
                 behavioral_indicators=behavioral_indicators,
                 severity=severity,
                 is_urgent=is_urgent,
-                media_evidence=media_evidence,
+                media_evidence=combined_evidence,
                 environmental_factors=environmental_factors,
                 reporter_notes=reporter_notes,
                 status=RescueStatus.REPORTED,
@@ -286,6 +317,34 @@ class RescueService:
                 # existence check and the flush - roll back and try again.
                 await self._repo._session.rollback()
                 continue
+
+            # Save ReportMedia entries
+            media_items = []
+            for idx, key in enumerate(photo_keys):
+                media_items.append(
+                    ReportMedia(
+                        rescue_request_id=candidate.id,
+                        media_type="photo",
+                        object_key=key,
+                        is_primary=(idx == 0),
+                        display_order=idx,
+                    )
+                )
+            if video_key:
+                media_items.append(
+                    ReportMedia(
+                        rescue_request_id=candidate.id,
+                        media_type="video",
+                        object_key=video_key,
+                        is_primary=False,
+                        display_order=len(photo_keys),
+                    )
+                )
+
+            for m in media_items:
+                self._repo._session.add(m)
+            await self._repo._session.flush()
+
             request = candidate
             break
 

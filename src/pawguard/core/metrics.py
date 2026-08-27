@@ -243,6 +243,25 @@ def create_timer(name: str, labels: dict[str, str] | None = None) -> MetricsTime
     return MetricsTimer(name, labels)
 
 
+def track_sse_bytes(message_type: str, byte_count: int) -> None:
+    """Record bytes streamed over SSE (Server-Sent Events).
+
+    SSE is delivered via ``StreamingResponse`` which has no ``Content-Length``
+    header, so the generic request-logging middleware cannot observe its bytes.
+    Those bytes are, however, counted by Render as HTTP Response bandwidth.
+    This captures them separately so SSE can be reconciled against Render's
+    Network Metrics instead of silently vanishing from the accounting.
+
+    ``message_type`` is one of: ``snapshot`` (full dashboard JSON) or
+    ``heartbeat`` (the ``: heartbeat`` comment). Only aggregate counts/bytes are
+    stored — never payload content, tokens, or PII.
+    """
+    if byte_count <= 0:
+        return
+    increment_counter("pawguard_sse_bytes_total", {"type": message_type}, byte_count)
+    increment_counter("pawguard_sse_messages_total", {"type": message_type})
+
+
 def track_outbound_request(
     destination: str,
     operation: str,

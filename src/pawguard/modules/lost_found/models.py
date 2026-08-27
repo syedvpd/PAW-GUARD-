@@ -5,7 +5,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -81,6 +81,12 @@ class LostReport(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base)
     broadcasted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id], lazy="joined")
+    media: Mapped[list["ReportMedia"]] = relationship(
+        "ReportMedia",
+        primaryjoin="LostReport.id == foreign(ReportMedia.lost_report_id)",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
 
 
 class FoundReport(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
@@ -118,6 +124,12 @@ class FoundReport(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base
     photo_object_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id], lazy="joined")
+    media: Mapped[list["ReportMedia"]] = relationship(
+        "ReportMedia",
+        primaryjoin="FoundReport.id == foreign(ReportMedia.found_report_id)",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
 
 
 class ReportMatch(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
@@ -189,3 +201,30 @@ class PetSighting(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base
     longitude: Mapped[float | None] = mapped_column(Numeric(9, 6), nullable=True)
     location_address: Mapped[str] = mapped_column(Text, nullable=False)
     message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ReportMedia(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
+    __tablename__ = "report_media"
+
+    rescue_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("rescue_requests.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    lost_report_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("lost_reports.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    found_report_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("found_reports.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    media_type: Mapped[str] = mapped_column(String(16), nullable=False)  # "photo" | "video"
+    object_key: Mapped[str] = mapped_column(String(512), nullable=False)
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    display_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

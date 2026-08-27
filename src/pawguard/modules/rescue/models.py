@@ -3,7 +3,10 @@
 import uuid
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from pawguard.modules.lost_found.models import ReportMedia
 
 from sqlalchemy import (
     Boolean,
@@ -190,6 +193,12 @@ class RescueRequest(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Ba
         "User",
         foreign_keys=[reporter_user_id],
         lazy="selectin",
+    )
+    media: Mapped[list["ReportMedia"]] = relationship(
+        "ReportMedia",
+        primaryjoin="RescueRequest.id == foreign(ReportMedia.rescue_request_id)",
+        lazy="selectin",
+        cascade="all, delete-orphan",
     )
 
 

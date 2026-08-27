@@ -632,13 +632,10 @@ class PortalRepository:
             (UrgentAlert.severity == AlertSeverity.WARNING, 1),
             else_=2,
         )
-        stmt = (
-            select(UrgentAlert)
-            .order_by(
-                severity_order,
-                UrgentAlert.sort_order.asc(),
-                UrgentAlert.created_at.desc(),
-            )
+        stmt = select(UrgentAlert).order_by(
+            severity_order,
+            UrgentAlert.sort_order.asc(),
+            UrgentAlert.created_at.desc(),
         )
         stmt = self._active_alert_filter(stmt)
         if page_params is not None:

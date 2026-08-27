@@ -272,7 +272,9 @@ class DogRepository:
         )
         return (await self._session.execute(stmt)).scalars().all()
 
-    async def get_adopter_contact(self, dog_id: uuid.UUID) -> tuple[str | None, str | None, str | None]:
+    async def get_adopter_contact(
+        self, dog_id: uuid.UUID
+    ) -> tuple[str | None, str | None, str | None]:
         """Retrieve active adopter full_name, phone, and email for public QR scan."""
         from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
         from pawguard.modules.auth.models import User

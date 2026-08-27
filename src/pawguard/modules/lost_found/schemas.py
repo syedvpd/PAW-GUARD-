@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -10,6 +11,38 @@ from pawguard.modules.auth.schemas import UserProfile
 from pawguard.modules.lost_found.models import MatchStatus, ReportStatus, Species
 
 logger = get_logger(__name__)
+
+
+class ReportMediaResponse(BaseModel):
+    id: uuid.UUID
+    media_type: str = Field(..., alias="type")
+    url: str | None = None
+    is_primary: bool
+    display_order: int
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _populate_url(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            return data
+        key = getattr(data, "object_key", None)
+        url = None
+        if key:
+            try:
+                from pawguard.services.storage_service import get_storage_service
+
+                url = get_storage_service().generate_public_url(object_key=key)
+            except Exception:
+                url = None
+        return {
+            "id": getattr(data, "id", None),
+            "type": getattr(data, "media_type", None),
+            "url": url,
+            "is_primary": getattr(data, "is_primary", False),
+            "display_order": getattr(data, "display_order", 0),
+        }
 
 
 class LostReportCreate(BaseModel):
@@ -36,6 +69,10 @@ class LostReportCreate(BaseModel):
         examples=["lost-found/00000000-0000-0000-0000-000000000000.jpg"],
     )
     companion_pet_id: uuid.UUID | None = Field(None, description="Optional companion pet ID")
+    photo_object_keys: list[str] | None = Field(
+        None, max_length=5, examples=[["lost-found/file1.jpg"]]
+    )
+    video_object_key: str | None = Field(None, max_length=512, examples=["lost-found/video1.mp4"])
 
     @field_validator("photo_object_key")
     @classmethod
@@ -46,6 +83,29 @@ class LostReportCreate(BaseModel):
             raise ValueError(
                 "photo_object_key must reference a lost-found upload "
                 "(expected prefix 'lost-found/')."
+            )
+        return value
+
+    @field_validator("photo_object_keys")
+    @classmethod
+    def _validate_photo_object_keys(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return value
+        for key in value:
+            if not key.startswith("lost-found/"):
+                raise ValueError(
+                    "Each photo key must reference a lost-found upload (expected prefix 'lost-found/')."
+                )
+        return value
+
+    @field_validator("video_object_key")
+    @classmethod
+    def _validate_video_object_key(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        if not value.startswith("lost-found/"):
+            raise ValueError(
+                "video_object_key must reference a lost-found upload (expected prefix 'lost-found/')."
             )
         return value
 
@@ -99,6 +159,7 @@ class LostReportResponse(BaseModel):
     photo_object_key: str | None = Field(None, exclude=True)
     created_at: datetime
     user: UserProfile | None = None
+    media: list[ReportMediaResponse] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -148,6 +209,10 @@ class FoundReportCreate(BaseModel):
         max_length=512,
         examples=["lost-found/00000000-0000-0000-0000-000000000000.jpg"],
     )
+    photo_object_keys: list[str] | None = Field(
+        None, max_length=5, examples=[["lost-found/file1.jpg"]]
+    )
+    video_object_key: str | None = Field(None, max_length=512, examples=["lost-found/video1.mp4"])
 
     @field_validator("photo_object_key")
     @classmethod
@@ -158,6 +223,29 @@ class FoundReportCreate(BaseModel):
             raise ValueError(
                 "photo_object_key must reference a lost-found upload "
                 "(expected prefix 'lost-found/')."
+            )
+        return value
+
+    @field_validator("photo_object_keys")
+    @classmethod
+    def _validate_photo_object_keys(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return value
+        for key in value:
+            if not key.startswith("lost-found/"):
+                raise ValueError(
+                    "Each photo key must reference a lost-found upload (expected prefix 'lost-found/')."
+                )
+        return value
+
+    @field_validator("video_object_key")
+    @classmethod
+    def _validate_video_object_key(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        if not value.startswith("lost-found/"):
+            raise ValueError(
+                "video_object_key must reference a lost-found upload (expected prefix 'lost-found/')."
             )
         return value
 
@@ -182,6 +270,7 @@ class FoundReportResponse(BaseModel):
     photo_object_key: str | None = Field(None, exclude=True)
     created_at: datetime
     user: UserProfile | None = None
+    media: list[ReportMediaResponse] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 

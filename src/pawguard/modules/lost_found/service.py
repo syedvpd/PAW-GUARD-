@@ -1,5 +1,6 @@
 """LostFoundService: owns lost/found registers and reunifying cross-matching logic (RULE-003)."""
 
+import contextlib
 import math
 import uuid
 from collections.abc import Sequence
@@ -20,6 +21,7 @@ from pawguard.modules.lost_found.models import (
     MatchStatus,
     PetSighting,
     ReportMatch,
+    ReportMedia,
     ReportStatus,
     Species,
 )
@@ -107,6 +109,26 @@ class LostFoundService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> LostReport:
+        from pawguard.services.storage_service import StorageService
+
+        # Determine photo keys and video key
+        photo_keys = payload.photo_object_keys
+        if photo_keys is None:
+            photo_keys = [payload.photo_object_key] if payload.photo_object_key else []
+        video_key = payload.video_object_key
+
+        # Validate S3 objects if present
+        if photo_keys or video_key:
+            StorageService().validate_report_media(photo_keys, video_key)
+
+        # Legacy primary key to store on report model
+        primary_key = photo_keys[0] if photo_keys else payload.photo_object_key
+        # Resolve legacy photo url if primary key is present
+        photo_url = payload.photo_url
+        if primary_key:
+            with contextlib.suppress(Exception):
+                photo_url = StorageService().generate_public_url(object_key=primary_key)
+
         report = LostReport(
             user_id=user_id,
             pet_name=payload.pet_name,
@@ -122,11 +144,39 @@ class LostFoundService:
             lost_at=payload.lost_at,
             status=ReportStatus.ACTIVE,
             companion_pet_id=payload.companion_pet_id,
-            photo_url=payload.photo_url,
-            photo_object_key=payload.photo_object_key,
+            photo_url=photo_url,
+            photo_object_key=primary_key,
         )
         await self._repo.create_lost_report(report)
         await self._repo._session.flush()
+
+        # Save ReportMedia entries
+        media_items = []
+        for idx, key in enumerate(photo_keys):
+            media_items.append(
+                ReportMedia(
+                    lost_report_id=report.id,
+                    media_type="photo",
+                    object_key=key,
+                    is_primary=(idx == 0),
+                    display_order=idx,
+                )
+            )
+        if video_key:
+            media_items.append(
+                ReportMedia(
+                    lost_report_id=report.id,
+                    media_type="video",
+                    object_key=video_key,
+                    is_primary=False,
+                    display_order=len(photo_keys),
+                )
+            )
+
+        for m in media_items:
+            self._repo._session.add(m)
+        await self._repo._session.flush()
+
         await self._run_matching_for_lost(report)
         if self._audit and actor_id:
             await self._audit.record(
@@ -203,6 +253,26 @@ class LostFoundService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> FoundReport:
+        from pawguard.services.storage_service import StorageService
+
+        # Determine photo keys and video key
+        photo_keys = payload.photo_object_keys
+        if photo_keys is None:
+            photo_keys = [payload.photo_object_key] if payload.photo_object_key else []
+        video_key = payload.video_object_key
+
+        # Validate S3 objects if present
+        if photo_keys or video_key:
+            StorageService().validate_report_media(photo_keys, video_key)
+
+        # Legacy primary key to store on report model
+        primary_key = photo_keys[0] if photo_keys else payload.photo_object_key
+        # Resolve legacy photo url if primary key is present
+        photo_url = payload.photo_url
+        if primary_key:
+            with contextlib.suppress(Exception):
+                photo_url = StorageService().generate_public_url(object_key=primary_key)
+
         report = FoundReport(
             user_id=user_id,
             breed_observed=payload.breed_observed.lower(),
@@ -215,11 +285,39 @@ class LostFoundService:
             longitude=payload.longitude,
             found_at=payload.found_at,
             status=ReportStatus.ACTIVE,
-            photo_url=payload.photo_url,
-            photo_object_key=payload.photo_object_key,
+            photo_url=photo_url,
+            photo_object_key=primary_key,
         )
         await self._repo.create_found_report(report)
         await self._repo._session.flush()
+
+        # Save ReportMedia entries
+        media_items = []
+        for idx, key in enumerate(photo_keys):
+            media_items.append(
+                ReportMedia(
+                    found_report_id=report.id,
+                    media_type="photo",
+                    object_key=key,
+                    is_primary=(idx == 0),
+                    display_order=idx,
+                )
+            )
+        if video_key:
+            media_items.append(
+                ReportMedia(
+                    found_report_id=report.id,
+                    media_type="video",
+                    object_key=video_key,
+                    is_primary=False,
+                    display_order=len(photo_keys),
+                )
+            )
+
+        for m in media_items:
+            self._repo._session.add(m)
+        await self._repo._session.flush()
+
         await self._run_matching_for_found(report)
         if self._audit and actor_id:
             await self._audit.record(

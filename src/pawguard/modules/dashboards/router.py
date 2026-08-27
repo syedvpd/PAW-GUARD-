@@ -9,6 +9,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.cache_decorator import cache_response
+from pawguard.core.metrics import dec_gauge, inc_gauge, track_sse_bytes
 from pawguard.core.responses import ApiResponse
 from pawguard.db.session import get_db
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
@@ -75,6 +76,7 @@ async def stream_rescue_dashboard(
     """
 
     async def _event_stream():
+        inc_gauge("pawguard_sse_active_connections", {})
         pubsub = None
         if hasattr(redis, "pubsub"):
             try:
@@ -83,6 +85,13 @@ async def stream_rescue_dashboard(
             except Exception:
                 pubsub = None
 
+        def _emit(chunk: str) -> str:
+            track_sse_bytes(
+                "snapshot" if chunk.startswith("event: snapshot") else "heartbeat",
+                len(chunk.encode("utf-8")),
+            )
+            return chunk
+
         # Send initial snapshot immediately
         try:
             data = await dasvc.rescue_dashboard(db)
@@ -90,9 +99,9 @@ async def stream_rescue_dashboard(
                 {"data": data, "ts": datetime.now(UTC).isoformat()},
                 default=str,
             )
-            yield f"event: snapshot\ndata: {payload}\n\n"
+            yield _emit(f"event: snapshot\ndata: {payload}\n\n")
         except Exception:
-            yield ": initial snapshot unavailable, stream starting\n\n"
+            yield _emit(": initial snapshot unavailable, stream starting\n\n")
 
         try:
             while True:
@@ -120,12 +129,13 @@ async def stream_rescue_dashboard(
                             {"data": data, "ts": datetime.now(UTC).isoformat()},
                             default=str,
                         )
-                        yield f"event: snapshot\ndata: {payload}\n\n"
+                        yield _emit(f"event: snapshot\ndata: {payload}\n\n")
                     except Exception:
-                        yield ": snapshot unavailable, stream alive\n\n"
+                        yield _emit(": snapshot unavailable, stream alive\n\n")
                 else:
-                    yield ": heartbeat\n\n"
+                    yield _emit(": heartbeat\n\n")
         finally:
+            dec_gauge("pawguard_sse_active_connections", {})
             if pubsub is not None:
                 with contextlib.suppress(Exception):
                     await pubsub.unsubscribe("dispatch:events")

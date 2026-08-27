@@ -6,6 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
+from pawguard.modules.lost_found.schemas import ReportMediaResponse
 from pawguard.modules.rescue.models import (
     RescueEscalationStatus,
     RescueEscalationType,
@@ -125,6 +126,8 @@ class RescueRequestCreate(BaseModel):
         ),
         examples=[["rescue/2026/08/barnaby_1.jpg"]],
     )
+    photo_object_keys: list[str] | None = Field(None, max_length=5, examples=[["rescue/file1.jpg"]])
+    video_object_key: str | None = Field(None, max_length=512, examples=["rescue/video1.mp4"])
     # Temporal tracking extras (PRR 3.2): environmental factors and
     # additional reporter notes captured by the intake wizard.
     environmental_factors: str | None = Field(
@@ -146,6 +149,37 @@ class RescueRequestCreate(BaseModel):
                 raise ValueError("Media object keys cannot be empty.")
             cleaned.append(key)
         return cleaned
+
+    @field_validator("photo_object_keys")
+    @classmethod
+    def _validate_photo_object_keys(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return value
+        cleaned: list[str] = []
+        for key in value:
+            key = key.strip()
+            if not key:
+                raise ValueError("Photo object keys cannot be empty.")
+            if not key.startswith("rescue/"):
+                raise ValueError(
+                    "Each photo key must reference a rescue upload (expected prefix 'rescue/')."
+                )
+            cleaned.append(key)
+        return cleaned
+
+    @field_validator("video_object_key")
+    @classmethod
+    def _validate_video_object_key(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        value = value.strip()
+        if not value:
+            raise ValueError("video_object_key cannot be empty.")
+        if not value.startswith("rescue/"):
+            raise ValueError(
+                "video_object_key must reference a rescue upload (expected prefix 'rescue/')."
+            )
+        return value
 
     _normalise_condition = field_validator("physical_condition", mode="before")(
         _normalise_physical_condition
@@ -171,7 +205,7 @@ class PublicRescueStatusResponse(BaseModel):
 class RescueMediaUploadUrlRequest(BaseModel):
     filename: str = Field(..., examples=["incident_photo1.jpg"])
     mime_type: str = Field(..., examples=["image/jpeg"])
-    file_size: int = Field(..., ge=1, le=52428800, description="Max 50MB file size limit")
+    file_size: int = Field(..., ge=1, le=104857600, description="Max 100MB file size limit")
 
 
 class RescueMediaUploadUrlResponse(BaseModel):
@@ -186,6 +220,8 @@ class RescueRequestUpdate(BaseModel):
     severity: RescueSeverity | None = Field(None, examples=["critical"])
     is_urgent: bool | None = Field(None, examples=[True])
     media_evidence: list[str] | None = Field(None, max_length=5)
+    photo_object_keys: list[str] | None = Field(None, max_length=5)
+    video_object_key: str | None = Field(None, max_length=512)
 
 
 class RescueDispatchCreate(BaseModel):
@@ -420,6 +456,7 @@ class RescueRequestResponse(BaseModel):
     dispatch: RescueDispatchResponse | None = None
     reports: list[RescueReportResponse] = []
     dog_profile_id: uuid.UUID | None = None
+    media: list[ReportMediaResponse] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod
@@ -442,6 +479,7 @@ class RescueRequestResponse(BaseModel):
             obj_dict = getattr(data, "__dict__", {})
             dispatch_val = obj_dict.get("dispatch", None)
             reports_val = obj_dict.get("reports", [])
+            media_val = obj_dict.get("media", [])
             dog_prof = obj_dict.get("dog_profile", None)
             dog_profile_id = getattr(dog_prof, "id", None) if dog_prof else None
 
@@ -474,6 +512,7 @@ class RescueRequestResponse(BaseModel):
                 "dispatch": dispatch_val,
                 "reports": reports_val,
                 "dog_profile_id": dog_profile_id,
+                "media": media_val,
             }
         return data
 

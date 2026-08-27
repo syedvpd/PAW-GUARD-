@@ -172,6 +172,8 @@ async def report_incident(
         severity=payload.severity,
         is_urgent=payload.is_urgent,
         media_evidence=payload.media_evidence,
+        photo_object_keys=payload.photo_object_keys,
+        video_object_key=payload.video_object_key,
         environmental_factors=payload.environmental_factors,
         reporter_notes=payload.reporter_notes,
         actor_id=current_user.id,
@@ -216,6 +218,8 @@ async def public_report_incident(
         severity=payload.severity,
         is_urgent=payload.is_urgent,
         media_evidence=payload.media_evidence,
+        photo_object_keys=payload.photo_object_keys,
+        video_object_key=payload.video_object_key,
         environmental_factors=payload.environmental_factors,
         reporter_notes=payload.reporter_notes,
         actor_id=None,
@@ -244,8 +248,21 @@ async def request_rescue_media_upload_url(
     from pawguard.core.exceptions import ValidationFailedError
     from pawguard.services.storage_service import StorageService
 
-    if payload.file_size > 52428800:
-        raise ValidationFailedError("File size exceeds the maximum 50MB limit for media evidence.")
+    allowed_photo_mimes = {"image/jpeg", "image/png", "image/webp"}
+    allowed_video_mimes = {"video/mp4", "video/webm", "video/quicktime"}
+
+    is_photo = payload.mime_type in allowed_photo_mimes
+    is_video = payload.mime_type in allowed_video_mimes
+
+    if not is_photo and not is_video:
+        raise ValidationFailedError(
+            f"Unsupported file type '{payload.mime_type}'. Allowed types: JPEG, PNG, WEBP, MP4, WEBM, QUICKTIME."
+        )
+
+    if is_photo and payload.file_size > 52428800:
+        raise ValidationFailedError("File size exceeds the maximum 50MB limit for pet photos.")
+    if is_video and payload.file_size > 104857600:
+        raise ValidationFailedError("File size exceeds the maximum 100MB limit for pet videos.")
 
     storage = StorageService()
     object_key = storage.build_object_key(folder="rescue", filename=payload.filename)
