@@ -62,10 +62,13 @@ class EmailService:
         from pawguard.core.metrics import track_outbound_request
 
         start = time.perf_counter()
+        sender_name = self._settings.mail_from_name
+        sender_email = self._settings.mail_from_email
         payload = json.dumps(
             {
-                "sender": {"name": "PawGuard", "email": self._settings.mail_from_email},
+                "sender": {"name": sender_name, "email": sender_email},
                 "to": [{"email": to}],
+                "replyTo": {"name": sender_name, "email": sender_email},
                 "subject": subject,
                 "htmlContent": html_body,
             }
@@ -128,8 +131,11 @@ class EmailService:
         from pawguard.core.metrics import track_outbound_request
 
         start = time.perf_counter()
+        sender_name = self._settings.mail_from_name
+        sender_email = self._settings.mail_from_email
         message = EmailMessage()
-        message["From"] = self._settings.mail_from
+        message["From"] = f"{sender_name} <{sender_email}>"
+        message["Reply-To"] = f"{sender_name} <{sender_email}>"
         message["To"] = to
         message["Subject"] = subject
         message.set_content("This email requires an HTML-capable client.")

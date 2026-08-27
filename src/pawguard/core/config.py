@@ -135,6 +135,7 @@ class Settings(BaseSettings):
 
     # --- Mail ---
     mail_from: str = "no-reply@pawguard.org"
+    mail_from_name: str = "PawGuard Rescue & Care"
     mail_host: str = "localhost"
     mail_port: int = 1025
     mail_username: str = ""
@@ -176,7 +177,7 @@ class Settings(BaseSettings):
     password_reset_rate_limit_per_hour: int = 5
 
     # --- Organisation ---
-    org_name: str = "PawGuard Animal Rescue"
+    org_name: str = "PawGuard Rescue & Care"
     org_address: str = "123 Shelter Lane, Petville, PA 12345"
 
     # --- Payments ---
