@@ -201,28 +201,6 @@ class AuthService:
         if not user.is_active:
             raise AccountInactiveError("This account has been deactivated.")
 
-        # PAW-AUTH-004: Public Website (https://pawguard-public-web.vercel.app/) permits ONLY General Public users.
-        # All operational and partner roles are blocked on Public Web and directed to Admin Portal (https://pawguard-admin.vercel.app/).
-        # Admin Portal permits ALL 15 roles.
-        is_public_web = False
-        if (
-            origin
-            and "pawguard-public-web" in origin.lower()
-            or client_type
-            and client_type.lower() in ("public", "public_web")
-        ):
-            is_public_web = True
-
-        if is_public_web:
-            user_roles = {r.name.lower() for r in getattr(user, "roles", [])}
-            allowed_public_roles = {"app_user", "general_public"}
-            if not user_roles or user_roles.isdisjoint(allowed_public_roles):
-                from pawguard.core.exceptions import ForbiddenError
-
-                raise ForbiddenError(
-                    "Access denied. Account is not authorized for public portal access."
-                )
-
         user.failed_login_count = 0
         user.locked_until = None
         user.last_login_at = datetime.now(UTC)
@@ -316,14 +294,15 @@ class AuthService:
             if revoked_at.tzinfo is None:
                 revoked_at = revoked_at.replace(tzinfo=UTC)
 
-            if (
-                existing.revoked_reason == "rotated"
-                and ref_time - revoked_at < timedelta(seconds=30)
+            if existing.revoked_reason == "rotated" and ref_time - revoked_at < timedelta(
+                seconds=30
             ):
                 logger.info(f"Rotated refresh token reused within grace period: {existing.id}")
             else:
                 # Reuse of a rotated/revoked token — treat as a breach signal and kill the session.
-                await self._sessions.revoke(existing.session_id, reason="refresh_token_reuse_detected")
+                await self._sessions.revoke(
+                    existing.session_id, reason="refresh_token_reuse_detected"
+                )
                 await self._refresh_tokens.revoke_all_for_session(
                     existing.session_id, reason="refresh_token_reuse_detected"
                 )
@@ -334,7 +313,9 @@ class AuthService:
                     ip_address=ctx.ip_address,
                     user_agent=ctx.user_agent,
                 )
-                raise RefreshTokenReuseDetectedError("Refresh token reuse detected. Session revoked.")
+                raise RefreshTokenReuseDetectedError(
+                    "Refresh token reuse detected. Session revoked."
+                )
 
         expires_at = existing.expires_at
         if expires_at.tzinfo is None:
