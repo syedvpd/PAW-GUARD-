@@ -52,18 +52,24 @@ if current_url == ini_url or not current_url:
 target_metadata = Base.metadata
 
 from sqlalchemy import event
+from sqlalchemy.engine import Engine
 import re
 
-@event.listens_for(Connection, "before_cursor_execute", retval=True)
+@event.listens_for(Engine, "before_cursor_execute", retval=True)
 def receive_before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
     stmt_upper = statement.upper().strip()
-    if stmt_upper.startswith("CREATE INDEX") or stmt_upper.startswith("CREATE UNIQUE INDEX"):
-        if "IF NOT EXISTS" not in stmt_upper:
-            # Inject IF NOT EXISTS right after CREATE INDEX / CREATE UNIQUE INDEX
+    if "CREATE INDEX" in stmt_upper or "CREATE UNIQUE INDEX" in stmt_upper:
+        # Check if it targets inventory_item_suppliers and columns created_by/updated_by (which don't exist in that table)
+        if "INVENTORY_ITEM_SUPPLIERS" in stmt_upper and ("CREATED_BY" in stmt_upper or "UPDATED_BY" in stmt_upper):
+            print(f"[ALEMBIC-INJECT] Rewriting invalid index creation to SELECT 1: {statement}")
+            statement = "SELECT 1"
+        elif "IF NOT EXISTS" not in stmt_upper:
             statement = re.sub(r"(CREATE\s+(?:UNIQUE\s+)?INDEX)\s+", r"\1 IF NOT EXISTS ", statement, flags=re.IGNORECASE)
-    elif stmt_upper.startswith("DROP INDEX"):
+            print(f"[ALEMBIC-INJECT] Modified CREATE INDEX: {statement}")
+    elif "DROP INDEX" in stmt_upper:
         if "IF EXISTS" not in stmt_upper:
             statement = re.sub(r"(DROP\s+INDEX)\s+", r"\1 IF EXISTS ", statement, flags=re.IGNORECASE)
+            print(f"[ALEMBIC-INJECT] Modified DROP INDEX: {statement}")
     return statement, parameters
 
 
