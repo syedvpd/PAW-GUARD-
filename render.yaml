@@ -3,7 +3,7 @@ services:
     name: pawguard-backend
     runtime: python
     buildCommand: "pip install --upgrade pip && pip install uv && uv pip install ."
-    startCommand: "alembic upgrade head && uvicorn pawguard.main:app --host 0.0.0.0 --port $PORT"
+    startCommand: "uv run python -m pawguard.serve"
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
