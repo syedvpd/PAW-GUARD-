@@ -54,11 +54,7 @@ async def _dispatch_email_direct(job_name: str, payload: dict[str, Any]) -> None
 
 async def _dispatch_job_direct(job_name: str, payload: dict[str, Any]) -> None:
     """Dispatches any ARQ background job name directly in-process as a fallback."""
-    is_email_job = (
-        "email" in job_name
-        or "notification" in job_name
-        or job_name.startswith("send_")
-    )
+    is_email_job = "email" in job_name or "notification" in job_name or job_name.startswith("send_")
     if is_email_job:
         await _dispatch_email_direct(job_name, payload)
         return
@@ -66,30 +62,39 @@ async def _dispatch_job_direct(job_name: str, payload: dict[str, Any]) -> None:
     ctx: dict[str, Any] = {}
     if job_name == "broadcast_lost_pet_alert":
         from pawguard.workers.jobs.lost_found_jobs import broadcast_lost_pet_alert
+
         await broadcast_lost_pet_alert(ctx, **payload)
     elif job_name == "notify_safety_tag_scan":
         from pawguard.workers.jobs.companion_pet_jobs import notify_safety_tag_scan
+
         await notify_safety_tag_scan(ctx, **payload)
     elif job_name == "send_companion_pet_reminders":
         from pawguard.workers.jobs.companion_pet_jobs import send_companion_pet_reminders
+
         await send_companion_pet_reminders(ctx, **payload)
     elif job_name == "check_inventory_low_stock":
         from pawguard.workers.jobs.scheduled_jobs import check_inventory_low_stock
+
         await check_inventory_low_stock(ctx, **payload)
     elif job_name == "check_inventory_expiry":
         from pawguard.workers.jobs.scheduled_jobs import check_inventory_expiry
+
         await check_inventory_expiry(ctx, **payload)
     elif job_name == "check_vaccination_renewals":
         from pawguard.workers.jobs.scheduled_jobs import check_vaccination_renewals
+
         await check_vaccination_renewals(ctx, **payload)
     elif job_name == "post_adoption_followups":
         from pawguard.workers.jobs.scheduled_jobs import post_adoption_followups
+
         await post_adoption_followups(ctx, **payload)
     elif job_name == "process_sponsorship_charges":
         from pawguard.workers.jobs.scheduled_jobs import process_sponsorship_charges
+
         await process_sponsorship_charges(ctx, **payload)
     elif job_name == "send_volunteer_shift_reminders":
         from pawguard.workers.jobs.scheduled_jobs import send_volunteer_shift_reminders
+
         await send_volunteer_shift_reminders(ctx, **payload)
     else:
         raise ValueError(f"Unknown in-process job to dispatch directly: {job_name}")
@@ -152,6 +157,7 @@ class OutboxService:
 
             try:
                 from pawguard.core.config import get_settings
+
                 settings = get_settings()
 
                 is_null_pool = (
@@ -175,7 +181,9 @@ class OutboxService:
                     res = await arq_pool.enqueue_job(event.job_name, **event.payload)
                     if res is None:
                         if settings.environment == "test":
-                            logger.info("Test environment: skipping arq pool fallback in-process dispatch")
+                            logger.info(
+                                "Test environment: skipping arq pool fallback in-process dispatch"
+                            )
                         else:
                             logger.info(
                                 f"ARQ pool fallback: directly dispatching job {event.job_name} in-process"
@@ -183,7 +191,9 @@ class OutboxService:
                             await _dispatch_job_direct(event.job_name, event.payload)
                 else:
                     if settings.environment == "test":
-                        logger.info("Test environment: skipping no arq pool fallback in-process dispatch")
+                        logger.info(
+                            "Test environment: skipping no arq pool fallback in-process dispatch"
+                        )
                     else:
                         logger.info(
                             f"No ARQ pool: directly dispatching job {event.job_name} in-process"

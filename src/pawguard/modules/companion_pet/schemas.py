@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
@@ -82,7 +82,7 @@ class MedicalRecordCreate(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def map_legacy_fields(cls, data: any) -> any:
+    def map_legacy_fields(cls, data: Any) -> Any:
         if isinstance(data, dict):
             if "description" in data and data["description"]:
                 if "title" not in data or not data["title"]:
@@ -180,7 +180,7 @@ class SafetyTagScanRequest(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def map_legacy_fields(cls, data: any) -> any:
+    def map_legacy_fields(cls, data: Any) -> Any:
         if isinstance(data, dict) and "tag_code" in data and data["tag_code"]:
             if "token" not in data or not data["token"]:
                 data["token"] = data["tag_code"]
@@ -300,7 +300,7 @@ class PetAppointmentCreate(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def map_legacy_fields(cls, data: any) -> any:
+    def map_legacy_fields(cls, data: Any) -> Any:
         if isinstance(data, dict):
             if "scheduled_at" in data and data["scheduled_at"]:
                 from datetime import datetime, timedelta
@@ -381,7 +381,7 @@ class PetReminderCreate(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def map_legacy_fields(cls, data: any) -> any:
+    def map_legacy_fields(cls, data: Any) -> Any:
         if isinstance(data, dict):
             if "reminder_type" in data and data["reminder_type"]:
                 if "kind" not in data or not data["kind"]:

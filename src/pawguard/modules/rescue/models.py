@@ -3,9 +3,7 @@
 import uuid
 from datetime import datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
-
-from pawguard.modules.lost_found.models import ReportMedia
+from typing import Any
 
 from sqlalchemy import (
     Boolean,
@@ -24,6 +22,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pawguard.db.base import Base
 from pawguard.db.mixins import AuditMixin, SoftDeleteMixin, TimestampMixin, UUIDPkMixin
+from pawguard.modules.lost_found.models import ReportMedia
 
 
 class RescueStatus(StrEnum):

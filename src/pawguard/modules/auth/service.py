@@ -460,7 +460,7 @@ class AuthService:
                 "/auth/login",
             )
         except Exception:
-            logger.debug("push_notification_skipped", event="password_reset_request")
+            logger.debug("push_notification_skipped", action="password_reset_request")
         return raw_token
 
     async def confirm_password_reset(
@@ -576,7 +576,7 @@ class AuthService:
                 "/auth/settings",
             )
         except Exception:
-            logger.debug("push_notification_skipped", event="mfa_enrolled")
+            logger.debug("push_notification_skipped", action="mfa_enrolled")
 
     # --- Sessions ---
 
@@ -1419,6 +1419,7 @@ class AdminService:
                 f"Invalid permission code(s): {', '.join(sorted(invalid_codes))}"
             )
         up_repo = self._user_permissions
+        assert up_repo is not None
         for p in perms:
             await up_repo.grant_permission(user_id, p.id, granted_by=actor_id)
         await self._invalidate_rbac_cache()
@@ -1452,6 +1453,7 @@ class AdminService:
         if perm is None:
             raise NotFoundError(f"Permission '{permission_code}' not found.")
         up_repo = self._user_permissions
+        assert up_repo is not None
         revoked = await up_repo.revoke_permission(user_id, perm.id)
         await self._invalidate_rbac_cache()
         if self._audit and actor_id:
@@ -1474,5 +1476,6 @@ class AdminService:
         if user is None:
             raise NotFoundError(f"User {user_id} not found.")
         up_repo = self._user_permissions
+        assert up_repo is not None
         perms = await up_repo.list_user_permissions(user_id)
         return [p.code for p in perms]

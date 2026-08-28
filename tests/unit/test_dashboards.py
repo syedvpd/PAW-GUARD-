@@ -23,9 +23,14 @@ from pawguard.modules.dashboards.service import (
 
 
 def _fake_result(
-    scalar_one_val=None, all_val=None, one_val=None, scalars_all=None, scalar_val=None
+    scalar_one_val=None, all_val=None, one_val=None, scalars_all=None, scalar_val=None, **row_attrs
 ):
     r = MagicMock()
+    if row_attrs:
+        row = MagicMock()
+        for k, v in row_attrs.items():
+            setattr(row, k, v)
+        r.one.return_value = row
     if scalar_one_val is not None:
         r.scalar_one.return_value = scalar_one_val
     if scalar_val is not None:
@@ -48,10 +53,7 @@ class TestDashboards:
 
     async def test_rescue_dashboard(self, session):
         session.execute.side_effect = [
-            _fake_result(scalar_one_val=10),
-            _fake_result(scalar_one_val=3),
-            _fake_result(scalar_one_val=2),
-            _fake_result(scalar_one_val=5),
+            _fake_result(total=10, pending=3, dispatched=2, rescued=5),
             _fake_result(scalars_all=[]),
         ]
         result = await rescue_dashboard(session)
@@ -63,13 +65,15 @@ class TestDashboards:
 
     async def test_shelter_dashboard(self, session):
         session.execute.side_effect = [
-            _fake_result(scalar_one_val=2),
-            _fake_result(scalar_one_val=50),
-            _fake_result(scalar_one_val=20),
-            _fake_result(scalar_one_val=60),
-            _fake_result(scalar_one_val=0),
-            _fake_result(scalar_one_val=0),
-            _fake_result(scalar_one_val=0),
+            _fake_result(
+                total_facilities=2,
+                total_dogs=50,
+                adoptable_dogs=20,
+                total_kennels=60,
+                pending_transfers=0,
+                isolation_count=0,
+                pending_cleaning=0,
+            ),
         ]
         result = await shelter_dashboard(session)
         assert result["total_facilities"] == 2
@@ -80,13 +84,15 @@ class TestDashboards:
 
     async def test_shelter_dashboard_no_kennels(self, session):
         session.execute.side_effect = [
-            _fake_result(scalar_one_val=0),
-            _fake_result(scalar_one_val=0),
-            _fake_result(scalar_one_val=0),
-            _fake_result(scalar_one_val=0),
-            _fake_result(scalar_one_val=0),
-            _fake_result(scalar_one_val=0),
-            _fake_result(scalar_one_val=0),
+            _fake_result(
+                total_facilities=0,
+                total_dogs=0,
+                adoptable_dogs=0,
+                total_kennels=0,
+                pending_transfers=0,
+                isolation_count=0,
+                pending_cleaning=0,
+            ),
         ]
         result = await shelter_dashboard(session)
         assert result["occupancy_rate"] == 0
@@ -102,14 +108,16 @@ class TestDashboards:
 
     async def test_adoption_dashboard(self, session):
         session.execute.side_effect = [
-            _fake_result(scalar_one_val=100),
-            _fake_result(scalar_one_val=20),
-            _fake_result(scalar_one_val=15),
-            _fake_result(scalar_one_val=60),
-            _fake_result(scalar_one_val=8),
-            _fake_result(scalar_one_val=5),
-            _fake_result(scalar_one_val=3),
-            _fake_result(scalar_one_val=4),
+            _fake_result(
+                total=100,
+                pending=20,
+                approved=15,
+                completed=60,
+                screening=8,
+                interview=5,
+                home_check=3,
+                overdue_follow_ups=4,
+            ),
         ]
         result = await adoption_dashboard(session)
         assert result["total_applications"] == 100
@@ -123,8 +131,7 @@ class TestDashboards:
 
     async def test_foster_dashboard(self, session):
         session.execute.side_effect = [
-            _fake_result(scalar_one_val=25),
-            _fake_result(scalar_one_val=10),
+            _fake_result(total=25, active=10),
         ]
         result = await foster_dashboard(session)
         assert result["total_placements"] == 25
@@ -132,8 +139,7 @@ class TestDashboards:
 
     async def test_volunteer_dashboard(self, session):
         session.execute.side_effect = [
-            _fake_result(scalar_one_val=50),
-            _fake_result(scalar_one_val=35),
+            _fake_result(total=50, available=35),
         ]
         result = await volunteer_dashboard(session)
         assert result["total_volunteers"] == 50
@@ -164,11 +170,8 @@ class TestDashboards:
 
     async def test_finance_dashboard(self, session):
         session.execute.side_effect = [
-            _fake_result(scalar_one_val=30000.0),
-            _fake_result(scalar_one_val=15000.0),
-            _fake_result(scalar_one_val=5000.0),
-            _fake_result(scalar_one_val=20000.0),
-            _fake_result(scalar_one_val=5),
+            _fake_result(income=30000.0, donation_income=15000.0, expense=20000.0, pending_tx=5),
+            _fake_result(amount=5000.0),
         ]
         result = await finance_dashboard(session)
         assert result["total_income"] == 50000.0
@@ -194,8 +197,7 @@ class TestDashboards:
 
     async def test_staff_dashboard(self, session):
         session.execute.side_effect = [
-            _fake_result(scalar_one_val=25),
-            _fake_result(scalar_one_val=8),
+            _fake_result(total_staff=25, open_grievances=8),
         ]
         result = await staff_dashboard(session)
         assert result["total_staff"] == 25
@@ -203,27 +205,23 @@ class TestDashboards:
 
     async def test_executive_dashboard(self, session):
         session.execute.side_effect = [
-            # rescue_dashboard (5 queries)
-            _fake_result(scalar_one_val=200),
-            _fake_result(scalar_one_val=10),
-            _fake_result(scalar_one_val=5),
-            _fake_result(scalar_one_val=20),
+            # rescue_dashboard (2 queries)
+            _fake_result(total=200, pending=10, dispatched=5, rescued=20),
             _fake_result(scalars_all=[]),
-            # finance_dashboard (5 queries)
-            _fake_result(scalar_one_val=60000.0),
-            _fake_result(scalar_one_val=30000.0),
-            _fake_result(scalar_one_val=10000.0),
-            _fake_result(scalar_one_val=40000.0),
-            _fake_result(scalar_one_val=2),
-            # adoption_dashboard (8 queries)
-            _fake_result(scalar_one_val=150),
-            _fake_result(scalar_one_val=20),
-            _fake_result(scalar_one_val=15),
-            _fake_result(scalar_one_val=60),
-            _fake_result(scalar_one_val=8),
-            _fake_result(scalar_one_val=5),
-            _fake_result(scalar_one_val=3),
-            _fake_result(scalar_one_val=4),
+            # finance_dashboard (2 queries)
+            _fake_result(income=60000.0, donation_income=30000.0, expense=40000.0, pending_tx=2),
+            _fake_result(amount=10000.0),
+            # adoption_dashboard (1 query)
+            _fake_result(
+                total=150,
+                pending=20,
+                approved=15,
+                completed=60,
+                screening=8,
+                interview=5,
+                home_check=3,
+                overdue_follow_ups=4,
+            ),
         ]
         result = await executive_dashboard(session)
         assert "rescue_overview" in result
@@ -238,8 +236,7 @@ class TestDashboards:
 
     async def test_public_dashboard(self, session):
         session.execute.side_effect = [
-            _fake_result(scalar_one_val=45),
-            _fake_result(scalar_one_val=100),
+            _fake_result(adoptable_dogs=45, dogs_rescued=100),
         ]
         result = await public_dashboard(session)
         assert result["adoptable_dogs"] == 45
@@ -247,20 +244,19 @@ class TestDashboards:
 
     async def test_operations_dashboard(self, session):
         session.execute.side_effect = [
-            # rescue_dashboard (5 queries)
-            _fake_result(scalar_one_val=200),
-            _fake_result(scalar_one_val=10),
-            _fake_result(scalar_one_val=5),
-            _fake_result(scalar_one_val=20),
+            # rescue_dashboard (2 queries)
+            _fake_result(total=200, pending=10, dispatched=5, rescued=20),
             _fake_result(scalars_all=[]),
-            # shelter_dashboard (7 queries)
-            _fake_result(scalar_one_val=3),
-            _fake_result(scalar_one_val=80),
-            _fake_result(scalar_one_val=30),
-            _fake_result(scalar_one_val=100),
-            _fake_result(scalar_one_val=0),
-            _fake_result(scalar_one_val=0),
-            _fake_result(scalar_one_val=0),
+            # shelter_dashboard (1 query)
+            _fake_result(
+                total_facilities=3,
+                total_dogs=80,
+                adoptable_dogs=30,
+                total_kennels=100,
+                pending_transfers=0,
+                isolation_count=0,
+                pending_cleaning=0,
+            ),
             # inventory_dashboard (2 queries)
             _fake_result(all_val=[]),
             _fake_result(scalars_all=[]),
@@ -283,10 +279,7 @@ class TestDashboards:
         fake_redis = AsyncMock()
         fake_redis.get.return_value = None
         session.execute.side_effect = [
-            _fake_result(scalar_one_val=10),
-            _fake_result(scalar_one_val=3),
-            _fake_result(scalar_one_val=2),
-            _fake_result(scalar_one_val=5),
+            _fake_result(total=10, pending=3, dispatched=2, rescued=5),
             _fake_result(scalars_all=[]),
         ]
         result = await rescue_dashboard(session, redis=fake_redis)
@@ -296,7 +289,6 @@ class TestDashboards:
 
     async def test_stream_rescue_dashboard_pubsub(self, session):
         request = AsyncMock()
-        # Mock connection is_disconnected to return False first, then True to break loop
         request.is_disconnected.side_effect = [False, True]
 
         fake_redis = MagicMock()
@@ -305,18 +297,10 @@ class TestDashboards:
 
         pubsub_mock.get_message.return_value = {"type": "message", "data": "updated"}
 
-        # Mock DB results for initial fetch and subsequent pubsub wake-up fetch
         session.execute.side_effect = [
-            _fake_result(scalar_one_val=10),
-            _fake_result(scalar_one_val=3),
-            _fake_result(scalar_one_val=2),
-            _fake_result(scalar_one_val=5),
+            _fake_result(total=10, pending=3, dispatched=2, rescued=5),
             _fake_result(scalars_all=[]),
-            # Second iteration calls
-            _fake_result(scalar_one_val=10),
-            _fake_result(scalar_one_val=3),
-            _fake_result(scalar_one_val=2),
-            _fake_result(scalar_one_val=5),
+            _fake_result(total=10, pending=3, dispatched=2, rescued=5),
             _fake_result(scalars_all=[]),
         ]
 
@@ -328,19 +312,15 @@ class TestDashboards:
             current_user=AsyncMock(),
         )
 
-        # Collect yielded outputs
         outputs = []
         async for chunk in response.body_iterator:
             outputs.append(chunk)
 
-        # Confirm subscription occurred
         fake_redis.pubsub.assert_called_once()
         pubsub_mock.subscribe.assert_called_with("dispatch:events")
-        # Assert clean closure
         pubsub_mock.unsubscribe.assert_called_with("dispatch:events")
         pubsub_mock.close.assert_called_once()
 
-        # Check returned content contains expected events
         assert len(outputs) == 2
         assert "event: snapshot" in outputs[0]
         assert "event: snapshot" in outputs[1]

@@ -308,17 +308,23 @@ async def test_arq_polling_backoff():
     original_sleep = asyncio.sleep
     sleep_calls = []
 
+    from unittest.mock import patch
+
+    from pawguard.workers.pool import _NullArqPool
+
     async def mock_sleep(delay):
         sleep_calls.append(delay)
-        raise asyncio.CancelledError()  # Cancel loop on first sleep
+        if delay >= 2:
+            raise asyncio.CancelledError()
 
     asyncio.sleep = mock_sleep
 
     try:
-        with pytest.raises(asyncio.CancelledError):
-            await outbox_poller_loop(ctx)
-        # Verify delay was 2 seconds (since it processed 5 events)
-        assert 2 in sleep_calls
+        with patch("pawguard.workers.pool._ensure_pool", AsyncMock(return_value=_NullArqPool())):
+            with pytest.raises(asyncio.CancelledError):
+                await outbox_poller_loop(ctx)
+            # Verify delay was 2 seconds (since it processed 5 events)
+            assert 2 in sleep_calls
 
         # Step 2: Simulate processed == 0 (idle)
         OutboxService.process_pending_events = AsyncMock(return_value=0)

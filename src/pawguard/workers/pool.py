@@ -26,15 +26,19 @@ class _NullArqPool:
     async def enqueue_job(self, *args: Any, **kwargs: Any) -> Any:
         await asyncio.sleep(0)
         from pawguard.core.config import get_settings
+
         settings = get_settings()
         job_name = args[0] if args else None
         if job_name:
             if settings.environment == "test":
-                logger.info("Test environment: skipping enqueue_job in-process fallback", job=job_name)
+                logger.info(
+                    "Test environment: skipping enqueue_job in-process fallback", job=job_name
+                )
                 return "mock_job_id"
             logger.info("arq_pool_unavailable_falling_back_to_in_process", job=job_name)
             try:
                 from pawguard.modules.outbox.service import _dispatch_job_direct
+
                 await _dispatch_job_direct(job_name, kwargs)
                 return "in_process_success"
             except Exception as exc:
@@ -52,6 +56,7 @@ class _SafeArqPool:
 
     async def enqueue_job(self, *args: Any, **kwargs: Any) -> Any:
         from pawguard.core.config import get_settings
+
         settings = get_settings()
         job_name = args[0] if args else None
 
@@ -60,6 +65,7 @@ class _SafeArqPool:
                 logger.info("force_in_process_jobs_enabled_dispatching", job=job_name)
                 try:
                     from pawguard.modules.outbox.service import _dispatch_job_direct
+
                     await _dispatch_job_direct(job_name, kwargs)
                     return "in_process_success"
                 except Exception as exc:
@@ -73,15 +79,21 @@ class _SafeArqPool:
             logger.warning("arq_pool_enqueue_failed_falling_back", error=str(exc))
             if job_name:
                 if settings.environment == "test":
-                    logger.info("Test environment: skipping arq enqueue fallback to in-process", job=job_name)
+                    logger.info(
+                        "Test environment: skipping arq enqueue fallback to in-process",
+                        job=job_name,
+                    )
                     return "mock_job_id"
                 logger.info("arq_pool_enqueue_failed_falling_back_to_in_process", job=job_name)
                 try:
                     from pawguard.modules.outbox.service import _dispatch_job_direct
+
                     await _dispatch_job_direct(job_name, kwargs)
                     return "in_process_success"
                 except Exception as exc_inner:
-                    logger.error("in_process_job_dispatch_failed", job=job_name, error=str(exc_inner))
+                    logger.error(
+                        "in_process_job_dispatch_failed", job=job_name, error=str(exc_inner)
+                    )
                     return None
             return None
 

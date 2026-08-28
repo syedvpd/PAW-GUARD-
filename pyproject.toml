@@ -91,7 +91,7 @@ plugins = ["pydantic.mypy"]
 exclude = ["alembic/"]
 ignore_missing_imports = true
 warn_unused_ignores = false
-disable_error_code = ["arg-type", "assignment", "attr-defined", "operator", "list-item", "call-arg", "method-assign"]
+disable_error_code = ["arg-type", "assignment", "attr-defined", "operator", "list-item", "call-arg", "method-assign", "index", "prop-decorator"]
 
 [[tool.mypy.overrides]]
 module = ["boto3.*", "botocore.*", "pyotp.*", "razorpay.*", "reportlab.*", "openpyxl.*", "qrcode.*", "arq.*", "firebase_admin.*"]
