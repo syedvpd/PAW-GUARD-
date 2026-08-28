@@ -616,12 +616,7 @@ class AuthService:
         return await self._sessions.create(session)
 
     async def _issue_tokens(self, *, user: User, session: UserSession) -> AuthenticatedTokens:
-        import time
-
-        from pawguard.modules.auth.dependencies import _AUTH_SESSION_CACHE
-
         session.user = user
-        _AUTH_SESSION_CACHE[session.id] = (time.monotonic(), user, session)
 
         access_token = create_access_token(
             user_id=user.id,
