@@ -76,9 +76,12 @@ async def get_current_user(
     cached = _AUTH_SESSION_CACHE.get(claims.session_id)
     if cached is not None:
         cached_ts, cached_user, cached_session = cached
+        cached_expires_at = cached_session.expires_at
+        if cached_expires_at.tzinfo is None:
+            cached_expires_at = cached_expires_at.replace(tzinfo=UTC)
         if (
             now_time - cached_ts < _AUTH_CACHE_TTL_SECONDS
-            and cached_session.expires_at > datetime.now(UTC)
+            and cached_expires_at > datetime.now(UTC)
         ):
             request.state.user_id = cached_user.id
             set_actor(cached_user.id)
@@ -94,7 +97,12 @@ async def get_current_user(
     if session is None or not session.is_active:
         _AUTH_SESSION_CACHE.pop(claims.session_id, None)
         raise InvalidSessionError("Session has been revoked or has expired.")
-    if session.expires_at < datetime.now(UTC):
+
+    session_expires_at = session.expires_at
+    if session_expires_at.tzinfo is None:
+        session_expires_at = session_expires_at.replace(tzinfo=UTC)
+
+    if session_expires_at < datetime.now(UTC):
         _AUTH_SESSION_CACHE.pop(claims.session_id, None)
         raise InvalidSessionError("Session has expired.")
 

@@ -309,28 +309,49 @@ class AuthService:
         if existing is None:
             raise InvalidRefreshTokenError("Refresh token is invalid.")
 
-        if existing.revoked_at is not None:
-            # Reuse of a rotated/revoked token — treat as a breach signal and kill the session.
-            await self._sessions.revoke(existing.session_id, reason="refresh_token_reuse_detected")
-            await self._refresh_tokens.revoke_all_for_session(
-                existing.session_id, reason="refresh_token_reuse_detected"
-            )
-            session = await self._sessions.get_by_id(existing.session_id)
-            await self._audit.record(
-                event_type=AuthAuditEventType.REFRESH_REUSE_DETECTED,
-                actor_id=session.user_id if session else None,
-                ip_address=ctx.ip_address,
-                user_agent=ctx.user_agent,
-            )
-            raise RefreshTokenReuseDetectedError("Refresh token reuse detected. Session revoked.")
+        ref_time = datetime.now(UTC)
 
-        if existing.expires_at < datetime.now(UTC):
+        if existing.revoked_at is not None:
+            revoked_at = existing.revoked_at
+            if revoked_at.tzinfo is None:
+                revoked_at = revoked_at.replace(tzinfo=UTC)
+
+            if (
+                existing.revoked_reason == "rotated"
+                and ref_time - revoked_at < timedelta(seconds=30)
+            ):
+                logger.info(f"Rotated refresh token reused within grace period: {existing.id}")
+            else:
+                # Reuse of a rotated/revoked token — treat as a breach signal and kill the session.
+                await self._sessions.revoke(existing.session_id, reason="refresh_token_reuse_detected")
+                await self._refresh_tokens.revoke_all_for_session(
+                    existing.session_id, reason="refresh_token_reuse_detected"
+                )
+                session = await self._sessions.get_by_id(existing.session_id)
+                await self._audit.record(
+                    event_type=AuthAuditEventType.REFRESH_REUSE_DETECTED,
+                    actor_id=session.user_id if session else None,
+                    ip_address=ctx.ip_address,
+                    user_agent=ctx.user_agent,
+                )
+                raise RefreshTokenReuseDetectedError("Refresh token reuse detected. Session revoked.")
+
+        expires_at = existing.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=UTC)
+
+        if expires_at < ref_time:
             raise InvalidRefreshTokenError("Refresh token has expired.")
 
         session = await self._sessions.get_by_id(existing.session_id)
         if session is None or not session.is_active:
             raise InvalidSessionError("Session is no longer valid.")
-        if session.expires_at < datetime.now(UTC):
+
+        session_expires_at = session.expires_at
+        if session_expires_at.tzinfo is None:
+            session_expires_at = session_expires_at.replace(tzinfo=UTC)
+
+        if session_expires_at < ref_time:
             raise InvalidSessionError("Session has expired.")
 
         user = await self._users.get_by_id(session.user_id)
