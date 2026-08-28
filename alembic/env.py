@@ -51,6 +51,21 @@ if current_url == ini_url or not current_url:
 
 target_metadata = Base.metadata
 
+from sqlalchemy import event
+import re
+
+@event.listens_for(Connection, "before_cursor_execute", retval=True)
+def receive_before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+    stmt_upper = statement.upper().strip()
+    if stmt_upper.startswith("CREATE INDEX") or stmt_upper.startswith("CREATE UNIQUE INDEX"):
+        if "IF NOT EXISTS" not in stmt_upper:
+            # Inject IF NOT EXISTS right after CREATE INDEX / CREATE UNIQUE INDEX
+            statement = re.sub(r"(CREATE\s+(?:UNIQUE\s+)?INDEX)\s+", r"\1 IF NOT EXISTS ", statement, flags=re.IGNORECASE)
+    elif stmt_upper.startswith("DROP INDEX"):
+        if "IF EXISTS" not in stmt_upper:
+            statement = re.sub(r"(DROP\s+INDEX)\s+", r"\1 IF EXISTS ", statement, flags=re.IGNORECASE)
+    return statement, parameters
+
 
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")

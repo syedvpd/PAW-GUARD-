@@ -23,7 +23,7 @@ COPY alembic ./alembic
 # scripts/ holds the role/permission seeder imported by main._seed_roles().
 COPY scripts ./scripts
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
-RUN chmod +x /app/docker-entrypoint.sh
+RUN sed -i 's/\r$//' /app/docker-entrypoint.sh && chmod +x /app/docker-entrypoint.sh
 
 RUN uv pip install --system --no-cache .
 
