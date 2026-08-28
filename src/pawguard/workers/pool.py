@@ -23,7 +23,7 @@ _pool: Any = None
 class _NullArqPool:
     """Stand-in when Redis/ARQ is unreachable — enqueue calls are no-ops."""
 
-    async def enqueue_job(self, *args: Any, **kwargs: Any) -> None:
+    async def enqueue_job(self, *args: Any, **kwargs: Any) -> Any:
         await asyncio.sleep(0)
         from pawguard.core.config import get_settings
         settings = get_settings()
