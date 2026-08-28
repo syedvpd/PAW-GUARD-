@@ -17,6 +17,7 @@ class MockArqPool:
         if self.should_fail:
             raise RuntimeError("Redis connection failure")
         self.enqueued_jobs.append((job_name, payload))
+        return "mock_job_id"
 
 
 @pytest.mark.asyncio

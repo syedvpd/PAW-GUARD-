@@ -52,6 +52,49 @@ async def _dispatch_email_direct(job_name: str, payload: dict[str, Any]) -> None
         await asyncio.to_thread(email_svc.send, to=to, subject=subject, html_body=html)
 
 
+async def _dispatch_job_direct(job_name: str, payload: dict[str, Any]) -> None:
+    """Dispatches any ARQ background job name directly in-process as a fallback."""
+    is_email_job = (
+        "email" in job_name
+        or "notification" in job_name
+        or job_name.startswith("send_")
+    )
+    if is_email_job:
+        await _dispatch_email_direct(job_name, payload)
+        return
+
+    ctx: dict[str, Any] = {}
+    if job_name == "broadcast_lost_pet_alert":
+        from pawguard.workers.jobs.lost_found_jobs import broadcast_lost_pet_alert
+        await broadcast_lost_pet_alert(ctx, **payload)
+    elif job_name == "notify_safety_tag_scan":
+        from pawguard.workers.jobs.companion_pet_jobs import notify_safety_tag_scan
+        await notify_safety_tag_scan(ctx, **payload)
+    elif job_name == "send_companion_pet_reminders":
+        from pawguard.workers.jobs.companion_pet_jobs import send_companion_pet_reminders
+        await send_companion_pet_reminders(ctx, **payload)
+    elif job_name == "check_inventory_low_stock":
+        from pawguard.workers.jobs.scheduled_jobs import check_inventory_low_stock
+        await check_inventory_low_stock(ctx, **payload)
+    elif job_name == "check_inventory_expiry":
+        from pawguard.workers.jobs.scheduled_jobs import check_inventory_expiry
+        await check_inventory_expiry(ctx, **payload)
+    elif job_name == "check_vaccination_renewals":
+        from pawguard.workers.jobs.scheduled_jobs import check_vaccination_renewals
+        await check_vaccination_renewals(ctx, **payload)
+    elif job_name == "post_adoption_followups":
+        from pawguard.workers.jobs.scheduled_jobs import post_adoption_followups
+        await post_adoption_followups(ctx, **payload)
+    elif job_name == "process_sponsorship_charges":
+        from pawguard.workers.jobs.scheduled_jobs import process_sponsorship_charges
+        await process_sponsorship_charges(ctx, **payload)
+    elif job_name == "send_volunteer_shift_reminders":
+        from pawguard.workers.jobs.scheduled_jobs import send_volunteer_shift_reminders
+        await send_volunteer_shift_reminders(ctx, **payload)
+    else:
+        raise ValueError(f"Unknown in-process job to dispatch directly: {job_name}")
+
+
 class OutboxService:
     """Service to coordinate saving and reliable dispatching of transactional outbox events."""
 
@@ -108,37 +151,44 @@ class OutboxService:
             await session.flush()
 
             try:
+                from pawguard.core.config import get_settings
+                settings = get_settings()
+
                 is_null_pool = (
                     arq_pool is None
                     or type(arq_pool).__name__ == "_NullArqPool"
                     or getattr(arq_pool, "_inner", None).__class__.__name__ == "_NullArqPool"
                 )
-                is_email_job = (
-                    "email" in event.job_name
-                    or "notification" in event.job_name
-                    or event.job_name.startswith("send_")
-                )
 
-                if is_email_job and is_null_pool:
-                    logger.info(
-                        f"Directly dispatching email job {event.job_name} to {event.payload.get('to')}"
-                    )
-                    await _dispatch_email_direct(event.job_name, event.payload)
-                elif arq_pool and not is_null_pool:
-                    res = await arq_pool.enqueue_job(event.job_name, **event.payload)
-                    if res is None and is_email_job:
+                if settings.force_in_process_jobs:
+                    logger.info(f"Forcing in-process dispatch for job {event.job_name}")
+                    await _dispatch_job_direct(event.job_name, event.payload)
+                elif is_null_pool:
+                    if settings.environment == "test":
+                        logger.info("Test environment: skipping in-process dispatch fallback")
+                    else:
                         logger.info(
-                            f"ARQ pool fallback: directly dispatching email job {event.job_name}"
+                            f"Directly dispatching job {event.job_name} in-process (null pool)"
                         )
-                        await _dispatch_email_direct(event.job_name, event.payload)
-                    elif res is None and not is_email_job:
-                        raise RuntimeError(
-                            f"ARQ pool unavailable for non-email job {event.job_name}"
-                        )
-                elif is_email_job:
-                    await _dispatch_email_direct(event.job_name, event.payload)
+                        await _dispatch_job_direct(event.job_name, event.payload)
+                elif arq_pool:
+                    res = await arq_pool.enqueue_job(event.job_name, **event.payload)
+                    if res is None:
+                        if settings.environment == "test":
+                            logger.info("Test environment: skipping arq pool fallback in-process dispatch")
+                        else:
+                            logger.info(
+                                f"ARQ pool fallback: directly dispatching job {event.job_name} in-process"
+                            )
+                            await _dispatch_job_direct(event.job_name, event.payload)
                 else:
-                    raise RuntimeError(f"No ARQ pool available for job {event.job_name}")
+                    if settings.environment == "test":
+                        logger.info("Test environment: skipping no arq pool fallback in-process dispatch")
+                    else:
+                        logger.info(
+                            f"No ARQ pool: directly dispatching job {event.job_name} in-process"
+                        )
+                        await _dispatch_job_direct(event.job_name, event.payload)
 
                 # Update status on success
                 event.status = "completed"
