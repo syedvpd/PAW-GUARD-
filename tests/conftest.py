@@ -137,7 +137,7 @@ def ensure_local_test_db(url: str) -> None:
     from sqlalchemy.engine import make_url
 
     host = (make_url(url).host or "").lower()
-    allowed_hosts = {"localhost", "127.0.0.1", "::1"}
+    allowed_hosts = {"localhost", "127.0.0.1", "::1", ""}
     if host not in allowed_hosts and os.environ.get("TEST_ALLOW_REMOTE_DB") != "1":
         raise RuntimeError(
             "Refusing to run tests against non-local database host "
@@ -152,11 +152,16 @@ async def engine() -> AsyncGenerator[AsyncEngine]:
     settings = get_settings()
     test_url = settings.database_url_frontend or settings.database_url
     ensure_local_test_db(test_url)
+    extra_kw = (
+        {}
+        if "sqlite" in test_url
+        else {"connect_args": {"statement_cache_size": 0, "command_timeout": 60}}
+    )
     eng = create_async_engine(
         test_url,
         echo=False,
         poolclass=NullPool,
-        connect_args={"statement_cache_size": 0, "command_timeout": 60},
+        **extra_kw,
     )
     from scripts.seed_roles_and_permissions import reconcile_roles
     from sqlalchemy.ext.asyncio import async_sessionmaker

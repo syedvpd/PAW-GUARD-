@@ -23,15 +23,28 @@ from pawguard.core.metrics import (
 
 _settings = get_settings()
 
+
+def _get_engine_kwargs(url: str) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {
+        "echo": _settings.database_echo,
+    }
+    if "sqlite" not in url:
+        kwargs.update(
+            {
+                "pool_size": _settings.database_pool_size,
+                "max_overflow": _settings.database_max_overflow,
+                "pool_pre_ping": True,
+                "pool_recycle": 1800,
+                "pool_timeout": 15,
+                "connect_args": {"statement_cache_size": 0},
+            }
+        )
+    return kwargs
+
+
 engine: AsyncEngine = create_async_engine(
     _settings.database_url,
-    echo=_settings.database_echo,
-    pool_size=_settings.database_pool_size,
-    max_overflow=_settings.database_max_overflow,
-    pool_pre_ping=True,
-    pool_recycle=1800,
-    pool_timeout=15,
-    connect_args={"statement_cache_size": 0},
+    **_get_engine_kwargs(_settings.database_url),
 )
 
 AsyncSessionLocal = async_sessionmaker(
@@ -45,13 +58,7 @@ replica_url = _settings.database_replica_url or _settings.database_url
 
 replica_engine: AsyncEngine = create_async_engine(
     replica_url,
-    echo=_settings.database_echo,
-    pool_size=_settings.database_pool_size,
-    max_overflow=_settings.database_max_overflow,
-    pool_pre_ping=True,
-    pool_recycle=1800,
-    pool_timeout=15,
-    connect_args={"statement_cache_size": 0},
+    **_get_engine_kwargs(replica_url),
 )
 
 AsyncReplicaSessionLocal = async_sessionmaker(
