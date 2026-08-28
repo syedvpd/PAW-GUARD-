@@ -181,6 +181,7 @@ class Settings(BaseSettings):
     refresh_rate_limit_per_minute: int = 30
     password_reset_rate_limit_per_hour: int = 5
     force_in_process_jobs: bool = False
+    disable_redis: bool = False
 
     # --- Organisation ---
     org_name: str = "PawGuard Rescue & Care"

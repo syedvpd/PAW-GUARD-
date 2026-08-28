@@ -100,7 +100,7 @@ async def _ensure_client() -> RedisClient:
     global _pool, _client, _redis_available, _client_wrapped
     if _client_wrapped is not None:
         return _client_wrapped
-    if _redis_available is False:
+    if _settings.disable_redis or _redis_available is False:
         _client = cast(RedisClient, _NullRedis())
         from pawguard.core.metrics import InstrumentedRedisClient
 
@@ -131,6 +131,8 @@ async def get_redis() -> AsyncGenerator[RedisClient]:
 
 
 async def ping_redis() -> bool:
+    if _settings.disable_redis:
+        return True
     try:
         client = await _ensure_client()
         return bool(await client.ping())

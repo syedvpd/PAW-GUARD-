@@ -93,8 +93,12 @@ async def _ensure_pool() -> Any:
     global _pool
     if _pool is not None:
         return _pool
+    settings = get_settings()
+    if settings.disable_redis:
+        logger.info("redis_disabled_falling_back_to_noop_pool")
+        _pool = _NullArqPool()
+        return _pool
     try:
-        settings = get_settings()
         redis_settings = RedisSettings.from_dsn(settings.redis_url)
         redis_settings.conn_timeout = 2.0
         redis_settings.conn_retries = 2
