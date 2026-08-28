@@ -123,7 +123,7 @@ def cache_response(ttl_seconds: int = 300, namespace: str = "route_cache"):
 
                 if status_code == 200:
                     cache_payload = {
-                        "content": content_bytes.decode("utf-8"),
+                        "content": bytes(content_bytes).decode("utf-8"),
                         "headers": headers_dict,
                         "status_code": status_code,
                     }

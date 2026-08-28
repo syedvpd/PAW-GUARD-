@@ -1,6 +1,5 @@
 """DashboardRepository: data access for admin dashboard metrics (RULE-002)."""
 
-import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -423,37 +422,30 @@ class DashboardRepository:
         return (await self._session.execute(stmt)).scalar_one()
 
     async def get_system_metrics(self) -> dict[str, int]:
-        (
-            total_users,
-            active_users,
-            verified_users,
-            total_roles,
-            active_sessions,
-            total_dogs,
-            adoptable_dogs,
-            pending_adoptions,
-            total_rescues,
-        ) = await asyncio.gather(
-            self.get_total_users_count(),
-            self.get_active_users_count(),
-            self.get_verified_users_count(),
-            self.get_total_roles_count(),
-            self.get_active_sessions_count(),
-            self.get_total_dogs_count(),
-            self.get_adoptable_dogs_count(),
-            self.get_pending_adoptions_count(),
-            self.get_total_rescues_count(),
-        )
+        """Single-query replacement for the old asyncio.gather multi-query approach."""
+        stmt = text("""
+            SELECT
+                (SELECT COUNT(*) FROM users WHERE deleted_at IS NULL) AS total_users,
+                (SELECT COUNT(*) FROM users WHERE is_active = true AND deleted_at IS NULL) AS active_users,
+                (SELECT COUNT(*) FROM users WHERE is_verified = true AND deleted_at IS NULL) AS verified_users,
+                (SELECT COUNT(*) FROM roles) AS total_roles,
+                (SELECT COUNT(*) FROM user_sessions WHERE is_active = true) AS active_sessions,
+                (SELECT COUNT(*) FROM dog_profiles WHERE deleted_at IS NULL) AS total_dogs,
+                (SELECT COUNT(*) FROM dog_profiles WHERE is_adoptable = true AND deleted_at IS NULL) AS adoptable_dogs,
+                (SELECT COUNT(*) FROM adoption_applications WHERE status = 'submitted' AND deleted_at IS NULL) AS pending_adoptions,
+                (SELECT COUNT(*) FROM rescue_requests WHERE deleted_at IS NULL) AS total_rescues
+        """)
+        row = (await self._session.execute(stmt)).one()
         return {
-            "total_users": total_users,
-            "active_users": active_users,
-            "verified_users": verified_users,
-            "total_roles": total_roles,
-            "active_sessions": active_sessions,
-            "total_dogs": total_dogs,
-            "adoptable_dogs": adoptable_dogs,
-            "pending_adoptions": pending_adoptions,
-            "total_rescues": total_rescues,
+            "total_users": row.total_users,
+            "active_users": row.active_users,
+            "verified_users": row.verified_users,
+            "total_roles": row.total_roles,
+            "active_sessions": row.active_sessions,
+            "total_dogs": row.total_dogs,
+            "adoptable_dogs": row.adoptable_dogs,
+            "pending_adoptions": row.pending_adoptions,
+            "total_rescues": row.total_rescues,
         }
 
     async def get_summary(self) -> dict[str, Any]:
@@ -537,24 +529,64 @@ class DashboardRepository:
         }
 
     async def get_kpis(self) -> dict[str, Any]:
-        adoption_rate = await self.get_adoption_rate()
-        shelter = await self.get_shelter_occupancy()
-        rescue = await self.get_rescue_kpis()
-        donations = await self.get_donation_totals()
-        open_grievances = await self.get_open_grievances()
-        unread = await self.get_unread_notifications_count()
-        active_fosters = await self.get_active_fosters()
-        volunteer_hours = await self.get_volunteer_hours()
+        """Single combined SQL query for all KPI metrics — 1 DB round-trip instead of 16+."""
+        stmt = text("""
+            SELECT
+                -- Adoption rate: adopted / total dogs
+                COALESCE(
+                    ROUND(
+                        100.0 * COUNT(DISTINCT CASE WHEN dp.status = 'adopted' AND dp.deleted_at IS NULL THEN dp.id END)
+                        / NULLIF(COUNT(DISTINCT CASE WHEN dp.deleted_at IS NULL THEN dp.id END), 0),
+                        1
+                    ), 0
+                ) AS adoption_rate_pct,
+                -- Shelter occupancy
+                COALESCE(SUM(DISTINCT sf.total_capacity), 0) AS shelter_capacity,
+                (SELECT COUNT(*) FROM dog_profiles WHERE status IN ('shelter','clinic') AND deleted_at IS NULL) AS dogs_in_shelter,
+                -- Rescue KPIs
+                (SELECT COUNT(*) FROM rescue_requests WHERE deleted_at IS NULL) AS total_rescues,
+                (SELECT COUNT(*) FROM rescue_requests WHERE status = 'rejected' AND deleted_at IS NULL) AS rejected_rescues,
+                (SELECT AVG(EXTRACT(EPOCH FROM (rd.located_at - rd.dispatched_at)) / 60)
+                 FROM rescue_dispatches rd WHERE rd.located_at IS NOT NULL AND rd.dispatched_at IS NOT NULL
+                ) AS avg_response_minutes,
+                -- Donations
+                COALESCE((SELECT SUM(amount) FROM donations WHERE status = 'success'), 0) AS total_raised,
+                -- Grievances
+                (SELECT COUNT(*) FROM grievance_tickets
+                 WHERE status IN ('open','investigating','awaiting_response') AND deleted_at IS NULL
+                ) AS open_grievances,
+                -- Notifications
+                (SELECT COUNT(*) FROM notifications WHERE is_read = false) AS unread_notifications,
+                -- Fosters
+                (SELECT COUNT(*) FROM foster_placements WHERE is_active = true) AS active_fosters,
+                -- Volunteer hours
+                COALESCE((SELECT SUM(hours_logged) FROM shift_attendances), 0) AS volunteer_hours
+            FROM dog_profiles dp
+            CROSS JOIN shelter_facilities sf
+        """)
+        row = (await self._session.execute(stmt)).one()
+        total_rescues = row.total_rescues or 0
+        rejected_rescues = row.rejected_rescues or 0
+        rejection_rate = (
+            round(rejected_rescues / total_rescues * 100, 1) if total_rescues > 0 else 0.0
+        )
+        shelter_capacity = row.shelter_capacity or 0
+        dogs_in_shelter = row.dogs_in_shelter or 0
+        occupancy_pct = (
+            round(dogs_in_shelter / shelter_capacity * 100, 1) if shelter_capacity > 0 else 0.0
+        )
         return {
-            "adoption_rate_pct": adoption_rate,
-            "shelter_occupancy_pct": shelter["occupancy_pct"],
-            "rescue_rejection_rate_pct": rescue["rejection_rate_pct"],
-            "avg_rescue_response_minutes": rescue["avg_response_time_minutes"],
-            "total_raised": donations["total_raised"],
-            "open_grievances": open_grievances,
-            "unread_notifications": unread,
-            "active_fosters": active_fosters,
-            "volunteer_hours": volunteer_hours,
+            "adoption_rate_pct": float(row.adoption_rate_pct or 0),
+            "shelter_occupancy_pct": occupancy_pct,
+            "rescue_rejection_rate_pct": rejection_rate,
+            "avg_rescue_response_minutes": round(float(row.avg_response_minutes), 1)
+            if row.avg_response_minutes
+            else None,
+            "total_raised": float(row.total_raised or 0),
+            "open_grievances": row.open_grievances or 0,
+            "unread_notifications": row.unread_notifications or 0,
+            "active_fosters": row.active_fosters or 0,
+            "volunteer_hours": float(row.volunteer_hours or 0),
         }
 
     async def get_charts(self) -> dict[str, Any]:
@@ -581,25 +613,81 @@ class DashboardRepository:
         }
 
     async def get_rescue_stats(self) -> dict[str, Any]:
-        kpis = await self.get_rescue_kpis()
-        by_status = await self.count_rescues_by_status()
+        """Single query: rescue KPIs + status breakdown in one round-trip."""
+        stmt = text("""
+            SELECT
+                COUNT(*) AS total,
+                COUNT(*) FILTER (WHERE status = 'admitted') AS admitted,
+                COUNT(*) FILTER (WHERE status = 'rejected') AS rejected,
+                COUNT(*) FILTER (WHERE status = 'reported') AS reported,
+                COUNT(*) FILTER (WHERE status = 'verified') AS verified,
+                COUNT(*) FILTER (WHERE status = 'dispatched') AS dispatched,
+                COUNT(*) FILTER (WHERE status = 'located') AS located,
+                COUNT(*) FILTER (WHERE status = 'rescued') AS rescued,
+                (SELECT AVG(EXTRACT(EPOCH FROM (located_at - dispatched_at)) / 60)
+                 FROM rescue_dispatches WHERE located_at IS NOT NULL AND dispatched_at IS NOT NULL
+                ) AS avg_response_minutes
+            FROM rescue_requests
+            WHERE deleted_at IS NULL
+        """)
+        row = (await self._session.execute(stmt)).one()
+        total = row.total or 0
+        rejected = row.rejected or 0
+        rejection_rate = round(rejected / total * 100, 1) if total > 0 else 0.0
         return {
-            "total_rescues": kpis["total_rescues"],
-            "admitted": kpis["admitted"],
-            "rejection_rate_pct": kpis["rejection_rate_pct"],
-            "avg_response_time_minutes": kpis["avg_response_time_minutes"],
-            "by_status": by_status,
+            "total_rescues": total,
+            "admitted": row.admitted or 0,
+            "rejection_rate_pct": rejection_rate,
+            "avg_response_time_minutes": round(float(row.avg_response_minutes), 1)
+            if row.avg_response_minutes
+            else None,
+            "by_status": {
+                "reported": row.reported or 0,
+                "verified": row.verified or 0,
+                "dispatched": row.dispatched or 0,
+                "located": row.located or 0,
+                "rescued": row.rescued or 0,
+                "admitted": row.admitted or 0,
+                "rejected": row.rejected or 0,
+            },
         }
 
     async def get_adoption_stats(self) -> dict[str, Any]:
-        by_status = await self.count_adoptions_by_status()
-        rate = await self.get_adoption_rate()
-        pending = await self.get_pending_adoptions_count()
+        """Single query: adoption status counts + rate in one round-trip."""
+        stmt = text("""
+            SELECT
+                COUNT(*) AS total,
+                COUNT(*) FILTER (WHERE status = 'submitted') AS submitted,
+                COUNT(*) FILTER (WHERE status = 'screening') AS screening,
+                COUNT(*) FILTER (WHERE status = 'interview') AS interview,
+                COUNT(*) FILTER (WHERE status = 'home_check') AS home_check,
+                COUNT(*) FILTER (WHERE status = 'approved') AS approved,
+                COUNT(*) FILTER (WHERE status = 'completed') AS completed,
+                COUNT(*) FILTER (WHERE status = 'rejected') AS rejected,
+                COUNT(*) FILTER (WHERE status = 'withdrawn') AS withdrawn
+            FROM adoption_applications
+            WHERE deleted_at IS NULL
+        """)
+        row = (await self._session.execute(stmt)).one()
+        by_status = {
+            "submitted": row.submitted or 0,
+            "screening": row.screening or 0,
+            "interview": row.interview or 0,
+            "home_check": row.home_check or 0,
+            "approved": row.approved or 0,
+            "completed": row.completed or 0,
+            "rejected": row.rejected or 0,
+            "withdrawn": row.withdrawn or 0,
+        }
+        total = row.total or 0
+        completed = row.completed or 0
+        # Fetch trend separately (needs GROUP BY month, can't combine with above)
         trend = await self.get_monthly_adoption_trend()
+        adoption_rate_pct = round(completed / total * 100, 1) if total > 0 else 0.0
         return {
             "by_status": by_status,
-            "adoption_rate_pct": rate,
-            "pending": pending,
+            "adoption_rate_pct": adoption_rate_pct,
+            "pending": row.submitted or 0,
             "monthly_trend": trend,
         }
 
@@ -614,8 +702,16 @@ class DashboardRepository:
         }
 
     async def get_notification_summary(self) -> dict[str, Any]:
-        unread = await self.get_unread_notifications_count()
-        total = await self.get_total_notifications_count()
+        """Single query for notification counts — 1 round-trip instead of 2."""
+        stmt = text("""
+            SELECT
+                COUNT(*) AS total,
+                COUNT(*) FILTER (WHERE is_read = false) AS unread
+            FROM notifications
+        """)
+        row = (await self._session.execute(stmt)).one()
+        total = row.total or 0
+        unread = row.unread or 0
         return {
             "total": total,
             "unread": unread,
@@ -623,13 +719,22 @@ class DashboardRepository:
         }
 
     async def get_shelter_stats(self) -> dict[str, Any]:
-        occupancy = await self.get_shelter_occupancy()
-        total_facilities = await self.get_total_facilities_count()
+        """Single query for shelter stats — 1 round-trip instead of 3."""
+        stmt = text("""
+            SELECT
+                (SELECT COUNT(*) FROM shelter_facilities) AS total_facilities,
+                COALESCE((SELECT SUM(total_capacity) FROM shelter_facilities), 0) AS capacity,
+                (SELECT COUNT(*) FROM dog_profiles WHERE status IN ('shelter','clinic') AND deleted_at IS NULL) AS occupied
+        """)
+        row = (await self._session.execute(stmt)).one()
+        capacity = row.capacity or 0
+        occupied = row.occupied or 0
+        occupancy_pct = round(occupied / capacity * 100, 1) if capacity > 0 else 0.0
         return {
-            "total_facilities": total_facilities,
-            "capacity": occupancy["capacity"],
-            "occupied": occupancy["occupied"],
-            "occupancy_pct": occupancy["occupancy_pct"],
+            "total_facilities": row.total_facilities or 0,
+            "capacity": capacity,
+            "occupied": occupied,
+            "occupancy_pct": occupancy_pct,
         }
 
     async def get_lost_found_stats(self) -> dict[str, Any]:
