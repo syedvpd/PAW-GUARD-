@@ -191,11 +191,12 @@ class ShelterRepository:
         sort: SortParams,
         kennel_id: uuid.UUID,
     ) -> tuple[Sequence[KennelCleaningLog], int]:
-        stmt = select(KennelCleaningLog).where(KennelCleaningLog.kennel_id == kennel_id)
-
-        count_stmt = select(func.count()).select_from(stmt.subquery())
+        count_stmt = select(func.count(KennelCleaningLog.id)).where(
+            KennelCleaningLog.kennel_id == kennel_id
+        )
         total = (await self._session.execute(count_stmt)).scalar_one()
 
+        stmt = select(KennelCleaningLog).where(KennelCleaningLog.kennel_id == kennel_id)
         valid_fields = {"cleaned_at", "sanitation_state_after", "created_at"}
         stmt = apply_sorting(stmt, sort, valid_fields)
         stmt = stmt.offset(page_params.offset).limit(page_params.limit)
@@ -211,20 +212,21 @@ class ShelterRepository:
         status: FacilityStatus | None = None,
         facility_type: FacilityType | None = None,
     ) -> tuple[Sequence[ShelterFacility], int]:
-        stmt = select(ShelterFacility).where(ShelterFacility.deleted_at.is_(None))
+        filters = [ShelterFacility.deleted_at.is_(None)]
 
         search_filter = build_search_filter(ShelterFacility, search_term, ("name", "address"))
         if search_filter is not None:
-            stmt = stmt.where(search_filter)
+            filters.append(search_filter)
 
         if status is not None:
-            stmt = stmt.where(ShelterFacility.status == status)
+            filters.append(ShelterFacility.status == status)
         if facility_type is not None:
-            stmt = stmt.where(ShelterFacility.facility_type == facility_type)
+            filters.append(ShelterFacility.facility_type == facility_type)
 
-        count_stmt = select(func.count()).select_from(stmt.subquery())
+        count_stmt = select(func.count(ShelterFacility.id)).where(*filters)
         total = (await self._session.execute(count_stmt)).scalar_one()
 
+        stmt = select(ShelterFacility).where(*filters)
         valid_fields = {
             "name",
             "total_capacity",
@@ -247,21 +249,25 @@ class ShelterRepository:
         section_type: SectionType | None = None,
         search_term: str | None = None,
     ) -> tuple[Sequence[ShelterSection], int]:
-        stmt = select(ShelterSection)
-
+        filters = []
         if facility_id is not None:
-            stmt = stmt.where(ShelterSection.facility_id == facility_id)
+            filters.append(ShelterSection.facility_id == facility_id)
 
         if section_type is not None:
-            stmt = stmt.where(ShelterSection.section_type == section_type)
+            filters.append(ShelterSection.section_type == section_type)
 
         search_filter = build_search_filter(ShelterSection, search_term, ("name",))
         if search_filter is not None:
-            stmt = stmt.where(search_filter)
+            filters.append(search_filter)
 
-        count_stmt = select(func.count()).select_from(stmt.subquery())
+        count_stmt = select(func.count(ShelterSection.id))
+        if filters:
+            count_stmt = count_stmt.where(*filters)
         total = (await self._session.execute(count_stmt)).scalar_one()
 
+        stmt = select(ShelterSection)
+        if filters:
+            stmt = stmt.where(*filters)
         valid_fields = {"name", "section_type", "capacity", "created_at"}
         stmt = apply_sorting(stmt, sort, valid_fields)
         stmt = stmt.offset(page_params.offset).limit(page_params.limit)
@@ -275,13 +281,14 @@ class ShelterRepository:
         sort: SortParams,
         section_id: uuid.UUID | None = None,
     ) -> tuple[Sequence[Kennel], int]:
-        stmt = select(Kennel)
+        count_stmt = select(func.count(Kennel.id))
+        if section_id is not None:
+            count_stmt = count_stmt.where(Kennel.section_id == section_id)
+        total = (await self._session.execute(count_stmt)).scalar_one()
 
+        stmt = select(Kennel)
         if section_id is not None:
             stmt = stmt.where(Kennel.section_id == section_id)
-
-        count_stmt = select(func.count()).select_from(stmt.subquery())
-        total = (await self._session.execute(count_stmt)).scalar_one()
 
         valid_fields = {"identifier", "capacity", "sanitation_state", "created_at"}
         stmt = apply_sorting(stmt, sort, valid_fields)

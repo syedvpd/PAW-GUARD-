@@ -151,15 +151,16 @@ class CompanionPetRepository:
     async def list_clinics(
         self, page: PageParams, sort: SortParams, search: str | None = None
     ) -> tuple[Sequence[VetClinic], int]:
-        stmt = select(VetClinic).where(
-            VetClinic.deleted_at.is_(None), VetClinic.is_active.is_(True)
-        )
+        filters = [VetClinic.deleted_at.is_(None), VetClinic.is_active.is_(True)]
         search_filter = build_search_filter(VetClinic, search, ("name", "address", "services"))
         if search_filter is not None:
-            stmt = stmt.where(search_filter)
+            filters.append(search_filter)
+
         total = (
-            await self._session.execute(select(func.count()).select_from(stmt.subquery()))
+            await self._session.execute(select(func.count(VetClinic.id)).where(*filters))
         ).scalar_one()
+
+        stmt = select(VetClinic).where(*filters)
         stmt = apply_sorting(stmt, sort, self.CLINIC_SORTABLE_FIELDS, "name")
         rows = (
             (await self._session.execute(stmt.offset(page.offset).limit(page.limit)))
@@ -292,9 +293,12 @@ class CompanionPetRepository:
             stmt = stmt.where(PetAppointment.clinic_id == clinic_id)
         if pet_id is not None:
             stmt = stmt.where(PetAppointment.pet_id == pet_id)
-        total = (
-            await self._session.execute(select(func.count()).select_from(stmt.subquery()))
-        ).scalar_one()
+        count_stmt = (
+            select(func.count(PetAppointment.id)).where(*stmt.whereclause.clauses)
+            if stmt.whereclause is not None
+            else select(func.count(PetAppointment.id))
+        )
+        total = (await self._session.execute(count_stmt)).scalar_one()
         stmt = apply_sorting(stmt, sort, self.APPOINTMENT_SORTABLE_FIELDS, "starts_at")
         rows = (
             (await self._session.execute(stmt.offset(page.offset).limit(page.limit)))

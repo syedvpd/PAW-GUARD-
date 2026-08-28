@@ -152,26 +152,29 @@ class DonationRepository:
         date_from: date_type | None = None,
         date_to: date_type | None = None,
     ) -> tuple[Sequence[Donation], int]:
-        stmt = select(Donation).options(selectinload(Donation.donor), selectinload(Donation.dog))
-
+        filters = []
         search_filter = build_search_filter(Donation, search_term, self.DONATION_SEARCH_FIELDS)
         if search_filter is not None:
-            stmt = stmt.where(search_filter)
+            filters.append(search_filter)
 
         if donation_type is not None:
-            stmt = stmt.where(Donation.donation_type == donation_type)
+            filters.append(Donation.donation_type == donation_type)
         if status is not None:
-            stmt = stmt.where(Donation.status == status)
+            filters.append(Donation.status == status)
         if date_from is not None:
-            stmt = stmt.where(Donation.created_at >= date_from)
+            filters.append(Donation.created_at >= date_from)
         if date_to is not None:
-            # `date_to` is a bare date; comparing a DateTime column with `<=`
-            # normalizes it to midnight, silently excluding the entire end
-            # day. Use an exclusive upper bound (end of day) instead.
-            stmt = stmt.where(Donation.created_at < date_to + timedelta(days=1))
+            filters.append(Donation.created_at < date_to + timedelta(days=1))
 
-        count_stmt = select(func.count()).select_from(stmt.subquery())
+        count_stmt = select(func.count(Donation.id))
+        if filters:
+            count_stmt = count_stmt.where(*filters)
+
         total = (await self._session.execute(count_stmt)).scalar_one()
+
+        stmt = select(Donation).options(selectinload(Donation.donor), selectinload(Donation.dog))
+        if filters:
+            stmt = stmt.where(*filters)
 
         stmt = apply_sorting(stmt, sort, self.DONATION_SORTABLE_FIELDS)
         stmt = stmt.offset(page.offset).limit(page.limit)

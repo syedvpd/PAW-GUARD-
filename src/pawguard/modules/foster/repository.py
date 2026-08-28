@@ -75,23 +75,24 @@ class FosterRepository:
         status: FosterStatus | None = None,
         is_available: bool | None = None,
     ) -> tuple[Sequence[FosterProfile], int]:
+        filters = [FosterProfile.deleted_at.is_(None)]
+        search_filter = build_search_filter(FosterProfile, search_term, self.PROFILE_SEARCH_FIELDS)
+        if search_filter is not None:
+            filters.append(search_filter)
+
+        if status is not None:
+            filters.append(FosterProfile.status == status)
+        if is_available is not None:
+            filters.append(FosterProfile.is_available == is_available)
+
+        count_stmt = select(func.count(FosterProfile.id)).where(*filters)
+        total = (await self._session.execute(count_stmt)).scalar_one()
+
         stmt = (
             select(FosterProfile)
             .options(selectinload(FosterProfile.user).selectinload(User.roles))
-            .where(FosterProfile.deleted_at.is_(None))
+            .where(*filters)
         )
-        search_filter = build_search_filter(FosterProfile, search_term, self.PROFILE_SEARCH_FIELDS)
-        if search_filter is not None:
-            stmt = stmt.where(search_filter)
-
-        if status is not None:
-            stmt = stmt.where(FosterProfile.status == status)
-        if is_available is not None:
-            stmt = stmt.where(FosterProfile.is_available == is_available)
-
-        count_stmt = select(func.count()).select_from(stmt.subquery())
-        total = (await self._session.execute(count_stmt)).scalar_one()
-
         stmt = apply_sorting(stmt, sort, self.PROFILE_SORTABLE_FIELDS)
         stmt = stmt.offset(page.offset).limit(page.limit)
         results = (await self._session.execute(stmt)).scalars().all()

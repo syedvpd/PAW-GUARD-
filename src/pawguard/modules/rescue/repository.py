@@ -98,27 +98,41 @@ class RescueRepository:
         urgent_only: bool | None = None,
         assigned_to_me: uuid.UUID | None = None,
     ) -> tuple[Sequence[RescueRequest], int]:
-        stmt = self._base_stmt()
+        # Filter conditions
+        filters = [RescueRequest.deleted_at.is_(None)]
 
         search_filter = build_search_filter(RescueRequest, search_term, self.SEARCH_FIELDS)
         if search_filter is not None:
-            stmt = stmt.where(search_filter)
+            filters.append(search_filter)
 
         if status is not None:
-            stmt = stmt.where(RescueRequest.status == status)
+            filters.append(RescueRequest.status == status)
 
         if severity is not None:
-            stmt = stmt.where(RescueRequest.severity == severity)
+            filters.append(RescueRequest.severity == severity)
 
         if urgent_only is not None:
-            stmt = stmt.where(RescueRequest.is_urgent.is_(urgent_only))
+            filters.append(RescueRequest.is_urgent.is_(urgent_only))
+
+        count_stmt = select(func.count(RescueRequest.id)).where(*filters)
 
         if assigned_to_me is not None:
-            # "My assigned cases" filter (PRR 3.2 field-agent interface): the
-            # user is on the dispatch team when they are either the legacy
-            # assigned_driver_id or a row in the dispatch-agent association
-            # table. EXISTS keeps the row set distinct (no fan-out) so the
-            # count query below stays correct.
+            agent_scope = exists().where(
+                RescueDispatchAgent.dispatch_id == RescueDispatch.id,
+                RescueDispatchAgent.agent_id == assigned_to_me,
+            )
+            assign_clause = or_(
+                RescueDispatch.assigned_driver_id == assigned_to_me,
+                agent_scope,
+            )
+            count_stmt = count_stmt.join(
+                RescueDispatch, RescueDispatch.rescue_request_id == RescueRequest.id
+            ).where(assign_clause)
+
+        total = (await self._session.execute(count_stmt)).scalar_one()
+
+        stmt = self._base_stmt().where(*filters)
+        if assigned_to_me is not None:
             agent_scope = exists().where(
                 RescueDispatchAgent.dispatch_id == RescueDispatch.id,
                 RescueDispatchAgent.agent_id == assigned_to_me,
@@ -131,9 +145,6 @@ class RescueRepository:
                     agent_scope,
                 )
             )
-
-        count_stmt = select(func.count()).select_from(stmt.subquery())
-        total = (await self._session.execute(count_stmt)).scalar_one()
 
         stmt = apply_sorting(stmt, sort, self.SORTABLE_FIELDS)
         stmt = stmt.offset(page.offset).limit(page.limit)

@@ -109,18 +109,19 @@ class InventoryRepository:
         search_term: str | None = None,
         category: ItemCategory | None = None,
     ) -> tuple[Sequence[InventoryItem], int]:
-        stmt = select(InventoryItem).where(InventoryItem.deleted_at.is_(None))
+        filters = [InventoryItem.deleted_at.is_(None)]
 
         search_filter = build_search_filter(InventoryItem, search_term, ("name", "category"))
         if search_filter is not None:
-            stmt = stmt.where(search_filter)
+            filters.append(search_filter)
 
         if category is not None:
-            stmt = stmt.where(InventoryItem.category == category)
+            filters.append(InventoryItem.category == category)
 
-        count_stmt = select(func.count()).select_from(stmt.subquery())
+        count_stmt = select(func.count(InventoryItem.id)).where(*filters)
         total = (await self._session.execute(count_stmt)).scalar_one()
 
+        stmt = select(InventoryItem).where(*filters)
         valid_fields = {"name", "quantity", "category", "created_at", "updated_at", "expiry_date"}
         stmt = apply_sorting(stmt, sort, valid_fields)
         stmt = stmt.offset(page_params.offset).limit(page_params.limit)
@@ -135,15 +136,20 @@ class InventoryRepository:
         item_id: uuid.UUID | None = None,
         movement_type: MovementType | None = None,
     ) -> tuple[Sequence[InventoryMovement], int]:
-        stmt = select(InventoryMovement)
-
+        filters = []
         if item_id is not None:
-            stmt = stmt.where(InventoryMovement.item_id == item_id)
+            filters.append(InventoryMovement.item_id == item_id)
         if movement_type is not None:
-            stmt = stmt.where(InventoryMovement.movement_type == movement_type)
+            filters.append(InventoryMovement.movement_type == movement_type)
 
-        count_stmt = select(func.count()).select_from(stmt.subquery())
+        count_stmt = select(func.count(InventoryMovement.id))
+        if filters:
+            count_stmt = count_stmt.where(*filters)
         total = (await self._session.execute(count_stmt)).scalar_one()
+
+        stmt = select(InventoryMovement)
+        if filters:
+            stmt = stmt.where(*filters)
 
         valid_fields = {"created_at", "quantity", "movement_type"}
         stmt = apply_sorting(stmt, sort, valid_fields)
@@ -158,13 +164,14 @@ class InventoryRepository:
         sort: SortParams,
         status: RequisitionStatus | None = None,
     ) -> tuple[Sequence[RequisitionOrder], int]:
-        stmt = select(RequisitionOrder)
+        count_stmt = select(func.count(RequisitionOrder.id))
+        if status is not None:
+            count_stmt = count_stmt.where(RequisitionOrder.status == status)
+        total = (await self._session.execute(count_stmt)).scalar_one()
 
+        stmt = select(RequisitionOrder)
         if status is not None:
             stmt = stmt.where(RequisitionOrder.status == status)
-
-        count_stmt = select(func.count()).select_from(stmt.subquery())
-        total = (await self._session.execute(count_stmt)).scalar_one()
 
         valid_fields = {"created_at", "status", "quantity", "updated_at"}
         stmt = apply_sorting(stmt, sort, valid_fields)

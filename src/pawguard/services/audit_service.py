@@ -61,5 +61,4 @@ class AuditService:
             after_state=_jsonable(after_state),
         )
         self._session.add(entry)
-        await self._session.flush()
         return entry
