@@ -180,10 +180,13 @@ def decode_token(token: str, *, expected_type: TokenType) -> dict[str, Any]:
 
 def parse_access_token_claims(token: str) -> AccessTokenClaims:
     payload = decode_token(token, expected_type=TokenType.ACCESS)
-    return AccessTokenClaims(
-        user_id=UUID(payload["sub"]),
-        session_id=UUID(payload["sid"]),
-        roles=payload.get("roles", []),
-        jti=payload["jti"],
-        expires_at=datetime.fromtimestamp(payload["exp"], tz=UTC),
-    )
+    try:
+        return AccessTokenClaims(
+            user_id=UUID(payload["sub"]),
+            session_id=UUID(payload["sid"]),
+            roles=payload.get("roles", []),
+            jti=payload["jti"],
+            expires_at=datetime.fromtimestamp(payload["exp"], tz=UTC),
+        )
+    except (ValueError, KeyError, TypeError) as exc:
+        raise TokenError("Token claims are invalid or malformed.") from exc
