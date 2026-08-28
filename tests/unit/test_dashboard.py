@@ -68,33 +68,72 @@ class TestDashboardRepository:
         assert count == 5
 
     async def test_get_system_metrics(self, repo, mock_session):
+        mock_row = MagicMock()
+        mock_row.total_users = 0
+        mock_row.active_users = 0
+        mock_row.total_rescues = 0
+        mock_row.active_rescues = 0
+        mock_row.dogs_in_shelter = 0
+        mock_row.shelter_capacity = 0
+        mock_row.approved_adoptions = 0
+        mock_row.active_fosters = 0
+        mock_row.total_donations = 0
+        mock_row.open_grievances = 0
+        mock_row.unread_notifications = 0
+
         mock_result = MagicMock()
-        mock_result.scalar_one.return_value = 0
+        mock_result.one.return_value = mock_row
         mock_session.execute.return_value = mock_result
+
         metrics = await repo.get_system_metrics()
         assert metrics["total_users"] == 0
         assert "total_rescues" in metrics
 
     async def test_get_summary_returns_nested_dict(self, repo, mock_session):
-        mock_result = MagicMock()
-        mock_result.scalar_one.return_value = 0
-        mock_result.scalar_one_or_none.return_value = None
-        mock_result.one.side_effect = [(0,) * 11] + [(0, 0)] * 10
-        mock_result.all.return_value = []
-        mock_result.scalars.return_value.all.return_value = []
-        mock_session.execute.return_value = mock_result
+        class SmartMockRow(tuple):
+            def __getattr__(self, name):
+                if name == "avg_response_minutes":
+                    return None
+                return 0
+
+        call_count = 0
+
+        def side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            res = MagicMock()
+            if call_count == 1:
+                res.one.return_value = SmartMockRow((0,) * 11)
+            else:
+                res.one.return_value = SmartMockRow((0, 0))
+            res.scalar_one.return_value = 0
+            res.scalar_one_or_none.return_value = None
+            res.all.return_value = []
+            res.scalars.return_value.all.return_value = []
+            return res
+
+        mock_session.execute.side_effect = side_effect
+
         summary = await repo.get_summary()
         assert "users" in summary and "dogs" in summary
         assert "rescues" in summary and "donations" in summary
 
     async def test_get_kpis_returns_expected_keys(self, repo, mock_session):
+        class SmartMockRow(tuple):
+            def __getattr__(self, name):
+                if name == "avg_response_minutes":
+                    return None
+                return 0
+
         mock_result = MagicMock()
+        mock_result.one.return_value = SmartMockRow((0,) * 13)
         mock_result.scalar_one.return_value = 0
         mock_result.scalar_one_or_none.return_value = None
-        mock_result.one.return_value = (0, 0)
         mock_result.all.return_value = []
         mock_result.scalars.return_value.all.return_value = []
+        mock_session.execute.side_effect = None
         mock_session.execute.return_value = mock_result
+
         kpis = await repo.get_kpis()
         assert "adoption_rate_pct" in kpis
         assert "shelter_occupancy_pct" in kpis
@@ -106,6 +145,7 @@ class TestDashboardRepository:
         mock_result.one.return_value = (0, 0)
         mock_result.all.return_value = []
         mock_result.scalars.return_value.all.return_value = []
+        mock_session.execute.side_effect = None
         mock_session.execute.return_value = mock_result
         charts = await repo.get_charts()
         assert "adoption_trend" in charts
@@ -114,13 +154,23 @@ class TestDashboardRepository:
         assert "breed_distribution" in charts
 
     async def test_rescue_donation_adoption_volunteer_stats(self, repo, mock_session):
-        mock_result = MagicMock()
-        mock_result.scalar_one.return_value = 0
-        mock_result.scalar_one_or_none.return_value = None
-        mock_result.one.return_value = (0, 0)
-        mock_result.all.return_value = []
-        mock_result.scalars.return_value.all.return_value = []
-        mock_session.execute.return_value = mock_result
+        class SmartMockRow(tuple):
+            def __getattr__(self, name):
+                if name == "avg_response_minutes":
+                    return None
+                return 0
+
+        def side_effect(*args, **kwargs):
+            res = MagicMock()
+            res.one.return_value = SmartMockRow((0, 0))
+            res.scalar_one.return_value = 0
+            res.scalar_one_or_none.return_value = None
+            res.all.return_value = []
+            res.scalars.return_value.all.return_value = []
+            return res
+
+        mock_session.execute.side_effect = side_effect
+
         rescue = await repo.get_rescue_stats()
         assert "by_status" in rescue and "total_rescues" in rescue
         donation = await repo.get_donation_summary()
@@ -131,13 +181,21 @@ class TestDashboardRepository:
         assert "total_volunteers" in volunteer and "hours_logged" in volunteer
 
     async def test_notification_shelter_lost_found_grievance_stats(self, repo, mock_session):
+        mock_row = MagicMock()
+        mock_row.total = 0
+        mock_row.unread = 0
+        mock_row.total_facilities = 0
+        mock_row.capacity = 0
+        mock_row.occupied = 0
+
         mock_result = MagicMock()
+        mock_result.one.return_value = mock_row
         mock_result.scalar_one.return_value = 0
         mock_result.scalar_one_or_none.return_value = None
-        mock_result.one.return_value = (0, 0)
         mock_result.all.return_value = []
         mock_result.scalars.return_value.all.return_value = []
         mock_session.execute.return_value = mock_result
+
         notif = await repo.get_notification_summary()
         assert "total" in notif and "unread" in notif and "read" in notif
         shelter = await repo.get_shelter_stats()
