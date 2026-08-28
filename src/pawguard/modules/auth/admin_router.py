@@ -9,6 +9,7 @@ import uuid
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from pawguard.core.cache_decorator import cache_response
 from pawguard.core.rate_limiter import resolve_client_ip
 from pawguard.core.responses import ApiResponse
 from pawguard.db.session import get_db
@@ -62,7 +63,9 @@ def _get_admin_service(
     response_model=ApiResponse[list[RoleResponse]],
     dependencies=[Depends(require_permission("system:admin"))],
 )
+@cache_response(ttl_seconds=60, namespace="admin")
 async def list_roles(
+    request: Request,
     service: AdminService = Depends(_get_admin_service),
 ) -> ApiResponse[list[RoleResponse]]:
     roles = await service.list_roles()
@@ -181,7 +184,9 @@ async def list_permissions(
         )
     ],
 )
+@cache_response(ttl_seconds=60, namespace="admin")
 async def list_users(
+    request: Request,
     service: AdminService = Depends(_get_admin_service),
 ) -> ApiResponse[list[AdminUserResponse]]:
     users = await service.list_users()

@@ -60,23 +60,26 @@ async def get_current_user(
     except TokenError as exc:
         raise InvalidSessionError(str(exc)) from exc
 
-    session_repo = SessionRepository(db)
-    user_repo = UserRepository(db)
+    if hasattr(request.state, "current_user_obj") and request.state.current_user_obj is not None:
+        return request.state.current_user_obj  # type: ignore[no-any-return]
 
-    session = await session_repo.get_by_id(claims.session_id)
+    session_repo = SessionRepository(db)
+    session = await session_repo.get_with_user(claims.session_id)
+
     if session is None or not session.is_active:
         raise InvalidSessionError("Session has been revoked or has expired.")
     if session.expires_at < datetime.now(UTC):
         raise InvalidSessionError("Session has expired.")
 
-    user = await user_repo.get_by_id(claims.user_id)
-
+    user = session.user
     if user is None or not user.is_active:
         raise AccountInactiveError("Account is inactive or no longer exists.")
 
     request.state.user_id = user.id
     set_actor(user.id)
-    return CurrentUser(user=user, claims=claims, db=db, redis=redis, session=session)
+    current_user = CurrentUser(user=user, claims=claims, db=db, redis=redis, session=session)
+    request.state.current_user_obj = current_user
+    return current_user
 
 
 async def get_optional_current_user(

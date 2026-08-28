@@ -3,9 +3,10 @@
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from pawguard.core.cache_decorator import cache_response
 from pawguard.core.responses import ApiResponse
 from pawguard.db.session import get_db
 from pawguard.modules.auth.rbac import require_permission
@@ -53,7 +54,9 @@ def _format_audit_entry(e: Any) -> dict[str, Any]:
     "",
     dependencies=[Depends(require_permission("system:admin"))],
 )
+@cache_response(ttl_seconds=30, namespace="admin")
 async def list_audit_logs(
+    request: Request,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     event_type: str | None = Query(None),

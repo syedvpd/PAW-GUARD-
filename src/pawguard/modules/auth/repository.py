@@ -128,6 +128,22 @@ class SessionRepository:
         stmt = select(UserSession).where(UserSession.id == session_id)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    async def get_with_user(self, session_id: uuid.UUID) -> UserSession | None:
+        from sqlalchemy.orm import selectinload
+
+        from pawguard.modules.auth.models import Role, User
+
+        stmt = (
+            select(UserSession)
+            .options(
+                selectinload(UserSession.user)
+                .selectinload(User.roles)
+                .selectinload(Role.permissions)
+            )
+            .where(UserSession.id == session_id)
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
     async def list_active_for_user(self, user_id: uuid.UUID) -> list[UserSession]:
         stmt = (
             select(UserSession)
