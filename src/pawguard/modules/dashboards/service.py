@@ -3,26 +3,12 @@ from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from pawguard.modules.adoption.models import (
-    AdoptionApplication,
-    AdoptionFollowUp,
-    AdoptionStatus,
-    FollowUpStatus,
-)
 from pawguard.modules.auth.models import Role, User, UserRole
-from pawguard.modules.dog.models import DogProfile, DogStatus
 from pawguard.modules.donation.models import Donation, DonationStatus
-from pawguard.modules.finance.models import (
-    FinancialTransaction,
-    TransactionStatus,
-    TransactionType,
-)
 from pawguard.modules.fleet.models import Vehicle
-from pawguard.modules.foster.models import FosterPlacement
-from pawguard.modules.grievance.models import GrievanceStatus, GrievanceTicket
 from pawguard.modules.inventory.models import InventoryItem
 from pawguard.modules.medical.models import ClinicalExam, MedicalTreatment
 from pawguard.modules.rescue.models import (
@@ -31,16 +17,6 @@ from pawguard.modules.rescue.models import (
     RescueRequest,
     RescueStatus,
 )
-from pawguard.modules.shelter.models import (
-    FacilityTransfer,
-    Kennel,
-    KennelSanitationState,
-    SectionType,
-    ShelterFacility,
-    ShelterSection,
-    TransferStatus,
-)
-from pawguard.modules.volunteer.models import VolunteerProfile, VolunteerStatus
 
 DASHBOARD_CACHE_TTL = 30  # seconds
 
@@ -76,16 +52,20 @@ async def rescue_dashboard(session: AsyncSession, redis: Any | None = None) -> d
     if cached is not None:
         return cached
 
-    total_res = await session.execute(select(func.count(RescueRequest.id)))
-    pending_res = await session.execute(
-        select(func.count(RescueRequest.id)).where(RescueRequest.status == RescueStatus.REPORTED)
+    counts_stmt = select(
+        func.count(RescueRequest.id).label("total"),
+        func.count(RescueRequest.id)
+        .filter(RescueRequest.status == RescueStatus.REPORTED)
+        .label("pending"),
+        func.count(RescueRequest.id)
+        .filter(RescueRequest.status == RescueStatus.DISPATCHED)
+        .label("dispatched"),
+        func.count(RescueRequest.id)
+        .filter(RescueRequest.status == RescueStatus.RESCUED)
+        .label("rescued"),
     )
-    dispatched_res = await session.execute(
-        select(func.count(RescueRequest.id)).where(RescueRequest.status == RescueStatus.DISPATCHED)
-    )
-    rescued_res = await session.execute(
-        select(func.count(RescueRequest.id)).where(RescueRequest.status == RescueStatus.RESCUED)
-    )
+    counts_row = (await session.execute(counts_stmt)).one()
+
     recent_res = await session.execute(
         select(RescueRequest).order_by(RescueRequest.created_at.desc()).limit(10)
     )
@@ -101,10 +81,10 @@ async def rescue_dashboard(session: AsyncSession, redis: Any | None = None) -> d
         for r in recent_res.scalars().all()
     ]
     result = {
-        "total_calls": total_res.scalar_one(),
-        "pending": pending_res.scalar_one(),
-        "dispatched": dispatched_res.scalar_one(),
-        "rescued": rescued_res.scalar_one(),
+        "total_calls": counts_row.total,
+        "pending": counts_row.pending,
+        "dispatched": counts_row.dispatched,
+        "rescued": counts_row.rescued,
         "recent_calls": recent_list,
     }
     await _set_cache(redis, cache_key, result)
@@ -212,42 +192,29 @@ async def shelter_dashboard(session: AsyncSession, redis: Any | None = None) -> 
     if cached is not None:
         return cached
 
-    facilities_res = await session.execute(select(func.count(ShelterFacility.id)))
-    dogs_res = await session.execute(select(func.count(DogProfile.id)))
-    adoptable_res = await session.execute(
-        select(func.count(DogProfile.id)).where(DogProfile.status == DogStatus.SHELTER)
-    )
-    kennels_res = await session.execute(select(func.count(Kennel.id)))
-    transfers_res = await session.execute(
-        select(func.count(FacilityTransfer.id)).where(
-            FacilityTransfer.status == TransferStatus.PENDING
-        )
-    )
-    isolation_res = await session.execute(
-        select(func.count(DogProfile.id))
-        .join(ShelterSection, DogProfile.section_id == ShelterSection.id)
-        .where(
-            ShelterSection.section_type == SectionType.ISOLATION,
-            DogProfile.deleted_at.is_(None),
-        )
-    )
-    cleaning_res = await session.execute(
-        select(func.count(Kennel.id)).where(
-            Kennel.sanitation_state == KennelSanitationState.NEEDS_CLEANING
-        )
-    )
+    stmt = text("""
+        SELECT
+            (SELECT COUNT(*) FROM shelter_facilities WHERE deleted_at IS NULL) AS total_facilities,
+            (SELECT COUNT(*) FROM dog_profiles WHERE deleted_at IS NULL) AS total_dogs,
+            (SELECT COUNT(*) FROM dog_profiles WHERE status = 'shelter' AND deleted_at IS NULL) AS adoptable_dogs,
+            (SELECT COUNT(*) FROM kennels) AS total_kennels,
+            (SELECT COUNT(*) FROM facility_transfers WHERE status = 'pending') AS pending_transfers,
+            (SELECT COUNT(*) FROM dog_profiles d JOIN shelter_sections s ON d.section_id = s.id WHERE s.section_type = 'isolation' AND d.deleted_at IS NULL) AS isolation_count,
+            (SELECT COUNT(*) FROM kennels WHERE sanitation_state = 'needs_cleaning') AS pending_cleaning
+    """)
+    row = (await session.execute(stmt)).one()
 
-    total_dogs = dogs_res.scalar_one()
-    total_kennels = kennels_res.scalar_one()
+    total_dogs = row.total_dogs
+    total_kennels = row.total_kennels
     result = {
-        "total_facilities": facilities_res.scalar_one(),
+        "total_facilities": row.total_facilities,
         "total_dogs": total_dogs,
-        "adoptable_dogs": adoptable_res.scalar_one(),
+        "adoptable_dogs": row.adoptable_dogs,
         "total_kennels": total_kennels,
         "occupancy_rate": (round(total_dogs / total_kennels * 100, 1) if total_kennels > 0 else 0),
-        "pending_transfers": transfers_res.scalar_one(),
-        "isolation_count": isolation_res.scalar_one(),
-        "pending_cleaning": cleaning_res.scalar_one(),
+        "pending_transfers": row.pending_transfers,
+        "isolation_count": row.isolation_count,
+        "pending_cleaning": row.pending_cleaning,
     }
     await _set_cache(redis, cache_key, result)
     return result
@@ -280,51 +247,28 @@ async def adoption_dashboard(session: AsyncSession, redis: Any | None = None) ->
     if cached is not None:
         return cached
 
-    total = await session.execute(select(func.count(AdoptionApplication.id)))
-    pending = await session.execute(
-        select(func.count(AdoptionApplication.id)).where(
-            AdoptionApplication.status == AdoptionStatus.SUBMITTED
-        )
-    )
-    approved = await session.execute(
-        select(func.count(AdoptionApplication.id)).where(
-            AdoptionApplication.status == AdoptionStatus.APPROVED
-        )
-    )
-    completed = await session.execute(
-        select(func.count(AdoptionApplication.id)).where(
-            AdoptionApplication.status == AdoptionStatus.COMPLETED
-        )
-    )
-    screening = await session.execute(
-        select(func.count(AdoptionApplication.id)).where(
-            AdoptionApplication.status == AdoptionStatus.SCREENING
-        )
-    )
-    interview = await session.execute(
-        select(func.count(AdoptionApplication.id)).where(
-            AdoptionApplication.status == AdoptionStatus.INTERVIEW
-        )
-    )
-    home_check = await session.execute(
-        select(func.count(AdoptionApplication.id)).where(
-            AdoptionApplication.status == AdoptionStatus.HOME_CHECK
-        )
-    )
-    overdue_follow_ups = await session.execute(
-        select(func.count(AdoptionFollowUp.id)).where(
-            AdoptionFollowUp.status == FollowUpStatus.OVERDUE
-        )
-    )
+    stmt = text("""
+        SELECT
+            (SELECT COUNT(*) FROM adoption_applications) AS total,
+            (SELECT COUNT(*) FROM adoption_applications WHERE status = 'submitted') AS pending,
+            (SELECT COUNT(*) FROM adoption_applications WHERE status = 'approved') AS approved,
+            (SELECT COUNT(*) FROM adoption_applications WHERE status = 'completed') AS completed,
+            (SELECT COUNT(*) FROM adoption_applications WHERE status = 'screening') AS screening,
+            (SELECT COUNT(*) FROM adoption_applications WHERE status = 'interview') AS interview,
+            (SELECT COUNT(*) FROM adoption_applications WHERE status = 'home_check') AS home_check,
+            (SELECT COUNT(*) FROM adoption_follow_ups WHERE status = 'overdue') AS overdue_follow_ups
+    """)
+    row = (await session.execute(stmt)).one()
+
     result = {
-        "total_applications": total.scalar_one(),
-        "pending": pending.scalar_one(),
-        "approved": approved.scalar_one(),
-        "completed": completed.scalar_one(),
-        "screening": screening.scalar_one(),
-        "interview": interview.scalar_one(),
-        "home_check": home_check.scalar_one(),
-        "overdue_follow_ups": overdue_follow_ups.scalar_one(),
+        "total_applications": row.total,
+        "pending": row.pending,
+        "approved": row.approved,
+        "completed": row.completed,
+        "screening": row.screening,
+        "interview": row.interview,
+        "home_check": row.home_check,
+        "overdue_follow_ups": row.overdue_follow_ups,
     }
     await _set_cache(redis, cache_key, result)
     return result
@@ -336,13 +280,16 @@ async def foster_dashboard(session: AsyncSession, redis: Any | None = None) -> d
     if cached is not None:
         return cached
 
-    total = await session.execute(select(func.count(FosterPlacement.id)))
-    active = await session.execute(
-        select(func.count(FosterPlacement.id)).where(FosterPlacement.is_active.is_(True))
-    )
+    stmt = text("""
+        SELECT
+            (SELECT COUNT(*) FROM foster_placements) AS total,
+            (SELECT COUNT(*) FROM foster_placements WHERE is_active = true) AS active
+    """)
+    row = (await session.execute(stmt)).one()
+
     result = {
-        "total_placements": total.scalar_one(),
-        "active_placements": active.scalar_one(),
+        "total_placements": row.total,
+        "active_placements": row.active,
     }
     await _set_cache(redis, cache_key, result)
     return result
@@ -354,15 +301,16 @@ async def volunteer_dashboard(session: AsyncSession, redis: Any | None = None) -
     if cached is not None:
         return cached
 
-    total = await session.execute(select(func.count(VolunteerProfile.id)))
-    available = await session.execute(
-        select(func.count(VolunteerProfile.id)).where(
-            VolunteerProfile.status == VolunteerStatus.ACTIVE.value
-        )
-    )
+    stmt = text("""
+        SELECT
+            (SELECT COUNT(*) FROM volunteer_profiles) AS total,
+            (SELECT COUNT(*) FROM volunteer_profiles WHERE status = 'active') AS available
+    """)
+    row = (await session.execute(stmt)).one()
+
     result = {
-        "total_volunteers": total.scalar_one(),
-        "available": available.scalar_one(),
+        "total_volunteers": row.total,
+        "available": row.available,
     }
     await _set_cache(redis, cache_key, result)
     return result
@@ -421,56 +369,33 @@ async def finance_dashboard(session: AsyncSession, redis: Any | None = None) -> 
     if cached is not None:
         return cached
 
-    posted = [TransactionStatus.POSTED, TransactionStatus.RECONCILED]
-    income = await session.execute(
-        select(func.coalesce(func.sum(FinancialTransaction.amount), 0)).where(
-            FinancialTransaction.transaction_type == TransactionType.INCOME,
-            FinancialTransaction.status.in_(posted),
-            FinancialTransaction.deleted_at.is_(None),
-        )
-    )
-    donation_income = await session.execute(
-        select(func.coalesce(func.sum(FinancialTransaction.amount), 0)).where(
-            FinancialTransaction.transaction_type == TransactionType.RECONCILIATION,
-            FinancialTransaction.status.in_(posted),
-            FinancialTransaction.deleted_at.is_(None),
-        )
-    )
-    unreconciled_donations = await session.execute(
-        select(func.coalesce(func.sum(Donation.amount), 0)).where(
-            Donation.status == DonationStatus.SUCCESS,
-            Donation.id.notin_(
-                select(FinancialTransaction.donation_id).where(
-                    FinancialTransaction.donation_id.isnot(None),
-                    FinancialTransaction.status == TransactionStatus.RECONCILED,
-                )
-            ),
-        )
-    )
-    expense = await session.execute(
-        select(func.coalesce(func.sum(FinancialTransaction.amount), 0)).where(
-            FinancialTransaction.transaction_type == TransactionType.EXPENSE,
-            FinancialTransaction.status.in_(posted),
-            FinancialTransaction.deleted_at.is_(None),
-        )
-    )
-    pending_tx = await session.execute(
-        select(func.count(FinancialTransaction.id)).where(
-            FinancialTransaction.status == TransactionStatus.PENDING,
-            FinancialTransaction.deleted_at.is_(None),
-        )
-    )
-    total_income = (
-        float(income.scalar_one())
-        + float(donation_income.scalar_one())
-        + float(unreconciled_donations.scalar_one())
-    )
-    total_expenses = float(expense.scalar_one())
+    stmt = text("""
+        SELECT
+            COALESCE(SUM(CASE WHEN transaction_type = 'income' AND status IN ('posted', 'reconciled') AND deleted_at IS NULL THEN amount ELSE 0 END), 0) AS income,
+            COALESCE(SUM(CASE WHEN transaction_type = 'reconciliation' AND status IN ('posted', 'reconciled') AND deleted_at IS NULL THEN amount ELSE 0 END), 0) AS donation_income,
+            COALESCE(SUM(CASE WHEN transaction_type = 'expense' AND status IN ('posted', 'reconciled') AND deleted_at IS NULL THEN amount ELSE 0 END), 0) AS expense,
+            COUNT(CASE WHEN status = 'pending' AND deleted_at IS NULL THEN 1 END) AS pending_tx
+        FROM financial_transactions
+    """)
+    row = (await session.execute(stmt)).one()
+
+    unreconciled_stmt = text("""
+        SELECT COALESCE(SUM(amount), 0) AS amount
+        FROM donations
+        WHERE status = 'success'
+          AND id NOT IN (
+              SELECT donation_id FROM financial_transactions WHERE donation_id IS NOT NULL AND status = 'reconciled'
+          )
+    """)
+    unreconciled_row = (await session.execute(unreconciled_stmt)).one()
+
+    total_income = float(row.income) + float(row.donation_income) + float(unreconciled_row.amount)
+    total_expenses = float(row.expense)
     result = {
         "total_income": total_income,
         "total_expenses": total_expenses,
         "net_balance": total_income - total_expenses,
-        "pending_transactions": pending_tx.scalar_one(),
+        "pending_transactions": row.pending_tx,
     }
     await _set_cache(redis, cache_key, result)
     return result
@@ -523,15 +448,16 @@ async def staff_dashboard(session: AsyncSession, redis: Any | None = None) -> di
     if cached is not None:
         return cached
 
-    users = await session.execute(select(func.count(User.id)))
-    grievances = await session.execute(
-        select(func.count(GrievanceTicket.id)).where(
-            GrievanceTicket.status == GrievanceStatus.OPEN.value
-        )
-    )
+    stmt = text("""
+        SELECT
+            (SELECT COUNT(*) FROM users) AS total_staff,
+            (SELECT COUNT(*) FROM grievance_tickets WHERE status = 'open') AS open_grievances
+    """)
+    row = (await session.execute(stmt)).one()
+
     result = {
-        "total_staff": users.scalar_one(),
-        "open_grievances": grievances.scalar_one(),
+        "total_staff": row.total_staff,
+        "open_grievances": row.open_grievances,
     }
     await _set_cache(redis, cache_key, result)
     return result
@@ -571,15 +497,16 @@ async def public_dashboard(session: AsyncSession, redis: Any | None = None) -> d
     if cached is not None:
         return cached
 
-    adoptable = await session.execute(
-        select(func.count(DogProfile.id)).where(DogProfile.status == DogStatus.SHELTER)
-    )
-    rescued = await session.execute(
-        select(func.count(RescueRequest.id)).where(RescueRequest.status == RescueStatus.RESCUED)
-    )
+    stmt = text("""
+        SELECT
+            (SELECT COUNT(*) FROM dog_profiles WHERE status = 'shelter') AS adoptable_dogs,
+            (SELECT COUNT(*) FROM rescue_requests WHERE status = 'rescued') AS dogs_rescued
+    """)
+    row = (await session.execute(stmt)).one()
+
     result = {
-        "adoptable_dogs": adoptable.scalar_one(),
-        "dogs_rescued": rescued.scalar_one(),
+        "adoptable_dogs": row.adoptable_dogs,
+        "dogs_rescued": row.dogs_rescued,
     }
     await _set_cache(redis, cache_key, result)
     return result
