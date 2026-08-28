@@ -83,8 +83,8 @@ class Settings(BaseSettings):
     database_url: str = ""
     database_url_frontend: str = ""
     database_replica_url: str = ""
-    database_pool_size: int = 50
-    database_max_overflow: int = 30
+    database_pool_size: int = 100
+    database_max_overflow: int = 50
     database_echo: bool = False
 
     # --- Redis ---

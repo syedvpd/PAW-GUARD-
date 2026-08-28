@@ -4,6 +4,7 @@ These are the dependencies every future module's routers will depend on (RULE-00
 routers authenticate/authorise via dependencies, never inline).
 """
 
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -49,6 +50,14 @@ def _extract_access_token(
     raise InvalidSessionError("No authentication credentials were provided.")
 
 
+_AUTH_SESSION_CACHE: dict[uuid.UUID, tuple[float, User, UserSession]] = {}
+_AUTH_CACHE_TTL_SECONDS = 15.0
+
+
+def invalidate_auth_cache(session_id: uuid.UUID) -> None:
+    _AUTH_SESSION_CACHE.pop(session_id, None)
+
+
 async def get_current_user(
     request: Request,
     token: str = Depends(_extract_access_token),
@@ -63,18 +72,38 @@ async def get_current_user(
     if hasattr(request.state, "current_user_obj") and request.state.current_user_obj is not None:
         return request.state.current_user_obj  # type: ignore[no-any-return]
 
+    now_time = time.monotonic()
+    cached = _AUTH_SESSION_CACHE.get(claims.session_id)
+    if cached is not None:
+        cached_ts, cached_user, cached_session = cached
+        if (
+            now_time - cached_ts < _AUTH_CACHE_TTL_SECONDS
+            and cached_session.expires_at > datetime.now(UTC)
+        ):
+            request.state.user_id = cached_user.id
+            set_actor(cached_user.id)
+            current_user = CurrentUser(
+                user=cached_user, claims=claims, db=db, redis=redis, session=cached_session
+            )
+            request.state.current_user_obj = current_user
+            return current_user
+
     session_repo = SessionRepository(db)
     session = await session_repo.get_with_user(claims.session_id)
 
     if session is None or not session.is_active:
+        _AUTH_SESSION_CACHE.pop(claims.session_id, None)
         raise InvalidSessionError("Session has been revoked or has expired.")
     if session.expires_at < datetime.now(UTC):
+        _AUTH_SESSION_CACHE.pop(claims.session_id, None)
         raise InvalidSessionError("Session has expired.")
 
     user = session.user
     if user is None or not user.is_active:
+        _AUTH_SESSION_CACHE.pop(claims.session_id, None)
         raise AccountInactiveError("Account is inactive or no longer exists.")
 
+    _AUTH_SESSION_CACHE[claims.session_id] = (now_time, user, session)
     request.state.user_id = user.id
     set_actor(user.id)
     current_user = CurrentUser(user=user, claims=claims, db=db, redis=redis, session=session)
