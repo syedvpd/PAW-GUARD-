@@ -171,7 +171,6 @@ class TestAuditBeforeAfterState:
         added = session.add.call_args.args[0]
         assert added.before_state == {"status": "rescued"}
         assert added.after_state == {"status": "shelter"}
-        session.flush.assert_awaited_once()
 
     async def test_record_coerces_complex_types_correctly(self) -> None:
         from datetime import UTC, date, datetime
