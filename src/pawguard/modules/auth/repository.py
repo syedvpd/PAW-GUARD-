@@ -122,6 +122,7 @@ class SessionRepository:
 
     async def create(self, user_session: UserSession) -> UserSession:
         self._session.add(user_session)
+        await self._session.flush()
         return user_session
 
     async def get_by_id(self, session_id: uuid.UUID) -> UserSession | None:
@@ -186,6 +187,7 @@ class RefreshTokenRepository:
 
     async def create(self, token: RefreshToken) -> RefreshToken:
         self._session.add(token)
+        await self._session.flush()
         return token
 
     async def get_by_hash(self, token_hash: str) -> RefreshToken | None:

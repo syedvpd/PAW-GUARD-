@@ -145,3 +145,15 @@ async def get_db(request: Request = None) -> AsyncGenerator[AsyncSession]:
                 if session.in_transaction():
                     await session.rollback()
                 raise
+
+
+async def get_master_db() -> AsyncGenerator[AsyncSession]:
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+            if session.in_transaction():
+                await session.commit()
+        except Exception:
+            if session.in_transaction():
+                await session.rollback()
+            raise

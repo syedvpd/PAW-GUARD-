@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pawguard.core.constants import ACCESS_TOKEN_COOKIE_NAME
 from pawguard.core.security import AccessTokenClaims, TokenError, parse_access_token_claims
 from pawguard.db.audit import set_actor
-from pawguard.db.session import get_db
+from pawguard.db.session import get_master_db
 from pawguard.modules.auth.exceptions import AccountInactiveError, InvalidSessionError
 from pawguard.modules.auth.models import User, UserSession
 from pawguard.modules.auth.repository import SessionRepository, UserRepository
@@ -61,7 +61,7 @@ def invalidate_auth_cache(session_id: uuid.UUID) -> None:
 async def get_current_user(
     request: Request,
     token: str = Depends(_extract_access_token),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_master_db),
     redis: RedisClient = Depends(get_redis),
 ) -> CurrentUser:
     try:
@@ -123,7 +123,7 @@ async def get_optional_current_user(
     request: Request,
     authorization: str | None = Header(default=None),
     access_token_cookie: str | None = Cookie(default=None, alias=ACCESS_TOKEN_COOKIE_NAME),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_master_db),
     redis: RedisClient = Depends(get_redis),
 ) -> CurrentUser | None:
     """Resolve the current user when a valid token is presented, else None.
