@@ -5,8 +5,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
-if TYPE_CHECKING:
-    from pawguard.modules.lost_found.models import ReportMedia
+from pawguard.modules.lost_found.models import ReportMedia
 
 from sqlalchemy import (
     Boolean,
