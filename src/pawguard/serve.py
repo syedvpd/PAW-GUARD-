@@ -19,12 +19,33 @@ import uvicorn
 
 
 async def _run_worker() -> None:
-    from arq.worker import create_worker
+    from pawguard.core.config import get_settings
+    from pawguard.core.logging import get_logger
 
-    from pawguard.workers.arq_worker import WorkerSettings
+    logger = get_logger(__name__)
+    settings = get_settings()
 
-    worker = create_worker(WorkerSettings)
-    await worker.async_run()
+    if settings.disable_redis:
+        logger.info("redis_disabled_worker_in_noop_mode")
+        await asyncio.Event().wait()
+        return
+
+    while True:
+        try:
+            from arq.worker import create_worker
+
+            from pawguard.workers.arq_worker import WorkerSettings
+
+            worker = create_worker(WorkerSettings)
+            await worker.async_run()
+        except asyncio.CancelledError:
+            break
+        except Exception as exc:
+            logger.warning(
+                "arq_worker_failed_to_connect_degrading_to_noop",
+                error=str(exc),
+            )
+            await asyncio.sleep(30)
 
 
 async def _run_api() -> None:
