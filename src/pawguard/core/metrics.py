@@ -307,12 +307,13 @@ class InstrumentedRedisClient:
 
     async def get(self, key: str) -> Any:
         start = time.perf_counter()
+        res = None
         try:
             res = await self._client.get(key)
             status = "success"
         except Exception:
             status = "failed"
-            raise
+            res = None
         finally:
             duration_ms = (time.perf_counter() - start) * 1000
             res_len = len(str(res)) if (status == "success" and res is not None) else 0
@@ -336,12 +337,13 @@ class InstrumentedRedisClient:
     ) -> Any:
         start = time.perf_counter()
         val_str = str(value)
+        res = None
         try:
             res = await self._client.set(key, value, ex=ex, px=px, nx=nx)
             status = "success"
         except Exception:
             status = "failed"
-            raise
+            res = None
         finally:
             duration_ms = (time.perf_counter() - start) * 1000
             track_outbound_request(
@@ -361,7 +363,6 @@ class InstrumentedRedisClient:
             status = "success"
         except Exception:
             status = "failed"
-            raise
         finally:
             duration_ms = (time.perf_counter() - start) * 1000
             track_outbound_request(
@@ -375,12 +376,13 @@ class InstrumentedRedisClient:
 
     async def incr(self, key: str) -> int:
         start = time.perf_counter()
+        res = 0
         try:
             res = await self._client.incr(key)
             status = "success"
         except Exception:
             status = "failed"
-            raise
+            res = 0
         finally:
             duration_ms = (time.perf_counter() - start) * 1000
             track_outbound_request(
@@ -400,7 +402,6 @@ class InstrumentedRedisClient:
             status = "success"
         except Exception:
             status = "failed"
-            raise
         finally:
             duration_ms = (time.perf_counter() - start) * 1000
             track_outbound_request(
@@ -414,12 +415,13 @@ class InstrumentedRedisClient:
 
     async def eval(self, script: str, numkeys: int, *keys_and_args: Any) -> Any:
         start = time.perf_counter()
+        res = None
         try:
             res = await self._client.eval(script, numkeys, *keys_and_args)
             status = "success"
         except Exception:
             status = "failed"
-            raise
+            res = None
         finally:
             duration_ms = (time.perf_counter() - start) * 1000
             res_len = len(str(res)) if (status == "success" and res is not None) else 0
@@ -435,12 +437,13 @@ class InstrumentedRedisClient:
 
     async def ping(self) -> bool:
         start = time.perf_counter()
+        res = False
         try:
-            res = await self._client.ping()
+            res = bool(await self._client.ping())
             status = "success"
         except Exception:
             status = "failed"
-            raise
+            res = False
         finally:
             duration_ms = (time.perf_counter() - start) * 1000
             track_outbound_request(
@@ -461,7 +464,6 @@ class InstrumentedRedisClient:
             status = "success"
         except Exception:
             status = "failed"
-            raise
         finally:
             duration_ms = (time.perf_counter() - start) * 1000
             track_outbound_request(
@@ -475,12 +477,13 @@ class InstrumentedRedisClient:
 
     async def geoadd(self, name: str, *args: Any, **kwargs: Any) -> int:
         start = time.perf_counter()
+        res = 0
         try:
             res = await self._client.geoadd(name, *args, **kwargs)
             status = "success"
         except Exception:
             status = "failed"
-            raise
+            res = 0
         finally:
             duration_ms = (time.perf_counter() - start) * 1000
             track_outbound_request(
@@ -495,12 +498,13 @@ class InstrumentedRedisClient:
 
     async def geosearch(self, name: str, *args: Any, **kwargs: Any) -> list[Any]:
         start = time.perf_counter()
+        res: list[Any] = []
         try:
             res = await self._client.geosearch(name, *args, **kwargs)
             status = "success"
         except Exception:
             status = "failed"
-            raise
+            res = []
         finally:
             duration_ms = (time.perf_counter() - start) * 1000
             track_outbound_request(
