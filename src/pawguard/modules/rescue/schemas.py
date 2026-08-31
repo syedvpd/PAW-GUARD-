@@ -277,6 +277,7 @@ class RescueDispatchAgentResponse(BaseModel):
     role: str | None = None
     agent_name: str | None = None
     agent_email: str | None = None
+    accepted_at: datetime | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -292,6 +293,7 @@ class RescueDispatchAgentResponse(BaseModel):
             "role": getattr(data, "role", None),
             "agent_name": getattr(agent_obj, "full_name", None) if agent_obj else None,
             "agent_email": getattr(agent_obj, "email", None) if agent_obj else None,
+            "accepted_at": getattr(data, "accepted_at", None),
         }
 
     model_config = ConfigDict(from_attributes=True)
@@ -316,6 +318,7 @@ class RescueDispatchResponse(BaseModel):
     agents: list[RescueDispatchAgentResponse] = Field(default_factory=list)
     equipment_details: str | None = None
     dispatched_at: datetime
+    accepted_at: datetime | None = None
     located_at: datetime | None = None
     rescued_at: datetime | None = None
     admitted_at: datetime | None = None
@@ -347,6 +350,7 @@ class RescueDispatchResponse(BaseModel):
             "agents": agents_val,
             "equipment_details": getattr(data, "equipment_details", None),
             "dispatched_at": getattr(data, "dispatched_at", None),
+            "accepted_at": getattr(data, "accepted_at", None),
             "located_at": getattr(data, "located_at", None),
             "rescued_at": getattr(data, "rescued_at", None),
             "admitted_at": getattr(data, "admitted_at", None),

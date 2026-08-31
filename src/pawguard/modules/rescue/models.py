@@ -232,6 +232,7 @@ class RescueDispatch(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     dispatched_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     located_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     rescued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     admitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -305,6 +306,7 @@ class RescueDispatchAgent(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
         index=True,
     )
     role: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     dispatch: Mapped["RescueDispatch"] = relationship(back_populates="agents")
     agent: Mapped[Any] = relationship("User", foreign_keys=[agent_id], lazy="joined")

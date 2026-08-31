@@ -772,18 +772,26 @@ class RescueService:
         if dispatch is None:
             raise NotFoundError("Dispatch record not found for this request.")
 
-        # Ensure the agent is assigned to this dispatch
+        now = datetime.now(UTC)
+
+        # Ensure the agent is assigned to this dispatch and update accepted_at
         is_assigned = False
         if dispatch.assigned_driver_id == agent_id:
             is_assigned = True
-        else:
-            for agent in dispatch.agents:
-                if agent.agent_id == agent_id:
-                    is_assigned = True
-                    break
+            if dispatch.accepted_at is None:
+                dispatch.accepted_at = now
+
+        for agent in dispatch.agents:
+            if agent.agent_id == agent_id:
+                is_assigned = True
+                agent.accepted_at = now
+                if dispatch.accepted_at is None:
+                    dispatch.accepted_at = now
 
         if not is_assigned:
             raise ConflictError("Agent is not assigned to this dispatch.")
+
+        await self._repo._session.flush()
 
         if self._audit:
             await self._audit.record(
@@ -794,10 +802,12 @@ class RescueService:
                 metadata={
                     "rescue_id": str(request_id),
                     "action": "dispatch_accepted",
+                    "accepted_at": now.isoformat(),
                 },
             )
 
-        return request
+        fresh_req = await self._repo.get_request_by_id(request_id)
+        return fresh_req or request
 
     async def add_observation_report(
         self,
