@@ -20,7 +20,7 @@ import time
 from typing import Any
 import httpx
 
-LIVE_PAWGUARD_URL = "https://pawguard-backend-mqri.onrender.com"
+LIVE_PAWGUARD_URL = "https://pawguard-backend-dev.onrender.com"
 
 
 def _get_auth_headers() -> dict[str, str]:
