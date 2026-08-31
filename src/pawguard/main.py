@@ -62,6 +62,21 @@ def _build_custom_openapi(app: FastAPI) -> dict:
     return app.openapi_schema
 
 
+def _run_migrations() -> None:
+    """Run alembic upgrade head automatically on application startup to ensure
+    database schema is 100% up-to-date with current code models.
+    """
+    from alembic import command
+    from alembic.config import Config
+
+    try:
+        alembic_cfg = Config("alembic.ini")
+        command.upgrade(alembic_cfg, "head")
+        logger.info("alembic_migrations_applied_successfully")
+    except Exception as exc:
+        logger.warning("alembic_migration_auto_run_skipped_or_failed", error=str(exc))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     import asyncio
@@ -69,6 +84,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     configure_logging()
     logger.info("application_startup")
+    _run_migrations()
     await _seed_roles()
 
     # Start in-process outbox poller so transactional email/notification jobs
