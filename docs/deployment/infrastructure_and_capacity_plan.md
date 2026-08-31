@@ -107,7 +107,7 @@ PawGuard leverages Python's **Asynchronous AsyncIO Event Loop**. Non-blocking ne
 
 ### **Multi-Tier AWS Sizing Breakdown**
 
-| Resource / Parameter | Stage 1: Internal & Beta (20 Members) | Stage 2: Production Launch (2,000 Active Members) | Stage 3: High-Scale Growth (20,000 Active Members) |
+| Resource / Parameter | Stage 1: Internal & Beta (200 Members) | Stage 2: Production Launch (2,000 Active Members) | Stage 3: High-Scale Growth (20,000 Active Members) |
 | :--- | :--- | :--- | :--- |
 | **Target Audience** | Internal staff, QA testers, and Admins (20 Users) | Public adopters, rescue volunteers, shelter staff (2k Users, ~25k DAU) | Multi-city shelter network, statewide rescue operations (20k Users, ~250k DAU) |
 | **Peak Throughput** | 5 – 15 req/sec | 150 – 350 req/sec | 1,500 – 3,500 req/sec |
