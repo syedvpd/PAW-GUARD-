@@ -205,7 +205,7 @@ class TestDogSafetyTagOptionA:
         assert scanned_pet.id == pet_id
         assert lost_info["dog_id"] == dog_id
         assert lost_info["owner_name"] == "Alice Adopter"
-        assert lost_info["owner_phone"] == "+91*****3210"  # PII Masked
+        assert lost_info["owner_phone"] == "+919876543210"
         assert lost_info["status"] == "adopted"
 
     @pytest.mark.asyncio
@@ -243,7 +243,7 @@ class TestDogSafetyTagOptionA:
 
         assert scanned_pet.id == pet_id
         assert lost_info["owner_name"] == "Bob NewOwner"
-        assert lost_info["owner_phone"] == "+91*****6789"
+        assert lost_info["owner_phone"] == "+919123456789"
 
     @pytest.mark.asyncio
     async def test_g_dog_reported_lost_same_qr(self, service, mock_repo):

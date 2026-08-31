@@ -158,15 +158,26 @@ class MedicalRecordResponse(BaseModel):
 
 class SafetyTagResponse(BaseModel):
     id: uuid.UUID
+    safety_tag_id: uuid.UUID | None = None
     pet_id: uuid.UUID
+    dog_id: uuid.UUID | None = None
     token_prefix: str
     is_active: bool
-    last_scanned_at: datetime | None
-    scan_count: int
+    last_scanned_at: datetime | None = None
+    scan_count: int = 0
+    public_scan_url: str | None = None
     created_at: datetime
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def _populate_derived_fields(self) -> "SafetyTagResponse":
+        if self.safety_tag_id is None:
+            self.safety_tag_id = self.id
+        if self.public_scan_url is None and self.pet_id:
+            self.public_scan_url = f"/api/v1/companion-pets/{self.pet_id}/public-scan"
+        return self
 
 
 class SafetyTagProvisionResponse(SafetyTagResponse):
@@ -195,6 +206,7 @@ class SafetyTagScanRequest(BaseModel):
 
 class SafetyTagScanResponse(BaseModel):
     id: uuid.UUID | None = None
+    safety_tag_id: uuid.UUID | None = None
     dog_id: uuid.UUID | None = None
     pet_id: uuid.UUID | None = None
     token_prefix: str | None = None

@@ -246,38 +246,80 @@ async def public_scan_dog(
     request: Request,
     current_user: CurrentUser | None = Depends(get_optional_current_user),
     service: DogService = Depends(get_dog_service),
+    companion_service: CompanionPetService = Depends(get_companion_pet_service),
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[PublicDogScanResponse]:
     """Return live public-safe status for any non-deleted dog, regardless of status."""
     resolve_client_ip(request)
-    dog = await service.get_dog(dog_id)
-    public = _public_dog_view(DogProfileResponse.model_validate(dog))
-    photo_urls = await service.get_dog_photo_urls(dog_id)
+    try:
+        dog = await service.get_dog(dog_id)
+    except NotFoundError:
+        dog = None
 
-    adopter_name: str | None = None
-    adopter_phone: str | None = None
-    adopter_email: str | None = None
-    adopter_name, adopter_phone, adopter_email = await service.get_adopter_contact(dog_id)
+    if dog is not None:
+        public = _public_dog_view(DogProfileResponse.model_validate(dog))
+        photo_urls = await service.get_dog_photo_urls(dog_id)
 
-    return ApiResponse(
-        data=PublicDogScanResponse(
-            name=public.name,
-            breed=public.breed,
-            breed_classification=public.breed_classification,
-            estimated_age=public.estimated_age,
-            gender=public.gender,
-            weight_kg=public.weight,
-            temperament=public.temperament,
-            color=public.color,
-            photo_gallery_urls=photo_urls,
-            current_status=public.status,
-            is_adoptable=public.is_adoptable,
-            registration_number=public.registration_number,
-            adopter_name=adopter_name,
-            adopter_phone=adopter_phone,
-            adopter_email=adopter_email,
+        adopter_name: str | None = None
+        adopter_phone: str | None = None
+        adopter_email: str | None = None
+        adopter_name, adopter_phone, adopter_email = await service.get_adopter_contact(dog_id)
+
+        return ApiResponse(
+            data=PublicDogScanResponse(
+                name=public.name,
+                breed=public.breed,
+                breed_classification=public.breed_classification,
+                estimated_age=public.estimated_age,
+                gender=public.gender,
+                weight_kg=public.weight,
+                temperament=public.temperament,
+                color=public.color,
+                photo_gallery_urls=photo_urls,
+                current_status=public.status,
+                is_adoptable=public.is_adoptable,
+                registration_number=public.registration_number,
+                adopter_name=adopter_name,
+                adopter_phone=adopter_phone,
+                adopter_email=adopter_email,
+            )
         )
-    )
+
+    # Fallback: check if dog_id is a CompanionPet ID
+    try:
+        _tag, pet, lost_info = await companion_service.public_scan_companion_pet(
+            dog_id, resolve_client_ip(request)
+        )
+        photo_url = await companion_service.get_pet_photo_url(pet.id)
+        return ApiResponse(
+            data=PublicDogScanResponse(
+                name=pet.name,
+                breed=pet.breed or "Mixed",
+                breed_classification=DogBreedClassification.MIX,
+                estimated_age=None,
+                gender=(
+                    DogGender.MALE
+                    if (pet.sex and pet.sex.lower() in ("male", "m"))
+                    else (
+                        DogGender.FEMALE
+                        if (pet.sex and pet.sex.lower() in ("female", "f"))
+                        else DogGender.UNKNOWN
+                    )
+                ),
+                weight_kg=None,
+                temperament=None,
+                color=pet.color,
+                photo_gallery_urls=[photo_url] if photo_url else [],
+                current_status=DogStatus.ADOPTED,
+                is_adoptable=False,
+                registration_number=f"PET-{str(pet.id)[:8]}",
+                adopter_name=lost_info.get("owner_name"),
+                adopter_phone=lost_info.get("owner_phone"),
+                adopter_email=None,
+            )
+        )
+    except Exception:
+        raise NotFoundError(f"Dog {dog_id} not found") from None
 
 
 @router.get(
@@ -543,6 +585,9 @@ async def resolve_dog_safety_tag(
     tag, pet, lost_info = await service.scan_safety_tag(
         payload.raw_token, resolve_client_ip(request)
     )
+    if tag is None:
+        raise NotFoundError("Safety Tag not found.")
+
     dog = getattr(tag, "dog", None)
     if dog is None and tag.dog_id:
         dog_repo = DogRepository(service._session)

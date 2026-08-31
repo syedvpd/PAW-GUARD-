@@ -70,6 +70,8 @@ class CompanionPet(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Bas
         index=True,
     )
 
+    owner: Mapped["User"] = relationship("User", foreign_keys=[owner_id], lazy="joined")
+
     __table_args__ = (Index("ix_companion_pets_owner_active", "owner_id", "deleted_at"),)
 
 
@@ -184,6 +186,7 @@ class PetMedicalRecord(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin,
 
 
 if TYPE_CHECKING:
+    from pawguard.modules.auth.models import User
     from pawguard.modules.dog.models import DogProfile
 
 

@@ -11,11 +11,12 @@ from pawguard.modules.notifications.service import NotificationService
 
 
 async def notify_safety_tag_scan(
-    ctx: dict[str, Any],
-    user_id: str,
-    title: str,
-    body: str,
-    action_url: str,
+    ctx: Any = None,
+    user_id: str | None = None,
+    title: str | None = None,
+    body: str | None = None,
+    action_url: str | None = None,
+    **kwargs: Any,
 ) -> int:
     """Deliver the push notification when a pet's safety tag is scanned.
 
@@ -28,11 +29,34 @@ async def notify_safety_tag_scan(
     from pawguard.modules.notifications.repository import NotificationRepository
     from pawguard.modules.notifications.service import NotificationService
 
-    pool = ctx.get("redis")
+    # Handle both (ctx, user_id, title, body, action_url) and (user_id, title, body, action_url)
+    if isinstance(ctx, (str, uuid.UUID)):
+        action_url = body
+        body = title
+        title = user_id
+        user_id = str(ctx)
+        ctx = {}
+    elif not isinstance(ctx, dict):
+        ctx = {}
+
+    target_user_id = user_id or kwargs.get("user_id") or kwargs.get("recipient_user_id")
+    target_title = title or kwargs.get("title") or "Your pet's safety tag was scanned!"
+    target_body = (
+        body
+        or kwargs.get("body")
+        or kwargs.get("message")
+        or "Someone scanned your pet's safety tag. Check the app for details."
+    )
+    target_action_url = action_url or kwargs.get("action_url") or "/companion-pets"
+
+    if not target_user_id:
+        return 0
+
+    pool = ctx.get("redis") if isinstance(ctx, dict) else None
     async with AsyncSessionLocal() as session:
         notification_service = NotificationService(NotificationRepository(session), arq_pool=pool)
         return await notification_service._send_push_to_users(
-            [uuid.UUID(user_id)], title, body, action_url
+            [uuid.UUID(str(target_user_id))], target_title, target_body, target_action_url
         )
 
 

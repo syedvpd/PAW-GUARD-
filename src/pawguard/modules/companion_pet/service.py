@@ -1,6 +1,7 @@
 """Business services for companion pets and veterinary workflows."""
 
 import hashlib
+import inspect
 import secrets
 import uuid
 from datetime import UTC, datetime
@@ -22,7 +23,7 @@ from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
 from pawguard.modules.auth.dependencies import CurrentUser
-from pawguard.modules.auth.models import AuthAuditEventType
+from pawguard.modules.auth.models import AuthAuditEventType, User
 from pawguard.modules.auth.rbac import is_admin_role
 from pawguard.modules.companion_pet.models import (
     AppointmentStatus,
@@ -532,34 +533,64 @@ class CompanionPetService:
 
     async def scan_safety_tag(
         self, raw_token: str, ip_address: str | None = None
-    ) -> tuple[SafetyTag, CompanionPet | None, dict[str, Any]]:
+    ) -> tuple[SafetyTag | None, CompanionPet | None, dict[str, Any]]:
         tag = await self._repo.get_tag_by_hash(_hash_tag_token(raw_token))
-        if tag is None or not getattr(tag, "is_active", True):
+        pet: CompanionPet | None = None
+        dog: DogProfile | None = None
+
+        if tag is None:
+            # Check if raw_token is a pet_id / dog_id (UUID or URL containing UUID)
+            pet_id_val: uuid.UUID | None = None
+            try:
+                candidate = raw_token.strip()
+                if "/" in candidate:
+                    candidate = candidate.rstrip("/").split("/")[-1]
+                pet_id_val = uuid.UUID(candidate)
+            except Exception:
+                pet_id_val = None
+
+            if pet_id_val is not None:
+                tag = await self._repo.get_active_tag_for_pet(pet_id_val)
+                if tag is None:
+                    tag = await self._repo.get_active_tag_for_dog(pet_id_val)
+                if tag is None:
+                    pet = await self._repo.get_pet(pet_id_val)
+                    if pet is None:
+                        # Also check if it's a dog_profile id
+                        dog_stmt = select(DogProfile).where(
+                            DogProfile.id == pet_id_val, DogProfile.deleted_at.is_(None)
+                        )
+                        res = await self._session.execute(dog_stmt)
+                        dog = res.scalar_one_or_none()
+
+        if tag is None and pet is None and dog is None:
             raise NotFoundError("Safety tag not found.")
 
-        tag.last_scanned_at = datetime.now(UTC)
-        tag.scan_count = (getattr(tag, "scan_count", 0) or 0) + 1
-        await self._session.flush()
+        if tag is not None and not getattr(tag, "is_active", True):
+            raise NotFoundError("Safety tag not found.")
 
-        dog = getattr(tag, "dog", None)
-        pet = getattr(tag, "pet", None)
+        if tag is not None:
+            tag.last_scanned_at = datetime.now(UTC)
+            tag.scan_count = (getattr(tag, "scan_count", 0) or 0) + 1
+            await self._session.flush()
+            if pet is None:
+                pet = getattr(tag, "pet", None)
+            if dog is None:
+                dog = getattr(tag, "dog", None)
 
-        if pet is None and getattr(tag, "pet_id", None):
+        if pet is None and tag is not None and getattr(tag, "pet_id", None):
             try:
                 pet = await self._repo.get_pet(tag.pet_id)
             except Exception:
                 pet = None
 
-        if dog is None and getattr(tag, "dog_id", None):
+        if dog is None and tag is not None and getattr(tag, "dog_id", None):
             try:
                 dog_stmt = select(DogProfile).where(
                     DogProfile.id == tag.dog_id, DogProfile.deleted_at.is_(None)
                 )
                 res = await self._session.execute(dog_stmt)
-                if hasattr(res, "scalar_one_or_none"):
-                    found_dog = res.scalar_one_or_none()
-                    if isinstance(found_dog, DogProfile):
-                        dog = found_dog
+                dog = res.scalar_one_or_none()
             except Exception:
                 dog = None
 
@@ -569,10 +600,7 @@ class CompanionPetService:
                     DogProfile.id == pet.original_dog_id, DogProfile.deleted_at.is_(None)
                 )
                 res = await self._session.execute(dog_stmt)
-                if hasattr(res, "scalar_one_or_none"):
-                    found_dog = res.scalar_one_or_none()
-                    if isinstance(found_dog, DogProfile):
-                        dog = found_dog
+                dog = res.scalar_one_or_none()
             except Exception:
                 dog = None
 
@@ -594,9 +622,35 @@ class CompanionPetService:
 
         owner_name = None
         owner_phone = None
-        if pet and getattr(pet, "owner", None):
-            owner_name = pet.owner.full_name
-            owner_phone = _mask_pii(pet.owner.phone)
+        if pet and pet.owner_id:
+            owner_user = getattr(pet, "owner", None)
+            if inspect.isawaitable(owner_user):
+                owner_user = await owner_user
+            if (
+                owner_user is None
+                or not hasattr(owner_user, "full_name")
+                or not isinstance(owner_user.full_name, str)
+            ):
+                try:
+                    user_stmt = select(User).where(
+                        User.id == pet.owner_id, User.deleted_at.is_(None)
+                    )
+                    res = await self._session.execute(user_stmt)
+                    if hasattr(res, "scalar_one_or_none"):
+                        val = res.scalar_one_or_none()
+                        if inspect.isawaitable(val):
+                            owner_user = await val
+                        else:
+                            owner_user = val
+                except Exception:
+                    owner_user = None
+            if (
+                owner_user is not None
+                and hasattr(owner_user, "full_name")
+                and isinstance(owner_user.full_name, str)
+            ):
+                owner_name = owner_user.full_name
+                owner_phone = getattr(owner_user, "phone", None)
 
         foster_name = None
         foster_phone = None
@@ -605,7 +659,7 @@ class CompanionPetService:
 
         if dog and getattr(dog, "shelter_facility", None):
             facility_name = dog.shelter_facility.name
-            facility_phone = _mask_pii(dog.shelter_facility.phone)
+            facility_phone = dog.shelter_facility.phone
 
         lost_info: dict[str, Any] = {
             "status": status_str,
@@ -614,8 +668,10 @@ class CompanionPetService:
             "lost_location": lost_report.location_address if lost_report else None,
             "lost_at": lost_report.lost_at if lost_report else None,
             "dog_id": dog.id if dog else None,
-            "pet_id": pet.id if pet else None,
+            "pet_id": pet.id if pet else (tag.pet_id if tag else None),
+            "safety_tag_id": tag.id if tag else None,
             "name": pet_name,
+            "species": pet.species if pet else "dog",
             "breed": pet.breed if pet else (dog.breed if dog else None),
             "color": pet.color if pet else (dog.color if dog else None),
             "gender": pet.sex if pet else (str(dog.gender) if dog else None),
@@ -626,23 +682,23 @@ class CompanionPetService:
             "foster_phone": foster_phone,
             "owner_name": owner_name,
             "owner_phone": owner_phone,
+            "emergency_notes": pet.emergency_notes if pet else None,
         }
 
-        await self._audit_event(
-            AuthAuditEventType.SAFETY_TAG_SCANNED,
-            None,
-            ip_address,
-            {"tag_id": tag.id, "dog_id": tag.dog_id, "pet_id": tag.pet_id},
-        )
+        if self._audit and tag is not None:
+            await self._audit.record(
+                AuthAuditEventType.SAFETY_TAG_SCANNED,
+                None,
+                ip_address,
+                {"tag_id": tag.id, "dog_id": tag.dog_id, "pet_id": tag.pet_id},
+            )
 
         # Push notification to pet owner when their safety tag is scanned.
-        # Offloaded to a background worker so the (network-bound) FCM call does
-        # not block the scan response. Falls back to inline send when no ARQ
-        # pool is configured (e.g. local/dev without Redis).
         if owner_id:
             title = "Your pet's safety tag was scanned!"
             body = f"Someone scanned {pet_name}'s safety tag. Check the app for details."
-            action_url = f"/companion-pets/{pet.id if pet else tag.pet_id}"
+            pet_identifier = pet.id if pet else (tag.pet_id if tag is not None else "")
+            action_url = f"/companion-pets/{pet_identifier}"
             if self._arq is not None:
                 try:
                     await self._arq.enqueue_job(
@@ -663,6 +719,131 @@ class CompanionPetService:
                         repository=NotificationRepository(self._session)
                     )
                     await notification_svc._send_push_to_users([owner_id], title, body, action_url)
+                except Exception:
+                    logger.debug("push_notification_skipped", action="safety_tag_scan")
+
+        return tag, pet, lost_info
+
+    async def public_scan_companion_pet(
+        self, pet_id: uuid.UUID, ip_address: str | None = None
+    ) -> tuple[SafetyTag | None, CompanionPet, dict[str, Any]]:
+        pet = await self._repo.get_pet(pet_id)
+        if pet is None or getattr(pet, "is_scan_enabled", True) is False:
+            raise NotFoundError("Companion pet not found.")
+
+        tag = await self._repo.get_active_tag_for_pet(pet.id)
+        if tag is not None:
+            tag.last_scanned_at = datetime.now(UTC)
+            tag.scan_count = (getattr(tag, "scan_count", 0) or 0) + 1
+            await self._session.flush()
+
+        dog = getattr(tag, "dog", None) if tag else None
+        if dog is None and getattr(pet, "original_dog_id", None):
+            try:
+                dog_stmt = select(DogProfile).where(
+                    DogProfile.id == pet.original_dog_id, DogProfile.deleted_at.is_(None)
+                )
+                res = await self._session.execute(dog_stmt)
+                dog = res.scalar_one_or_none()
+            except Exception:
+                dog = None
+
+        lost_report = await self._repo.get_active_lost_report_for_pet(
+            pet.id, pet.owner_id, pet.name
+        )
+        is_lost = lost_report is not None
+        status_str = "lost" if is_lost else "safe"
+
+        owner_name = None
+        owner_phone = None
+        if pet.owner_id:
+            owner_user = getattr(pet, "owner", None)
+            if inspect.isawaitable(owner_user):
+                owner_user = await owner_user
+            if (
+                owner_user is None
+                or not hasattr(owner_user, "full_name")
+                or not isinstance(owner_user.full_name, str)
+            ):
+                try:
+                    user_stmt = select(User).where(
+                        User.id == pet.owner_id, User.deleted_at.is_(None)
+                    )
+                    res = await self._session.execute(user_stmt)
+                    if hasattr(res, "scalar_one_or_none"):
+                        val = res.scalar_one_or_none()
+                        if inspect.isawaitable(val):
+                            owner_user = await val
+                        else:
+                            owner_user = val
+                except Exception:
+                    owner_user = None
+            if (
+                owner_user is not None
+                and hasattr(owner_user, "full_name")
+                and isinstance(owner_user.full_name, str)
+            ):
+                owner_name = owner_user.full_name
+                owner_phone = getattr(owner_user, "phone", None)
+
+        lost_info: dict[str, Any] = {
+            "status": status_str,
+            "is_lost": is_lost,
+            "lost_report_id": lost_report.id if lost_report else None,
+            "lost_location": lost_report.location_address if lost_report else None,
+            "lost_at": lost_report.lost_at if lost_report else None,
+            "dog_id": dog.id if dog else None,
+            "pet_id": pet.id,
+            "safety_tag_id": tag.id if tag else None,
+            "name": pet.name,
+            "species": pet.species or "dog",
+            "breed": pet.breed,
+            "color": pet.color,
+            "gender": pet.sex,
+            "microchip_id": pet.microchip_id,
+            "facility_name": None,
+            "facility_phone": None,
+            "foster_name": None,
+            "foster_phone": None,
+            "owner_name": owner_name,
+            "owner_phone": owner_phone,
+            "emergency_notes": pet.emergency_notes,
+        }
+
+        if tag is not None:
+            await self._audit_event(
+                AuthAuditEventType.SAFETY_TAG_SCANNED,
+                None,
+                ip_address,
+                {"tag_id": tag.id, "dog_id": tag.dog_id, "pet_id": tag.pet_id},
+            )
+
+        if pet.owner_id:
+            title = "Your pet's safety tag was scanned!"
+            body = f"Someone scanned {pet.name}'s safety tag. Check the app for details."
+            action_url = f"/companion-pets/{pet.id}"
+            if self._arq is not None:
+                try:
+                    await self._arq.enqueue_job(
+                        "notify_safety_tag_scan",
+                        str(pet.owner_id),
+                        title,
+                        body,
+                        action_url,
+                    )
+                except Exception:
+                    logger.warning("arq_enqueue_failed_safety_tag_push", owner_id=str(pet.owner_id))
+            else:
+                try:
+                    from pawguard.modules.notifications.repository import NotificationRepository
+                    from pawguard.modules.notifications.service import NotificationService
+
+                    notification_svc = NotificationService(
+                        repository=NotificationRepository(self._session)
+                    )
+                    await notification_svc._send_push_to_users(
+                        [pet.owner_id], title, body, action_url
+                    )
                 except Exception:
                     logger.debug("push_notification_skipped", action="safety_tag_scan")
 

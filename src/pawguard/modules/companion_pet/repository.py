@@ -41,15 +41,21 @@ class CompanionPetRepository:
         return pet
 
     async def get_pet(self, pet_id: uuid.UUID) -> CompanionPet | None:
-        stmt = select(CompanionPet).where(
-            CompanionPet.id == pet_id, CompanionPet.deleted_at.is_(None)
+        stmt = (
+            select(CompanionPet)
+            .options(selectinload(CompanionPet.owner))
+            .where(CompanionPet.id == pet_id, CompanionPet.deleted_at.is_(None))
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def list_pets(
         self, page: PageParams, sort: SortParams, owner_id: uuid.UUID | None = None
     ) -> tuple[Sequence[CompanionPet], int]:
-        stmt = select(CompanionPet).where(CompanionPet.deleted_at.is_(None))
+        stmt = (
+            select(CompanionPet)
+            .options(selectinload(CompanionPet.owner))
+            .where(CompanionPet.deleted_at.is_(None))
+        )
         if owner_id is not None:
             stmt = stmt.where(CompanionPet.owner_id == owner_id)
         sorted_stmt = apply_sorting(stmt, sort, self.PET_SORTABLE_FIELDS, "created_at")
@@ -107,23 +113,33 @@ class CompanionPetRepository:
             await self._session.flush()
 
     async def get_active_tag_for_pet(self, pet_id: uuid.UUID) -> SafetyTag | None:
-        stmt = select(SafetyTag).where(
-            or_(
-                SafetyTag.pet_id == pet_id,
-                SafetyTag.dog_id
-                == select(CompanionPet.original_dog_id)
-                .where(CompanionPet.id == pet_id)
-                .scalar_subquery(),
-            ),
-            SafetyTag.is_active.is_(True),
-            SafetyTag.deleted_at.is_(None),
+        stmt = (
+            select(SafetyTag)
+            .options(
+                selectinload(SafetyTag.dog),
+                selectinload(SafetyTag.pet).selectinload(CompanionPet.owner),
+            )
+            .where(
+                or_(
+                    SafetyTag.pet_id == pet_id,
+                    SafetyTag.dog_id
+                    == select(CompanionPet.original_dog_id)
+                    .where(CompanionPet.id == pet_id)
+                    .scalar_subquery(),
+                ),
+                SafetyTag.is_active.is_(True),
+                SafetyTag.deleted_at.is_(None),
+            )
         )
         return (await self._session.execute(stmt)).scalars().first()
 
     async def get_tag_by_hash(self, token_hash: str) -> SafetyTag | None:
         stmt = (
             select(SafetyTag)
-            .options(selectinload(SafetyTag.dog), selectinload(SafetyTag.pet))
+            .options(
+                selectinload(SafetyTag.dog),
+                selectinload(SafetyTag.pet).selectinload(CompanionPet.owner),
+            )
             .where(
                 SafetyTag.token_hash == token_hash,
                 SafetyTag.is_active.is_(True),

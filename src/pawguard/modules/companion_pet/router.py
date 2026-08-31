@@ -468,6 +468,55 @@ async def create_pet_from_adoption(
     )
 
 
+@router.get(
+    "/{pet_id}/public-scan",
+    response_model=ApiResponse[SafetyTagScanResponse],
+    dependencies=[
+        Depends(rate_limit("companion_pet_public_scan", max_requests=20, window_seconds=60))
+    ],
+    summary="Privacy-safe public companion pet QR scan",
+)
+async def public_scan_companion_pet(
+    pet_id: uuid.UUID,
+    request: Request,
+    service: CompanionPetService = Depends(get_companion_pet_service),
+) -> ApiResponse[SafetyTagScanResponse]:
+    tag, pet, lost_info = await service.public_scan_companion_pet(
+        pet_id, resolve_client_ip(request)
+    )
+    photo_url = await service.get_pet_photo_url(pet.id) if pet else None
+    data = SafetyTagScanResponse(
+        id=tag.id if tag else None,
+        safety_tag_id=tag.id if tag else None,
+        dog_id=tag.dog_id if tag else None,
+        pet_id=pet.id,
+        token_prefix=tag.token_prefix if tag else None,
+        is_active=tag.is_active if tag else True,
+        last_scanned_at=tag.last_scanned_at if tag else None,
+        scan_count=tag.scan_count if tag else 0,
+        name=lost_info.get("name", "Animal"),
+        species=lost_info.get("species", "dog"),
+        breed=lost_info.get("breed"),
+        color=lost_info.get("color"),
+        gender=lost_info.get("gender"),
+        microchip_id=lost_info.get("microchip_id"),
+        emergency_notes=pet.emergency_notes if pet else None,
+        photo_url=photo_url,
+        status=lost_info.get("status", "safe"),
+        is_lost=lost_info.get("is_lost", False),
+        lost_report_id=lost_info.get("lost_report_id"),
+        lost_location=lost_info.get("lost_location"),
+        lost_at=lost_info.get("lost_at"),
+        facility_name=lost_info.get("facility_name"),
+        facility_phone=lost_info.get("facility_phone"),
+        foster_name=lost_info.get("foster_name"),
+        foster_phone=lost_info.get("foster_phone"),
+        owner_name=lost_info.get("owner_name"),
+        owner_phone=lost_info.get("owner_phone"),
+    )
+    return ApiResponse(data=data)
+
+
 @router.post(
     "/safety-tag/scan",
     response_model=ApiResponse[SafetyTagScanResponse],
@@ -482,15 +531,16 @@ async def scan_safety_tag(
     tag, pet, lost_info = await service.scan_safety_tag(payload.token, resolve_client_ip(request))
     photo_url = await service.get_pet_photo_url(pet.id) if pet else None
     data = SafetyTagScanResponse(
-        id=tag.id,
-        dog_id=tag.dog_id,
-        pet_id=pet.id if pet else tag.pet_id,
-        token_prefix=tag.token_prefix,
-        is_active=tag.is_active,
-        last_scanned_at=tag.last_scanned_at,
-        scan_count=tag.scan_count,
+        id=tag.id if tag else None,
+        safety_tag_id=tag.id if tag else None,
+        dog_id=tag.dog_id if tag else None,
+        pet_id=pet.id if pet else (tag.pet_id if tag else None),
+        token_prefix=tag.token_prefix if tag else None,
+        is_active=tag.is_active if tag else True,
+        last_scanned_at=tag.last_scanned_at if tag else None,
+        scan_count=tag.scan_count if tag else 0,
         name=lost_info.get("name", "Animal"),
-        species="dog",
+        species=lost_info.get("species", "dog"),
         breed=lost_info.get("breed"),
         color=lost_info.get("color"),
         gender=lost_info.get("gender"),

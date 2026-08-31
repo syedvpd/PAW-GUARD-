@@ -276,9 +276,13 @@ class DogRepository:
         self, dog_id: uuid.UUID
     ) -> tuple[str | None, str | None, str | None]:
         """Retrieve active adopter full_name, phone, and email for public QR scan."""
+        from sqlalchemy import or_
+
         from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
         from pawguard.modules.auth.models import User
+        from pawguard.modules.companion_pet.models import CompanionPet
 
+        # 1. Check adoption_applications
         stmt = (
             select(User.full_name, User.phone, User.email)
             .join(AdoptionApplication, AdoptionApplication.adopter_id == User.id)
@@ -293,6 +297,22 @@ class DogRepository:
             .limit(1)
         )
         row = (await self._session.execute(stmt)).first()
-        if row:
+        if row and (row[0] or row[1] or row[2]):
             return row[0], row[1], row[2]
+
+        # 2. Check companion_pets linked via original_dog_id or id
+        pet_stmt = (
+            select(User.full_name, User.phone, User.email)
+            .join(CompanionPet, CompanionPet.owner_id == User.id)
+            .where(
+                or_(CompanionPet.original_dog_id == dog_id, CompanionPet.id == dog_id),
+                CompanionPet.deleted_at.is_(None),
+            )
+            .order_by(CompanionPet.updated_at.desc())
+            .limit(1)
+        )
+        pet_row = (await self._session.execute(pet_stmt)).first()
+        if pet_row:
+            return pet_row[0], pet_row[1], pet_row[2]
+
         return None, None, None
