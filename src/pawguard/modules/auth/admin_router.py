@@ -69,7 +69,7 @@ async def list_roles(
     service: AdminService = Depends(_get_admin_service),
 ) -> ApiResponse[list[RoleResponse]]:
     roles = await service.list_roles()
-    return ApiResponse(data=roles)
+    return ApiResponse(data=[RoleResponse.model_validate(r) for r in roles])
 
 
 @admin_router.post(
@@ -92,7 +92,7 @@ async def create_role(
         ip_address=resolve_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
-    return ApiResponse(data=role)
+    return ApiResponse(data=RoleResponse.model_validate(role))
 
 
 @admin_router.get(
@@ -105,7 +105,7 @@ async def get_role(
     service: AdminService = Depends(_get_admin_service),
 ) -> ApiResponse[RoleResponse]:
     role = await service.get_role(role_id)
-    return ApiResponse(data=role)
+    return ApiResponse(data=RoleResponse.model_validate(role))
 
 
 @admin_router.put(
@@ -128,7 +128,7 @@ async def update_role(
         ip_address=resolve_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
-    return ApiResponse(data=role)
+    return ApiResponse(data=RoleResponse.model_validate(role))
 
 
 @admin_router.delete(
@@ -163,7 +163,7 @@ async def list_permissions(
     service: AdminService = Depends(_get_admin_service),
 ) -> ApiResponse[list[PermissionResponse]]:
     perms = await service.list_permissions()
-    return ApiResponse(data=perms)
+    return ApiResponse(data=[PermissionResponse.model_validate(p) for p in perms])
 
 
 # ── User provisioning ────────────────────────────────────────────────────────
@@ -190,7 +190,7 @@ async def list_users(
     service: AdminService = Depends(_get_admin_service),
 ) -> ApiResponse[list[AdminUserResponse]]:
     users = await service.list_users()
-    return ApiResponse(data=users)
+    return ApiResponse(data=[AdminUserResponse.model_validate(u) for u in users])
 
 
 @admin_router.post(
@@ -215,7 +215,7 @@ async def create_user(
         ip_address=resolve_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
-    return ApiResponse(data=user)
+    return ApiResponse(data=AdminUserResponse.model_validate(user))
 
 
 @admin_router.get(
@@ -228,7 +228,7 @@ async def get_user(
     service: AdminService = Depends(_get_admin_service),
 ) -> ApiResponse[AdminUserResponse]:
     user = await service.get_user(user_id)
-    return ApiResponse(data=user)
+    return ApiResponse(data=AdminUserResponse.model_validate(user))
 
 
 @admin_router.put(
@@ -254,7 +254,7 @@ async def update_user(
         ip_address=resolve_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
-    return ApiResponse(data=user)
+    return ApiResponse(data=AdminUserResponse.model_validate(user))
 
 
 @admin_router.delete(
@@ -295,7 +295,7 @@ async def restore_and_reset_password(
         ip_address=resolve_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
-    return ApiResponse(data=user)
+    return ApiResponse(data=AdminUserResponse.model_validate(user))
 
 
 # ── User-level permission overrides ──────────────────────────────────────────

@@ -49,7 +49,11 @@ class UserRepository:
 
     async def get_by_email_any(self, email: str) -> User | None:
         """Return user by email regardless of soft-delete status (admin use)."""
-        stmt = select(User).where(User.email == email.lower())
+        stmt = (
+            select(User)
+            .options(selectinload(User.roles).selectinload(Role.permissions))
+            .where(User.email == email.lower())
+        )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def create(self, user: User) -> User:
