@@ -75,7 +75,7 @@ class Settings(BaseSettings):
     cors_origins: str = (
         "http://localhost:3000,http://localhost:5173,https://pawguard-web-gamma.vercel.app"
     )
-    max_request_body_size: int = 10_485_760  # 10 MB
+    max_request_body_size: int = 31_457_280  # 30 MB
 
     # --- Database ---
     # No hardcoded fallback: infrastructure must provide DATABASE_URL via env.

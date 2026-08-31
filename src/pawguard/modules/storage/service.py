@@ -19,10 +19,13 @@ from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
 from pawguard.core.upload import (
-    MAX_FILE_SIZE_BYTES,
+    MAX_IMAGE_SIZE_BYTES,
+    MAX_VIDEO_SIZE_BYTES,
     UploadError,
     create_thumbnail,
+    optimize_image,
     verify_batch_size,
+    verify_file_size,
     verify_mime_type,
 )
 from pawguard.modules.auth.dependencies import CurrentUser
@@ -118,7 +121,7 @@ class StorageService:
         rejecting confirmation if it doesn't match what was declared.
 
         When ``batch_file_ids`` is provided the combined size of all files
-        in the batch is validated against the 50 MB cap before the
+        in the batch is validated against the 30 MB cap before the
         individual file is confirmed.
         """
         stored = await self._repo.get_by_id(file_id)
@@ -136,16 +139,19 @@ class StorageService:
             actual_size = await asyncio.to_thread(
                 self._s3.get_object_size, object_key=stored.object_key
             )
-            if actual_size > MAX_FILE_SIZE_BYTES:
-                raise UploadError(
-                    f"Uploaded file exceeds maximum size of "
-                    f"{MAX_FILE_SIZE_BYTES // (1024 * 1024)} MB (got {actual_size} bytes)."
-                )
             prefix = await asyncio.to_thread(
                 self._s3.get_object_prefix_bytes,
                 object_key=stored.object_key,
             )
             detected_mime = verify_mime_type(prefix, stored.mime_type)
+            verify_file_size(prefix, detected_mime)
+            if (detected_mime.startswith("image/") and actual_size > MAX_IMAGE_SIZE_BYTES) or (
+                detected_mime.startswith("video/") and actual_size > MAX_VIDEO_SIZE_BYTES
+            ):
+                limit_mb = 10 if detected_mime.startswith("image/") else 30
+                raise UploadError(
+                    f"Uploaded file exceeds maximum limit of {limit_mb} MB (got {actual_size // (1024 * 1024)} MB)."
+                )
         except (UploadError, BotoClientError, BotoCoreError, Exception) as exc:
             await _cleanup_s3_async(self._s3, stored.object_key)
             await self._repo._session.delete(stored)
@@ -165,21 +171,36 @@ class StorageService:
         stored.file_size = actual_size
         stored.is_uploaded = True
         stored.uploaded_at = datetime.now(UTC)
-        if detected_mime.startswith("image/") and stored.thumbnail_object_key is None:
+        if detected_mime.startswith("image/"):
             await self._generate_thumbnail(stored)
         await self._repo._session.flush()
         await self._repo._session.refresh(stored)
         return stored
 
     async def _generate_thumbnail(self, stored: StoredFile) -> None:
-        """Create and store an EXIF-free thumbnail for an image upload.
+        """Compress main image to WebP and create an EXIF-free thumbnail.
 
-        Thumbnailing is best-effort: a failure to decode or re-encode the image
-        must never reject an upload that already verified, so it is logged and
-        the stored file simply keeps ``thumbnail_object_key`` unset.
+        Thumbnailing & image optimization are best-effort: a failure to decode
+        or re-encode the image must never reject an upload that already verified,
+        so it is logged and the stored file simply keeps defaults.
         """
         try:
             content = await asyncio.to_thread(self._s3.get_object, object_key=stored.object_key)
+            opt_result = await asyncio.to_thread(
+                optimize_image, content, max_dimension=1920, quality=85
+            )
+            if opt_result is not None:
+                opt_bytes, opt_mime, _ = opt_result
+                if len(opt_bytes) < len(content):
+                    await asyncio.to_thread(
+                        self._s3.put_object,
+                        object_key=stored.object_key,
+                        content=opt_bytes,
+                        content_type=opt_mime,
+                    )
+                    stored.file_size = len(opt_bytes)
+                    stored.mime_type = opt_mime
+
             thumbnail = await asyncio.to_thread(create_thumbnail, content, max_size=400)
             if thumbnail is None:
                 return
