@@ -188,7 +188,18 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         else:
             response.headers["Content-Security-Policy"] = _STRICT_CSP
 
-        if request.url.path.startswith(("/api/", "/auth/")):
+        if request.url.path.startswith(
+            (
+                "/api/v1/portal/",
+                "/api/v1/storage/files/download",
+                "/api/v1/storage/files/view",
+            )
+        ):
+            if "Cache-Control" not in response.headers:
+                response.headers["Cache-Control"] = (
+                    "public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400"
+                )
+        elif request.url.path.startswith(("/api/", "/auth/")):
             if "Cache-Control" not in response.headers:
                 response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
         return response
