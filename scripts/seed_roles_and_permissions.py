@@ -279,6 +279,7 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
             pc.INVENTORY_READ,
             pc.PUBLIC_READ,
             pc.DASHBOARD_SHELTER,
+            pc.COMPANION_PET_READ,
         ],
     ),
     (
@@ -551,12 +552,16 @@ async def backfill_default_role(
         return 0
 
     orphan_users = (
-        await session.execute(
-            select(User)
-            .where(User.is_active.is_(True), User.deleted_at.is_(None))
-            .where(~User.id.in_(select(UserRole.user_id)))
+        (
+            await session.execute(
+                select(User)
+                .where(User.is_active.is_(True), User.deleted_at.is_(None))
+                .where(~User.id.in_(select(UserRole.user_id)))
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     granted = 0
     for user in orphan_users:

@@ -114,6 +114,16 @@ class CompanionPetService:
     def _is_admin(current_user: CurrentUser) -> bool:
         return is_admin_role(current_user.claims)
 
+    @staticmethod
+    def _has_registry_access(current_user: CurrentUser) -> bool:
+        if is_admin_role(current_user.claims):
+            return True
+        roles = getattr(current_user.claims, "roles", None)
+        if roles is None and isinstance(current_user.claims, dict):
+            roles = current_user.claims.get("roles", [])
+        staff_roles = {"shelter_manager", "veterinarian", "super_admin", "system:admin"}
+        return any(r in staff_roles for r in (roles or []))
+
     async def _get_pet(self, pet_id: uuid.UUID) -> CompanionPet:
         pet = await self._repo.get_pet(pet_id)
         if pet is None:
@@ -128,7 +138,11 @@ class CompanionPetService:
         clinic_id: uuid.UUID | None = None,
         owner_only: bool = False,
     ) -> None:
-        if self._is_admin(current_user) or pet.owner_id == current_user.id:
+        if (
+            self._has_registry_access(current_user)
+            or self._is_admin(current_user)
+            or pet.owner_id == current_user.id
+        ):
             return
         if owner_only:
             raise ForbiddenError("Only the pet owner or an administrator may perform this action.")
@@ -179,7 +193,7 @@ class CompanionPetService:
     async def list_pets(
         self, page: PageParams, sort: SortParams, current_user: CurrentUser
     ) -> PaginatedResponse[CompanionPetResponse]:
-        owner_id = None if self._is_admin(current_user) else current_user.id
+        owner_id = None if self._has_registry_access(current_user) else current_user.id
         rows, total = await self._repo.list_pets(page, sort, owner_id=owner_id)
         data = [await self.enrich_pet_response(row) for row in rows]
         return PaginatedResponse(

@@ -101,3 +101,43 @@ async def test_list_pets_enriches_all_returned_pets(companion_service, mock_repo
     result = await companion_service.list_pets(page, sort, caller)
     assert len(result.data) == 1
     assert result.data[0].photo_url == "https://s3.aws.com/milo.jpg"
+    mock_repo.list_pets.assert_awaited_with(page, sort, owner_id=pet1.owner_id)
+
+
+@pytest.mark.asyncio
+async def test_shelter_manager_can_list_companion_pets_registry(companion_service, mock_repo):
+    pet1 = CompanionPet(
+        id=uuid.uuid4(),
+        owner_id=uuid.uuid4(),
+        name="Bella",
+        species="dog",
+        is_scan_enabled=True,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+    mock_repo.list_pets.return_value = ([pet1], 1)
+    companion_service.get_pet_photo_url = AsyncMock(return_value="https://s3.aws.com/bella.jpg")
+
+    from pawguard.modules.auth.models import User
+
+    manager = User(
+        id=uuid.uuid4(),
+        email="shelter.manager@pawguard.com",
+        full_name="Shelter Manager",
+        hashed_password="hash",
+        is_active=True,
+    )
+    caller = CurrentUser(
+        user=manager,
+        claims={"sub": str(manager.id), "roles": ["shelter_manager"]},
+        db=AsyncMock(),
+        redis=AsyncMock(),
+    )
+    page = PageParams(page=1, page_size=10)
+    sort = SortParams(sort_by="created_at", sort_order="desc")
+
+    result = await companion_service.list_pets(page, sort, caller)
+    assert len(result.data) == 1
+    assert result.data[0].name == "Bella"
+    # Shelter Manager accesses the registry -> owner_id should be None
+    mock_repo.list_pets.assert_awaited_with(page, sort, owner_id=None)
