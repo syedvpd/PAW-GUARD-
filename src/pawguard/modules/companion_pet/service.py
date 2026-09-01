@@ -138,11 +138,7 @@ class CompanionPetService:
         clinic_id: uuid.UUID | None = None,
         owner_only: bool = False,
     ) -> None:
-        if (
-            self._has_registry_access(current_user)
-            or self._is_admin(current_user)
-            or pet.owner_id == current_user.id
-        ):
+        if self._is_admin(current_user) or pet.owner_id == current_user.id:
             return
         if owner_only:
             raise ForbiddenError("Only the pet owner or an administrator may perform this action.")

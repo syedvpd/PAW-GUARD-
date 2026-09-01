@@ -273,6 +273,20 @@ class User(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
 
     __table_args__ = (Index("ix_users_email_lower", "email"),)
 
+    @property
+    def has_password(self) -> bool:
+        return bool(
+            self.hashed_password and not self.hashed_password.startswith("!oauth_no_password_")
+        )
+
+    @property
+    def auth_provider(self) -> str | None:
+        if "oauth_accounts" in self.__dict__:
+            accounts = self.__dict__["oauth_accounts"]
+            if accounts:
+                return accounts[0].provider
+        return None
+
 
 class UserSession(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "user_sessions"

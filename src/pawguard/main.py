@@ -84,7 +84,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     configure_logging()
     logger.info("application_startup")
-    _run_migrations()
+    await asyncio.to_thread(_run_migrations)
     await _seed_roles()
 
     # Start in-process outbox poller so transactional email/notification jobs
