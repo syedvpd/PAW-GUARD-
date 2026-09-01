@@ -73,7 +73,8 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     allowed_hosts: str = "*,localhost,127.0.0.1"
     cors_origins: str = (
-        "http://localhost:3000,http://localhost:5173,https://pawguard-web-gamma.vercel.app"
+        "http://localhost:3000,http://localhost:5173,http://localhost:4173,http://localhost:8080,"
+        "https://pawguard-admin.vercel.app,https://pawguard-web-gamma.vercel.app,https://pawguard-web.vercel.app"
     )
     max_request_body_size: int = 31_457_280  # 30 MB
 
