@@ -705,9 +705,13 @@ class MedicalService:
         vax_records = await self._repo.get_vaccinations_by_dog(dog_id)
         for v in vax_records:
             due_raw = getattr(v, "next_due_at", getattr(v, "next_due_date", None))
-            due = due_raw.date() if hasattr(due_raw, "date") else due_raw
+            due = due_raw.date() if (due_raw is not None and hasattr(due_raw, "date")) else due_raw
             admin_raw = getattr(v, "administered_at", getattr(v, "administered_date", None))
-            admin_date = admin_raw.date() if hasattr(admin_raw, "date") else admin_raw
+            admin_date = (
+                admin_raw.date()
+                if (admin_raw is not None and hasattr(admin_raw, "date"))
+                else admin_raw
+            )
             lot = getattr(v, "lot_number", getattr(v, "batch_number", "N/A"))
             if due is not None:
                 days = (due - today).days
@@ -734,7 +738,11 @@ class MedicalService:
         for p in prescriptions:
             if p.is_active:
                 end_raw = getattr(p, "end_at", getattr(p, "end_date", None))
-                end_date = end_raw.date() if hasattr(end_raw, "date") else end_raw
+                end_date = (
+                    end_raw.date()
+                    if (end_raw is not None and hasattr(end_raw, "date"))
+                    else end_raw
+                )
                 medications.append(
                     DogMedicalReminderItem(
                         id=f"rx-{p.id}",
@@ -752,7 +760,7 @@ class MedicalService:
         for t in treatments:
             t_type = (t.treatment_type or "").lower()
             t_raw = getattr(t, "treatment_date", None)
-            t_date = t_raw.date() if hasattr(t_raw, "date") else t_raw
+            t_date = t_raw.date() if (t_raw is not None and hasattr(t_raw, "date")) else t_raw
             if any(term in t_type for term in ("deworm", "flea", "tick", "prevent", "parasite")):
                 preventative_care.append(
                     DogMedicalReminderItem(
