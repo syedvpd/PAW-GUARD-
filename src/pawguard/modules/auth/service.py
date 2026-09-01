@@ -1065,6 +1065,33 @@ class AuthService:
         )
         return user
 
+    async def delete_my_account(
+        self,
+        user_id: uuid.UUID,
+        *,
+        ctx: RequestContext | None = None,
+    ) -> None:
+        """Self-service user account deletion."""
+        user = await self._users.get_by_id(user_id)
+        if user is None:
+            raise NotFoundError(f"User {user_id} not found.")
+        user.deleted_at = datetime.now(UTC)
+        user.is_active = False
+
+        # Invalidate all active sessions and refresh tokens
+        await self._sessions.revoke_all_for_user(user_id, reason="account_deleted")
+        await self._refresh_tokens.revoke_all_for_user(user_id, reason="account_deleted")
+
+        await self._users._session.flush()
+
+        await self._audit.record(
+            event_type=AuthAuditEventType.USER_ACCOUNT_DELETED,
+            actor_id=user_id,
+            ip_address=ctx.ip_address if ctx else None,
+            user_agent=ctx.user_agent if ctx else None,
+            metadata={"user_id": str(user_id), "email": user.email, "self_service": True},
+        )
+
 
 # ── Admin service ────────────────────────────────────────────────────────────
 

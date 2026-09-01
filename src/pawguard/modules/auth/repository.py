@@ -218,6 +218,15 @@ class RefreshTokenRepository:
         )
         await self._session.execute(stmt)
 
+    async def revoke_all_for_user(self, user_id: uuid.UUID, *, reason: str) -> None:
+        user_session_ids = select(UserSession.id).where(UserSession.user_id == user_id)
+        stmt = (
+            update(RefreshToken)
+            .where(RefreshToken.session_id.in_(user_session_ids), RefreshToken.revoked_at.is_(None))
+            .values(revoked_at=datetime.now(UTC), revoked_reason=reason)
+        )
+        await self._session.execute(stmt)
+
 
 class MFARepository:
     def __init__(self, session: AsyncSession) -> None:

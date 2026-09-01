@@ -33,12 +33,14 @@ async def test_related_blogs_excludes_source_and_body(
     """Related-blogs endpoint returns published summaries, excludes the source
     and drafts, prefers same-category, and never leaks the full body."""
     suffix = uuid.uuid4().hex[:8]
+    cat_health = f"Health-{suffix}"
+    cat_news = f"News-{suffix}"
     source = BlogPost(
         title="Source Post",
         slug=f"source-{suffix}",
         excerpt="source excerpt",
         body="source body " * 50,
-        category="Health",
+        category=cat_health,
         status=ContentStatus.PUBLISHED,
     )
     same1 = BlogPost(
@@ -46,7 +48,7 @@ async def test_related_blogs_excludes_source_and_body(
         slug=f"same1-{suffix}",
         excerpt="e1",
         body="b1 " * 50,
-        category="Health",
+        category=cat_health,
         status=ContentStatus.PUBLISHED,
     )
     same2 = BlogPost(
@@ -54,23 +56,26 @@ async def test_related_blogs_excludes_source_and_body(
         slug=f"same2-{suffix}",
         excerpt="e2",
         body="b2 " * 50,
-        category="Health",
+        category=cat_health,
         status=ContentStatus.PUBLISHED,
     )
+    from datetime import UTC, datetime, timedelta
+
     different = BlogPost(
         title="Different Cat",
         slug=f"diff-{suffix}",
         excerpt="ed",
         body="bd " * 50,
-        category="News",
+        category=cat_news,
         status=ContentStatus.PUBLISHED,
+        published_at=datetime.now(UTC) + timedelta(days=10),
     )
     draft = BlogPost(
         title="Draft",
         slug=f"draft-{suffix}",
         excerpt="edraft",
         body="bdraft",
-        category="Health",
+        category=cat_health,
         status=ContentStatus.DRAFT,
     )
     for post in (source, same1, same2, different, draft):
@@ -199,10 +204,11 @@ async def test_adoption_age_and_weight_filtering(client: AsyncClient, db_session
     database-level filters (the Public Web age_group/size contract maps onto
     these primitives)."""
     suffix = uuid.uuid4().hex[:8]
+    test_breed = f"TestBreed-{suffix}"
     young = DogProfile(
         registration_number=f"REG-Y-{suffix}",
         name="Young Dog",
-        breed="Indie",
+        breed=test_breed,
         breed_classification=DogBreedClassification.UNKNOWN,
         gender=DogGender.UNKNOWN,
         status=DogStatus.SHELTER,
@@ -213,7 +219,7 @@ async def test_adoption_age_and_weight_filtering(client: AsyncClient, db_session
     old = DogProfile(
         registration_number=f"REG-O-{suffix}",
         name="Old Dog",
-        breed="Indie",
+        breed=test_breed,
         breed_classification=DogBreedClassification.UNKNOWN,
         gender=DogGender.UNKNOWN,
         status=DogStatus.SHELTER,
@@ -227,20 +233,24 @@ async def test_adoption_age_and_weight_filtering(client: AsyncClient, db_session
     await db_session.refresh(young)
     await db_session.refresh(old)
 
-    all_resp = await client.get("/api/v1/dogs?page=1&page_size=20")
+    all_resp = await client.get(f"/api/v1/dogs?breed={test_breed}&page=1&page_size=50")
     assert all_resp.status_code == 200
     young_id, old_id = str(young.id), str(old.id)
     all_ids = {str(d["id"]) for d in all_resp.json()["data"]}
     assert young_id in all_ids and old_id in all_ids
 
     # Age filter: only the older dog remains.
-    age_resp = await client.get("/api/v1/dogs?min_age_months=24&page=1&page_size=20")
+    age_resp = await client.get(
+        f"/api/v1/dogs?breed={test_breed}&min_age_months=24&page=1&page_size=50"
+    )
     assert age_resp.status_code == 200
     age_ids = {str(d["id"]) for d in age_resp.json()["data"]}
     assert young_id not in age_ids and old_id in age_ids
 
     # Weight filter: only the heavier dog remains.
-    weight_resp = await client.get("/api/v1/dogs?min_weight=20&page=1&page_size=20")
+    weight_resp = await client.get(
+        f"/api/v1/dogs?breed={test_breed}&min_weight=20&page=1&page_size=50"
+    )
     assert weight_resp.status_code == 200
     weight_ids = {str(d["id"]) for d in weight_resp.json()["data"]}
     assert young_id not in weight_ids and old_id in weight_ids

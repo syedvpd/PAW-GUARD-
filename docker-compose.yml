@@ -65,6 +65,7 @@ services:
       - DATABASE_REPLICA_URL=postgresql+asyncpg://postgres:postgres_secure_pass@postgres:5432/postgres
       - REDIS_URL=redis://redis:6379/0
       - S3_ENDPOINT_URL=http://minio:9000
+      - PYTHONPATH=/app/src
     volumes:
       - ./src:/app/src
       - ./secrets:/app/secrets
@@ -92,6 +93,7 @@ services:
       - DATABASE_REPLICA_URL=postgresql+asyncpg://postgres:postgres_secure_pass@postgres:5432/postgres
       - REDIS_URL=redis://redis:6379/0
       - S3_ENDPOINT_URL=http://minio:9000
+      - PYTHONPATH=/app/src
     volumes:
       - ./src:/app/src
       - ./secrets:/app/secrets

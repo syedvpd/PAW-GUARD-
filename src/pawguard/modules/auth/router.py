@@ -390,6 +390,22 @@ async def update_profile(
     )
 
 
+@router.delete("/me", response_model=ApiResponse[None])
+async def delete_my_account(
+    request: Request,
+    response: Response,
+    current: CurrentUser = Depends(get_current_user),
+    auth_service: AuthService = Depends(get_auth_service),
+) -> ApiResponse[None]:
+    """Self-service account deletion for the currently authenticated user."""
+    await auth_service.delete_my_account(
+        user_id=current.id,
+        ctx=_build_request_context(request),
+    )
+    _clear_auth_cookies(response)
+    return ApiResponse(message="Your account has been deleted successfully.")
+
+
 @router.get("/users/{user_id}/summary", response_model=ApiResponse[UserSummaryResponse])
 async def get_user_summary(
     user_id: uuid.UUID,

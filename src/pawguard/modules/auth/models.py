@@ -20,6 +20,7 @@ class AuthAuditEventType(StrEnum):
     LOGIN_FAILED = "login_failed"
     LOGOUT = "logout"
     LOGOUT_ALL = "logout_all"
+    USER_ACCOUNT_DELETED = "user_account_deleted"
     REFRESH = "refresh"
     REFRESH_REUSE_DETECTED = "refresh_reuse_detected"
     PASSWORD_CHANGE = "password_change"

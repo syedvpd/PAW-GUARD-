@@ -300,3 +300,34 @@ class TestRegisterRequestValidation:
                 current_session_id=uuid.uuid4(),
                 ctx=_ctx(),
             )
+
+
+class TestDeleteMyAccount:
+    @pytest.mark.asyncio
+    async def test_delete_my_account_soft_deletes_and_revokes_sessions(self) -> None:
+        service = _make_service()
+        user = _make_user()
+        service._users.get_by_id.return_value = user
+
+        await service.delete_my_account(user.id, ctx=_ctx())
+
+        assert user.deleted_at is not None
+        assert user.is_active is False
+        service._sessions.revoke_all_for_user.assert_awaited_once_with(
+            user.id, reason="account_deleted"
+        )
+        service._refresh_tokens.revoke_all_for_user.assert_awaited_once_with(
+            user.id, reason="account_deleted"
+        )
+        service._users._session.flush.assert_awaited()
+        service._audit.record.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_delete_my_account_not_found(self) -> None:
+        from pawguard.core.exceptions import NotFoundError
+
+        service = _make_service()
+        service._users.get_by_id.return_value = None
+
+        with pytest.raises(NotFoundError, match="not found"):
+            await service.delete_my_account(uuid.uuid4(), ctx=_ctx())

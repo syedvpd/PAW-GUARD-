@@ -19,16 +19,18 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        'rescue_dispatches',
-        sa.Column('accepted_at', sa.DateTime(timezone=True), nullable=True),
+    op.execute(
+        "ALTER TABLE rescue_dispatches ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMP WITH TIME ZONE"
     )
-    op.add_column(
-        'rescue_dispatch_agents',
-        sa.Column('accepted_at', sa.DateTime(timezone=True), nullable=True),
+    op.execute(
+        "ALTER TABLE rescue_dispatch_agents ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMP WITH TIME ZONE"
     )
 
 
 def downgrade() -> None:
-    op.drop_column('rescue_dispatch_agents', 'accepted_at')
-    op.drop_column('rescue_dispatches', 'accepted_at')
+    op.execute(
+        "ALTER TABLE rescue_dispatch_agents DROP COLUMN IF EXISTS accepted_at"
+    )
+    op.execute(
+        "ALTER TABLE rescue_dispatches DROP COLUMN IF EXISTS accepted_at"
+    )
