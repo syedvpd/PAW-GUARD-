@@ -23,6 +23,7 @@ from scripts.seed_roles_and_permissions import main as seed_roles
 from scripts.seed_success_stories import seed_success_stories
 from scripts.seed_veterinarians import main as seed_vets
 from scripts.seed_veterinary_partners import main as seed_partners
+from scripts.seed_volunteer_data import main as seed_volunteers
 
 
 async def run_all() -> None:
@@ -31,28 +32,31 @@ async def run_all() -> None:
     print("=========================================================\n")
 
     try:
-        print("--> Seeding 1/8: Roles & Permissions...")
+        print("--> Seeding 1/9: Roles & Permissions...")
         await seed_roles()
 
-        print("\n--> Seeding 2/8: Veterinary Partners (Clinics)...")
+        print("\n--> Seeding 2/9: Operational Users & Volunteer Module Data...")
+        await seed_volunteers()
+
+        print("\n--> Seeding 3/9: Veterinary Partners (Clinics)...")
         await seed_partners()
 
-        print("\n--> Seeding 3/8: Veterinarians & Memberships...")
+        print("\n--> Seeding 4/9: Veterinarians & Memberships...")
         await seed_vets()
 
-        print("\n--> Seeding 4/8: Adoptable Dogs...")
+        print("\n--> Seeding 5/9: Adoptable Dogs...")
         await seed_dogs()
 
-        print("\n--> Seeding 5/8: Success Stories...")
+        print("\n--> Seeding 6/9: Success Stories...")
         await seed_success_stories()
 
-        print("\n--> Seeding 6/8: Blogs & Sponsorships...")
+        print("\n--> Seeding 7/9: Blogs & Sponsorships...")
         await seed_blogs()
 
-        print("\n--> Seeding 7/8: Found-Animal Reports...")
+        print("\n--> Seeding 8/9: Found-Animal Reports...")
         await seed_found_reports()
 
-        print("\n--> Seeding 8/8: Pet Appointments & Companion Pets...")
+        print("\n--> Seeding 9/9: Pet Appointments & Companion Pets...")
         await seed_appointments()
 
         print("\n=========================================================")
