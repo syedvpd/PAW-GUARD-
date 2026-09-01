@@ -435,16 +435,10 @@ Documentation SHALL match implementation.
 
 # GIT CONTRACT
 
-AI SHALL NEVER:
+For PawGuard development:
 
-- commit
-- push
-- merge
-- rebase
-- force push
-- delete branches
-
-unless explicitly instructed.
+- Whenever code changes pass all quality checks (`ruff check`, `ruff format`, `mypy`, `pytest tests/unit/`), ALWAYS automatically stage, commit with a descriptive message, and push directly to `main` (`git push origin main`) so Render continuous deployment stays up to date and in sync with mobile and web teams.
+- AI SHALL NEVER force push, delete remote branches, or hard reset without explicit instruction.
 
 ---
 
