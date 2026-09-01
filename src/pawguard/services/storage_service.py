@@ -146,6 +146,11 @@ class StorageService:
 
         from pawguard.core.metrics import track_outbound_request
 
+        if not object_key:
+            return ""
+        if object_key.startswith("http://") or object_key.startswith("https://"):
+            return object_key
+
         start = time.perf_counter()
         bucket = self._bucket or "pawguard-media"
         params = {"Bucket": bucket, "Key": object_key}
