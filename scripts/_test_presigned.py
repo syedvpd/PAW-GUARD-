@@ -1,4 +1,5 @@
 """Generate presigned URLs that are long-lived enough for the app to use them."""
+
 import boto3
 from botocore.config import Config
 

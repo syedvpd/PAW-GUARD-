@@ -1,4 +1,5 @@
 """Test different URL formats for Supabase S3 public access."""
+
 import urllib.request
 import urllib.parse
 

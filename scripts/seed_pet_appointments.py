@@ -39,16 +39,16 @@ REASONS = [
 ]
 
 PET_SPECS = [
-    ("Simba",   "Golden Retriever",     "Golden",          "male"),
-    ("Maximus", "German Shepherd",      "Black & Tan",     "male"),
-    ("Coco",    "Labrador Retriever",   "Chocolate Brown", "female"),
-    ("Whiskey", "Indie Stray Mix",      "Fawn",            "male"),
-    ("Bruno",   "Rottweiler",           "Black & Mahogany","male"),
-    ("Daisy",   "Beagle",              "Tri-Color",       "female"),
-    ("Rocky",   "Pug",                 "Fawn",            "male"),
-    ("Stella",  "Doberman Pinscher",   "Black & Rust",    "female"),
-    ("Milo",    "Indie Pariah",        "White & Brown",   "male"),
-    ("Zoe",     "Shih Tzu",           "White & Gold",    "female"),
+    ("Simba", "Golden Retriever", "Golden", "male"),
+    ("Maximus", "German Shepherd", "Black & Tan", "male"),
+    ("Coco", "Labrador Retriever", "Chocolate Brown", "female"),
+    ("Whiskey", "Indie Stray Mix", "Fawn", "male"),
+    ("Bruno", "Rottweiler", "Black & Mahogany", "male"),
+    ("Daisy", "Beagle", "Tri-Color", "female"),
+    ("Rocky", "Pug", "Fawn", "male"),
+    ("Stella", "Doberman Pinscher", "Black & Rust", "female"),
+    ("Milo", "Indie Pariah", "White & Brown", "male"),
+    ("Zoe", "Shih Tzu", "White & Gold", "female"),
 ]
 
 
@@ -63,15 +63,23 @@ async def main() -> None:
 
     async with session_factory() as session:
         users = (await session.execute(select(User).limit(30))).scalars().all()
-        clinics = (await session.execute(
-            select(VetClinic).where(VetClinic.is_active.is_(True))
-        )).scalars().all()
-        vets = (await session.execute(
-            select(User)
-            .join(UserRole, UserRole.user_id == User.id)
-            .join(Role, Role.id == UserRole.role_id)
-            .where(Role.name == "veterinarian")
-        )).scalars().all()
+        clinics = (
+            (await session.execute(select(VetClinic).where(VetClinic.is_active.is_(True))))
+            .scalars()
+            .all()
+        )
+        vets = (
+            (
+                await session.execute(
+                    select(User)
+                    .join(UserRole, UserRole.user_id == User.id)
+                    .join(Role, Role.id == UserRole.role_id)
+                    .where(Role.name == "veterinarian")
+                )
+            )
+            .scalars()
+            .all()
+        )
 
         if not clinics:
             print("  ERROR: No active vet clinics found. Run seed_veterinary_partners.py first.")
@@ -81,12 +89,18 @@ async def main() -> None:
         pets: list[CompanionPet] = []
         for i, (name, breed, color, sex) in enumerate(PET_SPECS, 1):
             owner = users[(i - 1) % len(users)]
-            pet = (await session.execute(
-                select(CompanionPet).where(
-                    CompanionPet.name == name,
-                    CompanionPet.owner_id == owner.id,
+            pet = (
+                (
+                    await session.execute(
+                        select(CompanionPet).where(
+                            CompanionPet.name == name,
+                            CompanionPet.owner_id == owner.id,
+                        )
+                    )
                 )
-            )).scalars().first()
+                .scalars()
+                .first()
+            )
             if not pet:
                 pet = CompanionPet(
                     id=uuid.uuid4(),
@@ -121,31 +135,41 @@ async def main() -> None:
             end_time = start_time + timedelta(minutes=45)
 
             # Check for conflict before inserting
-            conflict = (await session.execute(
-                select(PetAppointment).where(
-                    PetAppointment.clinic_id == clinic.id,
-                    PetAppointment.starts_at == start_time,
+            conflict = (
+                (
+                    await session.execute(
+                        select(PetAppointment).where(
+                            PetAppointment.clinic_id == clinic.id,
+                            PetAppointment.starts_at == start_time,
+                        )
+                    )
                 )
-            )).scalars().first()
+                .scalars()
+                .first()
+            )
             if conflict:
                 continue
 
-            session.add(PetAppointment(
-                id=uuid.uuid4(),
-                pet_id=pet.id,
-                owner_id=pet.owner_id,
-                clinic_id=clinic.id,
-                vet_id=vet.id if vet else None,
-                starts_at=start_time,
-                ends_at=end_time,
-                status=random.choice([
-                    AppointmentStatus.CONFIRMED,
-                    AppointmentStatus.REQUESTED,
-                    AppointmentStatus.COMPLETED,
-                ]),
-                reason=random.choice(REASONS),
-                notes="Booked via PawGuard Mobile Client App.",
-            ))
+            session.add(
+                PetAppointment(
+                    id=uuid.uuid4(),
+                    pet_id=pet.id,
+                    owner_id=pet.owner_id,
+                    clinic_id=clinic.id,
+                    vet_id=vet.id if vet else None,
+                    starts_at=start_time,
+                    ends_at=end_time,
+                    status=random.choice(
+                        [
+                            AppointmentStatus.CONFIRMED,
+                            AppointmentStatus.REQUESTED,
+                            AppointmentStatus.COMPLETED,
+                        ]
+                    ),
+                    reason=random.choice(REASONS),
+                    notes="Booked via PawGuard Mobile Client App.",
+                )
+            )
             appts_created += 1
 
         await session.commit()

@@ -31,7 +31,9 @@ def _get_auth_headers() -> dict[str, str]:
     return headers
 
 
-def _generate_sample_body(schema: dict[str, Any], components_schemas: dict[str, Any]) -> dict[str, Any]:
+def _generate_sample_body(
+    schema: dict[str, Any], components_schemas: dict[str, Any]
+) -> dict[str, Any]:
     """Dynamically generate valid JSON request body from OpenAPI schema definition."""
     if "$ref" in schema:
         ref_name = schema["$ref"].split("/")[-1]
@@ -64,7 +66,11 @@ def _generate_sample_body(schema: dict[str, Any], components_schemas: dict[str, 
             elif "phone" in prop_name.lower():
                 body[prop_name] = "+15550192834"
             else:
-                body[prop_name] = prop_info.get("examples", ["sample_val"])[0] if prop_info.get("examples") else "sample_text"
+                body[prop_name] = (
+                    prop_info.get("examples", ["sample_val"])[0]
+                    if prop_info.get("examples")
+                    else "sample_text"
+                )
         elif p_type in {"integer", "number"}:
             body[prop_name] = prop_info.get("examples", [1])[0] if prop_info.get("examples") else 1
         elif p_type == "boolean":
@@ -75,7 +81,9 @@ def _generate_sample_body(schema: dict[str, Any], components_schemas: dict[str, 
     return body
 
 
-async def fetch_openapi_spec(base_url: str, local_spec_path: str = "openapi.json") -> dict[str, Any]:
+async def fetch_openapi_spec(
+    base_url: str, local_spec_path: str = "openapi.json"
+) -> dict[str, Any]:
     """Retrieve OpenAPI specification from live server or fallback to local file."""
     openapi_url = base_url.rstrip("/") + "/openapi.json"
     print(f"[+] Fetching live OpenAPI spec from {openapi_url}...", flush=True)
@@ -87,13 +95,17 @@ async def fetch_openapi_spec(base_url: str, local_spec_path: str = "openapi.json
                 print("[OK] Successfully fetched live OpenAPI specification!", flush=True)
                 return resp.json()
         except Exception as e:
-            print(f"[!] Could not fetch live spec ({e}). Using local {local_spec_path}...", flush=True)
+            print(
+                f"[!] Could not fetch live spec ({e}). Using local {local_spec_path}...", flush=True
+            )
 
     if os.path.exists(local_spec_path):
         with open(local_spec_path, encoding="utf-8") as f:
             return json.load(f)
 
-    raise FileNotFoundError(f"Could not load OpenAPI spec from {openapi_url} or local file {local_spec_path}")
+    raise FileNotFoundError(
+        f"Could not load OpenAPI spec from {openapi_url} or local file {local_spec_path}"
+    )
 
 
 async def test_and_print_single_endpoint(
@@ -178,7 +190,9 @@ async def test_and_print_single_endpoint(
         return res
 
 
-async def run_pawguard_benchmark(server_url: str = LIVE_PAWGUARD_URL, openapi_path: str = "openapi.json"):
+async def run_pawguard_benchmark(
+    server_url: str = LIVE_PAWGUARD_URL, openapi_path: str = "openapi.json"
+):
     print("=" * 115, flush=True)
     print("PAWGUARD FULL-SYSTEM ENDPOINT LATENCY & UPSTASH REDIS BENCHMARK SUITE", flush=True)
     print("=" * 115, flush=True)
@@ -222,10 +236,14 @@ async def run_pawguard_benchmark(server_url: str = LIVE_PAWGUARD_URL, openapi_pa
                     request_body_info = op_info.get("requestBody", {})
                     content_info = request_body_info.get("content", {}).get("application/json", {})
                     if "schema" in content_info:
-                        json_body = _generate_sample_body(content_info["schema"], components_schemas)
+                        json_body = _generate_sample_body(
+                            content_info["schema"], components_schemas
+                        )
 
                 tasks.append(
-                    test_and_print_single_endpoint(sem, client, method, path_pattern, test_path, json_body, headers)
+                    test_and_print_single_endpoint(
+                        sem, client, method, path_pattern, test_path, json_body, headers
+                    )
                 )
 
         results = await asyncio.gather(*tasks)
@@ -264,7 +282,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="PawGuard Full-System Live Latency & Redis Benchmark"
     )
-    parser.add_argument("--url", type=str, default=LIVE_PAWGUARD_URL, help="Target backend server URL")
+    parser.add_argument(
+        "--url", type=str, default=LIVE_PAWGUARD_URL, help="Target backend server URL"
+    )
     parser.add_argument(
         "--openapi", type=str, default="openapi.json", help="Path to local openapi.json file"
     )

@@ -158,9 +158,7 @@ STORIES = [
 
 async def seed_success_stories() -> None:
     settings = get_settings()
-    engine = create_async_engine(
-        settings.database_url, connect_args={"statement_cache_size": 0}
-    )
+    engine = create_async_engine(settings.database_url, connect_args={"statement_cache_size": 0})
     session_factory = async_sessionmaker(bind=engine, expire_on_commit=False)
 
     async with session_factory() as session:
@@ -168,20 +166,28 @@ async def seed_success_stories() -> None:
         dog_ids: dict[str, uuid.UUID] = {}
         for reg in {s["dog_registration"] for s in STORIES}:
             dog = (
-                await session.execute(
-                    select(DogProfile).where(DogProfile.registration_number == reg)
+                (
+                    await session.execute(
+                        select(DogProfile).where(DogProfile.registration_number == reg)
+                    )
                 )
-            ).scalars().first()
+                .scalars()
+                .first()
+            )
             if dog is not None:
                 dog_ids[reg] = dog.id
 
         created = 0
         for story_data in STORIES:
             existing = (
-                await session.execute(
-                    select(SuccessStory).where(SuccessStory.title == story_data["title"])
+                (
+                    await session.execute(
+                        select(SuccessStory).where(SuccessStory.title == story_data["title"])
+                    )
                 )
-            ).scalars().first()
+                .scalars()
+                .first()
+            )
             if existing is not None:
                 continue
 

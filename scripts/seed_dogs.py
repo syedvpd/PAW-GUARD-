@@ -265,18 +265,16 @@ async def seed_dogs() -> None:
     from pawguard.modules.auth.models import User
 
     settings = get_settings()
-    engine = create_async_engine(
-        settings.database_url, connect_args={"statement_cache_size": 0}
-    )
+    engine = create_async_engine(settings.database_url, connect_args={"statement_cache_size": 0})
     session_factory = async_sessionmaker(bind=engine, expire_on_commit=False)
 
     async with session_factory() as session:
         # 1. Ensure test adopter user exists
         adopter_user = (
-            await session.execute(
-                select(User).where(User.email == "adopter@pawguard.org")
-            )
-        ).scalars().first()
+            (await session.execute(select(User).where(User.email == "adopter@pawguard.org")))
+            .scalars()
+            .first()
+        )
 
         if not adopter_user:
             adopter_user = User(
@@ -299,12 +297,16 @@ async def seed_dogs() -> None:
         adopted_dog_obj = None
         for dog_data in all_seed:
             existing = (
-                await session.execute(
-                    select(DogProfile).where(
-                        DogProfile.registration_number == dog_data["registration_number"]
+                (
+                    await session.execute(
+                        select(DogProfile).where(
+                            DogProfile.registration_number == dog_data["registration_number"]
+                        )
                     )
                 )
-            ).scalars().first()
+                .scalars()
+                .first()
+            )
             if existing:
                 existing.image_urls = dog_data.get("image_urls")
                 existing.status = dog_data.get("status", existing.status)
@@ -324,13 +326,17 @@ async def seed_dogs() -> None:
         # 3. Ensure active COMPLETED adoption record exists for DOG-2026-0011 (Oscar)
         if adopted_dog_obj:
             existing_app = (
-                await session.execute(
-                    select(AdoptionApplication).where(
-                        AdoptionApplication.dog_id == adopted_dog_obj.id,
-                        AdoptionApplication.adopter_id == adopter_user.id,
+                (
+                    await session.execute(
+                        select(AdoptionApplication).where(
+                            AdoptionApplication.dog_id == adopted_dog_obj.id,
+                            AdoptionApplication.adopter_id == adopter_user.id,
+                        )
                     )
                 )
-            ).scalars().first()
+                .scalars()
+                .first()
+            )
 
             if not existing_app:
                 adoption_app = AdoptionApplication(

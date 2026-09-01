@@ -4,6 +4,7 @@ Lists the files in the 'adoption images/' prefix of the pawguard-media
 Supabase S3 bucket (or uses predefined presigned URLs) and stores
 distinct photo URLs on every LostReport and FoundReport row.
 """
+
 import asyncio
 import sys
 import time
@@ -40,9 +41,7 @@ PREDEFINED_URLS = [
 
 async def update_reports() -> None:
     settings = get_settings()
-    engine = create_async_engine(
-        settings.database_url, connect_args={"statement_cache_size": 0}
-    )
+    engine = create_async_engine(settings.database_url, connect_args={"statement_cache_size": 0})
     session_factory = async_sessionmaker(bind=engine, expire_on_commit=False)
 
     for attempt in range(1, 11):

@@ -4,6 +4,7 @@ Lists the files in the 'adoption images/' prefix of the pawguard-media
 Supabase S3 bucket (or uses predefined presigned S3 URLs) and stores
 distinct cover photo URLs on every BlogPost and hero photo URLs on every SuccessStory.
 """
+
 import asyncio
 import sys
 import time
@@ -75,9 +76,7 @@ async def update_blogs_and_stories() -> None:
     urls = list_and_build_urls()
     print(f"Loaded {len(urls)} presigned image URLs for Blogs & Success Stories.")
 
-    engine = create_async_engine(
-        settings.database_url, connect_args={"statement_cache_size": 0}
-    )
+    engine = create_async_engine(settings.database_url, connect_args={"statement_cache_size": 0})
     session_factory = async_sessionmaker(bind=engine, expire_on_commit=False)
 
     for attempt in range(1, 11):

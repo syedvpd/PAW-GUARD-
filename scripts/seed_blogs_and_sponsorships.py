@@ -164,6 +164,7 @@ Consider opening your home to a senior shelter resident today!
     },
 ]
 
+
 async def seed_blogs_and_sponsorships(label: str, database_url: str) -> None:
     if not database_url:
         print(f"SKIP [{label}]: No database URL configured.")
@@ -173,9 +174,7 @@ async def seed_blogs_and_sponsorships(label: str, database_url: str) -> None:
     print(f"SEEDING [{label}] -> Blogs & Dog Sponsorships")
     print("=======================================================")
 
-    engine = create_async_engine(
-        database_url, echo=False, connect_args={"statement_cache_size": 0}
-    )
+    engine = create_async_engine(database_url, echo=False, connect_args={"statement_cache_size": 0})
     session_factory = async_sessionmaker(bind=engine, expire_on_commit=False)
 
     now = datetime.now(UTC)
@@ -186,10 +185,10 @@ async def seed_blogs_and_sponsorships(label: str, database_url: str) -> None:
         blog_count = 0
         for bp_data in MOCK_BLOG_POSTS:
             existing = (
-                await session.execute(
-                    select(BlogPost).where(BlogPost.slug == bp_data["slug"])
-                )
-            ).scalars().first()
+                (await session.execute(select(BlogPost).where(BlogPost.slug == bp_data["slug"])))
+                .scalars()
+                .first()
+            )
 
             if existing is None:
                 post = BlogPost(
@@ -225,10 +224,14 @@ async def seed_blogs_and_sponsorships(label: str, database_url: str) -> None:
             donor_profiles = []
             for idx, user in enumerate(users[:5]):
                 profile = (
-                    await session.execute(
-                        select(DonorProfile).where(DonorProfile.user_id == user.id)
+                    (
+                        await session.execute(
+                            select(DonorProfile).where(DonorProfile.user_id == user.id)
+                        )
                     )
-                ).scalars().first()
+                    .scalars()
+                    .first()
+                )
 
                 if profile is None:
                     profile = DonorProfile(
@@ -249,13 +252,17 @@ async def seed_blogs_and_sponsorships(label: str, database_url: str) -> None:
             for i, dog in enumerate(dogs):
                 donor = donor_profiles[i % len(donor_profiles)]
                 existing_sp = (
-                    await session.execute(
-                        select(DogSponsorship).where(
-                            DogSponsorship.dog_id == dog.id,
-                            DogSponsorship.donor_id == donor.id,
+                    (
+                        await session.execute(
+                            select(DogSponsorship).where(
+                                DogSponsorship.dog_id == dog.id,
+                                DogSponsorship.donor_id == donor.id,
+                            )
                         )
                     )
-                ).scalars().first()
+                    .scalars()
+                    .first()
+                )
 
                 if existing_sp is None:
                     monthly_amt = amounts[i % len(amounts)]
@@ -271,7 +278,9 @@ async def seed_blogs_and_sponsorships(label: str, database_url: str) -> None:
                     )
                     session.add(sp)
                     sponsorship_count += 1
-                    print(f"  [+] Sponsored Dog '{dog.name}' by Donor {donor.id} (${monthly_amt}/mo)")
+                    print(
+                        f"  [+] Sponsored Dog '{dog.name}' by Donor {donor.id} (${monthly_amt}/mo)"
+                    )
 
             print(f"--> Total new dog sponsorships added: {sponsorship_count}")
 
@@ -280,11 +289,13 @@ async def seed_blogs_and_sponsorships(label: str, database_url: str) -> None:
 
     await engine.dispose()
 
+
 async def main() -> None:
     settings = get_settings()
     await seed_blogs_and_sponsorships("Backend Primary DB", settings.database_url)
     if settings.database_url_frontend:
         await seed_blogs_and_sponsorships("Frontend Secondary DB", settings.database_url_frontend)
+
 
 if __name__ == "__main__":
     asyncio.run(main())

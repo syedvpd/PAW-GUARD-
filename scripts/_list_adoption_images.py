@@ -1,4 +1,5 @@
 """List adoption images in Supabase S3 bucket."""
+
 import boto3
 from botocore.config import Config
 

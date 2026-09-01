@@ -20,6 +20,7 @@ async def cleanup(session: AsyncSession) -> dict[str, int]:
 
     # 1. Fix vet@pawguard.com identity fields overwritten by perf data
     from pawguard.modules.auth.models import User
+
     result = await session.execute(
         update(User)
         .where(User.email == "vet@pawguard.com")
@@ -31,44 +32,50 @@ async def cleanup(session: AsyncSession) -> dict[str, int]:
 
     # 2. Delete perf* rescue reports (rescue_requests with perf* reporter data)
     from pawguard.modules.rescue.models import RescueRequest
+
     result = await session.execute(
-        delete(RescueRequest)
-        .where(or_(
-            RescueRequest.reporter_name.like("perf%"),
-            RescueRequest.reporter_phone.like("perf%"),
-            RescueRequest.location_address.like("perf%"),
-        ))
+        delete(RescueRequest).where(
+            or_(
+                RescueRequest.reporter_name.like("perf%"),
+                RescueRequest.reporter_phone.like("perf%"),
+                RescueRequest.location_address.like("perf%"),
+            )
+        )
     )
     counts["rescue_requests_deleted"] = result.rowcount or 0
 
     # 3. Delete perf* shelters (shelter_facilities with generic names)
     from pawguard.modules.shelter.models import ShelterFacility
+
     result = await session.execute(
-        delete(ShelterFacility)
-        .where(ShelterFacility.name.like("perf%"))
+        delete(ShelterFacility).where(ShelterFacility.name.like("perf%"))
     )
     counts["shelters_deleted"] = result.rowcount or 0
 
     # 4. Delete perf* vaccine protocols (medical treatments with perf* data)
     # These are in medical_treatments or vaccine_protocols tables
     from pawguard.modules.medical.models import MedicalTreatment
+
     result = await session.execute(
-        delete(MedicalTreatment)
-        .where(or_(
-            MedicalTreatment.treatment_type.like("perf%"),
-            MedicalTreatment.notes.like("perf%"),
-        ))
+        delete(MedicalTreatment).where(
+            or_(
+                MedicalTreatment.treatment_type.like("perf%"),
+                MedicalTreatment.notes.like("perf%"),
+            )
+        )
     )
     counts["treatments_deleted"] = result.rowcount or 0
 
     # 5. Delete perf* prescriptions
     from pawguard.modules.medical.models import Prescription
+
     result = await session.execute(
-        delete(Prescription)
-        .where(or_(
-            Prescription.medication_name.like("perf%"),
-            Prescription.notes.like("perf%"),
-        ))
+        delete(Prescription).where(
+            or_(
+                Prescription.medication_name.like("perf%"),
+                Prescription.notes.like("perf%"),
+            )
+        )
     )
     counts["prescriptions_deleted"] = result.rowcount or 0
 

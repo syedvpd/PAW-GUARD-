@@ -1,4 +1,5 @@
 """Extract every registered endpoint from openapi.json and produce CSV/MD inventories."""
+
 import json, csv, sys
 from pathlib import Path
 
@@ -20,14 +21,16 @@ for path, methods in sorted(spec.get("paths", {}).items()):
         op = methods[method]
         tags = op.get("tags", [])
         module = tags[0] if tags else "unknown"
-        rows.append({
-            "id": idx,
-            "method": method.upper(),
-            "path": path,
-            "module": module,
-            "operation_id": op.get("operationId", ""),
-            "summary": op.get("summary", ""),
-        })
+        rows.append(
+            {
+                "id": idx,
+                "method": method.upper(),
+                "path": path,
+                "module": module,
+                "operation_id": op.get("operationId", ""),
+                "summary": op.get("summary", ""),
+            }
+        )
 
 # Write CSV
 csv_path = out_dir / "all-endpoints.csv"
@@ -49,10 +52,13 @@ with open(md_path, "w") as f:
     f.write("| # | Method | Path | Module | Operation ID |\n")
     f.write("|---|--------|------|--------|-------------|\n")
     for r in rows:
-        f.write(f"| {r['id']} | {r['method']} | `{r['path']}` | {r['module']} | {r['operation_id']} |\n")
+        f.write(
+            f"| {r['id']} | {r['method']} | `{r['path']}` | {r['module']} | {r['operation_id']} |\n"
+        )
 
 # Module summary
 from collections import Counter
+
 module_counts = Counter(r["module"] for r in rows)
 summary_path = out_dir / "module-summary.md"
 with open(summary_path, "w") as f:

@@ -65,10 +65,12 @@ class QueryCounter:
                 # Filter internal transaction commands from endpoint business queries
                 stmt_clean = statement.strip()
                 if not stmt_clean.startswith(("ROLLBACK", "COMMIT", "BEGIN")):
-                    self.queries.append({
-                        "statement": stmt_clean,
-                        "duration_ms": duration_ms,
-                    })
+                    self.queries.append(
+                        {
+                            "statement": stmt_clean,
+                            "duration_ms": duration_ms,
+                        }
+                    )
 
     def start(self):
         self.queries = []
@@ -112,7 +114,9 @@ def get_system_metrics() -> dict[str, Any]:
                 ("ullAvailExtendedVirtual", ctypes.c_uint64),
             ]
 
-        fn = getattr(ctypes.windll.kernel32, "K32GetProcessMemoryInfo", None) or getattr(ctypes.windll.psapi, "GetProcessMemoryInfo", None)
+        fn = getattr(ctypes.windll.kernel32, "K32GetProcessMemoryInfo", None) or getattr(
+            ctypes.windll.psapi, "GetProcessMemoryInfo", None
+        )
         fn.argtypes = [wintypes.HANDLE, ctypes.POINTER(PROCESS_MEMORY_COUNTERS), wintypes.DWORD]
         fn.restype = wintypes.BOOL
 
@@ -144,21 +148,25 @@ def get_system_metrics() -> dict[str, Any]:
         }
 
 
-def _extract_plan_nodes(node: dict[str, Any], collected: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+def _extract_plan_nodes(
+    node: dict[str, Any], collected: list[dict[str, Any]] | None = None
+) -> list[dict[str, Any]]:
     if collected is None:
         collected = []
-    collected.append({
-        "node_type": node.get("Node Type"),
-        "index_name": node.get("Index Name"),
-        "relation_name": node.get("Relation Name"),
-        "filter": node.get("Filter"),
-        "index_cond": node.get("Index Cond"),
-        "total_cost": node.get("Total Cost"),
-        "actual_rows": node.get("Actual Rows"),
-        "actual_loops": node.get("Actual Loops"),
-        "shared_hit_blocks": node.get("Shared Hit Blocks", 0),
-        "shared_read_blocks": node.get("Shared Read Blocks", 0),
-    })
+    collected.append(
+        {
+            "node_type": node.get("Node Type"),
+            "index_name": node.get("Index Name"),
+            "relation_name": node.get("Relation Name"),
+            "filter": node.get("Filter"),
+            "index_cond": node.get("Index Cond"),
+            "total_cost": node.get("Total Cost"),
+            "actual_rows": node.get("Actual Rows"),
+            "actual_loops": node.get("Actual Loops"),
+            "shared_hit_blocks": node.get("Shared Hit Blocks", 0),
+            "shared_read_blocks": node.get("Shared Read Blocks", 0),
+        }
+    )
     for child in node.get("Plans", []):
         _extract_plan_nodes(child, collected)
     return collected
@@ -187,9 +195,11 @@ class BaselineBenchmarker:
         # Retrieve sample IDs and setup authentications
         async with AsyncSession(self.engine, expire_on_commit=False) as session:
             # 1. Fetch sample dog and shelter
-            dog = (await session.execute(
-                select(DogProfile).where(DogProfile.deleted_at.is_(None)).limit(1)
-            )).scalar_one_or_none()
+            dog = (
+                await session.execute(
+                    select(DogProfile).where(DogProfile.deleted_at.is_(None)).limit(1)
+                )
+            ).scalar_one_or_none()
             if not dog:
                 dog = DogProfile(
                     id=uuid.uuid4(),
@@ -204,19 +214,29 @@ class BaselineBenchmarker:
                 await session.refresh(dog)
             self.sample_ids["dog_id"] = str(dog.id)
 
-            shelter = (await session.execute(
-                select(ShelterFacility).where(ShelterFacility.deleted_at.is_(None)).limit(1)
-            )).scalar_one_or_none()
+            shelter = (
+                await session.execute(
+                    select(ShelterFacility).where(ShelterFacility.deleted_at.is_(None)).limit(1)
+                )
+            ).scalar_one_or_none()
             self.sample_ids["shelter_id"] = str(shelter.id) if shelter else str(uuid.uuid4())
 
             # 2. Authenticate admin user
-            admin_user = (await session.execute(
-                select(User).options(selectinload(User.roles)).join(User.roles).where(Role.name == "super_admin").limit(1)
-            )).scalar_one_or_none()
+            admin_user = (
+                await session.execute(
+                    select(User)
+                    .options(selectinload(User.roles))
+                    .join(User.roles)
+                    .where(Role.name == "super_admin")
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
 
             if not admin_user:
                 admin_id = uuid.uuid4()
-                admin_role = (await session.execute(select(Role).where(Role.name == "super_admin"))).scalar_one()
+                admin_role = (
+                    await session.execute(select(Role).where(Role.name == "super_admin"))
+                ).scalar_one()
                 admin_user = User(
                     id=admin_id,
                     email=f"bench_admin_{self.scale_label}@pawguard.test",
@@ -251,12 +271,20 @@ class BaselineBenchmarker:
             self.auth_tokens["admin"] = f"Bearer {admin_token}"
 
             # 3. Authenticate standard public user
-            app_user = (await session.execute(
-                select(User).options(selectinload(User.roles)).join(User.roles).where(Role.name == "super_admin").limit(1)
-            )).scalar_one_or_none() or admin_user
+            app_user = (
+                await session.execute(
+                    select(User)
+                    .options(selectinload(User.roles))
+                    .join(User.roles)
+                    .where(Role.name == "super_admin")
+                    .limit(1)
+                )
+            ).scalar_one_or_none() or admin_user
 
             if not app_user:
-                app_role = (await session.execute(select(Role).where(Role.name == "app_user"))).scalar_one()
+                app_role = (
+                    await session.execute(select(Role).where(Role.name == "app_user"))
+                ).scalar_one()
                 app_user = User(
                     id=uuid.uuid4(),
                     email=f"bench_user_{self.scale_label}@pawguard.test",
@@ -369,14 +397,16 @@ class BaselineBenchmarker:
             res = await self.client.get(path)
             lat = (time.perf_counter() - t0) * 1000.0
             queries = self.query_counter.stop()
-            results.append({
-                "endpoint": "/api/v1/dogs",
-                "page": p,
-                "latency_ms": round(lat, 2),
-                "status_code": res.status_code,
-                "queries": len(queries),
-                "db_time_ms": round(sum(q["duration_ms"] for q in queries), 2),
-            })
+            results.append(
+                {
+                    "endpoint": "/api/v1/dogs",
+                    "page": p,
+                    "latency_ms": round(lat, 2),
+                    "status_code": res.status_code,
+                    "queries": len(queries),
+                    "db_time_ms": round(sum(q["duration_ms"] for q in queries), 2),
+                }
+            )
         return results
 
     async def run_explain_analyze(self) -> list[dict[str, Any]]:
@@ -411,7 +441,9 @@ class BaselineBenchmarker:
         async with AsyncSession(self.engine) as session:
             for name, q in queries_to_explain:
                 try:
-                    res = await session.execute(text(f"EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) {q}"))
+                    res = await session.execute(
+                        text(f"EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) {q}")
+                    )
                     plan_json = res.scalar()
                     plan_data = plan_json[0] if isinstance(plan_json, list) else plan_json
                     exec_time = plan_data.get("Execution Time", 0.0)
@@ -419,31 +451,45 @@ class BaselineBenchmarker:
                     root_node = plan_data.get("Plan", {})
                     all_nodes = _extract_plan_nodes(root_node)
 
-                    index_nodes = [n for n in all_nodes if n.get("index_name") or "Index" in str(n.get("node_type", ""))]
-                    seq_scan_nodes = [n for n in all_nodes if "Seq Scan" in str(n.get("node_type", ""))]
+                    index_nodes = [
+                        n
+                        for n in all_nodes
+                        if n.get("index_name") or "Index" in str(n.get("node_type", ""))
+                    ]
+                    seq_scan_nodes = [
+                        n for n in all_nodes if "Seq Scan" in str(n.get("node_type", ""))
+                    ]
 
                     shared_hit = sum(n.get("shared_hit_blocks", 0) for n in all_nodes)
                     shared_read = sum(n.get("shared_read_blocks", 0) for n in all_nodes)
 
-                    plans.append({
-                        "name": name,
-                        "query": q,
-                        "execution_time_ms": round(exec_time, 3),
-                        "planning_time_ms": round(planning_time, 3),
-                        "root_node_type": root_node.get("Node Type", "Unknown"),
-                        "used_index": len(index_nodes) > 0,
-                        "index_names": [n["index_name"] for n in index_nodes if n.get("index_name")],
-                        "seq_scan_relations": [n["relation_name"] for n in seq_scan_nodes if n.get("relation_name")],
-                        "all_nodes": all_nodes,
-                        "total_shared_hit_blocks": shared_hit,
-                        "total_shared_read_blocks": shared_read,
-                    })
+                    plans.append(
+                        {
+                            "name": name,
+                            "query": q,
+                            "execution_time_ms": round(exec_time, 3),
+                            "planning_time_ms": round(planning_time, 3),
+                            "root_node_type": root_node.get("Node Type", "Unknown"),
+                            "used_index": len(index_nodes) > 0,
+                            "index_names": [
+                                n["index_name"] for n in index_nodes if n.get("index_name")
+                            ],
+                            "seq_scan_relations": [
+                                n["relation_name"] for n in seq_scan_nodes if n.get("relation_name")
+                            ],
+                            "all_nodes": all_nodes,
+                            "total_shared_hit_blocks": shared_hit,
+                            "total_shared_read_blocks": shared_read,
+                        }
+                    )
                 except Exception as e:
-                    plans.append({
-                        "name": name,
-                        "query": q,
-                        "error": str(e),
-                    })
+                    plans.append(
+                        {
+                            "name": name,
+                            "query": q,
+                            "error": str(e),
+                        }
+                    )
         return plans
 
     async def run_all(self) -> dict[str, Any]:
@@ -458,36 +504,96 @@ class BaselineBenchmarker:
         endpoints_to_test = [
             # PUBLIC READ
             ("Dog List/Search", "PUBLIC_READ", "GET", "/api/v1/dogs?page=1&size=20", None, None),
-            ("Dog Detail", "PUBLIC_READ", "GET", f"/api/v1/dogs/{self.sample_ids['dog_id']}", None, None),
-            ("Shelter Facilities List", "PUBLIC_READ", "GET", "/api/v1/shelter/facilities?page=1&size=20", admin_hdr, None),
+            (
+                "Dog Detail",
+                "PUBLIC_READ",
+                "GET",
+                f"/api/v1/dogs/{self.sample_ids['dog_id']}",
+                None,
+                None,
+            ),
+            (
+                "Shelter Facilities List",
+                "PUBLIC_READ",
+                "GET",
+                "/api/v1/shelter/facilities?page=1&size=20",
+                admin_hdr,
+                None,
+            ),
             ("Portal Hero Stats", "PUBLIC_READ", "GET", "/api/v1/portal/stats", None, None),
-
             # AUTHENTICATED READ
             ("Current User Profile", "AUTH_READ", "GET", "/api/v1/auth/me", user_hdr, None),
-            ("Notifications List", "AUTH_READ", "GET", "/api/v1/notifications?page=1&size=20", user_hdr, None),
-            ("Companion Pets List", "AUTH_READ", "GET", "/api/v1/companion-pets?page=1&size=20", user_hdr, None),
+            (
+                "Notifications List",
+                "AUTH_READ",
+                "GET",
+                "/api/v1/notifications?page=1&size=20",
+                user_hdr,
+                None,
+            ),
+            (
+                "Companion Pets List",
+                "AUTH_READ",
+                "GET",
+                "/api/v1/companion-pets?page=1&size=20",
+                user_hdr,
+                None,
+            ),
             ("Rescue Dashboard", "AUTH_READ", "GET", "/api/v1/dashboards/rescue", admin_hdr, None),
-
             # MUTATIONS
-            ("Public Rescue Case Report", "MUTATION", "POST", "/api/v1/public/rescue/report", None, {
-                "reporter_name": "Scale Tester",
-                "reporter_phone": "+919876543210",
-                "location_address": "MG Road Sector 4, Bangalore",
-                "physical_condition": "injured",
-                "severity": "high",
-            }),
-            ("Adoption Application Submit", "MUTATION", "POST", "/api/v1/adoptions", user_hdr, {
-                "dog_id": self.sample_ids["dog_id"],
-                "residential_status": "owned",
-                "has_landlord_approval": True,
-                "has_yard_fence": True,
-                "household_members_count": 3,
-            }),
-
+            (
+                "Public Rescue Case Report",
+                "MUTATION",
+                "POST",
+                "/api/v1/public/rescue/report",
+                None,
+                {
+                    "reporter_name": "Scale Tester",
+                    "reporter_phone": "+919876543210",
+                    "location_address": "MG Road Sector 4, Bangalore",
+                    "physical_condition": "injured",
+                    "severity": "high",
+                },
+            ),
+            (
+                "Adoption Application Submit",
+                "MUTATION",
+                "POST",
+                "/api/v1/adoptions",
+                user_hdr,
+                {
+                    "dog_id": self.sample_ids["dog_id"],
+                    "residential_status": "owned",
+                    "has_landlord_approval": True,
+                    "has_yard_fence": True,
+                    "household_members_count": 3,
+                },
+            ),
             # ADMIN
-            ("Admin Dashboard Summary", "ADMIN", "GET", "/api/v1/admin/dashboard/summary", admin_hdr, None),
-            ("Admin User Search", "ADMIN", "GET", "/api/v1/admin/users?page=1&size=20", admin_hdr, None),
-            ("Adoption Applications List", "ADMIN", "GET", "/api/v1/adoptions?page=1&size=20", admin_hdr, None),
+            (
+                "Admin Dashboard Summary",
+                "ADMIN",
+                "GET",
+                "/api/v1/admin/dashboard/summary",
+                admin_hdr,
+                None,
+            ),
+            (
+                "Admin User Search",
+                "ADMIN",
+                "GET",
+                "/api/v1/admin/users?page=1&size=20",
+                admin_hdr,
+                None,
+            ),
+            (
+                "Adoption Applications List",
+                "ADMIN",
+                "GET",
+                "/api/v1/adoptions?page=1&size=20",
+                admin_hdr,
+                None,
+            ),
             ("Reports Types List", "ADMIN", "GET", "/api/v1/reports/types", admin_hdr, None),
         ]
 
@@ -496,7 +602,10 @@ class BaselineBenchmarker:
             print(f"Benchmarking [{category:12}] {name:28} ... ", end="", flush=True)
             res = await self.benchmark_endpoint(name, category, method, path, headers, body)
             benchmark_results.append(res)
-            print(f"p50: {res['p50_ms']:6.2f}ms | p95: {res['p95_ms']:6.2f}ms | Queries: {res['queries_per_request']:3.1f} | DB Time: {res['avg_db_time_ms']:5.2f}ms", flush=True)
+            print(
+                f"p50: {res['p50_ms']:6.2f}ms | p95: {res['p95_ms']:6.2f}ms | Queries: {res['queries_per_request']:3.1f} | DB Time: {res['avg_db_time_ms']:5.2f}ms",
+                flush=True,
+            )
 
         print("\nRunning Pagination Scalability Audit ... ", flush=True)
         pagination_results = await self.run_pagination_audit()

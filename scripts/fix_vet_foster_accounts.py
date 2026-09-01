@@ -3,6 +3,7 @@
 Bypasses the admin API to avoid the 500 error. Directly sets deleted_at=None,
 is_active=True, and hashed_password for both accounts.
 """
+
 import asyncio
 import sys
 from pathlib import Path
@@ -33,20 +34,17 @@ PASSWORD = "PawGuard@2026"
 async def fix_accounts() -> None:
     settings = get_settings()
     hashed = hash_password(PASSWORD)
-    engine = create_async_engine(
-        settings.database_url, connect_args={"statement_cache_size": 0}
-    )
+    engine = create_async_engine(settings.database_url, connect_args={"statement_cache_size": 0})
     session_factory = async_sessionmaker(bind=engine, expire_on_commit=False)
 
     async with session_factory() as session:
         for email in TARGET_EMAILS:
-            result = await session.execute(
-                select(User).where(User.email == email.lower())
-            )
+            result = await session.execute(select(User).where(User.email == email.lower()))
             user = result.scalars().first()
             if user is None:
                 print(f"  {email}: NOT FOUND — creating new user")
                 from pawguard.modules.auth.models import Role, UserRole
+
                 user = User(
                     email=email.lower(),
                     full_name=email.split("@")[0].replace(".", " ").title(),
@@ -59,9 +57,7 @@ async def fix_accounts() -> None:
                 await session.flush()
                 # Assign the right role
                 role_name = "veterinarian" if "vet@" in email else "foster_family"
-                role_result = await session.execute(
-                    select(Role).where(Role.name == role_name)
-                )
+                role_result = await session.execute(select(Role).where(Role.name == role_name))
                 role = role_result.scalars().first()
                 if role is not None:
                     session.add(UserRole(user_id=user.id, role_id=role.id))

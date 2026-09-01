@@ -10,6 +10,7 @@ Reads each image from S3, converts to a data URI, and stores on
 image_urls for all adoptable dogs. The Flutter app will receive
 the base64 data directly in the JSON response.
 """
+
 import asyncio
 import base64
 import mimetypes
@@ -71,9 +72,7 @@ async def apply() -> None:
     data_uris = download_images_as_data_uris()
     print(f"\nGenerated {len(data_uris)} data URIs")
 
-    engine = create_async_engine(
-        settings.database_url, connect_args={"statement_cache_size": 0}
-    )
+    engine = create_async_engine(settings.database_url, connect_args={"statement_cache_size": 0})
     session_factory = async_sessionmaker(bind=engine, expire_on_commit=False)
 
     updated = 0
@@ -89,7 +88,9 @@ async def apply() -> None:
             for dog in result.scalars().all():
                 dog.image_urls = data_uris
                 updated += 1
-                print(f"  {dog.name} ({dog.registration_number}): {status_filter} -> {len(data_uris)} data URIs")
+                print(
+                    f"  {dog.name} ({dog.registration_number}): {status_filter} -> {len(data_uris)} data URIs"
+                )
 
         # Also update adopted dogs
         result = await session.execute(
@@ -101,7 +102,9 @@ async def apply() -> None:
         for dog in result.scalars().all():
             dog.image_urls = data_uris
             updated += 1
-            print(f"  {dog.name} ({dog.registration_number}): adopted -> {len(data_uris)} data URIs")
+            print(
+                f"  {dog.name} ({dog.registration_number}): adopted -> {len(data_uris)} data URIs"
+            )
 
         await session.commit()
     await engine.dispose()

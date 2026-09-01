@@ -7,6 +7,7 @@ Flutter app has photos for dogs that were previously adopted.
 Replaces placeholder URLs (Unsplash etc.) and fills in missing
 image_urls for dogs that had none.
 """
+
 import asyncio
 import sys
 from pathlib import Path
@@ -47,9 +48,7 @@ async def update_adopted_dogs() -> None:
     urls = build_adoption_image_urls()
     print(f"Generated {len(urls)} presigned URLs ({PRESIGN_EXPIRY_DAYS}-day expiry)")
 
-    engine = create_async_engine(
-        settings.database_url, connect_args={"statement_cache_size": 0}
-    )
+    engine = create_async_engine(settings.database_url, connect_args={"statement_cache_size": 0})
     session_factory = async_sessionmaker(bind=engine, expire_on_commit=False)
 
     updated = 0

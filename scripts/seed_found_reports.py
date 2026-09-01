@@ -39,22 +39,78 @@ REPORTERS = [
 
 # (reporter_index, species, breed_observed, color_observed, location, found_days_ago, photo)
 FOUND = [
-    (0, Species.DOG, "Indian Pariah", "Tan / brown with white chest", "Near Gachibowli Flyover, Hyderabad", 4,
-     "https://images.unsplash.com/photo-1561037404-61cd46aa615b?auto=format&fit=crop&w=600&q=80"),
-    (0, Species.DOG, "Labrador mix", "Black", "DLF Road, Gachibowli, Hyderabad", 9,
-     "https://images.unsplash.com/photo-1601758228041-f3b2795255f1?auto=format&fit=crop&w=600&q=80"),
-    (1, Species.CAT, "Domestic Shorthair", "Grey tabby", "Banjara Hills Road No. 12, Hyderabad", 2,
-     "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?auto=format&fit=crop&w=600&q=80"),
-    (1, Species.DOG, "Indian Pariah", "White with black patches", "Jubilee Hills Check Post, Hyderabad", 14,
-     "https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?auto=format&fit=crop&w=600&q=80"),
-    (2, Species.DOG, "Street pup", "Golden brown", "Kondapur Market, Hyderabad", 6,
-     "https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=600&q=80"),
-    (2, Species.CAT, "Domestic Shorthair", "Calico (white/orange/black)", "Madhapur, Hyderabad", 1,
-     "https://images.unsplash.com/photo-1495360010541-f48722b34f7d?auto=format&fit=crop&w=600&q=80"),
-    (1, Species.DOG, "Pomeranian", "Cream / off-white", "Hitech City Metro, Hyderabad", 21,
-     "https://images.unsplash.com/photo-1583511656824-1c6c3ee036f8?auto=format&fit=crop&w=600&q=80"),
-    (0, Species.OTHER, "Rabbit (domestic)", "White", "Kukatpally Housing Board, Hyderabad", 11,
-     "https://images.unsplash.com/photo-1585110396000-c9ffd4e4b308?auto=format&fit=crop&w=600&q=80"),
+    (
+        0,
+        Species.DOG,
+        "Indian Pariah",
+        "Tan / brown with white chest",
+        "Near Gachibowli Flyover, Hyderabad",
+        4,
+        "https://images.unsplash.com/photo-1561037404-61cd46aa615b?auto=format&fit=crop&w=600&q=80",
+    ),
+    (
+        0,
+        Species.DOG,
+        "Labrador mix",
+        "Black",
+        "DLF Road, Gachibowli, Hyderabad",
+        9,
+        "https://images.unsplash.com/photo-1601758228041-f3b2795255f1?auto=format&fit=crop&w=600&q=80",
+    ),
+    (
+        1,
+        Species.CAT,
+        "Domestic Shorthair",
+        "Grey tabby",
+        "Banjara Hills Road No. 12, Hyderabad",
+        2,
+        "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?auto=format&fit=crop&w=600&q=80",
+    ),
+    (
+        1,
+        Species.DOG,
+        "Indian Pariah",
+        "White with black patches",
+        "Jubilee Hills Check Post, Hyderabad",
+        14,
+        "https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?auto=format&fit=crop&w=600&q=80",
+    ),
+    (
+        2,
+        Species.DOG,
+        "Street pup",
+        "Golden brown",
+        "Kondapur Market, Hyderabad",
+        6,
+        "https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=600&q=80",
+    ),
+    (
+        2,
+        Species.CAT,
+        "Domestic Shorthair",
+        "Calico (white/orange/black)",
+        "Madhapur, Hyderabad",
+        1,
+        "https://images.unsplash.com/photo-1495360010541-f48722b34f7d?auto=format&fit=crop&w=600&q=80",
+    ),
+    (
+        1,
+        Species.DOG,
+        "Pomeranian",
+        "Cream / off-white",
+        "Hitech City Metro, Hyderabad",
+        21,
+        "https://images.unsplash.com/photo-1583511656824-1c6c3ee036f8?auto=format&fit=crop&w=600&q=80",
+    ),
+    (
+        0,
+        Species.OTHER,
+        "Rabbit (domestic)",
+        "White",
+        "Kukatpally Housing Board, Hyderabad",
+        11,
+        "https://images.unsplash.com/photo-1585110396000-c9ffd4e4b308?auto=format&fit=crop&w=600&q=80",
+    ),
 ]
 
 
@@ -70,10 +126,14 @@ async def main() -> None:
 
     async with session_factory() as session:
         public_role = (
-            await session.execute(select(Role).where(Role.name == "general_public"))
-        ).scalars().first()
+            (await session.execute(select(Role).where(Role.name == "general_public")))
+            .scalars()
+            .first()
+        )
         if public_role is None:
-            public_role = Role(id=uuid.uuid4(), name="general_public", description="Public site user")
+            public_role = Role(
+                id=uuid.uuid4(), name="general_public", description="Public site user"
+            )
             session.add(public_role)
             await session.flush()
 
@@ -81,8 +141,10 @@ async def main() -> None:
         reporter_ids: list[uuid.UUID] = []
         for rep in REPORTERS:
             existing = (
-                await session.execute(select(User).where(User.email == rep["email"]))
-            ).scalars().first()
+                (await session.execute(select(User).where(User.email == rep["email"])))
+                .scalars()
+                .first()
+            )
             if existing:
                 reporter_ids.append(existing.id)
                 continue
@@ -104,13 +166,17 @@ async def main() -> None:
         for idx, species, breed, color, location, days_ago, photo in FOUND:
             found_at = datetime.now(UTC) - timedelta(days=days_ago)
             dup = (
-                await session.execute(
-                    select(FoundReport).where(
-                        FoundReport.location_address == location,
-                        FoundReport.found_at == found_at,
+                (
+                    await session.execute(
+                        select(FoundReport).where(
+                            FoundReport.location_address == location,
+                            FoundReport.found_at == found_at,
+                        )
                     )
                 )
-            ).scalars().first()
+                .scalars()
+                .first()
+            )
             if dup:
                 continue
             session.add(

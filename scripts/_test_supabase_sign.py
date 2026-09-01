@@ -1,4 +1,5 @@
 """Try Supabase REST API to get a signed URL via service role key."""
+
 import os
 import urllib.request
 import urllib.error
@@ -12,8 +13,12 @@ path = "adoption images/ad1.jfif"
 
 # Try with no auth (public bucket)
 url = f"https://xzxsdgobndbkufyszzul.storage.supabase.co/storage/v1/object/sign/{bucket}/{path}"
-req = urllib.request.Request(url, method="POST", headers={"Content-Type": "application/json"},
-                             data=json.dumps({"expiresIn": 3600}).encode())
+req = urllib.request.Request(
+    url,
+    method="POST",
+    headers={"Content-Type": "application/json"},
+    data=json.dumps({"expiresIn": 3600}).encode(),
+)
 try:
     resp = urllib.request.urlopen(req, timeout=10)
     print(f"OK no-auth: {json.loads(resp.read())}")

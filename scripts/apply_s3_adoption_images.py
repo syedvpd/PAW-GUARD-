@@ -9,6 +9,7 @@ Uses the same StorageService.generate_presigned_download_url used by the
 donation receipt endpoint — which works in the Flutter app the same way
 the receipt PDFs do.
 """
+
 import asyncio
 import sys
 from pathlib import Path
@@ -76,9 +77,7 @@ async def update_dogs() -> None:
     for u in urls:
         print(f"  {u}")
 
-    engine = create_async_engine(
-        settings.database_url, connect_args={"statement_cache_size": 0}
-    )
+    engine = create_async_engine(settings.database_url, connect_args={"statement_cache_size": 0})
     session_factory = async_sessionmaker(bind=engine, expire_on_commit=False)
 
     updated = 0
