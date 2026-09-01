@@ -102,13 +102,14 @@ class SuccessStoryResponse(BaseModel):
             or (self.images[0] if self.images else None)
         )
         if img:
-            if not img.startswith("http"):
-                try:
-                    from pawguard.services.storage_service import get_storage_service
+            try:
+                from pawguard.services.storage_service import get_storage_service
 
-                    img = get_storage_service().generate_public_url(object_key=img)
-                except Exception:
-                    pass
+                fresh = get_storage_service().sign_media_url(img)
+                if fresh:
+                    img = fresh
+            except Exception:
+                pass
             self.hero_image_url = img
             self.cover_image_url = img
             self.image_url = img
@@ -183,13 +184,14 @@ class SuccessStorySummaryResponse(BaseModel):
             or (self.images[0] if self.images else None)
         )
         if img:
-            if not img.startswith("http"):
-                try:
-                    from pawguard.services.storage_service import get_storage_service
+            try:
+                from pawguard.services.storage_service import get_storage_service
 
-                    img = get_storage_service().generate_public_url(object_key=img)
-                except Exception:
-                    pass
+                fresh = get_storage_service().sign_media_url(img)
+                if fresh:
+                    img = fresh
+            except Exception:
+                pass
             self.hero_image_url = img
             self.cover_image_url = img
             self.image_url = img
@@ -310,13 +312,14 @@ class BlogPostResponse(BaseModel):
             or (self.images[0] if self.images else None)
         )
         if img:
-            if not img.startswith("http"):
-                try:
-                    from pawguard.services.storage_service import get_storage_service
+            try:
+                from pawguard.services.storage_service import get_storage_service
 
-                    img = get_storage_service().generate_public_url(object_key=img)
-                except Exception:
-                    pass
+                fresh = get_storage_service().sign_media_url(img)
+                if fresh:
+                    img = fresh
+            except Exception:
+                pass
             self.cover_image_url = img
             self.image_url = img
             self.photo_url = img
@@ -391,13 +394,14 @@ class BlogPostSummaryResponse(BaseModel):
             or (self.images[0] if self.images else None)
         )
         if img:
-            if not img.startswith("http"):
-                try:
-                    from pawguard.services.storage_service import get_storage_service
+            try:
+                from pawguard.services.storage_service import get_storage_service
 
-                    img = get_storage_service().generate_public_url(object_key=img)
-                except Exception:
-                    pass
+                fresh = get_storage_service().sign_media_url(img)
+                if fresh:
+                    img = fresh
+            except Exception:
+                pass
             self.cover_image_url = img
             self.image_url = img
             self.photo_url = img

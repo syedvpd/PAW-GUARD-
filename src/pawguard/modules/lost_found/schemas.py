@@ -165,24 +165,19 @@ class LostReportResponse(BaseModel):
 
     @model_validator(mode="after")
     def _resolve_photo_url(self) -> "LostReportResponse":
-        """Mint a fresh signed download URL from the stored object key.
-
-        Backward compatible: legacy reports that only carry an externally
-        hosted ``photo_url`` are returned unchanged.
-        """
-        if self.photo_object_key:
+        """Mint a fresh signed download URL from the stored object key or URL."""
+        key_or_url = self.photo_object_key or self.photo_url
+        if key_or_url:
             try:
                 from pawguard.services.storage_service import get_storage_service
 
-                self.photo_url = get_storage_service().generate_public_url(
-                    object_key=self.photo_object_key
-                )
+                fresh = get_storage_service().sign_media_url(key_or_url)
+                if fresh:
+                    self.photo_url = fresh
             except Exception:
-                # Never fail report retrieval because storage signing is down;
-                # fall back to any legacy URL already present.
                 logger.warning(
                     "lost_report_photo_url_resolution_failed",
-                    object_key=self.photo_object_key,
+                    object_key=key_or_url,
                     exc_info=True,
                 )
         return self
@@ -198,56 +193,35 @@ class FoundReportCreate(BaseModel):
     location_address: str = Field(..., min_length=1, examples=["Jubilee Hills Sector 3"])
     latitude: float | None = Field(None, ge=-90.0, le=90.0, examples=[17.4321])
     longitude: float | None = Field(None, ge=-180.0, le=180.0, examples=[78.4055])
-    found_at: datetime = Field(..., examples=["2026-07-26T09:15:00Z"])
+    found_at: datetime = Field(..., examples=["2026-03-31T14:30:00Z"])
+    notes: str | None = Field(None, max_length=1000, examples=["Found near park entrance"])
+    contact_phone: str | None = Field(None, max_length=32, examples=["+1-555-0123"])
     photo_url: str | None = Field(None, max_length=512, examples=["https://example.com/found.jpg"])
-    # Permanent S3/Supabase object reference returned by
-    # POST /api/v1/lost-found/photo-upload-url. Stores a stable object key (NOT a
-    # presigned URL) so the backend can mint a fresh signed download URL on read.
-    # Legacy externally-hosted URLs may still be supplied via ``photo_url``.
     photo_object_key: str | None = Field(
         None,
         max_length=512,
         examples=["lost-found/00000000-0000-0000-0000-000000000000.jpg"],
     )
+    is_safe: bool = True
     photo_object_keys: list[str] | None = Field(
-        None, max_length=5, examples=[["lost-found/file1.jpg"]]
+        None,
+        max_length=5,
+        description="Up to 5 photo keys uploaded via the presigned flow.",
+        examples=[["lost-found/photos/buddy1.jpg", "lost-found/photos/buddy2.jpg"]],
     )
-    video_object_key: str | None = Field(None, max_length=512, examples=["lost-found/video1.mp4"])
+    video_object_key: str | None = Field(
+        None,
+        max_length=512,
+        description="Optional video key uploaded via the presigned flow.",
+        examples=["lost-found/videos/buddy_clip.mp4"],
+    )
 
-    @field_validator("photo_object_key")
-    @classmethod
-    def _validate_photo_object_key(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        if not value.startswith("lost-found/"):
-            raise ValueError(
-                "photo_object_key must reference a lost-found upload "
-                "(expected prefix 'lost-found/')."
-            )
-        return value
-
-    @field_validator("photo_object_keys")
-    @classmethod
-    def _validate_photo_object_keys(cls, value: list[str] | None) -> list[str] | None:
-        if value is None:
-            return value
-        for key in value:
-            if not key.startswith("lost-found/"):
-                raise ValueError(
-                    "Each photo key must reference a lost-found upload (expected prefix 'lost-found/')."
-                )
-        return value
-
-    @field_validator("video_object_key")
-    @classmethod
-    def _validate_video_object_key(cls, value: str | None) -> str | None:
-        if value is None:
-            return value
-        if not value.startswith("lost-found/"):
-            raise ValueError(
-                "video_object_key must reference a lost-found upload (expected prefix 'lost-found/')."
-            )
-        return value
+    _validate_photos = field_validator("photo_object_keys")(
+        LostReportCreate._validate_photo_object_keys
+    )
+    _validate_video = field_validator("video_object_key")(
+        LostReportCreate._validate_video_object_key
+    )
 
 
 class FoundReportResponse(BaseModel):
@@ -276,24 +250,19 @@ class FoundReportResponse(BaseModel):
 
     @model_validator(mode="after")
     def _resolve_photo_url(self) -> "FoundReportResponse":
-        """Mint a fresh signed download URL from the stored object key.
-
-        Backward compatible: legacy reports that only carry an externally
-        hosted ``photo_url`` are returned unchanged.
-        """
-        if self.photo_object_key:
+        """Mint a fresh signed download URL from the stored object key or URL."""
+        key_or_url = self.photo_object_key or self.photo_url
+        if key_or_url:
             try:
                 from pawguard.services.storage_service import get_storage_service
 
-                self.photo_url = get_storage_service().generate_public_url(
-                    object_key=self.photo_object_key
-                )
+                fresh = get_storage_service().sign_media_url(key_or_url)
+                if fresh:
+                    self.photo_url = fresh
             except Exception:
-                # Never fail report retrieval because storage signing is down;
-                # fall back to any legacy URL already present.
                 logger.warning(
                     "found_report_photo_url_resolution_failed",
-                    object_key=self.photo_object_key,
+                    object_key=key_or_url,
                     exc_info=True,
                 )
         return self
