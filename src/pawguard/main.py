@@ -117,6 +117,33 @@ async def _seed_roles() -> None:
     from pawguard.db.session import AsyncSessionLocal
 
     async with AsyncSessionLocal() as session:
+        # Guarantee missing critical columns exist in hosted database
+        try:
+            from sqlalchemy import text
+
+            await session.execute(
+                text(
+                    "ALTER TABLE rescue_requests ADD COLUMN IF NOT EXISTS reporter_user_id UUID REFERENCES users(id) ON DELETE SET NULL;"
+                )
+            )
+            await session.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_rescue_requests_reporter_user_id ON rescue_requests (reporter_user_id);"
+                )
+            )
+            await session.execute(
+                text(
+                    "ALTER TABLE rescue_dispatches ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMP WITH TIME ZONE;"
+                )
+            )
+            await session.execute(
+                text(
+                    "ALTER TABLE rescue_dispatch_agents ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMP WITH TIME ZONE;"
+                )
+            )
+        except Exception as schema_exc:
+            logger.warning("schema_idempotent_patch_skipped", error=str(schema_exc))
+
         await reconcile_roles(session, verbose=False)
         # Self-heal legacy accounts that were created with no role: without a
         # role they pass auth but fail every permission guard (e.g.
