@@ -62,6 +62,12 @@ class AdoptionStatusUpdate(BaseModel):
     status: AdoptionStatus = Field(
         ..., description="New status for the adoption application", examples=["approved"]
     )
+    rejection_reason: str | None = Field(
+        None,
+        description="Mandatory rationale when rejecting an application",
+        examples=["Unsuitable household environment"],
+    )
+    notes: str | None = Field(None, description="Optional notes on the status change")
     version_id: int | None = Field(
         None, description="Expected version_id for optimistic locking", examples=[1]
     )

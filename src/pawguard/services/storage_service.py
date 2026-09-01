@@ -424,6 +424,8 @@ class StorageService:
 
         is_mock = isinstance(self._client, MagicMock) or "Mock" in type(self._client).__name__
 
+        total_media_size = 0
+
         for key in photos:
             try:
                 response = self._client.head_object(Bucket=self._bucket, Key=key)
@@ -443,6 +445,7 @@ class StorageService:
                     )
                 if size > 52428800:
                     raise ValidationFailedError(f"Image {key} exceeds the maximum 50MB limit.")
+                total_media_size += size
             except ValidationFailedError:
                 raise
             except ClientError as e:
@@ -471,8 +474,9 @@ class StorageService:
                     raise ValidationFailedError(
                         f"Unsupported video type '{content_type}' for {key}."
                     )
-                if size > 104857600:
-                    raise ValidationFailedError(f"Video {key} exceeds the maximum 100MB limit.")
+                if size > 52428800:
+                    raise ValidationFailedError(f"Video {key} exceeds the maximum 50MB limit.")
+                total_media_size += size
             except ValidationFailedError:
                 raise
             except ClientError as e:
@@ -483,6 +487,11 @@ class StorageService:
                 logger.warning("storage_head_failed", object_key=key, error=str(e))
             except Exception as e:
                 logger.warning("storage_head_failed_unexpected", object_key=key, error=str(e))
+
+        if total_media_size > 52428800:
+            raise ValidationFailedError(
+                "Combined media evidence size exceeds the maximum permitted 50MB limit."
+            )
 
     def delete_object(self, *, object_key: str) -> None:
         import time

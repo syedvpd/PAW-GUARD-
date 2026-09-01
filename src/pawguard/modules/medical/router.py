@@ -29,6 +29,7 @@ from pawguard.modules.medical.repository import MedicalRepository
 from pawguard.modules.medical.schemas import (
     ClinicalExamCreate,
     ClinicalExamResponse,
+    DogMedicalRemindersResponse,
     MedicalClearanceCreate,
     MedicalClearanceResponse,
     MedicalTreatmentCreate,
@@ -321,6 +322,23 @@ async def get_medical_history(
         "prescriptions": [PrescriptionResponse.model_validate(p) for p in prescriptions],
     }
     return ApiResponse(data=history)
+
+
+@router.get(
+    "/dogs/{dog_id}/reminders",
+    response_model=ApiResponse[DogMedicalRemindersResponse],
+    dependencies=[Depends(require_permission("medical:read"))],
+    summary="Get automated vaccination and medication reminders for a dog",
+)
+async def get_dog_medical_reminders(
+    dog_id: uuid.UUID,
+    service: MedicalService = Depends(get_medical_service),
+) -> ApiResponse[DogMedicalRemindersResponse]:
+    reminders = await service.get_dog_reminders(dog_id)
+    return ApiResponse(
+        data=reminders,
+        message=f"{reminders.total_reminders} medical reminder(s) loaded for dog.",
+    )
 
 
 @router.get(

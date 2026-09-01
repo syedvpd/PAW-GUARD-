@@ -427,6 +427,23 @@ class AuthService:
             user_agent=ctx.user_agent,
         )
 
+    async def create_password(
+        self,
+        *,
+        user: User,
+        new_password: str,
+        ctx: RequestContext,
+    ) -> None:
+        """Allow social/OAuth-authenticated users to create their initial PawGuard password."""
+        user.hashed_password = await asyncio.to_thread(hash_password, new_password)
+        await self._audit.record(
+            event_type=AuthAuditEventType.PASSWORD_CHANGE,
+            actor_id=user.id,
+            ip_address=ctx.ip_address,
+            user_agent=ctx.user_agent,
+            metadata={"action": "password_created"},
+        )
+
     async def request_password_reset(self, *, email: str, ctx: RequestContext) -> str | None:
         """Returns the raw token to be emailed, or None if no account exists (no enumeration)."""
         user = await self._users.get_by_email(email.lower())

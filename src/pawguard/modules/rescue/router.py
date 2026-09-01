@@ -15,7 +15,7 @@ from pawguard.core.bulk import (
     BulkStatusUpdateRequest,
     BulkStatusUpdateResponse,
 )
-from pawguard.core.exceptions import parse_enum
+from pawguard.core.exceptions import ValidationFailedError, parse_enum
 from pawguard.core.pagination import PageParams, page_params
 from pawguard.core.pii import mask_email, mask_full_name, mask_phone
 from pawguard.core.rate_limiter import rate_limit
@@ -202,6 +202,14 @@ async def public_report_incident(
     created with ``actor_id=None``. Rate-limited to 5 requests/minute to deter
     spam. Staff-side workflow reporting remains on ``POST /rescue/report``.
     """
+    if (
+        not payload.media_evidence
+        and not payload.photo_object_keys
+        and not payload.video_object_key
+    ):
+        raise ValidationFailedError(
+            "Photo or video media evidence is mandatory for reporting a rescue incident."
+        )
     request_obj = await service.report_incident(
         reporter_name=payload.reporter_name,
         reporter_phone=payload.reporter_phone,
@@ -229,6 +237,25 @@ async def public_report_incident(
         data=RescueRequestResponse.model_validate(request_obj),
         message="Emergency incident reported successfully.",
     )
+
+
+@public_rescue_router.get(
+    "/track/{ticket_number}",
+    response_model=ApiResponse[PublicRescueStatusResponse],
+    dependencies=[Depends(rate_limit("public_rescue_track", 30, 60))],
+    summary="Dynamic unauthenticated tracking for emergency rescue incidents",
+)
+@router.get(
+    "/track/{ticket_number}",
+    response_model=ApiResponse[PublicRescueStatusResponse],
+    summary="Dynamic tracking for emergency rescue incidents",
+)
+async def track_rescue_incident(
+    ticket_number: str,
+    service: RescueService = Depends(get_rescue_service),
+) -> ApiResponse[PublicRescueStatusResponse]:
+    data = await service.get_public_status_by_ticket(ticket_number)
+    return ApiResponse(data=data)
 
 
 @router.post(
@@ -261,8 +288,8 @@ async def request_rescue_media_upload_url(
 
     if is_photo and payload.file_size > 52428800:
         raise ValidationFailedError("File size exceeds the maximum 50MB limit for pet photos.")
-    if is_video and payload.file_size > 104857600:
-        raise ValidationFailedError("File size exceeds the maximum 100MB limit for pet videos.")
+    if is_video and payload.file_size > 52428800:
+        raise ValidationFailedError("File size exceeds the maximum 50MB limit for pet videos.")
 
     storage = StorageService()
     object_key = storage.build_object_key(folder="rescue", filename=payload.filename)

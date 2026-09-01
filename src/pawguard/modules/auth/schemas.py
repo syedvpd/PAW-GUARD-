@@ -142,6 +142,15 @@ class ChangePasswordRequest(BaseModel):
         return self
 
 
+class CreatePasswordRequest(BaseModel):
+    new_password: str = Field(..., examples=["NewStr0ng!Pass"])
+
+    @field_validator("new_password")
+    @classmethod
+    def password_strength(cls, value: str) -> str:
+        return _validate_password_strength(value)
+
+
 class PasswordResetRequest(BaseModel):
     email: EmailStr = Field(..., examples=["jane.doe@example.com"])
 
@@ -311,6 +320,8 @@ class UserProfile(BaseModel):
     push_notifications: bool = True
     is_verified: bool
     mfa_enabled: bool
+    has_password: bool = True
+    auth_provider: str | None = None
     roles: list[str]
 
     @field_validator("roles", mode="before")

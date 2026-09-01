@@ -35,6 +35,7 @@ from pawguard.modules.auth.repository import (
 )
 from pawguard.modules.auth.schemas import (
     ChangePasswordRequest,
+    CreatePasswordRequest,
     EmailVerificationConfirmRequest,
     LoginRequest,
     LoginResponse,
@@ -478,6 +479,32 @@ async def change_password(
         ctx=_build_request_context(request),
     )
     return ApiResponse(message="Password changed. Other sessions have been logged out.")
+
+
+@router.post(
+    "/password/create",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(password_change_rate_limiter)],
+    summary="Create initial password for social/OAuth user",
+)
+@router.post(
+    "/create-password",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(password_change_rate_limiter)],
+    summary="Create initial password for social/OAuth user",
+)
+async def create_initial_password(
+    payload: CreatePasswordRequest,
+    request: Request,
+    current: CurrentUser = Depends(get_current_user),
+    auth_service: AuthService = Depends(get_auth_service),
+) -> ApiResponse[None]:
+    await auth_service.create_password(
+        user=current.user,
+        new_password=payload.new_password,
+        ctx=_build_request_context(request),
+    )
+    return ApiResponse(message="Password created successfully.")
 
 
 @router.post(

@@ -256,6 +256,9 @@ async def adoption_dashboard(session: AsyncSession, redis: Any | None = None) ->
             (SELECT COUNT(*) FROM adoption_applications WHERE status = 'screening') AS screening,
             (SELECT COUNT(*) FROM adoption_applications WHERE status = 'interview') AS interview,
             (SELECT COUNT(*) FROM adoption_applications WHERE status = 'home_check') AS home_check,
+            (SELECT COUNT(*) FROM adoption_applications WHERE status = 'rejected') AS rejected,
+            (SELECT COUNT(*) FROM adoption_applications WHERE home_inspection_scheduled_at IS NOT NULL AND status = 'home_check') AS scheduled_home_visits,
+            (SELECT COUNT(*) FROM dog_profiles WHERE is_adoptable = true AND deleted_at IS NULL) AS adoptable_dogs,
             (SELECT COUNT(*) FROM adoption_follow_ups WHERE status = 'overdue') AS overdue_follow_ups
     """)
     row = (await session.execute(stmt)).one()
@@ -263,11 +266,16 @@ async def adoption_dashboard(session: AsyncSession, redis: Any | None = None) ->
     result = {
         "total_applications": row.total,
         "pending": row.pending,
+        "pending_applications": row.pending,
         "approved": row.approved,
         "completed": row.completed,
+        "completed_adoptions": row.completed,
         "screening": row.screening,
         "interview": row.interview,
         "home_check": row.home_check,
+        "rejected": row.rejected,
+        "scheduled_home_visits": row.scheduled_home_visits,
+        "adoptable_dogs": row.adoptable_dogs,
         "overdue_follow_ups": row.overdue_follow_ups,
     }
     await _set_cache(redis, cache_key, result)

@@ -79,7 +79,7 @@ class UserRepository:
         return list((await self._session.execute(stmt)).scalars().all())
 
     async def list_staff_user_ids(self) -> list[uuid.UUID]:
-        """Active users holding any role other than the public ``user`` role.
+        """Active users holding operational staff roles (excluding general_public and user).
 
         Used by scheduled alert jobs (inventory / expiry / vaccination) to
         fan operational alerts out to staff who can act on them.
@@ -93,7 +93,7 @@ class UserRepository:
             .where(
                 User.is_active.is_(True),
                 User.deleted_at.is_(None),
-                Role.name != "user",
+                Role.name.not_in(["user", "general_public", "donor"]),
             )
             .distinct()
         )

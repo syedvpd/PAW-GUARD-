@@ -24,6 +24,8 @@ class FileFolder(StrEnum):
     AVATARS = "avatars"
     LOST_FOUND = "lost_found"
     ADOPTIONS = "adoptions"
+    COMPANION_PETS = "companion_pets"
+    PETS = "pets"
     GENERAL = "general"
     BLOG = "blog"
     CMS = "cms"

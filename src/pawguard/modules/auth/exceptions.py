@@ -20,6 +20,11 @@ class AccountInactiveError(AppException):
     code = "ACCOUNT_INACTIVE"
 
 
+class EmailNotVerifiedError(AppException):
+    status_code = status.HTTP_403_FORBIDDEN
+    code = "EMAIL_NOT_VERIFIED"
+
+
 class EmailAlreadyRegisteredError(AppException):
     status_code = status.HTTP_409_CONFLICT
     code = "EMAIL_ALREADY_REGISTERED"

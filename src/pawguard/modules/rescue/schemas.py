@@ -187,19 +187,22 @@ class RescueRequestCreate(BaseModel):
 
 
 class PublicRescueStatusResponse(BaseModel):
-    """Public case-status lookup response (PRR 3.2 "my submitted case" view).
-
-    Deliberately minimal: no reporter identity, no full address, no dispatch
-    details - just what the reporter already knows plus the pipeline status so
-    they can see where their case stands.
-    """
+    """Public case-status lookup response (PRR 3.2 "my submitted case" view)."""
 
     ticket_number: str
     status: RescueStatus
     severity: RescueSeverity
     animal_count: int
+    location_address: str | None = None
+    is_urgent: bool = False
+    rejection_rationale: str | None = None
+    estimated_arrival_minutes: int | None = None
+    eta_display: str | None = None
+    assigned_vehicle_name: str | None = None
     created_at: datetime
     updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class RescueMediaUploadUrlRequest(BaseModel):

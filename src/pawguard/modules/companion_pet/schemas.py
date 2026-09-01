@@ -53,6 +53,8 @@ class CompanionPetResponse(BaseModel):
     microchip_id: str | None
     emergency_notes: str | None
     is_scan_enabled: bool
+    photo_url: str | None = None
+    photo_urls: list[str] = Field(default_factory=list)
     original_dog_id: uuid.UUID | None = None
     adoption_application_id: uuid.UUID | None = None
     created_at: datetime

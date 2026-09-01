@@ -1,7 +1,7 @@
 """Pydantic schemas for the Medical module."""
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -198,5 +198,31 @@ class MedicalClearanceResponse(BaseModel):
     expires_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DogMedicalReminderItem(BaseModel):
+    id: str
+    kind: str  # vaccination, medication, preventative_care
+    title: str
+    due_date: date | None = None
+    status: str  # upcoming, due_today, overdue, active
+    details: str | None = None
+    days_until_due: int | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DogMedicalRemindersResponse(BaseModel):
+    dog_id: uuid.UUID
+    dog_name: str
+    total_reminders: int
+    overdue_count: int
+    upcoming_count: int
+    reminders: list[DogMedicalReminderItem] = []
+    vaccinations: list[DogMedicalReminderItem] = []
+    medications: list[DogMedicalReminderItem] = []
+    preventative_care: list[DogMedicalReminderItem] = []
 
     model_config = ConfigDict(from_attributes=True)

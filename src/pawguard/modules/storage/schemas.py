@@ -36,10 +36,13 @@ class StoredFileCreate(BaseModel):
                     "dog": FileFolder.DOGS,
                     "shelter": FileFolder.SHELTERS,
                     "doc": FileFolder.DOCUMENTS,
-                    "docs": FileFolder.DOCUMENTS,
                     "lost": FileFolder.LOST_FOUND,
                     "found": FileFolder.LOST_FOUND,
                     "adoption": FileFolder.ADOPTIONS,
+                    "companion_pet": FileFolder.COMPANION_PETS,
+                    "companion_pets": FileFolder.COMPANION_PETS,
+                    "pet": FileFolder.PETS,
+                    "pets": FileFolder.PETS,
                 }
                 return aliases.get(val_lower, FileFolder.GENERAL)
         return value

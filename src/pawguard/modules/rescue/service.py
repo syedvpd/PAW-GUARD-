@@ -1784,3 +1784,47 @@ class RescueService:
             data=data,
             meta=build_pagination_meta(total=total, params=page),
         )
+
+    async def get_public_status_by_ticket(self, ticket_number: str) -> PublicRescueStatusResponse:
+        """Dynamic public tracking for a rescue report without authentication."""
+        clean_ticket = ticket_number.strip()
+        request = await self._repo.get_request_by_ticket(clean_ticket)
+        if request is None:
+            with contextlib.suppress(ValueError, TypeError):
+                val_uuid = uuid.UUID(clean_ticket)
+                request = await self._repo.get_request_by_id(val_uuid)
+        if request is None:
+            raise NotFoundError(f"Rescue report '{clean_ticket}' not found.")
+
+        # ETA is ONLY computed if status is DISPATCHED or LOCATED (PRR 3.2)
+        eta_minutes: int | None = None
+        eta_display: str | None = None
+        if request.status in (RescueStatus.DISPATCHED, RescueStatus.LOCATED):
+            eta_minutes = 15
+            eta_display = "15 minutes (Unit en route)"
+
+        vehicle_name: str | None = None
+        if request.dispatch and request.dispatch.assigned_vehicle_id:
+            try:
+                fleet_svc = self._fleet_service()
+                veh = await fleet_svc.get_vehicle(request.dispatch.assigned_vehicle_id)
+                vehicle_name = veh.call_sign or veh.registration_number
+            except Exception:
+                vehicle_name = "Rescue Unit"
+
+        return PublicRescueStatusResponse(
+            ticket_number=request.ticket_number,
+            status=request.status,
+            rejection_rationale=(
+                request.rejection_rationale if request.status == RescueStatus.REJECTED else None
+            ),
+            location_address=request.location_address,
+            animal_count=request.animal_count,
+            severity=request.severity,
+            is_urgent=request.is_urgent,
+            estimated_arrival_minutes=eta_minutes,
+            eta_display=eta_display,
+            assigned_vehicle_name=vehicle_name,
+            created_at=request.created_at,
+            updated_at=request.updated_at,
+        )

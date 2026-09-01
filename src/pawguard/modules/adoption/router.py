@@ -284,6 +284,8 @@ async def update_application_status(
     app = await service.update_application_status(
         app_id,
         payload.status,
+        rejection_reason=payload.rejection_reason,
+        notes=payload.notes,
         actor_id=current_user.id,
         ip_address=request.client.host if request.client else None,
     )

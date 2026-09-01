@@ -391,6 +391,8 @@ class AdoptionService:
         app_id: uuid.UUID,
         status: AdoptionStatus,
         *,
+        rejection_reason: str | None = None,
+        notes: str | None = None,
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> AdoptionApplication:
@@ -400,6 +402,21 @@ class AdoptionService:
 
         old_status = app.status
         self._check_transition(old_status, status)
+
+        if status == AdoptionStatus.REJECTED:
+            reason = rejection_reason or notes
+            if reason and reason.strip():
+                app.vetting_officer_notes = (
+                    f"{app.vetting_officer_notes}\nRejection Reason: {reason.strip()}".strip()
+                    if app.vetting_officer_notes
+                    else f"Rejection Reason: {reason.strip()}"
+                )
+        elif notes and notes.strip():
+            app.vetting_officer_notes = (
+                f"{app.vetting_officer_notes}\n{notes.strip()}".strip()
+                if app.vetting_officer_notes
+                else notes.strip()
+            )
 
         if old_status == AdoptionStatus.INTERVIEW and status == AdoptionStatus.HOME_CHECK:
             if app.interview_completed_at is None:

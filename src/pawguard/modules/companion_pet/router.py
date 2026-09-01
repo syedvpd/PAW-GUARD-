@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import APIRouter, Body, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from pawguard.core.exceptions import ValidationFailedError
 from pawguard.core.pagination import PageParams, page_params
 from pawguard.core.rate_limiter import rate_limit, resolve_client_ip
 from pawguard.core.responses import ApiResponse, PaginatedResponse
@@ -43,6 +44,7 @@ from pawguard.modules.companion_pet.service import CompanionPetService
 from pawguard.modules.storage.repository import StorageRepository
 from pawguard.modules.storage.schemas import (
     DownloadUrlResponse,
+    StoredFileCreate,
     StoredFileResponse,
     UploadUrlResponse,
 )
@@ -176,7 +178,52 @@ async def get_pet(
     service: CompanionPetService = Depends(get_companion_pet_service),
 ) -> ApiResponse[CompanionPetResponse]:
     pet = await service.get_pet(pet_id, current_user)
-    return ApiResponse(data=CompanionPetResponse.model_validate(pet))
+    resp = await service.enrich_pet_response(pet)
+    return ApiResponse(data=resp)
+
+
+@router.post(
+    "/{pet_id}/photo-upload-url",
+    response_model=ApiResponse[UploadUrlResponse],
+    dependencies=[Depends(require_permission("companion_pet:update"))],
+    summary="Generate presigned upload URL for a companion pet photo",
+)
+async def request_pet_photo_upload_url(
+    pet_id: uuid.UUID,
+    payload: StoredFileCreate,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: CompanionPetService = Depends(get_companion_pet_service),
+) -> ApiResponse[UploadUrlResponse]:
+    pet = await service.get_pet(pet_id, current_user)
+    if service._storage is None:
+        raise ValidationFailedError("Storage service is not configured.")
+    payload.entity_type = "companion_pet"
+    payload.entity_id = pet.id
+    payload.folder = "companion_pets"  # type: ignore[assignment]
+    result = await service._storage.request_upload_url(payload, user_id=current_user.id)
+    return ApiResponse(data=result, message="Upload URL generated successfully.")
+
+
+@router.post(
+    "/{pet_id}/photo/confirm",
+    response_model=ApiResponse[StoredFileResponse],
+    dependencies=[Depends(require_permission("companion_pet:update"))],
+    summary="Confirm companion pet photo upload into storage",
+)
+async def confirm_pet_photo_upload(
+    pet_id: uuid.UUID,
+    file_id: uuid.UUID = Query(..., description="StoredFile ID to confirm"),
+    current_user: CurrentUser = Depends(get_current_user),
+    service: CompanionPetService = Depends(get_companion_pet_service),
+) -> ApiResponse[StoredFileResponse]:
+    await service.get_pet(pet_id, current_user)
+    if service._storage is None:
+        raise ValidationFailedError("Storage service is not configured.")
+    stored = await service._storage.confirm_upload(file_id)
+    return ApiResponse(
+        data=StoredFileResponse.model_validate(stored),
+        message="Pet photo upload confirmed.",
+    )
 
 
 @router.patch(

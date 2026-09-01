@@ -33,6 +33,8 @@ from pawguard.modules.medical.repository import MedicalRepository
 from pawguard.modules.medical.schemas import (
     ClinicalExamCreate,
     ClinicalExamResponse,
+    DogMedicalReminderItem,
+    DogMedicalRemindersResponse,
     MedicalClearanceCreate,
     MedicalTreatmentCreate,
     MedicalTreatmentResponse,
@@ -686,3 +688,96 @@ class MedicalService:
                 actor_id=actor_id,
                 ip_address=ip_address,
             )
+
+    async def get_dog_reminders(self, dog_id: uuid.UUID) -> DogMedicalRemindersResponse:
+        """Aggregate automated vaccination, medication, and preventative care reminders for a dog."""
+        from datetime import date
+
+        dog = await self._dog_repo.get_by_id(dog_id)
+        dog_name = dog.name if dog else "Dog"
+
+        today = date.today()
+        vaccinations: list[DogMedicalReminderItem] = []
+        medications: list[DogMedicalReminderItem] = []
+        preventative_care: list[DogMedicalReminderItem] = []
+
+        # 1. Fetch vaccination records
+        vax_records = await self._repo.get_vaccinations_by_dog(dog_id)
+        for v in vax_records:
+            due_raw = getattr(v, "next_due_at", getattr(v, "next_due_date", None))
+            due = due_raw.date() if hasattr(due_raw, "date") else due_raw
+            admin_raw = getattr(v, "administered_at", getattr(v, "administered_date", None))
+            admin_date = admin_raw.date() if hasattr(admin_raw, "date") else admin_raw
+            lot = getattr(v, "lot_number", getattr(v, "batch_number", "N/A"))
+            if due is not None:
+                days = (due - today).days
+                if days < 0:
+                    status = "overdue"
+                elif days == 0:
+                    status = "due_today"
+                else:
+                    status = "upcoming"
+                vaccinations.append(
+                    DogMedicalReminderItem(
+                        id=f"vax-{v.id}",
+                        kind="vaccination",
+                        title=f"{v.vaccine_name} Booster",
+                        due_date=due,
+                        status=status,
+                        details=(f"Last administered on {admin_date} (Lot/Batch: {lot or 'N/A'})"),
+                        days_until_due=days,
+                    )
+                )
+
+        # 2. Fetch active prescriptions
+        prescriptions = await self._repo.get_prescriptions_by_dog(dog_id)
+        for p in prescriptions:
+            if p.is_active:
+                end_raw = getattr(p, "end_at", getattr(p, "end_date", None))
+                end_date = end_raw.date() if hasattr(end_raw, "date") else end_raw
+                medications.append(
+                    DogMedicalReminderItem(
+                        id=f"rx-{p.id}",
+                        kind="medication",
+                        title=f"{p.drug_name} {p.dosage}",
+                        due_date=end_date,
+                        status="active",
+                        details=f"Route: {getattr(p, 'route', 'N/A')}, Frequency: {getattr(p, 'frequency', 'Daily')}",
+                        days_until_due=(end_date - today).days if end_date else None,
+                    )
+                )
+
+        # 3. Fetch treatments for preventative care (deworming, flea/tick)
+        treatments = await self._repo.get_treatments_by_dog(dog_id)
+        for t in treatments:
+            t_type = (t.treatment_type or "").lower()
+            t_raw = getattr(t, "treatment_date", None)
+            t_date = t_raw.date() if hasattr(t_raw, "date") else t_raw
+            if any(term in t_type for term in ("deworm", "flea", "tick", "prevent", "parasite")):
+                preventative_care.append(
+                    DogMedicalReminderItem(
+                        id=f"prev-{t.id}",
+                        kind="preventative_care",
+                        title=t.treatment_type.title(),
+                        due_date=t_date,
+                        status="active",
+                        details=t.description,
+                        days_until_due=None,
+                    )
+                )
+
+        all_reminders = vaccinations + medications + preventative_care
+        overdue_count = sum(1 for r in all_reminders if r.status == "overdue")
+        upcoming_count = sum(1 for r in all_reminders if r.status in ("upcoming", "due_today"))
+
+        return DogMedicalRemindersResponse(
+            dog_id=dog_id,
+            dog_name=dog_name,
+            total_reminders=len(all_reminders),
+            overdue_count=overdue_count,
+            upcoming_count=upcoming_count,
+            reminders=all_reminders,
+            vaccinations=vaccinations,
+            medications=medications,
+            preventative_care=preventative_care,
+        )

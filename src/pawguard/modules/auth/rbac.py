@@ -27,7 +27,12 @@ ADMIN_ROLES = {
 
 def is_admin_role(claims) -> bool:
     """True when the token carries a role with unrestricted admin access."""
-    return any(r in ADMIN_ROLES for r in claims.roles)
+    if claims is None:
+        return False
+    roles = getattr(claims, "roles", None)
+    if roles is None and isinstance(claims, dict):
+        roles = claims.get("roles", [])
+    return any(r in ADMIN_ROLES for r in (roles or []))
 
 
 def has_permission(user: User, permission_code: str) -> bool:

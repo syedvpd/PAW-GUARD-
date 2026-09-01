@@ -168,13 +168,22 @@ class CompanionPetService:
         )
         return pet
 
+    async def enrich_pet_response(self, pet: CompanionPet) -> CompanionPetResponse:
+        photo_url = await self.get_pet_photo_url(pet.id)
+        resp = CompanionPetResponse.model_validate(pet)
+        if photo_url:
+            resp.photo_url = photo_url
+            resp.photo_urls = [photo_url]
+        return resp
+
     async def list_pets(
         self, page: PageParams, sort: SortParams, current_user: CurrentUser
     ) -> PaginatedResponse[CompanionPetResponse]:
         owner_id = None if self._is_admin(current_user) else current_user.id
         rows, total = await self._repo.list_pets(page, sort, owner_id=owner_id)
+        data = [await self.enrich_pet_response(row) for row in rows]
         return PaginatedResponse(
-            data=[CompanionPetResponse.model_validate(row) for row in rows],
+            data=data,
             meta=build_pagination_meta(total=total, params=page),
         )
 
