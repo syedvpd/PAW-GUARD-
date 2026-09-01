@@ -197,5 +197,7 @@ class ShiftAttendance(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
         DateTime(timezone=True), nullable=True
     )
 
-    volunteer: Mapped["VolunteerProfile"] = relationship(back_populates="attendances")
-    shift: Mapped["VolunteerShift"] = relationship(back_populates="attendances")
+    volunteer: Mapped["VolunteerProfile"] = relationship(
+        back_populates="attendances", lazy="joined"
+    )
+    shift: Mapped["VolunteerShift"] = relationship(back_populates="attendances", lazy="joined")

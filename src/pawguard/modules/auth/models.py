@@ -263,7 +263,9 @@ class User(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     push_notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     fcm_token: Mapped[str | None] = mapped_column(String(512), nullable=True, index=True)
 
-    roles: Mapped[list["Role"]] = relationship(secondary="user_roles", back_populates="users")
+    roles: Mapped[list["Role"]] = relationship(
+        secondary="user_roles", back_populates="users", lazy="selectin"
+    )
     # sessions and oauth_accounts are declared at module scope after the child
     # classes below so foreign_keys can reference the actual FK columns
     # (created_by/updated_by also FK to users, making the reverse links

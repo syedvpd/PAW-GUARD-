@@ -112,11 +112,12 @@ async def get_my_attendance(
     service: VolunteerService = Depends(get_volunteer_service),
 ) -> ApiResponse[list[ShiftAttendanceWithShiftResponse]]:
     """Get the current user's shift registration and attendance history."""
-    profile = await service.get_profile_by_user(current_user.id)
-    if profile is None:
-        from pawguard.core.exceptions import NotFoundError
+    from pawguard.core.exceptions import NotFoundError
 
-        raise NotFoundError("Volunteer profile not found. Please apply to volunteer first.")
+    try:
+        profile = await service.get_profile_by_user(current_user.id)
+    except NotFoundError:
+        return ApiResponse(data=[], message="No volunteer profile found.")
     records = await service.list_all_attendance_for_volunteer(profile.id)
     return ApiResponse(data=[ShiftAttendanceWithShiftResponse.model_validate(r) for r in records])
 
@@ -246,7 +247,7 @@ async def soft_delete_profile(
 @router.get(
     "/shifts",
     response_model=PaginatedResponse[VolunteerShiftResponse],
-    dependencies=[Depends(require_permission("public:read"))],
+    dependencies=[Depends(get_current_user)],
 )
 async def list_shifts(
     params: PageParams = Depends(page_params),
