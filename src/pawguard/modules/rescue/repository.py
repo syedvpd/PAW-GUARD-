@@ -47,6 +47,7 @@ class RescueRepository:
                 selectinload(RescueRequest.dispatch).selectinload(RescueDispatch.driver),
                 selectinload(RescueRequest.reports),
                 selectinload(RescueRequest.dog_profile),
+                selectinload(RescueRequest.media),
             )
             .where(RescueRequest.deleted_at.is_(None))
         )

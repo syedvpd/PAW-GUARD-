@@ -331,6 +331,26 @@ class RescueDispatchResponse(BaseModel):
     status: RescueStatus | None = None
     ticket_number: str | None = None
 
+    # Rescue case details & evidence for assigned Rescue Agents and Admins
+    location_address: str | None = None
+    location_landmark: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    reporter_name: str | None = None
+    reporter_phone: str | None = None
+    reporter_notes: str | None = None
+    physical_condition: str | None = None
+    behavioral_indicators: str | None = None
+    severity: str | None = None
+    is_urgent: bool | None = None
+    animal_count: int | None = None
+    media_evidence: list[str] | None = None
+    media_urls: list[str] = Field(default_factory=list)
+    photo_urls: list[str] = Field(default_factory=list)
+    photo_object_keys: list[str] = Field(default_factory=list)
+    video_url: str | None = None
+    video_object_key: str | None = None
+
     @model_validator(mode="before")
     @classmethod
     def _populate_driver_details(cls, data: Any) -> Any:
@@ -339,6 +359,41 @@ class RescueDispatchResponse(BaseModel):
         obj_dict = getattr(data, "__dict__", {})
         driver_obj = obj_dict.get("driver", None)
         agents_val = obj_dict.get("agents", getattr(data, "agents", []))
+        req = obj_dict.get("rescue_request", getattr(data, "rescue_request", None))
+
+        keys = getattr(req, "media_evidence", None) or [] if req else []
+        photo_keys = []
+        video_key = None
+        video_exts = (".mp4", ".webm", ".mov", ".quicktime")
+        for k in keys:
+            if not k:
+                continue
+            k_lower = k.lower()
+            if any(k_lower.endswith(ext) for ext in video_exts) or "video" in k_lower:
+                if video_key is None:
+                    video_key = k
+            else:
+                photo_keys.append(k)
+
+        urls = []
+        photo_urls = []
+        video_url = None
+        if keys:
+            from pawguard.services.storage_service import get_storage_service
+
+            storage = get_storage_service()
+            try:
+                urls = [storage.generate_presigned_download_url(object_key=k) for k in keys if k]
+                photo_urls = [
+                    storage.generate_presigned_download_url(object_key=k) for k in photo_keys if k
+                ]
+                if video_key:
+                    video_url = storage.generate_presigned_download_url(object_key=video_key)
+            except Exception:
+                urls = []
+                photo_urls = []
+                video_url = None
+
         return {
             "id": getattr(data, "id", None),
             "rescue_request_id": getattr(data, "rescue_request_id", None),
@@ -361,8 +416,32 @@ class RescueDispatchResponse(BaseModel):
             "escalation_status": getattr(data, "escalation_status", None)
             or RescueEscalationStatus.NONE,
             "notes": getattr(data, "notes", None),
-            "status": getattr(data, "status", None),
-            "ticket_number": getattr(data, "ticket_number", None),
+            "status": getattr(req, "status", getattr(data, "status", None))
+            if req
+            else getattr(data, "status", None),
+            "ticket_number": getattr(req, "ticket_number", getattr(data, "ticket_number", None))
+            if req
+            else getattr(data, "ticket_number", None),
+            "location_address": getattr(req, "location_address", None) if req else None,
+            "location_landmark": getattr(req, "location_landmark", None) if req else None,
+            "latitude": float(req.latitude) if (req and req.latitude is not None) else None,
+            "longitude": float(req.longitude) if (req and req.longitude is not None) else None,
+            "reporter_name": getattr(req, "reporter_name", None) if req else None,
+            "reporter_phone": getattr(req, "reporter_phone", None) if req else None,
+            "reporter_notes": getattr(req, "reporter_notes", None) if req else None,
+            "physical_condition": str(req.physical_condition)
+            if (req and req.physical_condition)
+            else None,
+            "behavioral_indicators": getattr(req, "behavioral_indicators", None) if req else None,
+            "severity": str(req.severity) if (req and req.severity) else None,
+            "is_urgent": getattr(req, "is_urgent", None) if req else None,
+            "animal_count": getattr(req, "animal_count", None) if req else None,
+            "media_evidence": keys,
+            "media_urls": urls,
+            "photo_urls": photo_urls,
+            "photo_object_keys": photo_keys,
+            "video_url": video_url,
+            "video_object_key": video_key,
         }
 
     _normalise_failure = field_validator("failure_reason", mode="before")(
@@ -373,8 +452,8 @@ class RescueDispatchResponse(BaseModel):
 
 
 class AgentLocationUpdate(BaseModel):
-    latitude: float = Field(..., ge=-90.0, le=90.0, examples=[17.4482])
-    longitude: float = Field(..., ge=-180.0, le=180.0, examples=[78.3741])
+    latitude: float = Field(..., ge=-90.0, le=90.0)
+    longitude: float = Field(..., ge=-180.0, le=180.0)
 
 
 class NearbyAgentResponse(BaseModel):
@@ -450,6 +529,10 @@ class RescueRequestResponse(BaseModel):
     is_urgent: bool
     media_evidence: list[str] | None
     media_urls: list[str] = Field(default_factory=list)
+    photo_urls: list[str] = Field(default_factory=list)
+    photo_object_keys: list[str] = Field(default_factory=list)
+    video_url: str | None = None
+    video_object_key: str | None = None
     environmental_factors: str | None
     reporter_notes: str | None
     status: RescueStatus
@@ -467,17 +550,19 @@ class RescueRequestResponse(BaseModel):
     def _populate_media_urls(cls, data: Any) -> Any:
         if hasattr(data, "media_evidence") and not isinstance(data, dict):
             keys = getattr(data, "media_evidence", None) or []
-            urls = []
-            if keys:
-                from pawguard.services.storage_service import get_storage_service
+            photo_keys = []
+            video_key = None
+            video_exts = (".mp4", ".webm", ".mov", ".quicktime")
 
-                storage = get_storage_service()
-                try:
-                    urls = [
-                        storage.generate_presigned_download_url(object_key=k) for k in keys if k
-                    ]
-                except Exception:
-                    urls = []
+            for k in keys:
+                if not k:
+                    continue
+                k_lower = k.lower()
+                if any(k_lower.endswith(ext) for ext in video_exts) or "video" in k_lower:
+                    if video_key is None:
+                        video_key = k
+                else:
+                    photo_keys.append(k)
 
             # Safe relationship inspection to prevent MissingGreenlet errors in async SQLAlchemy
             obj_dict = getattr(data, "__dict__", {})
@@ -486,6 +571,44 @@ class RescueRequestResponse(BaseModel):
             media_val = obj_dict.get("media", [])
             dog_prof = obj_dict.get("dog_profile", None)
             dog_profile_id = getattr(dog_prof, "id", None) if dog_prof else None
+
+            # Also inspect media rows if media_evidence was empty
+            if not keys and media_val:
+                for m in media_val:
+                    m_type = getattr(m, "media_type", "")
+                    m_key = getattr(m, "object_key", "")
+                    if m_key:
+                        if m_type == "video" or any(
+                            m_key.lower().endswith(ext) for ext in video_exts
+                        ):
+                            if video_key is None:
+                                video_key = m_key
+                        else:
+                            photo_keys.append(m_key)
+                keys = photo_keys + ([video_key] if video_key else [])
+
+            urls = []
+            photo_urls = []
+            video_url = None
+            if keys:
+                from pawguard.services.storage_service import get_storage_service
+
+                storage = get_storage_service()
+                try:
+                    urls = [
+                        storage.generate_presigned_download_url(object_key=k) for k in keys if k
+                    ]
+                    photo_urls = [
+                        storage.generate_presigned_download_url(object_key=k)
+                        for k in photo_keys
+                        if k
+                    ]
+                    if video_key:
+                        video_url = storage.generate_presigned_download_url(object_key=video_key)
+                except Exception:
+                    urls = []
+                    photo_urls = []
+                    video_url = None
 
             return {
                 "id": data.id,
@@ -506,6 +629,10 @@ class RescueRequestResponse(BaseModel):
                 "is_urgent": data.is_urgent,
                 "media_evidence": keys,
                 "media_urls": urls,
+                "photo_urls": photo_urls,
+                "photo_object_keys": photo_keys,
+                "video_url": video_url,
+                "video_object_key": video_key,
                 "environmental_factors": data.environmental_factors,
                 "reporter_notes": data.reporter_notes,
                 "status": data.status,
