@@ -163,6 +163,21 @@ class CompanionPetRepository:
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    async def get_tag_by_prefix(self, token_prefix: str) -> SafetyTag | None:
+        stmt = (
+            select(SafetyTag)
+            .options(
+                selectinload(SafetyTag.dog),
+                selectinload(SafetyTag.pet).selectinload(CompanionPet.owner),
+            )
+            .where(
+                SafetyTag.token_prefix == token_prefix,
+                SafetyTag.is_active.is_(True),
+                SafetyTag.deleted_at.is_(None),
+            )
+        )
+        return (await self._session.execute(stmt)).scalars().first()
+
     async def create_tag(self, tag: SafetyTag) -> SafetyTag:
         self._session.add(tag)
         await self._session.flush()

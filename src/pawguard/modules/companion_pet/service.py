@@ -553,17 +553,24 @@ class CompanionPetService:
     async def scan_safety_tag(
         self, raw_token: str, ip_address: str | None = None
     ) -> tuple[SafetyTag | None, CompanionPet | None, dict[str, Any]]:
-        tag = await self._repo.get_tag_by_hash(_hash_tag_token(raw_token))
+        candidate = raw_token.strip()
+        if "token=" in candidate:
+            candidate = candidate.split("token=")[-1].split("&")[0].strip()
+        elif "/" in candidate:
+            candidate = candidate.rstrip("/").split("/")[-1].strip()
+
+        tag = await self._repo.get_tag_by_hash(_hash_tag_token(candidate))
+        if tag is None and len(candidate) <= 12 and "-" not in candidate:
+            # Check if candidate matches a registered token_prefix (e.g. 8-char prefix from QR)
+            tag = await self._repo.get_tag_by_prefix(candidate)
+
         pet: CompanionPet | None = None
         dog: DogProfile | None = None
 
         if tag is None:
-            # Check if raw_token is a pet_id / dog_id (UUID or URL containing UUID)
+            # Check if candidate is a pet_id / dog_id (UUID)
             pet_id_val: uuid.UUID | None = None
             try:
-                candidate = raw_token.strip()
-                if "/" in candidate:
-                    candidate = candidate.rstrip("/").split("/")[-1]
                 pet_id_val = uuid.UUID(candidate)
             except Exception:
                 pet_id_val = None

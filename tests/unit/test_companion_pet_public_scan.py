@@ -190,6 +190,7 @@ async def test_invalid_qr_returns_not_found():
     """Verify that an invalid token or nonexistent pet_id raises NotFoundError."""
     repo = AsyncMock(spec=CompanionPetRepository)
     repo.get_tag_by_hash.return_value = None
+    repo.get_tag_by_prefix.return_value = None
     repo.get_active_tag_for_pet.return_value = None
     repo.get_active_tag_for_dog.return_value = None
     repo.get_pet.return_value = None
@@ -259,3 +260,97 @@ async def test_scan_safety_tag_with_tag_id_and_audit_service():
     kwargs = audit_mock.record.call_args.kwargs
     assert kwargs["event_type"].value == "safety_tag_scanned"
     assert kwargs["ip_address"] == "127.0.0.1"
+
+
+@pytest.mark.asyncio
+async def test_scan_safety_tag_with_8_char_token_prefix():
+    """Verify scanning with 8-character token_prefix (e.g. wrFwg2xw) resolves correctly."""
+    owner_id = uuid.uuid4()
+    pet_id = uuid.uuid4()
+    tag_id = uuid.uuid4()
+
+    owner = User(id=owner_id, full_name="Julie Owner", phone="+91 98765 43210")
+    pet = CompanionPet(
+        id=pet_id,
+        owner_id=owner_id,
+        name="Julie",
+        species="dog",
+        breed="Golden Retriever",
+        is_scan_enabled=True,
+    )
+    pet.owner = owner
+
+    tag = SafetyTag(
+        id=tag_id,
+        pet_id=pet_id,
+        token_hash=_hash_tag_token("raw_secret_token_43_characters_long_value"),
+        token_prefix="wrFwg2xw",
+        is_active=True,
+        scan_count=2,
+    )
+    tag.pet = pet
+
+    repo = AsyncMock(spec=CompanionPetRepository)
+    repo.get_tag_by_hash.return_value = None  # Prefix does not match full token hash
+    repo.get_tag_by_prefix.return_value = tag
+    repo.get_pet.return_value = pet
+    repo.get_active_lost_report_for_pet.return_value = None
+
+    session = AsyncMock()
+    service = CompanionPetService(repo, session)
+
+    scanned_tag, scanned_pet, lost_info = await service.scan_safety_tag("wrFwg2xw")
+
+    assert scanned_tag.id == tag_id
+    assert scanned_tag.token_prefix == "wrFwg2xw"
+    assert scanned_pet.name == "Julie"
+    assert lost_info["name"] == "Julie"
+    assert scanned_tag.scan_count == 3
+
+
+@pytest.mark.asyncio
+async def test_scan_safety_tag_with_public_web_scan_url():
+    """Verify scanning full URL https://pawguard-public-web.vercel.app/scan?token=wrFwg2xw parses prefix."""
+    owner_id = uuid.uuid4()
+    pet_id = uuid.uuid4()
+    tag_id = uuid.uuid4()
+
+    owner = User(id=owner_id, full_name="Julie Owner", phone="+91 98765 43210")
+    pet = CompanionPet(
+        id=pet_id,
+        owner_id=owner_id,
+        name="Julie",
+        species="dog",
+        breed="Golden Retriever",
+        is_scan_enabled=True,
+    )
+    pet.owner = owner
+
+    tag = SafetyTag(
+        id=tag_id,
+        pet_id=pet_id,
+        token_hash=_hash_tag_token("raw_secret_token_43_characters_long_value"),
+        token_prefix="wrFwg2xw",
+        is_active=True,
+        scan_count=2,
+    )
+    tag.pet = pet
+
+    repo = AsyncMock(spec=CompanionPetRepository)
+    repo.get_tag_by_hash.return_value = None
+    repo.get_tag_by_prefix.return_value = tag
+    repo.get_pet.return_value = pet
+    repo.get_active_lost_report_for_pet.return_value = None
+
+    session = AsyncMock()
+    service = CompanionPetService(repo, session)
+
+    scanned_tag, scanned_pet, lost_info = await service.scan_safety_tag(
+        "https://pawguard-public-web.vercel.app/scan?token=wrFwg2xw"
+    )
+
+    assert scanned_tag.id == tag_id
+    assert scanned_tag.token_prefix == "wrFwg2xw"
+    assert scanned_pet.name == "Julie"
+    assert lost_info["name"] == "Julie"
+    assert scanned_tag.scan_count == 3
