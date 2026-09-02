@@ -157,6 +157,9 @@ def upgrade() -> None:
             """
         )
 
+        # Enable Row Level Security (RLS) on report_media for Supabase PostgREST lockdown
+        op.execute("ALTER TABLE report_media ENABLE ROW LEVEL SECURITY;")
+
 
 def downgrade() -> None:
     bind = op.get_bind()
