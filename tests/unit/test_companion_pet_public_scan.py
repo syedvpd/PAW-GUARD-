@@ -202,3 +202,60 @@ async def test_invalid_qr_returns_not_found():
 
     with pytest.raises(NotFoundError):
         await service.public_scan_companion_pet(uuid.uuid4())
+
+
+@pytest.mark.asyncio
+async def test_scan_safety_tag_with_tag_id_and_audit_service():
+    """Verify scanning by tag_id works and correctly invokes AuditService without TypeError."""
+    owner_id = uuid.uuid4()
+    pet_id = uuid.uuid4()
+    tag_id = uuid.uuid4()
+
+    owner = User(id=owner_id, full_name="Julie Owner", phone="+91 98765 43210")
+    pet = CompanionPet(
+        id=pet_id,
+        owner_id=owner_id,
+        name="Julie",
+        species="dog",
+        breed="Golden Retriever",
+        is_scan_enabled=True,
+    )
+    pet.owner = owner
+
+    tag = SafetyTag(
+        id=tag_id,
+        pet_id=pet_id,
+        token_hash=_hash_tag_token("raw_token_julie"),
+        token_prefix="raw_juli",
+        is_active=True,
+        scan_count=0,
+    )
+    tag.pet = pet
+
+    repo = AsyncMock(spec=CompanionPetRepository)
+    repo.get_tag_by_hash.return_value = None
+    repo.get_active_tag_for_pet.return_value = None
+    repo.get_active_tag_for_dog.return_value = None
+    repo.get_tag_by_id.return_value = tag
+    repo.get_pet.return_value = pet
+    repo.get_active_lost_report_for_pet.return_value = None
+
+    session = AsyncMock()
+    from pawguard.services.audit_service import AuditService
+
+    audit_mock = AsyncMock(spec=AuditService)
+    service = CompanionPetService(repo, session, audit=audit_mock)
+
+    scanned_tag, scanned_pet, lost_info = await service.scan_safety_tag(
+        str(tag_id), ip_address="127.0.0.1"
+    )
+
+    assert scanned_tag.id == tag_id
+    assert scanned_pet.name == "Julie"
+    assert lost_info["name"] == "Julie"
+    assert scanned_tag.scan_count == 1
+    # Verify audit.record was called with keyword arguments
+    audit_mock.record.assert_called_once()
+    kwargs = audit_mock.record.call_args.kwargs
+    assert kwargs["event_type"].value == "safety_tag_scanned"
+    assert kwargs["ip_address"] == "127.0.0.1"

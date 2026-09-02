@@ -573,6 +573,8 @@ class CompanionPetService:
                 if tag is None:
                     tag = await self._repo.get_active_tag_for_dog(pet_id_val)
                 if tag is None:
+                    tag = await self._repo.get_tag_by_id(pet_id_val)
+                if tag is None:
                     pet = await self._repo.get_pet(pet_id_val)
                     if pet is None:
                         # Also check if it's a dog_profile id
@@ -704,8 +706,8 @@ class CompanionPetService:
             "emergency_notes": pet.emergency_notes if pet else None,
         }
 
-        if self._audit and tag is not None:
-            await self._audit.record(
+        if tag is not None:
+            await self._audit_event(
                 AuthAuditEventType.SAFETY_TAG_SCANNED,
                 None,
                 ip_address,

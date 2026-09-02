@@ -133,6 +133,21 @@ class CompanionPetRepository:
         )
         return (await self._session.execute(stmt)).scalars().first()
 
+    async def get_tag_by_id(self, tag_id: uuid.UUID) -> SafetyTag | None:
+        stmt = (
+            select(SafetyTag)
+            .options(
+                selectinload(SafetyTag.dog),
+                selectinload(SafetyTag.pet).selectinload(CompanionPet.owner),
+            )
+            .where(
+                SafetyTag.id == tag_id,
+                SafetyTag.is_active.is_(True),
+                SafetyTag.deleted_at.is_(None),
+            )
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
     async def get_tag_by_hash(self, token_hash: str) -> SafetyTag | None:
         stmt = (
             select(SafetyTag)
