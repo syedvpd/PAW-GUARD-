@@ -10,17 +10,22 @@ from pawguard.core.exceptions import ForbiddenError, NotFoundError, ValidationFa
 from pawguard.core.pagination import PageParams
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
+from pawguard.modules.auth.models import User
 from pawguard.modules.lost_found.models import (
     FoundReport,
     LostReport,
     MatchStatus,
     ReportMatch,
+    ReportMedia,
     ReportStatus,
+    Species,
 )
 from pawguard.modules.lost_found.repository import LostFoundRepository
 from pawguard.modules.lost_found.schemas import (
     FoundReportCreate,
+    FoundReportResponse,
     LostReportCreate,
+    LostReportResponse,
     OwnershipClaimReview,
     OwnershipClaimSubmit,
 )
@@ -145,37 +150,86 @@ class TestLostFoundService:
     @pytest.mark.asyncio
     async def test_report_lost_pet(self, service, mock_repo, mock_audit):
         user_id = uuid.uuid4()
+        report_id = uuid.uuid4()
         mock_repo.create_lost_report.return_value = None
         mock_repo.list_found_reports.return_value = []
-        uuid.uuid4()
-        mock_repo.create_lost_report.side_effect = None
         mock_repo._session.flush.return_value = None
+
         payload = LostReportCreate(
+            species=Species.CAT,
             pet_name="Max",
-            breed="Labrador",
-            color="Brown",
+            breed="Persian",
+            color="White",
             location_address="123 Main St",
             lost_at=datetime.now(UTC),
         )
+
+        loaded_report = LostReport(
+            id=report_id,
+            user_id=user_id,
+            species=Species.CAT,
+            pet_name="Max",
+            breed="persian",
+            color="white",
+            location_address="123 Main St",
+            lost_at=datetime.now(UTC),
+            status=ReportStatus.ACTIVE,
+            created_at=datetime.now(UTC),
+            media=[],
+        )
+        mock_repo.get_lost_report_by_id.return_value = loaded_report
+
         result = await service.report_lost_pet(user_id, payload, actor_id=uuid.uuid4())
         assert result.pet_name == "Max"
+        assert result.species == Species.CAT
         assert result.status == ReportStatus.ACTIVE
+
+        # Verify Pydantic response model validation / serialization succeeds
+        response_data = LostReportResponse.model_validate(result)
+        assert response_data.id == report_id
+        assert response_data.species == Species.CAT
+        assert response_data.pet_name == "Max"
 
     @pytest.mark.asyncio
     async def test_report_found_pet(self, service, mock_repo, mock_audit):
         user_id = uuid.uuid4()
+        report_id = uuid.uuid4()
         mock_repo.create_found_report.return_value = None
         mock_repo.list_lost_reports.return_value = []
         mock_repo._session.flush.return_value = None
+
         payload = FoundReportCreate(
+            species=Species.DOG,
             breed_observed="Labrador",
             color_observed="Brown",
             location_address="456 Oak St",
             found_at=datetime.now(UTC),
         )
+
+        loaded_report = FoundReport(
+            id=report_id,
+            user_id=user_id,
+            species=Species.DOG,
+            breed_observed="labrador",
+            color_observed="brown",
+            location_address="456 Oak St",
+            found_at=datetime.now(UTC),
+            status=ReportStatus.ACTIVE,
+            created_at=datetime.now(UTC),
+            media=[],
+        )
+        mock_repo.get_found_report_by_id.return_value = loaded_report
+
         result = await service.report_found_pet(user_id, payload, actor_id=uuid.uuid4())
         assert result.breed_observed == "labrador"
+        assert result.species == Species.DOG
         assert result.status == ReportStatus.ACTIVE
+
+        # Verify Pydantic response model validation / serialization succeeds
+        response_data = FoundReportResponse.model_validate(result)
+        assert response_data.id == report_id
+        assert response_data.species == Species.DOG
+        assert response_data.breed_observed == "labrador"
 
     @pytest.mark.asyncio
     async def test_resolve_lost_report(self, service, mock_repo):
@@ -733,3 +787,95 @@ class TestOwnershipClaimWorkflow:
         mock_repo.get_match_by_id.return_value = None
         with pytest.raises(NotFoundError):
             await service.get_match(uuid.uuid4())
+
+    @pytest.mark.asyncio
+    async def test_lost_report_response_serialization_with_user_and_media(self):
+        user_id = uuid.uuid4()
+        report_id = uuid.uuid4()
+        media_id = uuid.uuid4()
+        user = User(
+            id=user_id,
+            email="owner@example.com",
+            full_name="John Doe",
+            phone="+919876543210",
+            is_verified=True,
+            mfa_enabled=False,
+            push_notifications_enabled=True,
+            roles=[],
+        )
+        media_item = ReportMedia(
+            id=media_id,
+            lost_report_id=report_id,
+            media_type="photo",
+            object_key="lost-found/sample.jpg",
+            is_primary=True,
+            display_order=0,
+        )
+        report = LostReport(
+            id=report_id,
+            user_id=user_id,
+            species=Species.DOG,
+            pet_name="Buddy",
+            breed="beagle",
+            color="tricolor",
+            location_address="123 Main St",
+            lost_at=datetime.now(UTC),
+            status=ReportStatus.ACTIVE,
+            created_at=datetime.now(UTC),
+            user=user,
+            media=[media_item],
+        )
+
+        res = LostReportResponse.model_validate(report)
+        assert res.id == report_id
+        assert res.user is not None
+        assert res.user.email == "owner@example.com"
+        assert res.user.full_name == "John Doe"
+        assert len(res.media) == 1
+        assert res.media[0].id == media_id
+        assert res.media[0].media_type == "photo"
+
+    @pytest.mark.asyncio
+    async def test_found_report_response_serialization_with_user_and_media(self):
+        user_id = uuid.uuid4()
+        report_id = uuid.uuid4()
+        media_id = uuid.uuid4()
+        user = User(
+            id=user_id,
+            email="finder@example.com",
+            full_name="Jane Finder",
+            phone="+919876543211",
+            is_verified=True,
+            mfa_enabled=False,
+            push_notifications_enabled=True,
+            roles=[],
+        )
+        media_item = ReportMedia(
+            id=media_id,
+            found_report_id=report_id,
+            media_type="photo",
+            object_key="lost-found/sample2.jpg",
+            is_primary=True,
+            display_order=0,
+        )
+        report = FoundReport(
+            id=report_id,
+            user_id=user_id,
+            species=Species.CAT,
+            breed_observed="persian",
+            color_observed="white",
+            location_address="456 Park Ave",
+            found_at=datetime.now(UTC),
+            status=ReportStatus.ACTIVE,
+            created_at=datetime.now(UTC),
+            user=user,
+            media=[media_item],
+        )
+
+        res = FoundReportResponse.model_validate(report)
+        assert res.id == report_id
+        assert res.user is not None
+        assert res.user.email == "finder@example.com"
+        assert res.species == Species.CAT
+        assert len(res.media) == 1
+        assert res.media[0].id == media_id

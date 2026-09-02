@@ -32,7 +32,10 @@ class LostFoundRepository:
     async def get_lost_report_by_id(self, report_id: uuid.UUID) -> LostReport | None:
         stmt = (
             select(LostReport)
-            .options(selectinload(LostReport.user).selectinload(User.roles))
+            .options(
+                selectinload(LostReport.user).selectinload(User.roles),
+                selectinload(LostReport.media),
+            )
             .where(LostReport.id == report_id, LostReport.deleted_at.is_(None))
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
@@ -48,7 +51,10 @@ class LostFoundRepository:
     async def list_lost_reports(self, status: ReportStatus | None = None) -> Sequence[LostReport]:
         stmt = (
             select(LostReport)
-            .options(selectinload(LostReport.user).selectinload(User.roles))
+            .options(
+                selectinload(LostReport.user).selectinload(User.roles),
+                selectinload(LostReport.media),
+            )
             .where(LostReport.deleted_at.is_(None))
             .order_by(LostReport.lost_at.desc())
         )
@@ -64,7 +70,10 @@ class LostFoundRepository:
     async def get_found_report_by_id(self, report_id: uuid.UUID) -> FoundReport | None:
         stmt = (
             select(FoundReport)
-            .options(selectinload(FoundReport.user).selectinload(User.roles))
+            .options(
+                selectinload(FoundReport.user).selectinload(User.roles),
+                selectinload(FoundReport.media),
+            )
             .where(FoundReport.id == report_id, FoundReport.deleted_at.is_(None))
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
@@ -72,7 +81,10 @@ class LostFoundRepository:
     async def list_found_reports(self, status: ReportStatus | None = None) -> Sequence[FoundReport]:
         stmt = (
             select(FoundReport)
-            .options(selectinload(FoundReport.user).selectinload(User.roles))
+            .options(
+                selectinload(FoundReport.user).selectinload(User.roles),
+                selectinload(FoundReport.media),
+            )
             .where(FoundReport.deleted_at.is_(None))
             .order_by(FoundReport.found_at.desc())
         )
@@ -92,9 +104,11 @@ class LostFoundRepository:
                 selectinload(ReportMatch.lost_report)
                 .selectinload(LostReport.user)
                 .selectinload(User.roles),
+                selectinload(ReportMatch.lost_report).selectinload(LostReport.media),
                 selectinload(ReportMatch.found_report)
                 .selectinload(FoundReport.user)
                 .selectinload(User.roles),
+                selectinload(ReportMatch.found_report).selectinload(FoundReport.media),
             )
             .where(ReportMatch.id == match_id)
         )
@@ -107,9 +121,14 @@ class LostFoundRepository:
         stmt = (
             select(ReportMatch)
             .options(
+                selectinload(ReportMatch.lost_report)
+                .selectinload(LostReport.user)
+                .selectinload(User.roles),
+                selectinload(ReportMatch.lost_report).selectinload(LostReport.media),
                 selectinload(ReportMatch.found_report)
                 .selectinload(FoundReport.user)
-                .selectinload(User.roles)
+                .selectinload(User.roles),
+                selectinload(ReportMatch.found_report).selectinload(FoundReport.media),
             )
             .where(ReportMatch.lost_report_id == lost_report_id)
             .order_by(ReportMatch.confidence_score.desc())
@@ -125,7 +144,12 @@ class LostFoundRepository:
             .options(
                 selectinload(ReportMatch.lost_report)
                 .selectinload(LostReport.user)
-                .selectinload(User.roles)
+                .selectinload(User.roles),
+                selectinload(ReportMatch.lost_report).selectinload(LostReport.media),
+                selectinload(ReportMatch.found_report)
+                .selectinload(FoundReport.user)
+                .selectinload(User.roles),
+                selectinload(ReportMatch.found_report).selectinload(FoundReport.media),
             )
             .where(ReportMatch.found_report_id == found_report_id)
             .order_by(ReportMatch.confidence_score.desc())
@@ -142,7 +166,10 @@ class LostFoundRepository:
     ) -> tuple[Sequence[LostReport], int]:
         stmt = (
             select(LostReport)
-            .options(selectinload(LostReport.user).selectinload(User.roles))
+            .options(
+                selectinload(LostReport.user).selectinload(User.roles),
+                selectinload(LostReport.media),
+            )
             .where(LostReport.deleted_at.is_(None))
         )
 
@@ -179,7 +206,10 @@ class LostFoundRepository:
     ) -> tuple[Sequence[FoundReport], int]:
         stmt = (
             select(FoundReport)
-            .options(selectinload(FoundReport.user).selectinload(User.roles))
+            .options(
+                selectinload(FoundReport.user).selectinload(User.roles),
+                selectinload(FoundReport.media),
+            )
             .where(FoundReport.deleted_at.is_(None))
         )
 
@@ -217,9 +247,11 @@ class LostFoundRepository:
             selectinload(ReportMatch.lost_report)
             .selectinload(LostReport.user)
             .selectinload(User.roles),
+            selectinload(ReportMatch.lost_report).selectinload(LostReport.media),
             selectinload(ReportMatch.found_report)
             .selectinload(FoundReport.user)
             .selectinload(User.roles),
+            selectinload(ReportMatch.found_report).selectinload(FoundReport.media),
         )
 
         if lost_report_id is not None:

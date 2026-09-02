@@ -131,6 +131,7 @@ class LostFoundService:
 
         report = LostReport(
             user_id=user_id,
+            species=payload.species,
             pet_name=payload.pet_name,
             breed=payload.breed.lower(),
             color=payload.color.lower(),
@@ -186,7 +187,8 @@ class LostFoundService:
                 user_agent="",
                 metadata={"report_id": str(report.id), "type": "lost"},
             )
-        return report
+        reloaded = await self._repo.get_lost_report_by_id(report.id)
+        return reloaded or report
 
     async def record_public_sighting(
         self, payload: PetSightingCreate, ip_address: str | None = None
@@ -275,6 +277,7 @@ class LostFoundService:
 
         report = FoundReport(
             user_id=user_id,
+            species=payload.species,
             breed_observed=payload.breed_observed.lower(),
             color_observed=payload.color_observed.lower(),
             collar_color=payload.collar_color,
@@ -327,7 +330,8 @@ class LostFoundService:
                 user_agent="",
                 metadata={"report_id": str(report.id), "type": "found"},
             )
-        return report
+        reloaded = await self._repo.get_found_report_by_id(report.id)
+        return reloaded or report
 
     async def resolve_lost_report(
         self, report_id: uuid.UUID, actor_id: uuid.UUID | None = None, ip_address: str | None = None
@@ -764,7 +768,7 @@ class LostFoundService:
                     status=MatchStatus.PENDING,
                 )
                 await self._repo.create_match(match)
-                await self._notify_match(match)
+                await self._notify_match(match, lost=lost, found=found)
 
     async def _run_matching_for_found(self, found: FoundReport) -> None:
         active_losts = await self._repo.list_lost_reports(status=ReportStatus.ACTIVE)
@@ -781,14 +785,27 @@ class LostFoundService:
                     status=MatchStatus.PENDING,
                 )
                 await self._repo.create_match(match)
-                await self._notify_match(match)
+                await self._notify_match(match, lost=lost, found=found)
 
-    async def _notify_match(self, match: ReportMatch) -> None:
+    async def _notify_match(
+        self,
+        match: ReportMatch,
+        lost: LostReport | None = None,
+        found: FoundReport | None = None,
+    ) -> None:
         """Email and push the lost-pet owner and the found-pet reporter about a possible match."""
-        if self._arq is None:
+        if self._arq is None and self._notification_svc is None:
             return
-        lost = match.lost_report
-        found = match.found_report
+        if lost is None or found is None:
+            loaded_match = await self._repo.get_match_by_id(match.id)
+            if loaded_match is not None:
+                lost = loaded_match.lost_report
+                found = loaded_match.found_report
+        if lost is None or found is None:
+            return
+
+        lost_user = getattr(lost, "user", None)
+        found_user = getattr(found, "user", None)
         pet_name = lost.pet_name if lost.pet_name else "your pet"
         subject = f"Possible match for {pet_name}!"
         body = (
@@ -796,23 +813,24 @@ class LostFoundService:
             f"{match.confidence_score:.0f}%). Our team is reviewing it - "
             "please check the PawGuard lost & found portal for details."
         )
-        try:
-            if lost.user is not None and lost.user.email:
-                await self._arq.enqueue_job(
-                    "send_notification_email_job",
-                    to=lost.user.email,
-                    subject=subject,
-                    body=body,
-                )
-            if found.user is not None and found.user.email:
-                await self._arq.enqueue_job(
-                    "send_notification_email_job",
-                    to=found.user.email,
-                    subject=subject,
-                    body=body,
-                )
-        except Exception as exc:
-            logger.warning("Failed to notify lost/found match %s: %s", match.id, exc)
+        if self._arq is not None:
+            try:
+                if lost_user is not None and getattr(lost_user, "email", None):
+                    await self._arq.enqueue_job(
+                        "send_notification_email_job",
+                        to=lost_user.email,
+                        subject=subject,
+                        body=body,
+                    )
+                if found_user is not None and getattr(found_user, "email", None):
+                    await self._arq.enqueue_job(
+                        "send_notification_email_job",
+                        to=found_user.email,
+                        subject=subject,
+                        body=body,
+                    )
+            except Exception as exc:
+                logger.warning("Failed to notify lost/found match %s: %s", match.id, exc)
 
         # Push notifications to both parties
         if self._notification_svc:
@@ -835,18 +853,16 @@ class LostFoundService:
         # Workflow 6: administrators are notified so they can oversee the
         # reunification from a potential match.
         try:
-            await self._notify_admins_of_match(match)
+            await self._notify_admins_of_match(match, lost=lost)
         except Exception as exc:
             logger.warning("Failed to notify admins of match %s: %s", match.id, exc)
 
-    async def _notify_admins_of_match(self, match: ReportMatch) -> None:
+    async def _notify_admins_of_match(
+        self, match: ReportMatch, lost: LostReport | None = None
+    ) -> None:
         if self._notification_svc is None:
             return
-        pet_name = (
-            match.lost_report.pet_name
-            if (match.lost_report and match.lost_report.pet_name)
-            else "a pet"
-        )
+        pet_name = lost.pet_name if (lost and lost.pet_name) else "a pet"
         await self._notification_svc.broadcast(
             BroadcastCreate(
                 title=f"New lost & found match: {pet_name}",
