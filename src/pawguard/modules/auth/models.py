@@ -79,6 +79,7 @@ class AuthAuditEventType(StrEnum):
     FOSTER_PLACEMENT_CREATED = "foster_placement_created"
     FOSTER_PLACEMENT_ENDED = "foster_placement_ended"
     FOSTER_SUPPLY_DISPATCHED = "foster_supply_dispatched"
+    FOSTER_VET_CHECK_REQUESTED = "foster_vet_check_requested"
     FOSTER_DELETED = "foster_deleted"
     INVENTORY_ITEM_CREATED = "inventory_item_created"
     INVENTORY_ITEM_UPDATED = "inventory_item_updated"

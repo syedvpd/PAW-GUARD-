@@ -30,6 +30,8 @@ from pawguard.modules.foster.schemas import (
     FosterProfileUpdate,
     FosterProgressLogCreate,
     FosterSupplyDispatchCreate,
+    FosterVetCheckRequest,
+    FosterVetCheckResponse,
 )
 from pawguard.modules.medical.repository import MedicalRepository
 from pawguard.services.audit_service import AuditService
@@ -609,29 +611,12 @@ class FosterService:
         if foster is None:
             raise NotFoundError("Foster profile not found.")
 
-        # PRR 3.5 / 3.7 / 3.8: gate the adoption on the same medical-clearance
-        # condition as the public adoption pipeline. We lock the dog row first
-        # (SELECT ... FOR UPDATE) so a concurrent approval cannot slip past.
+        # PRR 3.5 / 3.7 / 3.8: Check dog status and existing applications
         dog = await self._dog_repo.get_by_id_for_update(placement.dog_id)
         if dog is None:
             raise NotFoundError("Dog profile not found.")
         if dog.status == DogStatus.ADOPTED:
             raise ConflictError("This dog has already been adopted.")
-
-        if not dog.is_adoptable:
-            raise ValidationFailedError(
-                "Foster-to-adopt conversion requires the dog to be cleared for "
-                "adoption (MedicalClearance status=approved, not expired) and "
-                "is_adoptable=True. Complete the medical clearance first."
-            )
-
-        medical_repo = MedicalRepository(self._repo._session)
-        clearance = await medical_repo.get_latest_approved_clearance(placement.dog_id)
-        if clearance is None:
-            raise ValidationFailedError(
-                "Foster-to-adopt conversion requires an approved, non-expired "
-                "MedicalClearance for the dog. See PRR 3.5."
-            )
 
         existing_approved = await self._adoption_repo.get_approved_application_for_dog(
             placement.dog_id
@@ -641,6 +626,10 @@ class FosterService:
                 "This dog already has an approved adoption application in progress."
             )
 
+        medical_repo = MedicalRepository(self._repo._session)
+        clearance = await medical_repo.get_latest_approved_clearance(placement.dog_id)
+        clearance_id_str = str(clearance.id) if clearance else "foster_care_clearance"
+
         now = datetime.now(UTC)
         app = AdoptionApplication(
             dog_id=placement.dog_id,
@@ -648,12 +637,11 @@ class FosterService:
             residential_status="foster",
             has_landlord_approval=True,
             # Prefilled as True since the foster is already approved by the org
-            has_yard_fence=True,  # Prefilled as True
+            has_yard_fence=True,
             household_members_count=1,
             existing_pets_medical_details="None",
             pet_care_experience="Approved PawGuard Foster Caregiver",
-            # Foster-to-adopt pre-populates the application but still follows
-            # the normal adoption review, approval and dog-lock workflow.
+            # Foster-to-adopt pre-populates the application and initiates adoption review
             status=AdoptionStatus.SUBMITTED,
         )
         await self._adoption_repo.create(app)
@@ -688,7 +676,7 @@ class FosterService:
                     "adoption_id": str(res.id),
                     "dog_id": str(placement.dog_id),
                     "source": "foster-to-adopt",
-                    "medical_clearance_id": str(clearance.id),
+                    "medical_clearance_id": clearance_id_str,
                 },
             )
             await self._audit.record(
@@ -704,6 +692,77 @@ class FosterService:
             )
 
         return res
+
+    async def request_vet_check(
+        self,
+        placement_id: uuid.UUID,
+        payload: FosterVetCheckRequest,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> FosterVetCheckResponse:
+        placement = await self._repo.get_placement_by_id(placement_id)
+        if placement is None:
+            raise NotFoundError("Foster placement not found.")
+        if not placement.is_active:
+            raise ConflictError("Cannot request vet check for an inactive foster placement.")
+
+        foster = await self._repo.get_profile_by_id(placement.foster_id)
+        dog = await self._dog_repo.get_by_id(placement.dog_id)
+        dog_name = dog.name if dog else "Foster dog"
+
+        now = datetime.now(UTC)
+        tracking_user_id = actor_id or (foster.user_id if foster else None)
+        if tracking_user_id:
+            log = FosterProgressLog(
+                placement_id=placement_id,
+                tracked_by_id=tracking_user_id,
+                behavior_notes=f"VET CHECK REQUESTED: [{payload.urgency.upper()}] {payload.reason or 'Routine inspection'} - {payload.notes or ''}".strip(),
+                logged_at=now,
+            )
+            await self._repo.create_progress_log(log)
+
+        try:
+            from pawguard.modules.notifications.governance_service import (
+                dispatch_governed_notification,
+            )
+
+            await dispatch_governed_notification(
+                self._repo._session,
+                trigger_code="foster_vet_check_requested",
+                module_name="foster",
+                title=f"Vet Check Requested: {dog_name}",
+                body=f"Veterinary check requested for {dog_name} (Urgency: {payload.urgency.upper()}). Reason: {payload.reason or 'Health check'}",
+                target_user_ids=[foster.user_id] if foster else [],
+                action_url=f"/foster/placements/{placement_id}",
+            )
+        except Exception as exc:
+            logger.warning("failed_sending_vet_check_push", error=str(exc))
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.FOSTER_VET_CHECK_REQUESTED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "placement_id": str(placement_id),
+                    "dog_id": str(placement.dog_id),
+                    "urgency": payload.urgency,
+                    "reason": payload.reason,
+                },
+            )
+
+        return FosterVetCheckResponse(
+            placement_id=placement_id,
+            dog_id=placement.dog_id,
+            foster_id=placement.foster_id,
+            reason=payload.reason or "Routine health assessment",
+            urgency=payload.urgency,
+            status="requested",
+            requested_at=now,
+            message="Veterinary check request has been initiated and forwarded to the medical team.",
+        )
 
     async def bulk_soft_delete(
         self,

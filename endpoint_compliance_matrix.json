@@ -1,9 +1,9 @@
 {
   "summary": {
-    "total_openapi_endpoints": 561,
-    "unique_paths": 430,
+    "total_openapi_endpoints": 570,
+    "unique_paths": 438,
     "internal_system_routes": 17,
-    "total_route_surface": 578
+    "total_route_surface": 587
   },
   "endpoints": [
     {
@@ -2248,6 +2248,15 @@
       "category": "OpenAPI Operation"
     },
     {
+      "method": "POST",
+      "path": "/api/v1/fosters/{profile_id}/approve",
+      "module": "fosters",
+      "operation_id": "approve_profile_api_v1_fosters__profile_id__approve_post",
+      "summary": "Approve Profile",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
       "method": "DELETE",
       "path": "/api/v1/fosters/admin/fosters/{profile_id}",
       "module": "fosters",
@@ -2276,10 +2285,46 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/fosters/{placement_id}/return",
+      "module": "fosters",
+      "operation_id": "return_dog_api_v1_fosters__placement_id__return_post",
+      "summary": "Return Dog",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/fosters/placements/{placement_id}/return",
       "module": "fosters",
       "operation_id": "return_dog_api_v1_fosters_placements__placement_id__return_post",
       "summary": "Return Dog",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/fosters/{placement_id}/vet-check",
+      "module": "fosters",
+      "operation_id": "request_vet_check_api_v1_fosters__placement_id__vet_check_post",
+      "summary": "Request Vet Check",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/fosters/placements/{placement_id}/request-vet-check",
+      "module": "fosters",
+      "operation_id": "request_vet_check_api_v1_fosters_placements__placement_id__request_vet_check_post",
+      "summary": "Request Vet Check",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/fosters/placements/{placement_id}/vet-check",
+      "module": "fosters",
+      "operation_id": "request_vet_check_api_v1_fosters_placements__placement_id__vet_check_post",
+      "summary": "Request Vet Check",
       "auth": "authenticated",
       "category": "OpenAPI Operation"
     },
@@ -2298,6 +2343,24 @@
       "module": "fosters",
       "operation_id": "bulk_delete_profiles_api_v1_fosters_bulk_delete_post",
       "summary": "Bulk Delete Profiles",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/fosters/{placement_id}/progress",
+      "module": "fosters",
+      "operation_id": "log_progress_api_v1_fosters__placement_id__progress_post",
+      "summary": "Log Progress",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/fosters/{placement_id}/progress",
+      "module": "fosters",
+      "operation_id": "get_progress_logs_api_v1_fosters__placement_id__progress_get",
+      "summary": "Get Progress Logs",
       "auth": "authenticated",
       "category": "OpenAPI Operation"
     },
@@ -2343,6 +2406,24 @@
       "module": "fosters",
       "operation_id": "request_supplies_api_v1_fosters_placements__placement_id__supplies_request_post",
       "summary": "Request Supplies",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/fosters/{placement_id}/convert-to-adopt",
+      "module": "fosters",
+      "operation_id": "convert_to_adopt_api_v1_fosters__placement_id__convert_to_adopt_post",
+      "summary": "Convert To Adopt",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/fosters/placements/{placement_id}/convert",
+      "module": "fosters",
+      "operation_id": "convert_to_adopt_api_v1_fosters_placements__placement_id__convert_post",
+      "summary": "Convert To Adopt",
       "auth": "authenticated",
       "category": "OpenAPI Operation"
     },
@@ -5152,8 +5233,8 @@
     {
       "path": "/metrics/api/v1/query_range",
       "methods": [
-        "GET",
-        "POST"
+        "POST",
+        "GET"
       ],
       "name": "prometheus_query_stub",
       "type": "Starlette Route / Documentation"
@@ -5161,8 +5242,8 @@
     {
       "path": "/api/v1/query_range",
       "methods": [
-        "GET",
-        "POST"
+        "POST",
+        "GET"
       ],
       "name": "prometheus_query_stub",
       "type": "Starlette Route / Documentation"
@@ -5170,8 +5251,8 @@
     {
       "path": "/metrics/api/v1/query",
       "methods": [
-        "GET",
-        "POST"
+        "POST",
+        "GET"
       ],
       "name": "prometheus_query_stub",
       "type": "Starlette Route / Documentation"
@@ -5179,8 +5260,8 @@
     {
       "path": "/api/v1/query",
       "methods": [
-        "GET",
-        "POST"
+        "POST",
+        "GET"
       ],
       "name": "prometheus_query_stub",
       "type": "Starlette Route / Documentation"
@@ -5188,8 +5269,8 @@
     {
       "path": "/metrics/api/v1/labels",
       "methods": [
-        "GET",
-        "POST"
+        "POST",
+        "GET"
       ],
       "name": "prometheus_labels_stub",
       "type": "Starlette Route / Documentation"
@@ -5197,8 +5278,8 @@
     {
       "path": "/api/v1/labels",
       "methods": [
-        "GET",
-        "POST"
+        "POST",
+        "GET"
       ],
       "name": "prometheus_labels_stub",
       "type": "Starlette Route / Documentation"

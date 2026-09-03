@@ -29,6 +29,42 @@ class FosterProgressLogCreate(BaseModel):
     mood_rating: int | None = Field(None, ge=1, le=5, examples=[4])
     notes: str | None = Field(None, examples=["Doing great overall."])
 
+    @field_validator("weight_kg", mode="before")
+    @classmethod
+    def normalize_weight(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            v_clean = v.strip()
+            if v_clean == "":
+                return None
+            try:
+                return float(v_clean)
+            except ValueError:
+                return None
+        return v
+
+    @field_validator("exercise_minutes", "mood_rating", mode="before")
+    @classmethod
+    def normalize_ints(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            v_clean = v.strip()
+            if v_clean == "":
+                return None
+            try:
+                return int(v_clean)
+            except ValueError:
+                return None
+        return v
+
+    @field_validator("photo_urls", mode="before")
+    @classmethod
+    def normalize_photos(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            v_clean = v.strip()
+            if v_clean == "":
+                return []
+            return [v_clean]
+        return v
+
 
 class FosterProgressLogResponse(BaseModel):
     id: uuid.UUID
@@ -164,6 +200,40 @@ class FosterPlacementResponse(BaseModel):
 
 class FosterReturnRequest(BaseModel):
     notes: str | None = Field(None, examples=["Fully recovered, ready to return to shelter."])
+    reason: str | None = Field(None, examples=["Foster period completed", "Shelter request"])
+
+
+class FosterVetCheckRequest(BaseModel):
+    reason: str | None = Field(None, examples=["Routine health check", "Lethargy and limping"])
+    urgency: str = Field("routine", examples=["routine", "urgent", "emergency"])
+    preferred_date: datetime | None = Field(None)
+    notes: str | None = Field(None, examples=["Dog showing slight limp on front left paw."])
+
+    @field_validator("urgency", mode="before")
+    @classmethod
+    def normalize_urgency(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            v_clean = v.strip().lower()
+            return v_clean if v_clean in ("routine", "urgent", "emergency") else "routine"
+        return "routine"
+
+    @field_validator("preferred_date", mode="before")
+    @classmethod
+    def normalize_preferred_date(cls, v: Any) -> Any:
+        if isinstance(v, str) and v.strip() == "":
+            return None
+        return v
+
+
+class FosterVetCheckResponse(BaseModel):
+    placement_id: uuid.UUID
+    dog_id: uuid.UUID
+    foster_id: uuid.UUID
+    reason: str
+    urgency: str
+    status: str
+    requested_at: datetime
+    message: str
 
 
 class FosterSupplyDispatchCreate(BaseModel):

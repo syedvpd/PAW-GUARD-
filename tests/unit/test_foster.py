@@ -27,7 +27,9 @@ from pawguard.modules.foster.schemas import (
     FosterProfileCreate,
     FosterProfileUpdate,
     FosterProgressLogCreate,
+    FosterReturnRequest,
     FosterSupplyDispatchCreate,
+    FosterVetCheckRequest,
 )
 from pawguard.modules.foster.service import FosterService
 from pawguard.services.audit_service import AuditService
@@ -591,3 +593,242 @@ class TestFosterSupplyDispatch:
                 uuid.uuid4(),
                 FosterSupplyDispatchCreate(item_type=SupplyItemType.FOOD),
             )
+
+
+class TestFosterVetCheck:
+    @pytest.fixture
+    def mock_repo(self):
+        repo = AsyncMock(spec=FosterRepository)
+        repo._session = AsyncMock()
+        return repo
+
+    @pytest.fixture
+    def mock_dog_repo(self):
+        repo = AsyncMock(spec=DogRepository)
+        return repo
+
+    @pytest.fixture
+    def mock_audit(self):
+        return AsyncMock(spec=AuditService)
+
+    @pytest.fixture
+    def service(self, mock_repo, mock_dog_repo, mock_audit):
+        return FosterService(mock_repo, mock_dog_repo, audit_service=mock_audit)
+
+    @pytest.mark.asyncio
+    async def test_request_vet_check_success(self, service, mock_repo, mock_dog_repo, mock_audit):
+        placement_id = uuid.uuid4()
+        foster_id = uuid.uuid4()
+        dog_id = uuid.uuid4()
+        placement = FosterPlacement(
+            id=placement_id,
+            foster_id=foster_id,
+            dog_id=dog_id,
+            is_active=True,
+            placed_at=datetime.now(UTC),
+        )
+        mock_repo.get_placement_by_id.return_value = placement
+        mock_repo.get_profile_by_id.return_value = FosterProfile(
+            id=foster_id,
+            user_id=uuid.uuid4(),
+            status=FosterStatus.APPROVED,
+        )
+        mock_dog_repo.get_by_id.return_value = DogProfile(
+            id=dog_id,
+            registration_number="DOG-VET-01",
+            name="Charlie",
+            breed="Labrador",
+            gender="male",
+        )
+        mock_repo.create_progress_log.return_value = None
+
+        payload = FosterVetCheckRequest(
+            reason="Limping on front left paw",
+            urgency="urgent",
+            notes="Observed during morning walk.",
+        )
+        result = await service.request_vet_check(
+            placement_id,
+            payload,
+            actor_id=uuid.uuid4(),
+        )
+        assert result.placement_id == placement_id
+        assert result.dog_id == dog_id
+        assert result.urgency == "urgent"
+        assert result.status == "requested"
+        mock_repo.create_progress_log.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_request_vet_check_inactive_placement_fails(self, service, mock_repo):
+        placement_id = uuid.uuid4()
+        placement = FosterPlacement(
+            id=placement_id,
+            foster_id=uuid.uuid4(),
+            dog_id=uuid.uuid4(),
+            is_active=False,
+            placed_at=datetime.now(UTC),
+        )
+        mock_repo.get_placement_by_id.return_value = placement
+        payload = FosterVetCheckRequest(reason="Checkup")
+        with pytest.raises(ConflictError, match="inactive"):
+            await service.request_vet_check(placement_id, payload)
+
+
+class TestFosterDailyProgressReporting:
+    @pytest.fixture
+    def mock_repo(self):
+        repo = AsyncMock(spec=FosterRepository)
+        repo._session = AsyncMock()
+        return repo
+
+    @pytest.fixture
+    def mock_dog_repo(self):
+        return AsyncMock(spec=DogRepository)
+
+    @pytest.fixture
+    def mock_audit(self):
+        return AsyncMock(spec=AuditService)
+
+    @pytest.fixture
+    def service(self, mock_repo, mock_dog_repo, mock_audit):
+        return FosterService(mock_repo, mock_dog_repo, audit_service=mock_audit)
+
+    @pytest.mark.asyncio
+    async def test_daily_progress_all_four_capabilities(self, service, mock_repo):
+        placement_id = uuid.uuid4()
+        placement = FosterPlacement(
+            id=placement_id,
+            foster_id=uuid.uuid4(),
+            dog_id=uuid.uuid4(),
+            is_active=True,
+            placed_at=datetime.now(UTC),
+        )
+        mock_repo.get_placement_by_id.return_value = placement
+        mock_repo.create_progress_log.return_value = None
+
+        # 1. Weight logs, 2. Behavioral logs, 3. Medication verification check-in, 4. Media uploads
+        payload = FosterProgressLogCreate(
+            weight_kg=18.5,
+            behavior_notes="Calm, interacted nicely with children.",
+            feeding_notes="Finished full meal.",
+            medication_notes="Administered antibiotic tablet with food at 8 AM.",
+            exercise_minutes=45,
+            photo_urls=["https://storage.pawguard.io/fosters/rex_day3.jpg"],
+            mood_rating=5,
+            notes="Doing exceptionally well.",
+        )
+        result = await service.log_daily_progress(
+            placement_id,
+            payload,
+            actor_id=uuid.uuid4(),
+        )
+        assert result.weight_kg == 18.5
+        assert result.behavior_notes == "Calm, interacted nicely with children."
+        assert result.medication_notes == "Administered antibiotic tablet with food at 8 AM."
+        assert result.photo_urls == ["https://storage.pawguard.io/fosters/rex_day3.jpg"]
+        assert result.mood_rating == 5
+        assert result.exercise_minutes == 45
+        mock_repo.create_progress_log.assert_awaited_once()
+
+
+class TestFosterReturnToShelter:
+    @pytest.fixture
+    def mock_repo(self):
+        repo = AsyncMock(spec=FosterRepository)
+        repo._session = AsyncMock()
+        return repo
+
+    @pytest.fixture
+    def mock_dog_repo(self):
+        return AsyncMock(spec=DogRepository)
+
+    @pytest.fixture
+    def mock_audit(self):
+        return AsyncMock(spec=AuditService)
+
+    @pytest.fixture
+    def service(self, mock_repo, mock_dog_repo, mock_audit):
+        return FosterService(mock_repo, mock_dog_repo, audit_service=mock_audit)
+
+    @pytest.mark.asyncio
+    async def test_return_dog_success_and_state_updates(
+        self, service, mock_repo, mock_dog_repo, mock_audit
+    ):
+        placement_id = uuid.uuid4()
+        foster_id = uuid.uuid4()
+        dog_id = uuid.uuid4()
+        placement = FosterPlacement(
+            id=placement_id,
+            foster_id=foster_id,
+            dog_id=dog_id,
+            is_active=True,
+            placed_at=datetime.now(UTC),
+        )
+        foster = FosterProfile(
+            id=foster_id,
+            user_id=uuid.uuid4(),
+            status=FosterStatus.APPROVED,
+            max_capacity=1,
+            active_count=1,
+            is_available=False,
+        )
+        dog = DogProfile(
+            id=dog_id,
+            registration_number="DOG-RET-01",
+            name="Bella",
+            breed="Beagle",
+            gender="female",
+            status=DogStatus.FOSTERED,
+        )
+        mock_repo.get_placement_by_id.side_effect = [placement, placement]
+        mock_repo.get_profile_by_id.return_value = foster
+        mock_dog_repo.get_by_id.return_value = dog
+
+        res = await service.return_dog(
+            placement_id,
+            notes="Placement term finished successfully.",
+            actor_id=uuid.uuid4(),
+        )
+        assert res.is_active is False
+        assert foster.active_count == 0
+        assert foster.is_available is True
+        assert dog.status == DogStatus.SHELTER
+
+    @pytest.mark.asyncio
+    async def test_return_dog_with_schema_notes(self, service, mock_repo, mock_dog_repo):
+        placement_id = uuid.uuid4()
+        foster_id = uuid.uuid4()
+        dog_id = uuid.uuid4()
+        placement = FosterPlacement(
+            id=placement_id,
+            foster_id=foster_id,
+            dog_id=dog_id,
+            is_active=True,
+            placed_at=datetime.now(UTC),
+        )
+        foster = FosterProfile(
+            id=foster_id,
+            user_id=uuid.uuid4(),
+            status=FosterStatus.APPROVED,
+            max_capacity=1,
+            active_count=1,
+            is_available=False,
+        )
+        dog = DogProfile(
+            id=dog_id,
+            registration_number="DOG-RET-02",
+            name="Max",
+            breed="Husky",
+            gender="male",
+            status=DogStatus.FOSTERED,
+        )
+        mock_repo.get_placement_by_id.side_effect = [placement, placement]
+        mock_repo.get_profile_by_id.return_value = foster
+        mock_dog_repo.get_by_id.return_value = dog
+
+        req = FosterReturnRequest(notes="Completed medical recovery.", reason="Shelter request")
+        res = await service.return_dog(
+            placement_id,
+            notes=req.notes,
+        )
+        assert res.is_active is False

@@ -37,6 +37,8 @@ from pawguard.modules.foster.schemas import (
     FosterReturnRequest,
     FosterSupplyDispatchCreate,
     FosterSupplyDispatchResponse,
+    FosterVetCheckRequest,
+    FosterVetCheckResponse,
 )
 from pawguard.modules.foster.service import FosterService
 from pawguard.services.audit_service import AuditService
@@ -106,7 +108,7 @@ async def get_my_foster_placements(
 @router.put(
     "/{profile_id}",
     response_model=ApiResponse[FosterProfileResponse],
-    dependencies=[Depends(require_permission("foster:update"))],
+    dependencies=[Depends(require_permission("foster:update", "foster:approve"))],
 )
 async def update_profile(
     profile_id: uuid.UUID,
@@ -125,6 +127,30 @@ async def update_profile(
     return ApiResponse(
         data=FosterProfileResponse.model_validate(profile),
         message="Foster profile updated successfully.",
+    )
+
+
+@router.post(
+    "/{profile_id}/approve",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+async def approve_profile(
+    profile_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FosterService = Depends(get_foster_service),
+) -> ApiResponse[FosterProfileResponse]:
+    ip = request.client.host if request.client else None
+    profile = await service.update_profile(
+        profile_id,
+        FosterProfileUpdate(status=FosterStatus.APPROVED),
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=FosterProfileResponse.model_validate(profile),
+        message="Foster profile approved successfully.",
     )
 
 
@@ -198,12 +224,17 @@ async def list_foster_placements(
 @router.post(
     "/placements/{placement_id}/return",
     response_model=ApiResponse[FosterPlacementResponse],
-    dependencies=[Depends(require_permission("foster:approve"))],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+@router.post(
+    "/{placement_id}/return",
+    response_model=ApiResponse[FosterPlacementResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
 )
 async def return_dog(
     placement_id: uuid.UUID,
-    payload: FosterReturnRequest,
     request: Request,
+    payload: FosterReturnRequest = FosterReturnRequest(),
     current_user: CurrentUser = Depends(get_current_user),
     service: FosterService = Depends(get_foster_service),
 ) -> ApiResponse[FosterPlacementResponse]:
@@ -217,6 +248,58 @@ async def return_dog(
     return ApiResponse(
         data=FosterPlacementResponse.model_validate(placement),
         message="Dog returned to shelter facility.",
+    )
+
+
+@router.post(
+    "/placements/{placement_id}/vet-check",
+    response_model=ApiResponse[FosterVetCheckResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+@router.post(
+    "/placements/{placement_id}/request-vet-check",
+    response_model=ApiResponse[FosterVetCheckResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+@router.post(
+    "/{placement_id}/vet-check",
+    response_model=ApiResponse[FosterVetCheckResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def request_vet_check(
+    placement_id: uuid.UUID,
+    payload: FosterVetCheckRequest,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FosterService = Depends(get_foster_service),
+) -> ApiResponse[FosterVetCheckResponse]:
+    placement = await service.get_placement(placement_id)
+    is_owner = (
+        placement.foster.user_id == current_user.user.id
+        if (placement.foster and hasattr(placement.foster, "user_id"))
+        else False
+    )
+    is_authorized = (
+        is_owner
+        or has_permission(current_user.user, "foster:approve")
+        or has_permission(current_user.user, "foster:update")
+        or has_permission(current_user.user, "foster:read")
+        or has_permission(current_user.user, "medical:create")
+    )
+    if not is_authorized:
+        raise ForbiddenError(
+            "You do not have permission to request a vet check for this placement."
+        )
+    ip = request.client.host if request.client else None
+    result = await service.request_vet_check(
+        placement_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=result,
+        message="Veterinary check requested successfully.",
     )
 
 
@@ -272,6 +355,11 @@ async def bulk_delete_profiles(
     response_model=ApiResponse[FosterProgressLogResponse],
     status_code=status.HTTP_201_CREATED,
 )
+@router.post(
+    "/{placement_id}/progress",
+    response_model=ApiResponse[FosterProgressLogResponse],
+    status_code=status.HTTP_201_CREATED,
+)
 async def log_progress(
     placement_id: uuid.UUID,
     payload: FosterProgressLogCreate,
@@ -282,8 +370,16 @@ async def log_progress(
     # The foster family that owns the placement logs daily updates; foster
     # coordinators (foster:approve) may also log on their behalf.
     placement = await service.get_placement(placement_id)
-    is_owner = placement.foster.user_id == current_user.user.id
-    if not is_owner and not has_permission(current_user.user, "foster:approve"):
+    is_owner = (
+        placement.foster.user_id == current_user.user.id
+        if (placement.foster and hasattr(placement.foster, "user_id"))
+        else False
+    )
+    if (
+        not is_owner
+        and not has_permission(current_user.user, "foster:approve")
+        and not has_permission(current_user.user, "foster:update")
+    ):
         raise ForbiddenError("You do not have permission to log progress for this placement.")
     ip = request.client.host if request.client else None
     log = await service.log_daily_progress(
@@ -302,14 +398,26 @@ async def log_progress(
     "/placements/{placement_id}/progress",
     response_model=ApiResponse[list[FosterProgressLogResponse]],
 )
+@router.get(
+    "/{placement_id}/progress",
+    response_model=ApiResponse[list[FosterProgressLogResponse]],
+)
 async def get_progress_logs(
     placement_id: uuid.UUID,
     current_user: CurrentUser = Depends(get_current_user),
     service: FosterService = Depends(get_foster_service),
 ) -> ApiResponse[list[FosterProgressLogResponse]]:
     placement = await service.get_placement(placement_id)
-    is_owner = placement.foster.user_id == current_user.user.id
-    if not is_owner and not has_permission(current_user.user, "foster:update"):
+    is_owner = (
+        placement.foster.user_id == current_user.user.id
+        if (placement.foster and hasattr(placement.foster, "user_id"))
+        else False
+    )
+    if (
+        not is_owner
+        and not has_permission(current_user.user, "foster:update")
+        and not has_permission(current_user.user, "foster:read")
+    ):
         raise ForbiddenError("You do not have permission to view these progress logs.")
     logs = await service.get_progress_logs(placement_id)
     return ApiResponse(
@@ -353,8 +461,16 @@ async def list_supply_dispatches(
     service: FosterService = Depends(get_foster_service),
 ) -> ApiResponse[list[FosterSupplyDispatchResponse]]:
     placement = await service.get_placement(placement_id)
-    is_owner = placement.foster.user_id == current_user.user.id
-    if not is_owner and not has_permission(current_user.user, "foster:update"):
+    is_owner = (
+        placement.foster.user_id == current_user.user.id
+        if (placement.foster and hasattr(placement.foster, "user_id"))
+        else False
+    )
+    if (
+        not is_owner
+        and not has_permission(current_user.user, "foster:update")
+        and not has_permission(current_user.user, "foster:read")
+    ):
         raise ForbiddenError("You do not have permission to view these supply dispatches.")
     dispatches = await service.list_supply_dispatches(placement_id)
     return ApiResponse(
@@ -375,8 +491,16 @@ async def request_supplies(
     service: FosterService = Depends(get_foster_service),
 ) -> ApiResponse[FosterSupplyDispatchResponse]:
     placement = await service.get_placement(placement_id)
-    is_owner = placement.foster.user_id == current_user.user.id
-    if not is_owner and not has_permission(current_user.user, "foster:approve"):
+    is_owner = (
+        placement.foster.user_id == current_user.user.id
+        if (placement.foster and hasattr(placement.foster, "user_id"))
+        else False
+    )
+    if (
+        not is_owner
+        and not has_permission(current_user.user, "foster:approve")
+        and not has_permission(current_user.user, "foster:update")
+    ):
         raise ForbiddenError("You do not have permission to request supplies for this placement.")
     ip = request.client.host if request.client else None
     dispatch = await service.request_supplies(
@@ -396,6 +520,16 @@ async def request_supplies(
     response_model=ApiResponse[dict[str, Any]],
     status_code=status.HTTP_201_CREATED,
 )
+@router.post(
+    "/placements/{placement_id}/convert",
+    response_model=ApiResponse[dict[str, Any]],
+    status_code=status.HTTP_201_CREATED,
+)
+@router.post(
+    "/{placement_id}/convert-to-adopt",
+    response_model=ApiResponse[dict[str, Any]],
+    status_code=status.HTTP_201_CREATED,
+)
 async def convert_to_adopt(
     placement_id: uuid.UUID,
     request: Request,
@@ -403,8 +537,18 @@ async def convert_to_adopt(
     service: FosterService = Depends(get_foster_service),
 ) -> ApiResponse[dict[str, Any]]:
     placement = await service.get_placement(placement_id)
-    is_owner = placement.foster.user_id == current_user.user.id
-    if not is_owner and not has_permission(current_user.user, "foster:approve"):
+    is_owner = (
+        placement.foster.user_id == current_user.user.id
+        if (placement.foster and hasattr(placement.foster, "user_id"))
+        else False
+    )
+    is_authorized = (
+        is_owner
+        or has_permission(current_user.user, "foster:approve")
+        or has_permission(current_user.user, "foster:update")
+        or has_permission(current_user.user, "adoption:create")
+    )
+    if not is_authorized:
         raise ForbiddenError("You do not have permission to convert this placement to adoption.")
     ip = request.client.host if request.client else None
     app = await service.convert_to_adoption(
