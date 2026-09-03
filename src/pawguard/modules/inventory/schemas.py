@@ -2,10 +2,32 @@
 
 import uuid
 from datetime import date, datetime
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from pawguard.modules.inventory.models import ItemCategory, MovementType, RequisitionStatus
+
+
+def _normalize_category_val(v: Any) -> Any:
+    if isinstance(v, str):
+        v_clean = v.strip().lower()
+        plural_map = {
+            "consumables": "consumable",
+            "pharmaceuticals": "pharmaceutical",
+            "vaccines": "vaccine",
+            "foods": "food",
+            "gears": "gear",
+            "offices": "office",
+        }
+        return plural_map.get(v_clean, v_clean)
+    return v
+
+
+def _normalize_expiry_date(v: Any) -> Any:
+    if v == "" or v is None:
+        return None
+    return v
 
 
 class InventoryItemCreate(BaseModel):
@@ -16,6 +38,30 @@ class InventoryItemCreate(BaseModel):
     reorder_threshold: float = Field(10.0, ge=0.0, examples=[10.0])
     expiry_date: date | None = Field(None, examples=["2027-03-01"])
     unit_cost: float = Field(0.0, ge=0.0, examples=[4.50])
+
+    @field_validator("category", mode="before")
+    @classmethod
+    def _validate_category(cls, v: Any) -> Any:
+        return _normalize_category_val(v)
+
+    @field_validator("expiry_date", mode="before")
+    @classmethod
+    def _validate_expiry_date(cls, v: Any) -> Any:
+        return _normalize_expiry_date(v)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _remap_frontend_fields(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            d = dict(data)
+            if "unit_type" in d and "unit" not in d:
+                d["unit"] = d["unit_type"]
+            if "initial_quantity" in d and "quantity" not in d:
+                d["quantity"] = d["initial_quantity"]
+            if "reorder_level" in d and "reorder_threshold" not in d:
+                d["reorder_threshold"] = d["reorder_level"]
+            return d
+        return data
 
 
 class InventoryItemResponse(BaseModel):
@@ -88,6 +134,28 @@ class InventoryItemUpdate(BaseModel):
     reorder_threshold: float | None = Field(None, ge=0.0, examples=[15.0])
     expiry_date: date | None = Field(None, examples=["2027-03-01"])
     unit_cost: float | None = Field(None, ge=0.0, examples=[4.75])
+
+    @field_validator("category", mode="before")
+    @classmethod
+    def _validate_category(cls, v: Any) -> Any:
+        return _normalize_category_val(v)
+
+    @field_validator("expiry_date", mode="before")
+    @classmethod
+    def _validate_expiry_date(cls, v: Any) -> Any:
+        return _normalize_expiry_date(v)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _remap_frontend_fields(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            d = dict(data)
+            if "unit_type" in d and "unit" not in d:
+                d["unit"] = d["unit_type"]
+            if "reorder_level" in d and "reorder_threshold" not in d:
+                d["reorder_threshold"] = d["reorder_level"]
+            return d
+        return data
 
 
 class RequisitionStatusUpdate(BaseModel):

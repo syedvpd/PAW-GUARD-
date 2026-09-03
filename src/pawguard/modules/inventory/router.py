@@ -73,14 +73,7 @@ async def create_item(
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: InventoryService = Depends(get_inventory_service),
-) -> ApiResponse[RequisitionOrderResponse]:
-    # Workflow 8: the requisition APPROVAL step requires administrator
-    # authority; the requesting Inventory Manager cannot self-approve. Other
-    # transitions (reject, mark received) remain with inventory:update.
-    if payload.status == RequisitionStatus.APPROVED and not has_permission(
-        current_user.user, "system:admin"
-    ):
-        raise ForbiddenError("Requisition approval requires administrator privileges.")
+) -> ApiResponse[InventoryItemResponse]:
     ip = request.client.host if request.client else None
     item = await service.create_item(
         payload,
@@ -254,6 +247,13 @@ async def update_requisition_status(
     current_user: CurrentUser = Depends(get_current_user),
     service: InventoryService = Depends(get_inventory_service),
 ) -> ApiResponse[RequisitionOrderResponse]:
+    # Workflow 8: the requisition APPROVAL step requires administrator
+    # authority; the requesting Inventory Manager cannot self-approve. Other
+    # transitions (reject, mark received) remain with inventory:update.
+    if payload.status == RequisitionStatus.APPROVED and not has_permission(
+        current_user.user, "system:admin"
+    ):
+        raise ForbiddenError("Requisition approval requires administrator privileges.")
     ip = request.client.host if request.client else None
     req = await service.update_requisition_status(
         current_user.id,

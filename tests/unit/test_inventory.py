@@ -1,11 +1,12 @@
 """Unit tests for InventoryService with mocked repository."""
 
 import uuid
+from datetime import UTC
 from unittest.mock import AsyncMock
 
 import pytest
 
-from pawguard.core.exceptions import ConflictError, NotFoundError
+from pawguard.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from pawguard.core.pagination import PageParams
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
@@ -370,3 +371,109 @@ class TestInventoryService:
         result = await service.record_movement(uuid.uuid4(), payload, actor_id=uuid.uuid4())
         assert result.reference_type == "foster_supply"
         assert result.reference_id == ref_id
+
+    def test_inventory_item_create_frontend_compatibility(self):
+        # Frontend might send 'Consumables', 'initial_quantity', 'unit_type', or empty expiry_date string
+        raw_data = {
+            "name": "induja",
+            "category": "Consumables",
+            "unit_type": "vials",
+            "initial_quantity": 50,
+            "reorder_threshold": 10,
+            "unit_cost": 5,
+            "expiry_date": "",
+        }
+        item = InventoryItemCreate.model_validate(raw_data)
+        assert item.name == "induja"
+        assert item.category == ItemCategory.CONSUMABLE
+        assert item.unit == "vials"
+        assert item.quantity == 50.0
+        assert item.expiry_date is None
+
+    @pytest.mark.asyncio
+    async def test_router_create_item_success(self):
+        from unittest.mock import MagicMock
+
+        from pawguard.modules.auth.dependencies import CurrentUser
+        from pawguard.modules.inventory.router import create_item
+
+        service = AsyncMock(spec=InventoryService)
+        item_id = uuid.uuid4()
+        from datetime import datetime
+
+        now = datetime.now(UTC)
+        service.create_item.return_value = InventoryItem(
+            id=item_id,
+            name="induja",
+            category=ItemCategory.CONSUMABLE,
+            quantity=50.0,
+            unit="vials",
+            reorder_threshold=10.0,
+            unit_cost=5.0,
+            created_at=now,
+            updated_at=now,
+        )
+
+        mock_user = MagicMock()
+        mock_user.id = uuid.uuid4()
+        current_user = CurrentUser(
+            user=mock_user,
+            claims=MagicMock(),
+            db=MagicMock(),
+            redis=MagicMock(),
+        )
+        mock_request = MagicMock()
+        mock_request.client.host = "127.0.0.1"
+
+        payload = InventoryItemCreate(
+            name="induja",
+            category=ItemCategory.CONSUMABLE,
+            unit="vials",
+            quantity=50.0,
+            reorder_threshold=10.0,
+            unit_cost=5.0,
+        )
+        response = await create_item(
+            payload=payload,
+            request=mock_request,
+            current_user=current_user,
+            service=service,
+        )
+        assert response.data.id == item_id
+        assert response.data.name == "induja"
+        assert response.message == "Inventory item created."
+
+    @pytest.mark.asyncio
+    async def test_router_update_requisition_status_workflow8_admin_required(self):
+        from unittest.mock import MagicMock
+
+        from pawguard.modules.auth.dependencies import CurrentUser
+        from pawguard.modules.inventory.router import update_requisition_status
+        from pawguard.modules.inventory.schemas import RequisitionStatusUpdate
+
+        service = AsyncMock(spec=InventoryService)
+        req_id = uuid.uuid4()
+
+        # Regular user without system:admin
+        regular_user = MagicMock()
+        regular_user.id = uuid.uuid4()
+        regular_user.roles = []
+        regular_current_user = CurrentUser(
+            user=regular_user,
+            claims=MagicMock(),
+            db=MagicMock(),
+            redis=MagicMock(),
+        )
+
+        mock_request = MagicMock()
+        mock_request.client.host = "127.0.0.1"
+
+        payload = RequisitionStatusUpdate(status=RequisitionStatus.APPROVED)
+        with pytest.raises(ForbiddenError, match="administrator privileges"):
+            await update_requisition_status(
+                req_id=req_id,
+                payload=payload,
+                request=mock_request,
+                current_user=regular_current_user,
+                service=service,
+            )
