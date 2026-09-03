@@ -144,6 +144,61 @@ class TestFosterService:
             mock_grant.assert_awaited_once_with(user_id, foster_role.id)
 
     @pytest.mark.asyncio
+    async def test_approving_foster_with_pending_checks_succeeds(self, service, mock_repo):
+        profile_id = uuid.uuid4()
+        user_id = uuid.uuid4()
+        profile = FosterProfile(
+            id=profile_id,
+            user_id=user_id,
+            status=FosterStatus.APPLIED,
+            max_capacity=2,
+            is_available=True,
+            background_check_passed=None,
+            references_checked=None,
+            home_inspection_passed=None,
+        )
+        mock_repo.get_profile_by_id.side_effect = [profile, profile]
+
+        foster_role = type("Role", (), {"id": uuid.uuid4(), "name": "foster_family"})()
+        with (
+            patch.object(service._roles, "get_by_name", AsyncMock(return_value=foster_role)),
+            patch.object(service._user_roles, "grant_role", AsyncMock()) as mock_grant,
+        ):
+            res = await service.update_profile(
+                profile_id, FosterProfileUpdate(status=FosterStatus.APPROVED)
+            )
+            assert res.status == FosterStatus.APPROVED
+            assert res.background_check_passed is True
+            assert res.references_checked is True
+            assert res.home_inspection_passed is True
+            assert res.vetted_at is not None
+            assert res.inspected_at is not None
+            mock_grant.assert_awaited_once_with(user_id, foster_role.id)
+
+    @pytest.mark.asyncio
+    async def test_approving_foster_with_failed_check_raises_422(self, service, mock_repo):
+        from pawguard.core.exceptions import ValidationFailedError
+
+        profile_id = uuid.uuid4()
+        user_id = uuid.uuid4()
+        profile = FosterProfile(
+            id=profile_id,
+            user_id=user_id,
+            status=FosterStatus.APPLIED,
+            max_capacity=2,
+            is_available=True,
+            background_check_passed=False,
+            references_checked=True,
+            home_inspection_passed=True,
+        )
+        mock_repo.get_profile_by_id.side_effect = [profile, profile]
+
+        with pytest.raises(ValidationFailedError, match="failed background check"):
+            await service.update_profile(
+                profile_id, FosterProfileUpdate(status=FosterStatus.APPROVED)
+            )
+
+    @pytest.mark.asyncio
     async def test_get_profile(self, service, mock_repo):
         profile_id = uuid.uuid4()
         mock_repo.get_profile_by_id.return_value = FosterProfile(

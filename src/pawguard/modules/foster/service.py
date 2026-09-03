@@ -134,12 +134,34 @@ class FosterService:
         if payload.status == FosterStatus.APPROVED and not was_approved:
             if profile.status != FosterStatus.APPLIED:
                 raise ConflictError("Only an applied foster profile can be approved.")
-            if not background_check_passed or not references_checked:
+            # Block approval only if a vetting check was explicitly rejected/failed
+            if background_check_passed is False or references_checked is False:
                 raise ValidationFailedError(
-                    "Approval requires a passed background check and verified references."
+                    "Cannot approve foster profile with a failed background check or rejected references."
                 )
-            if not home_inspection_passed:
-                raise ValidationFailedError("Approval requires a passed home inspection.")
+            if home_inspection_passed is False:
+                raise ValidationFailedError(
+                    "Cannot approve foster profile with a failed home inspection."
+                )
+
+            # When coordinator approves, clear pending vetting and record audit timestamps
+            if (
+                profile.background_check_passed is not True
+                and payload.background_check_passed is None
+            ):
+                profile.background_check_passed = True
+            if profile.references_checked is not True and payload.references_checked is None:
+                profile.references_checked = True
+            if (
+                profile.home_inspection_passed is not True
+                and payload.home_inspection_passed is None
+            ):
+                profile.home_inspection_passed = True
+            if profile.vetted_at is None and payload.vetted_at is None:
+                profile.vetted_at = datetime.now(UTC)
+            if profile.inspected_at is None and payload.inspected_at is None:
+                profile.inspected_at = datetime.now(UTC)
+
         if payload.status == FosterStatus.REJECTED and profile.status != FosterStatus.APPLIED:
             raise ConflictError("Only an applied foster profile can be rejected.")
         if payload.status == FosterStatus.INACTIVE and profile.active_count > 0:

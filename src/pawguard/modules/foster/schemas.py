@@ -2,8 +2,9 @@
 
 import uuid
 from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from pawguard.modules.auth.schemas import UserProfile
 from pawguard.modules.dog.schemas import DogProfileResponse
@@ -74,6 +75,39 @@ class FosterProfileUpdate(BaseModel):
     home_inspection_notes: str | None = Field(None, examples=["Fenced yard verified."])
     home_inspection_address: str | None = Field(None, examples=["123 Shelter Way"])
     inspected_at: datetime | None = Field(None)
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def normalize_status(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            v_clean = v.strip().lower()
+            return v_clean
+        return v
+
+    @field_validator("vetted_at", "inspected_at", mode="before")
+    @classmethod
+    def normalize_empty_datetimes(cls, v: Any) -> Any:
+        if isinstance(v, str) and v.strip() == "":
+            return None
+        return v
+
+    @field_validator(
+        "background_check_passed",
+        "references_checked",
+        "home_inspection_passed",
+        "is_available",
+        mode="before",
+    )
+    @classmethod
+    def normalize_booleans(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            if v.strip().lower() in ("true", "1", "yes"):
+                return True
+            if v.strip().lower() in ("false", "0", "no"):
+                return False
+            if v.strip() == "":
+                return None
+        return v
 
 
 class FosterProfileResponse(BaseModel):

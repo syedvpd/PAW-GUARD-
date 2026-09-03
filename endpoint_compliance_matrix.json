@@ -1,0 +1,5207 @@
+{
+  "summary": {
+    "total_openapi_endpoints": 561,
+    "unique_paths": 430,
+    "internal_system_routes": 17,
+    "total_route_surface": 578
+  },
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/register",
+      "module": "auth",
+      "operation_id": "register_api_v1_auth_register_post",
+      "summary": "Register",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "module": "auth",
+      "operation_id": "login_api_v1_auth_login_post",
+      "summary": "Login",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/mfa/verify",
+      "module": "auth",
+      "operation_id": "verify_mfa_login_api_v1_auth_mfa_verify_post",
+      "summary": "Verify Mfa Login",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/refresh",
+      "module": "auth",
+      "operation_id": "refresh_api_v1_auth_refresh_post",
+      "summary": "Refresh",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/logout",
+      "module": "auth",
+      "operation_id": "logout_api_v1_auth_logout_post",
+      "summary": "Logout",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/logout-all",
+      "module": "auth",
+      "operation_id": "logout_all_api_v1_auth_logout_all_post",
+      "summary": "Logout All",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/auth/me",
+      "module": "auth",
+      "operation_id": "get_me_api_v1_auth_me_get",
+      "summary": "Get Me",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/auth/me",
+      "module": "auth",
+      "operation_id": "update_profile_api_v1_auth_me_put",
+      "summary": "Update Profile",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/auth/me",
+      "module": "auth",
+      "operation_id": "delete_my_account_api_v1_auth_me_delete",
+      "summary": "Delete My Account",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/auth/users/{user_id}/summary",
+      "module": "auth",
+      "operation_id": "get_user_summary_api_v1_auth_users__user_id__summary_get",
+      "summary": "Get User Summary",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/auth/sessions",
+      "module": "auth",
+      "operation_id": "list_sessions_api_v1_auth_sessions_get",
+      "summary": "List Sessions",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/auth/sessions/{session_id}",
+      "module": "auth",
+      "operation_id": "revoke_session_api_v1_auth_sessions__session_id__delete",
+      "summary": "Revoke Session",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/password/change",
+      "module": "auth",
+      "operation_id": "change_password_api_v1_auth_password_change_post",
+      "summary": "Change Password",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/create-password",
+      "module": "auth",
+      "operation_id": "create_initial_password_api_v1_auth_create_password_post",
+      "summary": "Create initial password for social/OAuth user",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/password/create",
+      "module": "auth",
+      "operation_id": "create_initial_password_api_v1_auth_password_create_post",
+      "summary": "Create initial password for social/OAuth user",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/password/reset/request",
+      "module": "auth",
+      "operation_id": "request_password_reset_api_v1_auth_password_reset_request_post",
+      "summary": "Request Password Reset",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/password/reset/confirm",
+      "module": "auth",
+      "operation_id": "confirm_password_reset_api_v1_auth_password_reset_confirm_post",
+      "summary": "Confirm Password Reset",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/email/verify/confirm",
+      "module": "auth",
+      "operation_id": "confirm_email_verification_api_v1_auth_email_verify_confirm_post",
+      "summary": "Confirm Email Verification",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/email/verify/request",
+      "module": "auth",
+      "operation_id": "request_email_verification_api_v1_auth_email_verify_request_post",
+      "summary": "Request Email Verification",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/mfa/enroll",
+      "module": "auth",
+      "operation_id": "enroll_mfa_api_v1_auth_mfa_enroll_post",
+      "summary": "Enroll Mfa",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/mfa/enroll/confirm",
+      "module": "auth",
+      "operation_id": "confirm_mfa_enrollment_api_v1_auth_mfa_enroll_confirm_post",
+      "summary": "Confirm Mfa Enrollment",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/mfa/disable",
+      "module": "auth",
+      "operation_id": "disable_mfa_api_v1_auth_mfa_disable_post",
+      "summary": "Disable Mfa",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/oauth/login",
+      "module": "auth",
+      "operation_id": "oauth_login_api_v1_auth_oauth_login_post",
+      "summary": "Oauth Login",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/auth/oauth/accounts",
+      "module": "auth",
+      "operation_id": "list_oauth_accounts_api_v1_auth_oauth_accounts_get",
+      "summary": "List Oauth Accounts",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/oauth/link",
+      "module": "auth",
+      "operation_id": "link_oauth_account_api_v1_auth_oauth_link_post",
+      "summary": "Link Oauth Account",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/auth/oauth/accounts/{account_id}",
+      "module": "auth",
+      "operation_id": "unlink_oauth_account_api_v1_auth_oauth_accounts__account_id__delete",
+      "summary": "Unlink Oauth Account",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/roles",
+      "module": "admin",
+      "operation_id": "list_roles_api_v1_admin_roles_get",
+      "summary": "List Roles",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/roles",
+      "module": "admin",
+      "operation_id": "create_role_api_v1_admin_roles_post",
+      "summary": "Create Role",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/roles/{role_id}",
+      "module": "admin",
+      "operation_id": "get_role_api_v1_admin_roles__role_id__get",
+      "summary": "Get Role",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/admin/roles/{role_id}",
+      "module": "admin",
+      "operation_id": "update_role_api_v1_admin_roles__role_id__put",
+      "summary": "Update Role",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/admin/roles/{role_id}",
+      "module": "admin",
+      "operation_id": "delete_role_api_v1_admin_roles__role_id__delete",
+      "summary": "Delete Role",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/permissions",
+      "module": "admin",
+      "operation_id": "list_permissions_api_v1_admin_permissions_get",
+      "summary": "List Permissions",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/users",
+      "module": "admin",
+      "operation_id": "list_users_api_v1_admin_users_get",
+      "summary": "List Users",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/users",
+      "module": "admin",
+      "operation_id": "create_user_api_v1_admin_users_post",
+      "summary": "Create User",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/users/{user_id}",
+      "module": "admin",
+      "operation_id": "get_user_api_v1_admin_users__user_id__get",
+      "summary": "Get User",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/admin/users/{user_id}",
+      "module": "admin",
+      "operation_id": "update_user_api_v1_admin_users__user_id__put",
+      "summary": "Update User",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/admin/users/{user_id}",
+      "module": "admin",
+      "operation_id": "delete_user_api_v1_admin_users__user_id__delete",
+      "summary": "Delete User",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/users/restore-and-reset",
+      "module": "admin",
+      "operation_id": "restore_and_reset_password_api_v1_admin_users_restore_and_reset_post",
+      "summary": "Restore And Reset Password",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/users/{user_id}/permissions",
+      "module": "admin",
+      "operation_id": "list_user_direct_permissions_api_v1_admin_users__user_id__permissions_get",
+      "summary": "List User Direct Permissions",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/users/{user_id}/permissions",
+      "module": "admin",
+      "operation_id": "grant_user_direct_permissions_api_v1_admin_users__user_id__permissions_post",
+      "summary": "Grant User Direct Permissions",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/admin/users/{user_id}/permissions/{permission_code}",
+      "module": "admin",
+      "operation_id": "revoke_user_direct_permission_api_v1_admin_users__user_id__permissions__permission_code__delete",
+      "summary": "Revoke User Direct Permission",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/notifications/overview",
+      "module": "admin-notifications",
+      "operation_id": "get_notifications_overview_api_v1_admin_notifications_overview_get",
+      "summary": "Get Notifications Overview",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/notifications/global",
+      "module": "admin-notifications",
+      "operation_id": "get_global_config_api_v1_admin_notifications_global_get",
+      "summary": "Get Global Config",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/admin/notifications/global",
+      "module": "admin-notifications",
+      "operation_id": "update_global_config_api_v1_admin_notifications_global_put",
+      "summary": "Update Global Config",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/notifications/modules",
+      "module": "admin-notifications",
+      "operation_id": "list_module_configs_api_v1_admin_notifications_modules_get",
+      "summary": "List Module Configs",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/admin/notifications/modules/{module_name}",
+      "module": "admin-notifications",
+      "operation_id": "update_module_config_api_v1_admin_notifications_modules__module_name__put",
+      "summary": "Update Module Config",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/notifications/triggers",
+      "module": "admin-notifications",
+      "operation_id": "list_trigger_configs_api_v1_admin_notifications_triggers_get",
+      "summary": "List Trigger Configs",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/admin/notifications/triggers/{trigger_id}",
+      "module": "admin-notifications",
+      "operation_id": "update_trigger_config_api_v1_admin_notifications_triggers__trigger_id__put",
+      "summary": "Update Trigger Config",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/notifications/approvals",
+      "module": "admin-notifications",
+      "operation_id": "list_approval_queue_api_v1_admin_notifications_approvals_get",
+      "summary": "List Approval Queue",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/notifications/approvals/{queue_id}",
+      "module": "admin-notifications",
+      "operation_id": "get_approval_item_api_v1_admin_notifications_approvals__queue_id__get",
+      "summary": "Get Approval Item",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/notifications/approvals/{queue_id}/approve",
+      "module": "admin-notifications",
+      "operation_id": "approve_notification_api_v1_admin_notifications_approvals__queue_id__approve_post",
+      "summary": "Approve Notification",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/notifications/approvals/{queue_id}/reject",
+      "module": "admin-notifications",
+      "operation_id": "reject_notification_api_v1_admin_notifications_approvals__queue_id__reject_post",
+      "summary": "Reject Notification",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/notifications/approvals/{queue_id}/pause",
+      "module": "admin-notifications",
+      "operation_id": "pause_notification_api_v1_admin_notifications_approvals__queue_id__pause_post",
+      "summary": "Pause Notification",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/notifications/approvals/{queue_id}/resume",
+      "module": "admin-notifications",
+      "operation_id": "resume_notification_api_v1_admin_notifications_approvals__queue_id__resume_post",
+      "summary": "Resume Notification",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/notifications/dispatch-logs",
+      "module": "admin-notifications",
+      "operation_id": "list_dispatch_logs_api_v1_admin_notifications_dispatch_logs_get",
+      "summary": "List Dispatch Logs",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/notifications/audit-logs",
+      "module": "admin-notifications",
+      "operation_id": "list_governance_audit_logs_api_v1_admin_notifications_audit_logs_get",
+      "summary": "List Governance Audit Logs",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboards/rescue",
+      "module": "dashboards",
+      "operation_id": "get_rescue_dashboard_api_v1_dashboards_rescue_get",
+      "summary": "Get Rescue Dashboard",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboards/rescue/operations",
+      "module": "dashboards",
+      "operation_id": "get_rescue_operations_dashboard_api_v1_dashboards_rescue_operations_get",
+      "summary": "Get Rescue Operations Dashboard",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboards/rescue/stream",
+      "module": "dashboards",
+      "operation_id": "stream_rescue_dashboard_api_v1_dashboards_rescue_stream_get",
+      "summary": "Stream Rescue Dashboard",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboards/shelter",
+      "module": "dashboards",
+      "operation_id": "get_shelter_dashboard_api_v1_dashboards_shelter_get",
+      "summary": "Get Shelter Dashboard",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboards/medical",
+      "module": "dashboards",
+      "operation_id": "get_medical_dashboard_api_v1_dashboards_medical_get",
+      "summary": "Get Medical Dashboard",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboards/adoption",
+      "module": "dashboards",
+      "operation_id": "get_adoption_dashboard_api_v1_dashboards_adoption_get",
+      "summary": "Get Adoption Dashboard",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboards/foster",
+      "module": "dashboards",
+      "operation_id": "get_foster_dashboard_api_v1_dashboards_foster_get",
+      "summary": "Get Foster Dashboard",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboards/volunteer",
+      "module": "dashboards",
+      "operation_id": "get_volunteer_dashboard_api_v1_dashboards_volunteer_get",
+      "summary": "Get Volunteer Dashboard",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboards/inventory",
+      "module": "dashboards",
+      "operation_id": "get_inventory_dashboard_api_v1_dashboards_inventory_get",
+      "summary": "Get Inventory Dashboard",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboards/finance",
+      "module": "dashboards",
+      "operation_id": "get_finance_dashboard_api_v1_dashboards_finance_get",
+      "summary": "Get Finance Dashboard",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboards/donor",
+      "module": "dashboards",
+      "operation_id": "get_donor_dashboard_api_v1_dashboards_donor_get",
+      "summary": "Get Donor Dashboard",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboards/staff",
+      "module": "dashboards",
+      "operation_id": "get_staff_dashboard_api_v1_dashboards_staff_get",
+      "summary": "Get Staff Dashboard",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboards/executive",
+      "module": "dashboards",
+      "operation_id": "get_executive_dashboard_api_v1_dashboards_executive_get",
+      "summary": "Get Executive Dashboard",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboards/public",
+      "module": "dashboards",
+      "operation_id": "get_public_dashboard_api_v1_dashboards_public_get",
+      "summary": "Get Public Dashboard",
+      "auth": "public",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dashboards/operations",
+      "module": "dashboards",
+      "operation_id": "get_operations_dashboard_api_v1_dashboards_operations_get",
+      "summary": "Get Operations Dashboard",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/dashboard/metrics",
+      "module": "admin-dashboard",
+      "operation_id": "get_system_metrics_api_v1_admin_dashboard_metrics_get",
+      "summary": "Get System Metrics",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/dashboard/summary",
+      "module": "admin-dashboard",
+      "operation_id": "get_summary_api_v1_admin_dashboard_summary_get",
+      "summary": "Get Summary",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/dashboard/kpis",
+      "module": "admin-dashboard",
+      "operation_id": "get_kpis_api_v1_admin_dashboard_kpis_get",
+      "summary": "Get Kpis",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/dashboard/charts",
+      "module": "admin-dashboard",
+      "operation_id": "get_charts_api_v1_admin_dashboard_charts_get",
+      "summary": "Get Charts",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/dashboard/recent-activity",
+      "module": "admin-dashboard",
+      "operation_id": "get_recent_activity_api_v1_admin_dashboard_recent_activity_get",
+      "summary": "Get Recent Activity",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/dashboard/inventory-alerts",
+      "module": "admin-dashboard",
+      "operation_id": "get_inventory_alerts_api_v1_admin_dashboard_inventory_alerts_get",
+      "summary": "Get Inventory Alerts",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/dashboard/donation-summary",
+      "module": "admin-dashboard",
+      "operation_id": "get_donation_summary_api_v1_admin_dashboard_donation_summary_get",
+      "summary": "Get Donation Summary",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/dashboard/rescue-stats",
+      "module": "admin-dashboard",
+      "operation_id": "get_rescue_stats_api_v1_admin_dashboard_rescue_stats_get",
+      "summary": "Get Rescue Stats",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/dashboard/medical-stats",
+      "module": "admin-dashboard",
+      "operation_id": "get_medical_stats_api_v1_admin_dashboard_medical_stats_get",
+      "summary": "Get Medical Stats",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/dashboard/adoption-stats",
+      "module": "admin-dashboard",
+      "operation_id": "get_adoption_stats_api_v1_admin_dashboard_adoption_stats_get",
+      "summary": "Get Adoption Stats",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/dashboard/volunteer-stats",
+      "module": "admin-dashboard",
+      "operation_id": "get_volunteer_stats_api_v1_admin_dashboard_volunteer_stats_get",
+      "summary": "Get Volunteer Stats",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/dashboard/notification-summary",
+      "module": "admin-dashboard",
+      "operation_id": "get_notification_summary_api_v1_admin_dashboard_notification_summary_get",
+      "summary": "Get Notification Summary",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/dashboard/shelter-stats",
+      "module": "admin-dashboard",
+      "operation_id": "get_shelter_stats_api_v1_admin_dashboard_shelter_stats_get",
+      "summary": "Get Shelter Stats",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/dashboard/foster-stats",
+      "module": "admin-dashboard",
+      "operation_id": "get_foster_stats_api_v1_admin_dashboard_foster_stats_get",
+      "summary": "Get Foster Stats",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/dashboard/lost-found-stats",
+      "module": "admin-dashboard",
+      "operation_id": "get_lost_found_stats_api_v1_admin_dashboard_lost_found_stats_get",
+      "summary": "Get Lost Found Stats",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/dashboard/grievance-stats",
+      "module": "admin-dashboard",
+      "operation_id": "get_grievance_stats_api_v1_admin_dashboard_grievance_stats_get",
+      "summary": "Get Grievance Stats",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/audit-logs",
+      "module": "admin-audit",
+      "operation_id": "list_audit_logs_api_v1_admin_audit_logs_get",
+      "summary": "List Audit Logs",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/audit-logs/export",
+      "module": "admin-audit",
+      "operation_id": "export_audit_logs_api_v1_admin_audit_logs_export_post",
+      "summary": "Export Audit Logs",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/audit-logs/export",
+      "module": "admin-audit",
+      "operation_id": "export_audit_logs_api_v1_admin_audit_logs_export_get",
+      "summary": "Export Audit Logs",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/audit-logs/{entry_id}",
+      "module": "admin-audit",
+      "operation_id": "get_audit_log_api_v1_admin_audit_logs__entry_id__get",
+      "summary": "Get Audit Log",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rescue/report",
+      "module": "rescue",
+      "operation_id": "report_incident_api_v1_rescue_report_post",
+      "summary": "Report Incident",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rescue/track/{ticket_number}",
+      "module": "rescue",
+      "operation_id": "track_rescue_incident_api_v1_rescue_track__ticket_number__get",
+      "summary": "Dynamic tracking for emergency rescue incidents",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rescue/media-upload-url",
+      "module": "rescue",
+      "operation_id": "request_rescue_media_upload_url_api_v1_rescue_media_upload_url_post",
+      "summary": "Request Rescue Media Upload Url",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rescue/{request_id}/verify",
+      "module": "rescue",
+      "operation_id": "verify_request_api_v1_rescue__request_id__verify_post",
+      "summary": "Verify Request",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rescue/{request_id}/assign-coordinator",
+      "module": "rescue",
+      "operation_id": "assign_coordinator_api_v1_rescue__request_id__assign_coordinator_post",
+      "summary": "Assign Coordinator",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rescue/{request_id}/dispatch",
+      "module": "rescue",
+      "operation_id": "dispatch_team_api_v1_rescue__request_id__dispatch_post",
+      "summary": "Dispatch Team",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/rescue/dispatch/{dispatch_id}",
+      "module": "rescue",
+      "operation_id": "update_dispatch_api_v1_rescue_dispatch__dispatch_id__patch",
+      "summary": "Update Dispatch",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/rescue/dispatch/{dispatch_id}",
+      "module": "rescue",
+      "operation_id": "delete_dispatch_api_v1_rescue_dispatch__dispatch_id__delete",
+      "summary": "Delete Dispatch",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/rescue/dispatches/{dispatch_id}",
+      "module": "rescue",
+      "operation_id": "update_dispatch_api_v1_rescue_dispatches__dispatch_id__patch",
+      "summary": "Update Dispatch",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/rescue/dispatches/{dispatch_id}",
+      "module": "rescue",
+      "operation_id": "delete_dispatch_api_v1_rescue_dispatches__dispatch_id__delete",
+      "summary": "Delete Dispatch",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rescue/{request_id}/escalate",
+      "module": "rescue",
+      "operation_id": "escalate_rescue_api_v1_rescue__request_id__escalate_post",
+      "summary": "Escalate Rescue",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rescue/{request_id}/located",
+      "module": "rescue",
+      "operation_id": "mark_located_api_v1_rescue__request_id__located_post",
+      "summary": "Mark Located",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rescue/{request_id}/secured",
+      "module": "rescue",
+      "operation_id": "mark_rescued_api_v1_rescue__request_id__secured_post",
+      "summary": "Mark Rescued",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rescue/{request_id}/admitted",
+      "module": "rescue",
+      "operation_id": "mark_admitted_api_v1_rescue__request_id__admitted_post",
+      "summary": "Mark Admitted",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rescue/{request_id}/fail",
+      "module": "rescue",
+      "operation_id": "fail_rescue_api_v1_rescue__request_id__fail_post",
+      "summary": "Fail Rescue",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rescue/{request_id}/accept",
+      "module": "rescue",
+      "operation_id": "accept_dispatch_api_v1_rescue__request_id__accept_post",
+      "summary": "Accept Dispatch",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rescue/{request_id}/reports",
+      "module": "rescue",
+      "operation_id": "add_observation_report_api_v1_rescue__request_id__reports_post",
+      "summary": "Add Observation Report",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rescue/status",
+      "module": "rescue",
+      "operation_id": "get_public_status_api_v1_rescue_status_get",
+      "summary": "Get Public Status",
+      "auth": "public",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rescue/dispatch/stats",
+      "module": "rescue",
+      "operation_id": "get_dispatch_counts_api_v1_rescue_dispatch_stats_get",
+      "summary": "Get Dispatch Counts",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rescue/dispatches/stats",
+      "module": "rescue",
+      "operation_id": "get_dispatch_counts_api_v1_rescue_dispatches_stats_get",
+      "summary": "Get Dispatch Counts",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rescue/dispatch/summary",
+      "module": "rescue",
+      "operation_id": "get_dispatch_counts_api_v1_rescue_dispatch_summary_get",
+      "summary": "Get Dispatch Counts",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rescue/dispatches/summary",
+      "module": "rescue",
+      "operation_id": "get_dispatch_counts_api_v1_rescue_dispatches_summary_get",
+      "summary": "Get Dispatch Counts",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rescue/dispatch/counts",
+      "module": "rescue",
+      "operation_id": "get_dispatch_counts_api_v1_rescue_dispatch_counts_get",
+      "summary": "Get Dispatch Counts",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rescue/dispatches/counts",
+      "module": "rescue",
+      "operation_id": "get_dispatch_counts_api_v1_rescue_dispatches_counts_get",
+      "summary": "Rescue dispatch aggregate counts",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rescue/dispatches",
+      "module": "rescue",
+      "operation_id": "list_dispatches_api_v1_rescue_dispatches_get",
+      "summary": "List Dispatches",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rescue/{request_id}",
+      "module": "rescue",
+      "operation_id": "get_request_api_v1_rescue__request_id__get",
+      "summary": "Get Request",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/rescue/{request_id}",
+      "module": "rescue",
+      "operation_id": "soft_delete_request_api_v1_rescue__request_id__delete",
+      "summary": "Soft Delete Request",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rescue",
+      "module": "rescue",
+      "operation_id": "list_requests_api_v1_rescue_get",
+      "summary": "List Requests",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rescue/bulk/status-update",
+      "module": "rescue",
+      "operation_id": "bulk_update_rescue_status_api_v1_rescue_bulk_status_update_post",
+      "summary": "Bulk Update Rescue Status",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rescue/bulk/delete",
+      "module": "rescue",
+      "operation_id": "bulk_delete_rescue_requests_api_v1_rescue_bulk_delete_post",
+      "summary": "Bulk Delete Rescue Requests",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rescue/agents/location",
+      "module": "rescue",
+      "operation_id": "update_agent_location_api_v1_rescue_agents_location_post",
+      "summary": "Update Agent Location",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rescue/{request_id}/suggest-agents",
+      "module": "rescue",
+      "operation_id": "suggest_nearest_agents_api_v1_rescue__request_id__suggest_agents_get",
+      "summary": "Suggest Nearest Agents",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rescue/agents/availability",
+      "module": "rescue",
+      "operation_id": "list_agent_availability_api_v1_rescue_agents_availability_get",
+      "summary": "List Agent Availability",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rescue/vehicles/availability",
+      "module": "rescue",
+      "operation_id": "list_vehicle_availability_api_v1_rescue_vehicles_availability_get",
+      "summary": "List Vehicle Availability",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rescue/{request_id}/tracking/start",
+      "module": "rescue",
+      "operation_id": "start_rescue_tracking_api_v1_rescue__request_id__tracking_start_post",
+      "summary": "Start Rescue Tracking",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rescue/{request_id}/tracking/stop",
+      "module": "rescue",
+      "operation_id": "stop_rescue_tracking_api_v1_rescue__request_id__tracking_stop_post",
+      "summary": "Stop Rescue Tracking",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rescue/{request_id}/location",
+      "module": "rescue",
+      "operation_id": "get_rescue_location_api_v1_rescue__request_id__location_get",
+      "summary": "Get Rescue Location",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rescue/{request_id}/events",
+      "module": "rescue",
+      "operation_id": "list_rescue_events_api_v1_rescue__request_id__events_get",
+      "summary": "List Rescue Events",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/public/rescue/report",
+      "module": "public-rescue",
+      "operation_id": "public_report_incident_api_v1_public_rescue_report_post",
+      "summary": "Public Report Incident",
+      "auth": "public",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/public/rescue/track/{ticket_number}",
+      "module": "public-rescue",
+      "operation_id": "track_rescue_incident_api_v1_public_rescue_track__ticket_number__get",
+      "summary": "Dynamic unauthenticated tracking for emergency rescue incidents",
+      "auth": "public",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/public/rescue/media-upload-url",
+      "module": "public-rescue",
+      "operation_id": "request_rescue_media_upload_url_api_v1_public_rescue_media_upload_url_post",
+      "summary": "Request Rescue Media Upload Url",
+      "auth": "public",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rescue-centres",
+      "module": "rescue-centres",
+      "operation_id": "list_rescue_centres_api_v1_rescue_centres_get",
+      "summary": "List Rescue Centres",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rescue-centres",
+      "module": "rescue-centres",
+      "operation_id": "create_rescue_centre_api_v1_rescue_centres_post",
+      "summary": "Create Rescue Centre",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rescue-centres/{facility_id}",
+      "module": "rescue-centres",
+      "operation_id": "get_rescue_centre_api_v1_rescue_centres__facility_id__get",
+      "summary": "Get Rescue Centre",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/rescue-centres/{facility_id}",
+      "module": "rescue-centres",
+      "operation_id": "update_rescue_centre_api_v1_rescue_centres__facility_id__put",
+      "summary": "Update Rescue Centre",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/rescue-centres/{facility_id}",
+      "module": "rescue-centres",
+      "operation_id": "delete_rescue_centre_api_v1_rescue_centres__facility_id__delete",
+      "summary": "Delete Rescue Centre",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/rescue-centres/{facility_id}/status",
+      "module": "rescue-centres",
+      "operation_id": "update_rescue_centre_status_api_v1_rescue_centres__facility_id__status_put",
+      "summary": "Update Rescue Centre Status",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rescue-centres/bulk/delete",
+      "module": "rescue-centres",
+      "operation_id": "bulk_delete_rescue_centres_api_v1_rescue_centres_bulk_delete_post",
+      "summary": "Bulk Delete Rescue Centres",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rescue-centres/bulk/status",
+      "module": "rescue-centres",
+      "operation_id": "bulk_update_rescue_centre_status_api_v1_rescue_centres_bulk_status_post",
+      "summary": "Bulk Update Rescue Centre Status",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dogs",
+      "module": "dogs",
+      "operation_id": "register_dog_api_v1_dogs_post",
+      "summary": "Register Dog",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dogs",
+      "module": "dogs",
+      "operation_id": "list_dogs_api_v1_dogs_get",
+      "summary": "List Dogs",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dogs/{dog_id}",
+      "module": "dogs",
+      "operation_id": "get_dog_api_v1_dogs__dog_id__get",
+      "summary": "Get Dog",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/dogs/{dog_id}",
+      "module": "dogs",
+      "operation_id": "update_dog_api_v1_dogs__dog_id__put",
+      "summary": "Update Dog",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/dogs/{dog_id}",
+      "module": "dogs",
+      "operation_id": "soft_delete_dog_api_v1_dogs__dog_id__delete",
+      "summary": "Soft Delete Dog",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dogs/admin/dogs/{dog_id}",
+      "module": "dogs",
+      "operation_id": "get_dog_api_v1_dogs_admin_dogs__dog_id__get",
+      "summary": "Get Dog",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dogs/{dog_id}/timeline",
+      "module": "dogs",
+      "operation_id": "get_dog_timeline_api_v1_dogs__dog_id__timeline_get",
+      "summary": "Get Dog Timeline",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dogs/{dog_id}/public-scan",
+      "module": "dogs",
+      "operation_id": "public_scan_dog_api_v1_dogs__dog_id__public_scan_get",
+      "summary": "Privacy-safe public dog QR scan",
+      "auth": "public",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dogs/{dog_id}/qr-image",
+      "module": "dogs",
+      "operation_id": "dog_qr_image_api_v1_dogs__dog_id__qr_image_get",
+      "summary": "Generate a staff-only dog profile QR image",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dogs/{dog_id}/weight",
+      "module": "dogs",
+      "operation_id": "record_dog_weight_api_v1_dogs__dog_id__weight_post",
+      "summary": "Record Dog Weight",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dogs/{dog_id}/weights",
+      "module": "dogs",
+      "operation_id": "get_dog_weight_history_api_v1_dogs__dog_id__weights_get",
+      "summary": "Get Dog Weight History",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dogs/admin/dogs/{dog_id}/status",
+      "module": "dogs",
+      "operation_id": "update_dog_status_api_v1_dogs_admin_dogs__dog_id__status_patch",
+      "summary": "Update Dog Status",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/dogs/{dog_id}/status",
+      "module": "dogs",
+      "operation_id": "update_dog_status_api_v1_dogs__dog_id__status_patch",
+      "summary": "Update Dog Status",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dogs/bulk/status-update",
+      "module": "dogs",
+      "operation_id": "bulk_update_dog_status_api_v1_dogs_bulk_status_update_post",
+      "summary": "Bulk Update Dog Status",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dogs/bulk/delete",
+      "module": "dogs",
+      "operation_id": "bulk_delete_dogs_api_v1_dogs_bulk_delete_post",
+      "summary": "Bulk Delete Dogs",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dogs/{dog_id}/safety-tag",
+      "module": "dogs",
+      "operation_id": "provision_dog_safety_tag_api_v1_dogs__dog_id__safety_tag_post",
+      "summary": "Provision a permanent Safety Tag for a Dog Master profile",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/dogs/{dog_id}/safety-tag",
+      "module": "dogs",
+      "operation_id": "get_dog_safety_tag_api_v1_dogs__dog_id__safety_tag_get",
+      "summary": "Get active Safety Tag metadata for a Dog Master profile",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/dogs/{dog_id}/safety-tag",
+      "module": "dogs",
+      "operation_id": "deactivate_dog_safety_tag_api_v1_dogs__dog_id__safety_tag_delete",
+      "summary": "Deactivate/revoke active Safety Tag for tag replacement",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/dogs/safety-tag/resolve",
+      "module": "dogs",
+      "operation_id": "resolve_dog_safety_tag_api_v1_dogs_safety_tag_resolve_post",
+      "summary": "Resolve a Safety Tag raw_token to its exact Dog Master profile",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/companion-pets",
+      "module": "companion-pets",
+      "operation_id": "create_pet_api_v1_companion_pets_post",
+      "summary": "Create an owner companion pet",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/companion-pets",
+      "module": "companion-pets",
+      "operation_id": "list_pets_api_v1_companion_pets_get",
+      "summary": "List companion pets visible to the caller",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/companion-pets/clinics",
+      "module": "companion-pets",
+      "operation_id": "list_clinics_api_v1_companion_pets_clinics_get",
+      "summary": "List active veterinary clinics",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/companion-pets/clinics",
+      "module": "companion-pets",
+      "operation_id": "create_clinic_api_v1_companion_pets_clinics_post",
+      "summary": "Create a veterinary clinic directory entry",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/companion-pets/clinics/{clinic_id}",
+      "module": "companion-pets",
+      "operation_id": "get_clinic_api_v1_companion_pets_clinics__clinic_id__get",
+      "summary": "Get single veterinary clinic details",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/companion-pets/clinics/{clinic_id}",
+      "module": "companion-pets",
+      "operation_id": "update_clinic_api_v1_companion_pets_clinics__clinic_id__patch",
+      "summary": "Update a veterinary clinic directory entry",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/companion-pets/clinics/{clinic_id}",
+      "module": "companion-pets",
+      "operation_id": "delete_clinic_api_v1_companion_pets_clinics__clinic_id__delete",
+      "summary": "Soft-delete a veterinary clinic directory entry",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/companion-pets/clinics/{clinic_id}/veterinarians",
+      "module": "companion-pets",
+      "operation_id": "list_clinic_veterinarians_api_v1_companion_pets_clinics__clinic_id__veterinarians_get",
+      "summary": "List veterinarians available at a veterinary clinic for appointment booking",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/companion-pets/appointments",
+      "module": "companion-pets",
+      "operation_id": "list_appointments_api_v1_companion_pets_appointments_get",
+      "summary": "List authorized veterinary appointments",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/companion-pets/appointments",
+      "module": "companion-pets",
+      "operation_id": "create_appointment_api_v1_companion_pets_appointments_post",
+      "summary": "Book a veterinary appointment",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/companion-pets/{pet_id}",
+      "module": "companion-pets",
+      "operation_id": "get_pet_api_v1_companion_pets__pet_id__get",
+      "summary": "Get an authorized companion pet profile",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/companion-pets/{pet_id}",
+      "module": "companion-pets",
+      "operation_id": "update_pet_api_v1_companion_pets__pet_id__patch",
+      "summary": "Update an authorized companion pet profile",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/companion-pets/{pet_id}",
+      "module": "companion-pets",
+      "operation_id": "delete_pet_api_v1_companion_pets__pet_id__delete",
+      "summary": "Soft-delete an owned companion pet",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/companion-pets/{pet_id}/photo-upload-url",
+      "module": "companion-pets",
+      "operation_id": "request_pet_photo_upload_url_api_v1_companion_pets__pet_id__photo_upload_url_post",
+      "summary": "Generate presigned upload URL for a companion pet photo",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/companion-pets/{pet_id}/photo/confirm",
+      "module": "companion-pets",
+      "operation_id": "confirm_pet_photo_upload_api_v1_companion_pets__pet_id__photo_confirm_post",
+      "summary": "Confirm companion pet photo upload into storage",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/companion-pets/{pet_id}/medical-files/upload-url",
+      "module": "companion-pets",
+      "operation_id": "request_medical_upload_api_v1_companion_pets__pet_id__medical_files_upload_url_post",
+      "summary": "Request a presigned medical-history upload",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/companion-pets/{pet_id}/medical-files/{file_id}/confirm",
+      "module": "companion-pets",
+      "operation_id": "confirm_medical_upload_api_v1_companion_pets__pet_id__medical_files__file_id__confirm_put",
+      "summary": "Confirm a medical-history upload",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/companion-pets/{pet_id}/medical-files",
+      "module": "companion-pets",
+      "operation_id": "list_medical_files_api_v1_companion_pets__pet_id__medical_files_get",
+      "summary": "List authorized medical-history files",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/companion-pets/medical-files/{file_id}/download-url",
+      "module": "companion-pets",
+      "operation_id": "get_medical_download_url_api_v1_companion_pets_medical_files__file_id__download_url_get",
+      "summary": "Get presigned download URL for a medical-history file",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/companion-pets/{pet_id}/medical-records",
+      "module": "companion-pets",
+      "operation_id": "create_medical_record_api_v1_companion_pets__pet_id__medical_records_post",
+      "summary": "Create a medical-history record",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/companion-pets/{pet_id}/medical-records",
+      "module": "companion-pets",
+      "operation_id": "list_medical_records_api_v1_companion_pets__pet_id__medical_records_get",
+      "summary": "List a pet's authorized medical history",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/companion-pets/medical-records/{record_id}",
+      "module": "companion-pets",
+      "operation_id": "get_medical_record_api_v1_companion_pets_medical_records__record_id__get",
+      "summary": "Get an authorized medical-history record by ID",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/companion-pets/medical-records/{record_id}",
+      "module": "companion-pets",
+      "operation_id": "update_medical_record_api_v1_companion_pets_medical_records__record_id__patch",
+      "summary": "Update an authorized medical-history record (partial update)",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/companion-pets/medical-records/{record_id}",
+      "module": "companion-pets",
+      "operation_id": "update_medical_record_api_v1_companion_pets_medical_records__record_id__put",
+      "summary": "Update an authorized medical-history record (full update)",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/companion-pets/medical-records/{record_id}",
+      "module": "companion-pets",
+      "operation_id": "delete_medical_record_api_v1_companion_pets_medical_records__record_id__delete",
+      "summary": "Soft-delete an authorized medical-history record",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/companion-pets/{pet_id}/safety-tag",
+      "module": "companion-pets",
+      "operation_id": "provision_safety_tag_api_v1_companion_pets__pet_id__safety_tag_post",
+      "summary": "Provision or rotate a QR safety tag",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/companion-pets/{pet_id}/safety-tag",
+      "module": "companion-pets",
+      "operation_id": "get_safety_tag_api_v1_companion_pets__pet_id__safety_tag_get",
+      "summary": "Read safety-tag metadata without revealing its token",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/companion-pets/{pet_id}/safety-tag",
+      "module": "companion-pets",
+      "operation_id": "deactivate_safety_tag_api_v1_companion_pets__pet_id__safety_tag_delete",
+      "summary": "Deactivate or revoke a QR safety tag",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/companion-pets/from-adoption/{application_id}",
+      "module": "companion-pets",
+      "operation_id": "create_pet_from_adoption_api_v1_companion_pets_from_adoption__application_id__post",
+      "summary": "Create a companion pet from an approved adoption application",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/companion-pets/{pet_id}/public-scan",
+      "module": "companion-pets",
+      "operation_id": "public_scan_companion_pet_api_v1_companion_pets__pet_id__public_scan_get",
+      "summary": "Privacy-safe public companion pet QR scan",
+      "auth": "public",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/companion-pets/safety-tag/scan",
+      "module": "companion-pets",
+      "operation_id": "scan_safety_tag_api_v1_companion_pets_safety_tag_scan_post",
+      "summary": "Privacy-safe public QR safety-tag scan",
+      "auth": "public",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/companion-pets/clinics/{clinic_id}/memberships",
+      "module": "companion-pets",
+      "operation_id": "add_clinic_membership_api_v1_companion_pets_clinics__clinic_id__memberships_post",
+      "summary": "Authorize a user for a veterinary clinic",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/companion-pets/appointments/{appointment_id}",
+      "module": "companion-pets",
+      "operation_id": "get_appointment_api_v1_companion_pets_appointments__appointment_id__get",
+      "summary": "Get an authorized appointment",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/companion-pets/appointments/{appointment_id}",
+      "module": "companion-pets",
+      "operation_id": "delete_appointment_api_v1_companion_pets_appointments__appointment_id__delete",
+      "summary": "Cancel an appointment via DELETE",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/companion-pets/appointments/{appointment_id}/cancel",
+      "module": "companion-pets",
+      "operation_id": "cancel_appointment_api_v1_companion_pets_appointments__appointment_id__cancel_put",
+      "summary": "Cancel an appointment (PUT alias)",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/companion-pets/appointments/{appointment_id}/cancel",
+      "module": "companion-pets",
+      "operation_id": "cancel_appointment_api_v1_companion_pets_appointments__appointment_id__cancel_patch",
+      "summary": "Cancel an appointment (PATCH alias)",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/companion-pets/appointments/{appointment_id}/cancel",
+      "module": "companion-pets",
+      "operation_id": "cancel_appointment_api_v1_companion_pets_appointments__appointment_id__cancel_post",
+      "summary": "Cancel an appointment",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/companion-pets/appointments/{appointment_id}/confirm",
+      "module": "companion-pets",
+      "operation_id": "confirm_appointment_api_v1_companion_pets_appointments__appointment_id__confirm_post",
+      "summary": "Confirm an appointment as clinic staff",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/companion-pets/{pet_id}/reminders",
+      "module": "companion-pets",
+      "operation_id": "create_reminder_api_v1_companion_pets__pet_id__reminders_post",
+      "summary": "Create a vaccination or medication reminder",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/companion-pets/{pet_id}/reminders",
+      "module": "companion-pets",
+      "operation_id": "list_reminders_api_v1_companion_pets__pet_id__reminders_get",
+      "summary": "List vaccination and medication reminders",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/companion-pets/{pet_id}/reminders/{reminder_id}",
+      "module": "companion-pets",
+      "operation_id": "delete_reminder_api_v1_companion_pets__pet_id__reminders__reminder_id__delete",
+      "summary": "Soft-delete a vaccination or medication reminder",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/adoptions/nearby-shelters",
+      "module": "adoptions",
+      "operation_id": "find_nearby_shelters_api_v1_adoptions_nearby_shelters_get",
+      "summary": "Find Nearby Shelters",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/adoptions",
+      "module": "adoptions",
+      "operation_id": "apply_for_adoption_api_v1_adoptions_post",
+      "summary": "Apply For Adoption",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/adoptions",
+      "module": "adoptions",
+      "operation_id": "list_applications_api_v1_adoptions_get",
+      "summary": "List Applications",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/adoptions/my",
+      "module": "adoptions",
+      "operation_id": "list_my_applications_api_v1_adoptions_my_get",
+      "summary": "List My Applications",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/adoptions/dashboard",
+      "module": "adoptions",
+      "operation_id": "get_adoption_dashboard_alias_api_v1_adoptions_dashboard_get",
+      "summary": "Get Adoption Dashboard Alias",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/adoptions/applications",
+      "module": "adoptions",
+      "operation_id": "list_applications_api_v1_adoptions_applications_get",
+      "summary": "List Applications",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/adoptions/{app_id}",
+      "module": "adoptions",
+      "operation_id": "get_application_api_v1_adoptions__app_id__get",
+      "summary": "Get Application",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/adoptions/{app_id}",
+      "module": "adoptions",
+      "operation_id": "update_application_api_v1_adoptions__app_id__put",
+      "summary": "Update Application",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/adoptions/{app_id}",
+      "module": "adoptions",
+      "operation_id": "soft_delete_application_api_v1_adoptions__app_id__delete",
+      "summary": "Soft Delete Application",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/adoptions/{app_id}/agreement",
+      "module": "adoptions",
+      "operation_id": "get_adoption_agreement_api_v1_adoptions__app_id__agreement_get",
+      "summary": "Get Adoption Agreement",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/adoptions/{app_id}/status",
+      "module": "adoptions",
+      "operation_id": "update_application_status_api_v1_adoptions__app_id__status_patch",
+      "summary": "Update Application Status",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/adoptions/{app_id}/scores",
+      "module": "adoptions",
+      "operation_id": "add_score_api_v1_adoptions__app_id__scores_post",
+      "summary": "Add Score",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/adoptions/{app_id}/scores",
+      "module": "adoptions",
+      "operation_id": "get_scores_api_v1_adoptions__app_id__scores_get",
+      "summary": "Get Scores",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/adoptions/admin/adoptions/{app_id}",
+      "module": "adoptions",
+      "operation_id": "soft_delete_application_api_v1_adoptions_admin_adoptions__app_id__delete",
+      "summary": "Soft Delete Application",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/adoptions/{app_id}/follow-ups",
+      "module": "adoptions",
+      "operation_id": "create_follow_up_api_v1_adoptions__app_id__follow_ups_post",
+      "summary": "Create Follow Up",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/adoptions/{app_id}/follow-ups",
+      "module": "adoptions",
+      "operation_id": "get_follow_ups_api_v1_adoptions__app_id__follow_ups_get",
+      "summary": "Get Follow Ups",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/adoptions/{app_id}/follow-ups/{follow_up_id}/proof",
+      "module": "adoptions",
+      "operation_id": "submit_follow_up_proof_api_v1_adoptions__app_id__follow_ups__follow_up_id__proof_post",
+      "summary": "Submit Follow Up Proof",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/adoptions/{app_id}/follow-ups/upload-url",
+      "module": "adoptions",
+      "operation_id": "generate_follow_up_upload_url_api_v1_adoptions__app_id__follow_ups_upload_url_post",
+      "summary": "Generate Follow Up Upload Url",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/adoptions/{app_id}/fee",
+      "module": "adoptions",
+      "operation_id": "update_adoption_fee_api_v1_adoptions__app_id__fee_put",
+      "summary": "Update Adoption Fee",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/adoptions/bulk/status-update",
+      "module": "adoptions",
+      "operation_id": "bulk_update_application_status_api_v1_adoptions_bulk_status_update_post",
+      "summary": "Bulk Update Application Status",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/adoptions/bulk/delete",
+      "module": "adoptions",
+      "operation_id": "bulk_delete_applications_api_v1_adoptions_bulk_delete_post",
+      "summary": "Bulk Delete Applications",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/volunteers/apply",
+      "module": "volunteers",
+      "operation_id": "apply_to_volunteer_api_v1_volunteers_apply_post",
+      "summary": "Apply To Volunteer",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/volunteers/me/status",
+      "module": "volunteers",
+      "operation_id": "get_my_volunteer_status_api_v1_volunteers_me_status_get",
+      "summary": "Get My Volunteer Status",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/volunteers/me/attendance",
+      "module": "volunteers",
+      "operation_id": "get_my_attendance_api_v1_volunteers_me_attendance_get",
+      "summary": "Get My Attendance",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/volunteers/me/application",
+      "module": "volunteers",
+      "operation_id": "get_my_application_api_v1_volunteers_me_application_get",
+      "summary": "Get My Application",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/volunteers/applications",
+      "module": "volunteers",
+      "operation_id": "list_applications_api_v1_volunteers_applications_get",
+      "summary": "List Applications",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/volunteers/applications/{application_id}/approve",
+      "module": "volunteers",
+      "operation_id": "approve_application_api_v1_volunteers_applications__application_id__approve_post",
+      "summary": "Approve Application",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/volunteers/applications/{application_id}/reject",
+      "module": "volunteers",
+      "operation_id": "reject_application_api_v1_volunteers_applications__application_id__reject_post",
+      "summary": "Reject Application",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/volunteers/{profile_id}",
+      "module": "volunteers",
+      "operation_id": "update_profile_api_v1_volunteers__profile_id__put",
+      "summary": "Update Profile",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/volunteers/{profile_id}",
+      "module": "volunteers",
+      "operation_id": "soft_delete_profile_api_v1_volunteers__profile_id__delete",
+      "summary": "Soft Delete Profile",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/volunteers/{profile_id}",
+      "module": "volunteers",
+      "operation_id": "get_profile_api_v1_volunteers__profile_id__get",
+      "summary": "Get Profile",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/volunteers/shifts",
+      "module": "volunteers",
+      "operation_id": "list_shifts_api_v1_volunteers_shifts_get",
+      "summary": "List Shifts",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/volunteers/shifts",
+      "module": "volunteers",
+      "operation_id": "create_shift_api_v1_volunteers_shifts_post",
+      "summary": "Create Shift",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/volunteers/shifts/{shift_id}/join",
+      "module": "volunteers",
+      "operation_id": "join_shift_api_v1_volunteers_shifts__shift_id__join_post",
+      "summary": "Join Shift",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/volunteers/attendance/{attendance_id}/check-in",
+      "module": "volunteers",
+      "operation_id": "check_in_api_v1_volunteers_attendance__attendance_id__check_in_post",
+      "summary": "Check In",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/volunteers/attendance/{attendance_id}/check-out",
+      "module": "volunteers",
+      "operation_id": "check_out_api_v1_volunteers_attendance__attendance_id__check_out_post",
+      "summary": "Check Out",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/volunteers/attendance/{attendance_id}/no-show",
+      "module": "volunteers",
+      "operation_id": "mark_no_show_api_v1_volunteers_attendance__attendance_id__no_show_post",
+      "summary": "Mark No Show",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/volunteers/attendance/{attendance_id}/cancel",
+      "module": "volunteers",
+      "operation_id": "cancel_attendance_api_v1_volunteers_attendance__attendance_id__cancel_post",
+      "summary": "Cancel Attendance",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/volunteers/shifts/{shift_id}/attendance",
+      "module": "volunteers",
+      "operation_id": "list_shift_attendance_api_v1_volunteers_shifts__shift_id__attendance_get",
+      "summary": "List Shift Attendance",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/volunteers",
+      "module": "volunteers",
+      "operation_id": "list_profiles_api_v1_volunteers_get",
+      "summary": "List Profiles",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/volunteers/bulk/delete",
+      "module": "volunteers",
+      "operation_id": "bulk_delete_profiles_api_v1_volunteers_bulk_delete_post",
+      "summary": "Bulk Delete Profiles",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/volunteers/{profile_id}/certificate",
+      "module": "volunteers",
+      "operation_id": "issue_service_certificate_api_v1_volunteers__profile_id__certificate_get",
+      "summary": "Issue Service Certificate",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/volunteers/{profile_id}/service-summary",
+      "module": "volunteers",
+      "operation_id": "get_service_summary_api_v1_volunteers__profile_id__service_summary_get",
+      "summary": "Get Service Summary",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/volunteers/bulk/status",
+      "module": "volunteers",
+      "operation_id": "bulk_update_profile_status_api_v1_volunteers_bulk_status_post",
+      "summary": "Bulk Update Profile Status",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/fosters/apply",
+      "module": "fosters",
+      "operation_id": "apply_to_foster_api_v1_fosters_apply_post",
+      "summary": "Apply To Foster",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/fosters/me",
+      "module": "fosters",
+      "operation_id": "get_my_foster_profile_api_v1_fosters_me_get",
+      "summary": "Get My Foster Profile",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/fosters/me/placements",
+      "module": "fosters",
+      "operation_id": "get_my_foster_placements_api_v1_fosters_me_placements_get",
+      "summary": "Get My Foster Placements",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/fosters/{profile_id}",
+      "module": "fosters",
+      "operation_id": "update_profile_api_v1_fosters__profile_id__put",
+      "summary": "Update Profile",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/fosters/{profile_id}",
+      "module": "fosters",
+      "operation_id": "soft_delete_profile_api_v1_fosters__profile_id__delete",
+      "summary": "Soft Delete Profile",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/fosters/admin/fosters/{profile_id}",
+      "module": "fosters",
+      "operation_id": "soft_delete_profile_api_v1_fosters_admin_fosters__profile_id__delete",
+      "summary": "Soft Delete Profile",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/fosters/{profile_id}/placements",
+      "module": "fosters",
+      "operation_id": "place_dog_api_v1_fosters__profile_id__placements_post",
+      "summary": "Place Dog",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/fosters/{profile_id}/placements",
+      "module": "fosters",
+      "operation_id": "list_foster_placements_api_v1_fosters__profile_id__placements_get",
+      "summary": "List Foster Placements",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/fosters/placements/{placement_id}/return",
+      "module": "fosters",
+      "operation_id": "return_dog_api_v1_fosters_placements__placement_id__return_post",
+      "summary": "Return Dog",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/fosters",
+      "module": "fosters",
+      "operation_id": "list_profiles_api_v1_fosters_get",
+      "summary": "List Profiles",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/fosters/bulk/delete",
+      "module": "fosters",
+      "operation_id": "bulk_delete_profiles_api_v1_fosters_bulk_delete_post",
+      "summary": "Bulk Delete Profiles",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/fosters/placements/{placement_id}/progress",
+      "module": "fosters",
+      "operation_id": "log_progress_api_v1_fosters_placements__placement_id__progress_post",
+      "summary": "Log Progress",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/fosters/placements/{placement_id}/progress",
+      "module": "fosters",
+      "operation_id": "get_progress_logs_api_v1_fosters_placements__placement_id__progress_get",
+      "summary": "Get Progress Logs",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/fosters/placements/{placement_id}/supplies",
+      "module": "fosters",
+      "operation_id": "log_supply_dispatch_api_v1_fosters_placements__placement_id__supplies_post",
+      "summary": "Log Supply Dispatch",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/fosters/placements/{placement_id}/supplies",
+      "module": "fosters",
+      "operation_id": "list_supply_dispatches_api_v1_fosters_placements__placement_id__supplies_get",
+      "summary": "List Supply Dispatches",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/fosters/placements/{placement_id}/supplies/request",
+      "module": "fosters",
+      "operation_id": "request_supplies_api_v1_fosters_placements__placement_id__supplies_request_post",
+      "summary": "Request Supplies",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/fosters/placements/{placement_id}/convert-to-adopt",
+      "module": "fosters",
+      "operation_id": "convert_to_adopt_api_v1_fosters_placements__placement_id__convert_to_adopt_post",
+      "summary": "Convert To Adopt",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/donations/register",
+      "module": "donations",
+      "operation_id": "register_donor_api_v1_donations_register_post",
+      "summary": "Register Donor",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/donations/donors/{donor_id}",
+      "module": "donations",
+      "operation_id": "update_donor_api_v1_donations_donors__donor_id__put",
+      "summary": "Update Donor",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/donations/donors/{donor_id}",
+      "module": "donations",
+      "operation_id": "soft_delete_donor_api_v1_donations_donors__donor_id__delete",
+      "summary": "Soft Delete Donor",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/donations",
+      "module": "donations",
+      "operation_id": "record_manual_donation_api_v1_donations_post",
+      "summary": "Record Manual Donation",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/donations",
+      "module": "donations",
+      "operation_id": "list_all_donations_api_v1_donations_get",
+      "summary": "List All Donations",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/donations/checkout",
+      "module": "donations",
+      "operation_id": "initiate_donation_checkout_api_v1_donations_checkout_post",
+      "summary": "Initiate Donation Checkout",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/donations/verify",
+      "module": "donations",
+      "operation_id": "verify_donation_checkout_api_v1_donations_verify_post",
+      "summary": "Verify Donation Checkout",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/donations/history",
+      "module": "donations",
+      "operation_id": "get_donation_history_api_v1_donations_history_get",
+      "summary": "Get Donation History",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/donations/donors",
+      "module": "donations",
+      "operation_id": "list_donors_api_v1_donations_donors_get",
+      "summary": "List Donors",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/donations/{donation_id}/receipt",
+      "module": "donations",
+      "operation_id": "get_donation_receipt_api_v1_donations__donation_id__receipt_get",
+      "summary": "Get Donation Receipt",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/donations/{donation_id}/status",
+      "module": "donations",
+      "operation_id": "update_donation_status_api_v1_donations__donation_id__status_patch",
+      "summary": "Update Donation Status",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/donations/{donation_id}/reconcile",
+      "module": "donations",
+      "operation_id": "reconcile_donation_api_v1_donations__donation_id__reconcile_post",
+      "summary": "Reconcile Donation",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/donations/bulk/status-update",
+      "module": "donations",
+      "operation_id": "bulk_update_donation_status_api_v1_donations_bulk_status_update_post",
+      "summary": "Bulk Update Donation Status",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/donations/donors/bulk/delete",
+      "module": "donations",
+      "operation_id": "bulk_delete_donors_api_v1_donations_donors_bulk_delete_post",
+      "summary": "Bulk Delete Donors",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/donations/sponsorships",
+      "module": "donations",
+      "operation_id": "create_sponsorship_api_v1_donations_sponsorships_post",
+      "summary": "Create Sponsorship",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/donations/sponsorships",
+      "module": "donations",
+      "operation_id": "list_all_sponsorships_api_v1_donations_sponsorships_get",
+      "summary": "List All Sponsorships",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/donations/sponsorships/{sponsorship_id}/status",
+      "module": "donations",
+      "operation_id": "update_sponsorship_status_api_v1_donations_sponsorships__sponsorship_id__status_patch",
+      "summary": "Update Sponsorship Status",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/donations/sponsorships/my",
+      "module": "donations",
+      "operation_id": "list_my_sponsorships_api_v1_donations_sponsorships_my_get",
+      "summary": "List My Sponsorships",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/donations/sponsorships/{sponsorship_id}",
+      "module": "donations",
+      "operation_id": "get_sponsorship_api_v1_donations_sponsorships__sponsorship_id__get",
+      "summary": "Get Sponsorship",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/donations/campaigns",
+      "module": "donations",
+      "operation_id": "list_public_campaigns_api_v1_donations_campaigns_get",
+      "summary": "List Public Campaigns",
+      "auth": "public",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/donations/campaigns",
+      "module": "donations",
+      "operation_id": "create_campaign_api_v1_donations_campaigns_post",
+      "summary": "Create Campaign",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/donations/campaigns/manage",
+      "module": "donations",
+      "operation_id": "list_all_campaigns_api_v1_donations_campaigns_manage_get",
+      "summary": "List All Campaigns",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/donations/campaigns/{campaign_id}",
+      "module": "donations",
+      "operation_id": "get_campaign_api_v1_donations_campaigns__campaign_id__get",
+      "summary": "Get Campaign",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/donations/campaigns/{campaign_id}",
+      "module": "donations",
+      "operation_id": "update_campaign_api_v1_donations_campaigns__campaign_id__patch",
+      "summary": "Update Campaign",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/donations/campaigns/{campaign_id}",
+      "module": "donations",
+      "operation_id": "delete_campaign_api_v1_donations_campaigns__campaign_id__delete",
+      "summary": "Delete Campaign",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/donations/donors/me",
+      "module": "donations",
+      "operation_id": "get_my_donor_profile_api_v1_donations_donors_me_get",
+      "summary": "Get My Donor Profile",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/donations/recurring",
+      "module": "donations",
+      "operation_id": "create_recurring_subscription_api_v1_donations_recurring_post",
+      "summary": "Create Recurring Subscription",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/donations/recurring",
+      "module": "donations",
+      "operation_id": "list_my_recurring_subscriptions_api_v1_donations_recurring_get",
+      "summary": "List My Recurring Subscriptions",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/donations/recurring/{subscription_id}",
+      "module": "donations",
+      "operation_id": "cancel_recurring_subscription_api_v1_donations_recurring__subscription_id__delete",
+      "summary": "Cancel Recurring Subscription",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/lost-found/found/sighting",
+      "module": "lost-found",
+      "operation_id": "report_public_sighting_api_v1_lost_found_found_sighting_post",
+      "summary": "Public submission of a lost pet sighting by a QR-scanner citizen (alias)",
+      "auth": "public",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/lost-found/sighting",
+      "module": "lost-found",
+      "operation_id": "report_public_sighting_api_v1_lost_found_sighting_post",
+      "summary": "Public submission of a lost pet sighting by a QR-scanner citizen",
+      "auth": "public",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/lost-found/photo-upload-url",
+      "module": "lost-found",
+      "operation_id": "request_lost_found_photo_upload_url_api_v1_lost_found_photo_upload_url_post",
+      "summary": "Request Lost Found Photo Upload Url",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/lost-found/lost",
+      "module": "lost-found",
+      "operation_id": "report_lost_pet_api_v1_lost_found_lost_post",
+      "summary": "Report Lost Pet",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/lost-found/lost",
+      "module": "lost-found",
+      "operation_id": "list_lost_reports_api_v1_lost_found_lost_get",
+      "summary": "List Lost Reports",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/lost-found/lost/{report_id}/broadcast",
+      "module": "lost-found",
+      "operation_id": "broadcast_lost_pet_alert_api_v1_lost_found_lost__report_id__broadcast_post",
+      "summary": "Broadcast Lost Pet Alert",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/lost-found/found",
+      "module": "lost-found",
+      "operation_id": "report_found_pet_api_v1_lost_found_found_post",
+      "summary": "Report Found Pet",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/lost-found/found",
+      "module": "lost-found",
+      "operation_id": "list_found_reports_api_v1_lost_found_found_get",
+      "summary": "List Found Reports",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/lost-found/stories",
+      "module": "lost-found",
+      "operation_id": "get_reunion_stories_api_v1_lost_found_stories_get",
+      "summary": "Get Reunion Stories",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/lost-found/reunion-stories",
+      "module": "lost-found",
+      "operation_id": "get_reunion_stories_api_v1_lost_found_reunion_stories_get",
+      "summary": "Get Reunion Stories",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/lost-found/lost/{report_id}",
+      "module": "lost-found",
+      "operation_id": "get_lost_report_api_v1_lost_found_lost__report_id__get",
+      "summary": "Get Lost Report",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/lost-found/lost/{report_id}",
+      "module": "lost-found",
+      "operation_id": "delete_lost_report_api_v1_lost_found_lost__report_id__delete",
+      "summary": "Delete Lost Report",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/lost-found/found/{report_id}",
+      "module": "lost-found",
+      "operation_id": "get_found_report_api_v1_lost_found_found__report_id__get",
+      "summary": "Get Found Report",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/lost-found/found/{report_id}",
+      "module": "lost-found",
+      "operation_id": "delete_found_report_api_v1_lost_found_found__report_id__delete",
+      "summary": "Delete Found Report",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/lost-found/reports/{report_id}",
+      "module": "lost-found",
+      "operation_id": "get_unified_report_api_v1_lost_found_reports__report_id__get",
+      "summary": "Get Unified Report",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/lost-found/lost/{report_id}/matches",
+      "module": "lost-found",
+      "operation_id": "get_matches_for_lost_api_v1_lost_found_lost__report_id__matches_get",
+      "summary": "Get Matches For Lost",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/lost-found/found/{report_id}/matches",
+      "module": "lost-found",
+      "operation_id": "get_matches_for_found_api_v1_lost_found_found__report_id__matches_get",
+      "summary": "Get Matches For Found",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/lost-found/matches/{match_id}/claim",
+      "module": "lost-found",
+      "operation_id": "submit_ownership_claim_api_v1_lost_found_matches__match_id__claim_post",
+      "summary": "Submit Ownership Claim",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/lost-found/matches/{match_id}/claim/review",
+      "module": "lost-found",
+      "operation_id": "review_ownership_claim_api_v1_lost_found_matches__match_id__claim_review_post",
+      "summary": "Review Ownership Claim",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/lost-found/matches/{match_id}/resolve",
+      "module": "lost-found",
+      "operation_id": "resolve_match_api_v1_lost_found_matches__match_id__resolve_post",
+      "summary": "Resolve Match",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/lost-found/lost/bulk/delete",
+      "module": "lost-found",
+      "operation_id": "bulk_delete_lost_reports_api_v1_lost_found_lost_bulk_delete_post",
+      "summary": "Bulk Delete Lost Reports",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/lost-found/found/bulk/delete",
+      "module": "lost-found",
+      "operation_id": "bulk_delete_found_reports_api_v1_lost_found_found_bulk_delete_post",
+      "summary": "Bulk Delete Found Reports",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/inventory/items",
+      "module": "inventory",
+      "operation_id": "create_item_api_v1_inventory_items_post",
+      "summary": "Create Item",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/inventory/items",
+      "module": "inventory",
+      "operation_id": "list_items_api_v1_inventory_items_get",
+      "summary": "List Items",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/inventory/items/{item_id}",
+      "module": "inventory",
+      "operation_id": "get_item_api_v1_inventory_items__item_id__get",
+      "summary": "Get Item",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/inventory/items/{item_id}",
+      "module": "inventory",
+      "operation_id": "update_item_api_v1_inventory_items__item_id__put",
+      "summary": "Update Item",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/inventory/items/{item_id}",
+      "module": "inventory",
+      "operation_id": "delete_item_api_v1_inventory_items__item_id__delete",
+      "summary": "Delete Item",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/inventory/movements",
+      "module": "inventory",
+      "operation_id": "record_movement_api_v1_inventory_movements_post",
+      "summary": "Record Movement",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/inventory/items/{item_id}/movements",
+      "module": "inventory",
+      "operation_id": "list_movements_api_v1_inventory_items__item_id__movements_get",
+      "summary": "List Movements",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/inventory/requisitions",
+      "module": "inventory",
+      "operation_id": "create_requisition_api_v1_inventory_requisitions_post",
+      "summary": "Create Requisition",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/inventory/requisitions",
+      "module": "inventory",
+      "operation_id": "list_requisitions_api_v1_inventory_requisitions_get",
+      "summary": "List Requisitions",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/inventory/requisitions/{req_id}/status",
+      "module": "inventory",
+      "operation_id": "update_requisition_status_api_v1_inventory_requisitions__req_id__status_put",
+      "summary": "Update Requisition Status",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/inventory/items/bulk/delete",
+      "module": "inventory",
+      "operation_id": "bulk_delete_items_api_v1_inventory_items_bulk_delete_post",
+      "summary": "Bulk Delete Items",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/inventory/requisitions/bulk/status",
+      "module": "inventory",
+      "operation_id": "bulk_update_requisition_status_api_v1_inventory_requisitions_bulk_status_post",
+      "summary": "Bulk Update Requisition Status",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/inventory/suppliers",
+      "module": "inventory",
+      "operation_id": "create_supplier_api_v1_inventory_suppliers_post",
+      "summary": "Create Supplier",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/inventory/suppliers",
+      "module": "inventory",
+      "operation_id": "list_suppliers_api_v1_inventory_suppliers_get",
+      "summary": "List Suppliers",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/inventory/suppliers/{supplier_id}",
+      "module": "inventory",
+      "operation_id": "get_supplier_api_v1_inventory_suppliers__supplier_id__get",
+      "summary": "Get Supplier",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/inventory/suppliers/{supplier_id}",
+      "module": "inventory",
+      "operation_id": "update_supplier_api_v1_inventory_suppliers__supplier_id__put",
+      "summary": "Update Supplier",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/inventory/suppliers/{supplier_id}",
+      "module": "inventory",
+      "operation_id": "delete_supplier_api_v1_inventory_suppliers__supplier_id__delete",
+      "summary": "Delete Supplier",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/shelter/facilities",
+      "module": "shelter",
+      "operation_id": "create_facility_api_v1_shelter_facilities_post",
+      "summary": "Create Facility",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/shelter/facilities",
+      "module": "shelter",
+      "operation_id": "list_facilities_api_v1_shelter_facilities_get",
+      "summary": "List Facilities",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/shelter/facilities/{facility_id}",
+      "module": "shelter",
+      "operation_id": "get_facility_api_v1_shelter_facilities__facility_id__get",
+      "summary": "Get Facility",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/shelter/facilities/{facility_id}",
+      "module": "shelter",
+      "operation_id": "update_facility_api_v1_shelter_facilities__facility_id__put",
+      "summary": "Update Facility",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/shelter/facilities/{facility_id}",
+      "module": "shelter",
+      "operation_id": "delete_facility_api_v1_shelter_facilities__facility_id__delete",
+      "summary": "Delete Facility",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/shelter/facilities/{facility_id}/sections",
+      "module": "shelter",
+      "operation_id": "create_section_api_v1_shelter_facilities__facility_id__sections_post",
+      "summary": "Create Section",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/shelter/facilities/{facility_id}/sections",
+      "module": "shelter",
+      "operation_id": "list_sections_api_v1_shelter_facilities__facility_id__sections_get",
+      "summary": "List Sections",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/shelter/sections/{section_id}/kennels",
+      "module": "shelter",
+      "operation_id": "create_kennel_api_v1_shelter_sections__section_id__kennels_post",
+      "summary": "Create Kennel",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/shelter/sections/{section_id}/kennels",
+      "module": "shelter",
+      "operation_id": "list_kennels_api_v1_shelter_sections__section_id__kennels_get",
+      "summary": "List Kennels",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/shelter/kennels/{kennel_id}/assign/{dog_id}",
+      "module": "shelter",
+      "operation_id": "assign_dog_to_kennel_api_v1_shelter_kennels__kennel_id__assign__dog_id__patch",
+      "summary": "Assign Dog To Kennel",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/shelter/kennels/{kennel_id}/assign/{dog_id}",
+      "module": "shelter",
+      "operation_id": "assign_dog_to_kennel_api_v1_shelter_kennels__kennel_id__assign__dog_id__post",
+      "summary": "Assign Dog To Kennel",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/shelter/kennels/{kennel_id}/sanitation",
+      "module": "shelter",
+      "operation_id": "update_kennel_sanitation_api_v1_shelter_kennels__kennel_id__sanitation_put",
+      "summary": "Update Kennel Sanitation",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/shelter/kennels/{kennel_id}/cleaning-logs",
+      "module": "shelter",
+      "operation_id": "log_kennel_cleaning_api_v1_shelter_kennels__kennel_id__cleaning_logs_post",
+      "summary": "Log Kennel Cleaning",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/shelter/kennels/{kennel_id}/cleaning-logs",
+      "module": "shelter",
+      "operation_id": "list_kennel_cleaning_logs_api_v1_shelter_kennels__kennel_id__cleaning_logs_get",
+      "summary": "List Kennel Cleaning Logs",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/shelter/transfers",
+      "module": "shelter",
+      "operation_id": "request_transfer_api_v1_shelter_transfers_post",
+      "summary": "Request Transfer",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/shelter/transfers",
+      "module": "shelter",
+      "operation_id": "list_transfers_api_v1_shelter_transfers_get",
+      "summary": "List Transfers",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/shelter/transfers/{transfer_id}",
+      "module": "shelter",
+      "operation_id": "get_transfer_api_v1_shelter_transfers__transfer_id__get",
+      "summary": "Get Transfer",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/shelter/transfers/{transfer_id}/confirm-sender",
+      "module": "shelter",
+      "operation_id": "confirm_transfer_sender_api_v1_shelter_transfers__transfer_id__confirm_sender_post",
+      "summary": "Confirm Transfer Sender",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/shelter/transfers/{transfer_id}/confirm-receiver",
+      "module": "shelter",
+      "operation_id": "confirm_transfer_receiver_api_v1_shelter_transfers__transfer_id__confirm_receiver_post",
+      "summary": "Confirm Transfer Receiver",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/shelter/care-logs",
+      "module": "shelter",
+      "operation_id": "submit_daily_care_log_api_v1_shelter_care_logs_post",
+      "summary": "Submit Daily Care Log",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/shelter/dogs/{dog_id}/care-logs",
+      "module": "shelter",
+      "operation_id": "list_care_logs_api_v1_shelter_dogs__dog_id__care_logs_get",
+      "summary": "List Care Logs",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/shelter/facilities/{facility_id}/status",
+      "module": "shelter",
+      "operation_id": "update_facility_status_api_v1_shelter_facilities__facility_id__status_put",
+      "summary": "Update Facility Status",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/shelter/facilities/bulk/delete",
+      "module": "shelter",
+      "operation_id": "bulk_delete_facilities_api_v1_shelter_facilities_bulk_delete_post",
+      "summary": "Bulk Delete Facilities",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/shelter/facilities/bulk/status",
+      "module": "shelter",
+      "operation_id": "bulk_update_facility_status_api_v1_shelter_facilities_bulk_status_post",
+      "summary": "Bulk Update Facility Status",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/medical/exams",
+      "module": "medical",
+      "operation_id": "perform_clinical_exam_api_v1_medical_exams_post",
+      "summary": "Perform Clinical Exam",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/medical/exams",
+      "module": "medical",
+      "operation_id": "list_exams_api_v1_medical_exams_get",
+      "summary": "List Exams",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/medical/treatments",
+      "module": "medical",
+      "operation_id": "record_treatment_api_v1_medical_treatments_post",
+      "summary": "Record Treatment",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/medical/treatments",
+      "module": "medical",
+      "operation_id": "list_treatments_api_v1_medical_treatments_get",
+      "summary": "List Treatments",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/medical/vaccinations",
+      "module": "medical",
+      "operation_id": "administer_vaccine_api_v1_medical_vaccinations_post",
+      "summary": "Administer Vaccine",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/medical/vaccinations",
+      "module": "medical",
+      "operation_id": "list_vaccinations_api_v1_medical_vaccinations_get",
+      "summary": "List Vaccinations",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/medical/prescriptions",
+      "module": "medical",
+      "operation_id": "prescribe_medication_api_v1_medical_prescriptions_post",
+      "summary": "Prescribe Medication",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/medical/prescriptions",
+      "module": "medical",
+      "operation_id": "list_prescriptions_api_v1_medical_prescriptions_get",
+      "summary": "List Prescriptions",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/medical/clearance/{dog_id}",
+      "module": "medical",
+      "operation_id": "authorize_adoption_clearance_api_v1_medical_clearance__dog_id__post",
+      "summary": "Authorize Adoption Clearance",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/medical/clearances/dogs/{dog_id}",
+      "module": "medical",
+      "operation_id": "get_dog_clearances_api_v1_medical_clearances_dogs__dog_id__get",
+      "summary": "Get Dog Clearances",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/medical/administrations",
+      "module": "medical",
+      "operation_id": "log_medication_administration_api_v1_medical_administrations_post",
+      "summary": "Log Medication Administration",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/medical/prescriptions/{prescription_id}/administrations",
+      "module": "medical",
+      "operation_id": "get_prescription_administrations_api_v1_medical_prescriptions__prescription_id__administrations_get",
+      "summary": "Get Prescription Administrations",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/medical/dogs/{dog_id}/administrations",
+      "module": "medical",
+      "operation_id": "get_dog_administrations_api_v1_medical_dogs__dog_id__administrations_get",
+      "summary": "Get Dog Administrations",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/medical/vaccine-protocols",
+      "module": "medical",
+      "operation_id": "create_vaccine_protocol_api_v1_medical_vaccine_protocols_post",
+      "summary": "Create Vaccine Protocol",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/medical/vaccine-protocols",
+      "module": "medical",
+      "operation_id": "list_vaccine_protocols_api_v1_medical_vaccine_protocols_get",
+      "summary": "List Vaccine Protocols",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/medical/dogs/{dog_id}/history",
+      "module": "medical",
+      "operation_id": "get_medical_history_api_v1_medical_dogs__dog_id__history_get",
+      "summary": "Get Medical History",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/medical/dogs/{dog_id}/reminders",
+      "module": "medical",
+      "operation_id": "get_dog_medical_reminders_api_v1_medical_dogs__dog_id__reminders_get",
+      "summary": "Get automated vaccination and medication reminders for a dog",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/medical/prescriptions/{prescription_id}",
+      "module": "medical",
+      "operation_id": "update_prescription_api_v1_medical_prescriptions__prescription_id__put",
+      "summary": "Update Prescription",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/medical/prescriptions/{prescription_id}/status",
+      "module": "medical",
+      "operation_id": "update_prescription_status_api_v1_medical_prescriptions__prescription_id__status_patch",
+      "summary": "Update Prescription Status",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/medical/{entity_type}/{entity_id}",
+      "module": "medical",
+      "operation_id": "soft_delete_entity_api_v1_medical__entity_type___entity_id__delete",
+      "summary": "Soft Delete Entity",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/medical/bulk/prescriptions/status",
+      "module": "medical",
+      "operation_id": "bulk_update_prescription_status_api_v1_medical_bulk_prescriptions_status_post",
+      "summary": "Bulk Update Prescription Status",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/medical/bulk/delete",
+      "module": "medical",
+      "operation_id": "bulk_delete_entities_api_v1_medical_bulk_delete_post",
+      "summary": "Bulk Delete Entities",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/portal/stats",
+      "module": "portal",
+      "operation_id": "get_hero_stats_api_v1_portal_stats_get",
+      "summary": "Get Hero Stats",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/portal/success-stories",
+      "module": "portal",
+      "operation_id": "list_published_stories_api_v1_portal_success_stories_get",
+      "summary": "List Published Stories",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/portal/success-stories/{story_id}",
+      "module": "portal",
+      "operation_id": "get_published_story_api_v1_portal_success_stories__story_id__get",
+      "summary": "Get Published Story",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/portal/success-stories/slug/{slug}",
+      "module": "portal",
+      "operation_id": "get_published_story_by_slug_api_v1_portal_success_stories_slug__slug__get",
+      "summary": "Get Published Story By Slug",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/portal/blog",
+      "module": "portal",
+      "operation_id": "list_published_blog_api_v1_portal_blog_get",
+      "summary": "List Published Blog",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/portal/blog/related",
+      "module": "portal",
+      "operation_id": "list_related_blog_posts_api_v1_portal_blog_related_get",
+      "summary": "List Related Blog Posts",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/portal/blog/slug/{slug}",
+      "module": "portal",
+      "operation_id": "get_blog_by_slug_api_v1_portal_blog_slug__slug__get",
+      "summary": "Get Blog By Slug",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/portal/veterinary-network",
+      "module": "portal",
+      "operation_id": "list_veterinary_partners_api_v1_portal_veterinary_network_get",
+      "summary": "List Veterinary Partners",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/portal/contact",
+      "module": "portal",
+      "operation_id": "list_contact_locations_api_v1_portal_contact_get",
+      "summary": "List Contact Locations",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/portal/contact",
+      "module": "portal",
+      "operation_id": "submit_contact_message_api_v1_portal_contact_post",
+      "summary": "Submit Contact Message",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/portal/newsletter/subscribe",
+      "module": "portal",
+      "operation_id": "subscribe_newsletter_api_v1_portal_newsletter_subscribe_post",
+      "summary": "Subscribe Newsletter",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/portal/faq",
+      "module": "portal",
+      "operation_id": "list_faq_api_v1_portal_faq_get",
+      "summary": "List Faq",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/portal/legal",
+      "module": "portal",
+      "operation_id": "list_published_legal_docs_api_v1_portal_legal_get",
+      "summary": "List Published Legal Docs",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/portal/legal/{slug}",
+      "module": "portal",
+      "operation_id": "get_published_legal_doc_api_v1_portal_legal__slug__get",
+      "summary": "Get Published Legal Doc",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/portal/urgent-alerts",
+      "module": "portal",
+      "operation_id": "list_active_urgent_alerts_api_v1_portal_urgent_alerts_get",
+      "summary": "List Active Urgent Alerts",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/portal/transparency",
+      "module": "portal",
+      "operation_id": "get_transparency_stats_api_v1_portal_transparency_get",
+      "summary": "Get Transparency Stats",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/portal/me/dashboard",
+      "module": "portal",
+      "operation_id": "get_user_dashboard_api_v1_portal_me_dashboard_get",
+      "summary": "Get User Dashboard",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/portal/admin/success-stories",
+      "module": "portal",
+      "operation_id": "create_story_api_v1_portal_admin_success_stories_post",
+      "summary": "Create Story",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/portal/admin/success-stories",
+      "module": "portal",
+      "operation_id": "admin_list_stories_api_v1_portal_admin_success_stories_get",
+      "summary": "Admin List Stories",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/portal/admin/success-stories/{story_id}",
+      "module": "portal",
+      "operation_id": "update_story_api_v1_portal_admin_success_stories__story_id__put",
+      "summary": "Update Story",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/portal/admin/success-stories/{story_id}",
+      "module": "portal",
+      "operation_id": "soft_delete_story_api_v1_portal_admin_success_stories__story_id__delete",
+      "summary": "Soft Delete Story",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/portal/admin/success-stories/{story_id}",
+      "module": "portal",
+      "operation_id": "get_admin_story_api_v1_portal_admin_success_stories__story_id__get",
+      "summary": "Get Admin Story",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/portal/admin/blog",
+      "module": "portal",
+      "operation_id": "create_blog_api_v1_portal_admin_blog_post",
+      "summary": "Create Blog",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/portal/admin/blog",
+      "module": "portal",
+      "operation_id": "admin_list_blogs_api_v1_portal_admin_blog_get",
+      "summary": "Admin List Blogs",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/portal/admin/blog/{post_id}",
+      "module": "portal",
+      "operation_id": "update_blog_api_v1_portal_admin_blog__post_id__put",
+      "summary": "Update Blog",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/portal/admin/blog/{post_id}",
+      "module": "portal",
+      "operation_id": "soft_delete_blog_api_v1_portal_admin_blog__post_id__delete",
+      "summary": "Soft Delete Blog",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/portal/admin/blog/{post_id}",
+      "module": "portal",
+      "operation_id": "get_admin_blog_api_v1_portal_admin_blog__post_id__get",
+      "summary": "Get Admin Blog",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/portal/admin/veterinary-network",
+      "module": "portal",
+      "operation_id": "create_vet_api_v1_portal_admin_veterinary_network_post",
+      "summary": "Create Vet",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/portal/admin/veterinary-network/{partner_id}",
+      "module": "portal",
+      "operation_id": "update_vet_api_v1_portal_admin_veterinary_network__partner_id__put",
+      "summary": "Update Vet",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/portal/admin/veterinary-network/{partner_id}",
+      "module": "portal",
+      "operation_id": "get_admin_vet_api_v1_portal_admin_veterinary_network__partner_id__get",
+      "summary": "Get Admin Vet",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/portal/admin/veterinary-network/{partner_id}",
+      "module": "portal",
+      "operation_id": "delete_admin_vet_api_v1_portal_admin_veterinary_network__partner_id__delete",
+      "summary": "Delete Admin Vet",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/portal/admin/contact",
+      "module": "portal",
+      "operation_id": "create_contact_api_v1_portal_admin_contact_post",
+      "summary": "Create Contact",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/portal/admin/contact/{location_id}",
+      "module": "portal",
+      "operation_id": "update_contact_api_v1_portal_admin_contact__location_id__put",
+      "summary": "Update Contact",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/portal/admin/contact/{location_id}",
+      "module": "portal",
+      "operation_id": "get_admin_contact_api_v1_portal_admin_contact__location_id__get",
+      "summary": "Get Admin Contact",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/portal/admin/contact/{location_id}",
+      "module": "portal",
+      "operation_id": "delete_admin_contact_api_v1_portal_admin_contact__location_id__delete",
+      "summary": "Delete Admin Contact",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/portal/admin/faq",
+      "module": "portal",
+      "operation_id": "create_faq_api_v1_portal_admin_faq_post",
+      "summary": "Create Faq",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/portal/admin/faq",
+      "module": "portal",
+      "operation_id": "admin_list_faqs_api_v1_portal_admin_faq_get",
+      "summary": "Admin List Faqs",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/portal/admin/faq/{entry_id}",
+      "module": "portal",
+      "operation_id": "update_faq_api_v1_portal_admin_faq__entry_id__put",
+      "summary": "Update Faq",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/portal/admin/faq/{entry_id}",
+      "module": "portal",
+      "operation_id": "soft_delete_faq_api_v1_portal_admin_faq__entry_id__delete",
+      "summary": "Soft Delete Faq",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/portal/admin/faq/{entry_id}",
+      "module": "portal",
+      "operation_id": "get_admin_faq_api_v1_portal_admin_faq__entry_id__get",
+      "summary": "Get Admin Faq",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/portal/admin/settings/{key}",
+      "module": "portal",
+      "operation_id": "upsert_setting_api_v1_portal_admin_settings__key__put",
+      "summary": "Upsert Setting",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/portal/admin/settings",
+      "module": "portal",
+      "operation_id": "list_settings_api_v1_portal_admin_settings_get",
+      "summary": "List Settings",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/portal/admin/success-stories/bulk/delete",
+      "module": "portal",
+      "operation_id": "bulk_delete_stories_api_v1_portal_admin_success_stories_bulk_delete_post",
+      "summary": "Bulk Delete Stories",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/portal/admin/success-stories/bulk/status",
+      "module": "portal",
+      "operation_id": "bulk_update_story_status_api_v1_portal_admin_success_stories_bulk_status_post",
+      "summary": "Bulk Update Story Status",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/portal/admin/blog/bulk/delete",
+      "module": "portal",
+      "operation_id": "bulk_delete_blogs_api_v1_portal_admin_blog_bulk_delete_post",
+      "summary": "Bulk Delete Blogs",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/portal/admin/blog/bulk/status",
+      "module": "portal",
+      "operation_id": "bulk_update_blog_status_api_v1_portal_admin_blog_bulk_status_post",
+      "summary": "Bulk Update Blog Status",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/portal/admin/faq/bulk/delete",
+      "module": "portal",
+      "operation_id": "bulk_delete_faqs_api_v1_portal_admin_faq_bulk_delete_post",
+      "summary": "Bulk Delete Faqs",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/portal/admin/faq/bulk/status",
+      "module": "portal",
+      "operation_id": "bulk_update_faq_status_api_v1_portal_admin_faq_bulk_status_post",
+      "summary": "Bulk Update Faq Status",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/portal/admin/legal",
+      "module": "portal",
+      "operation_id": "create_legal_doc_api_v1_portal_admin_legal_post",
+      "summary": "Create Legal Doc",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/portal/admin/legal",
+      "module": "portal",
+      "operation_id": "admin_list_legal_docs_api_v1_portal_admin_legal_get",
+      "summary": "Admin List Legal Docs",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/portal/admin/legal/{doc_id}",
+      "module": "portal",
+      "operation_id": "update_legal_doc_api_v1_portal_admin_legal__doc_id__put",
+      "summary": "Update Legal Doc",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/portal/admin/legal/{doc_id}",
+      "module": "portal",
+      "operation_id": "soft_delete_legal_doc_api_v1_portal_admin_legal__doc_id__delete",
+      "summary": "Soft Delete Legal Doc",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/portal/admin/legal/{doc_id}",
+      "module": "portal",
+      "operation_id": "get_admin_legal_doc_api_v1_portal_admin_legal__doc_id__get",
+      "summary": "Get Admin Legal Doc",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/portal/admin/urgent-alerts",
+      "module": "portal",
+      "operation_id": "create_urgent_alert_api_v1_portal_admin_urgent_alerts_post",
+      "summary": "Create Urgent Alert",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/portal/admin/urgent-alerts",
+      "module": "portal",
+      "operation_id": "admin_list_urgent_alerts_api_v1_portal_admin_urgent_alerts_get",
+      "summary": "Admin List Urgent Alerts",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/portal/admin/urgent-alerts/{alert_id}",
+      "module": "portal",
+      "operation_id": "update_urgent_alert_api_v1_portal_admin_urgent_alerts__alert_id__put",
+      "summary": "Update Urgent Alert",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/portal/admin/urgent-alerts/{alert_id}",
+      "module": "portal",
+      "operation_id": "soft_delete_urgent_alert_api_v1_portal_admin_urgent_alerts__alert_id__delete",
+      "summary": "Soft Delete Urgent Alert",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/portal/cms/pages/{slug}",
+      "module": "portal",
+      "operation_id": "get_public_cms_page_api_v1_portal_cms_pages__slug__get",
+      "summary": "Get Public Cms Page",
+      "auth": "public",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/portal/admin/cms/pages",
+      "module": "portal",
+      "operation_id": "list_admin_cms_pages_api_v1_portal_admin_cms_pages_get",
+      "summary": "List Admin Cms Pages",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/portal/admin/cms/pages/{slug}",
+      "module": "portal",
+      "operation_id": "get_admin_cms_page_api_v1_portal_admin_cms_pages__slug__get",
+      "summary": "Get Admin Cms Page",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/portal/admin/cms/pages/{slug}",
+      "module": "portal",
+      "operation_id": "update_admin_cms_page_api_v1_portal_admin_cms_pages__slug__put",
+      "summary": "Update Admin Cms Page",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/portal/admin/cms/pages/{slug}/publish",
+      "module": "portal",
+      "operation_id": "publish_admin_cms_page_api_v1_portal_admin_cms_pages__slug__publish_post",
+      "summary": "Publish Admin Cms Page",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/portal/admin/cms/pages/{slug}/discard",
+      "module": "portal",
+      "operation_id": "discard_admin_cms_page_api_v1_portal_admin_cms_pages__slug__discard_post",
+      "summary": "Discard Admin Cms Page",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/portal/admin/success-stories/{story_id}/publish",
+      "module": "portal",
+      "operation_id": "publish_admin_story_api_v1_portal_admin_success_stories__story_id__publish_post",
+      "summary": "Publish Admin Story",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/portal/admin/success-stories/{story_id}/discard",
+      "module": "portal",
+      "operation_id": "discard_admin_story_api_v1_portal_admin_success_stories__story_id__discard_post",
+      "summary": "Discard Admin Story",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/portal/admin/blog/{post_id}/publish",
+      "module": "portal",
+      "operation_id": "publish_admin_blog_api_v1_portal_admin_blog__post_id__publish_post",
+      "summary": "Publish Admin Blog",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/portal/admin/blog/{post_id}/discard",
+      "module": "portal",
+      "operation_id": "discard_admin_blog_api_v1_portal_admin_blog__post_id__discard_post",
+      "summary": "Discard Admin Blog",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/portal/admin/legal/{doc_id}/publish",
+      "module": "portal",
+      "operation_id": "publish_admin_legal_doc_api_v1_portal_admin_legal__doc_id__publish_post",
+      "summary": "Publish Admin Legal Doc",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/portal/admin/legal/{doc_id}/discard",
+      "module": "portal",
+      "operation_id": "discard_admin_legal_doc_api_v1_portal_admin_legal__doc_id__discard_post",
+      "summary": "Discard Admin Legal Doc",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/portal/admin/cms/media/upload-url",
+      "module": "portal",
+      "operation_id": "request_cms_media_upload_url_api_v1_portal_admin_cms_media_upload_url_post",
+      "summary": "Request Cms Media Upload Url",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/portal/admin/cms/media/{file_id}/confirm",
+      "module": "portal",
+      "operation_id": "confirm_cms_media_upload_api_v1_portal_admin_cms_media__file_id__confirm_post",
+      "summary": "Confirm Cms Media Upload",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/fleet/vehicles",
+      "module": "fleet",
+      "operation_id": "create_vehicle_api_v1_fleet_vehicles_post",
+      "summary": "Create Vehicle",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/fleet/vehicles",
+      "module": "fleet",
+      "operation_id": "list_vehicles_api_v1_fleet_vehicles_get",
+      "summary": "List Vehicles",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/fleet/vehicles/{vehicle_id}",
+      "module": "fleet",
+      "operation_id": "get_vehicle_api_v1_fleet_vehicles__vehicle_id__get",
+      "summary": "Get Vehicle",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/fleet/vehicles/{vehicle_id}",
+      "module": "fleet",
+      "operation_id": "update_vehicle_api_v1_fleet_vehicles__vehicle_id__put",
+      "summary": "Update Vehicle",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/fleet/vehicles/{vehicle_id}",
+      "module": "fleet",
+      "operation_id": "soft_delete_vehicle_api_v1_fleet_vehicles__vehicle_id__delete",
+      "summary": "Soft Delete Vehicle",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/fleet/vehicles/{vehicle_id}/status",
+      "module": "fleet",
+      "operation_id": "update_vehicle_status_api_v1_fleet_vehicles__vehicle_id__status_patch",
+      "summary": "Update Vehicle Status",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/fleet/maintenance",
+      "module": "fleet",
+      "operation_id": "log_maintenance_api_v1_fleet_maintenance_post",
+      "summary": "Log Maintenance",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/fleet/vehicles/{vehicle_id}/maintenance",
+      "module": "fleet",
+      "operation_id": "list_maintenance_api_v1_fleet_vehicles__vehicle_id__maintenance_get",
+      "summary": "List Maintenance",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/fleet/bulk/status-update",
+      "module": "fleet",
+      "operation_id": "bulk_update_vehicle_status_api_v1_fleet_bulk_status_update_post",
+      "summary": "Bulk Update Vehicle Status",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/fleet/bulk/delete",
+      "module": "fleet",
+      "operation_id": "bulk_delete_vehicles_api_v1_fleet_bulk_delete_post",
+      "summary": "Bulk Delete Vehicles",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/fleet/equipment",
+      "module": "fleet",
+      "operation_id": "checkout_equipment_api_v1_fleet_equipment_post",
+      "summary": "Checkout Equipment",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/fleet/equipment",
+      "module": "fleet",
+      "operation_id": "list_equipment_checkouts_api_v1_fleet_equipment_get",
+      "summary": "List Equipment Checkouts",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/fleet/equipment/{checkout_id}",
+      "module": "fleet",
+      "operation_id": "get_equipment_checkout_api_v1_fleet_equipment__checkout_id__get",
+      "summary": "Get Equipment Checkout",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/fleet/equipment/{checkout_id}/return",
+      "module": "fleet",
+      "operation_id": "return_equipment_api_v1_fleet_equipment__checkout_id__return_post",
+      "summary": "Return Equipment",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/fleet/vehicles/{vehicle_id}/fuel",
+      "module": "fleet",
+      "operation_id": "log_fuel_api_v1_fleet_vehicles__vehicle_id__fuel_post",
+      "summary": "Log Fuel",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/fleet/vehicles/{vehicle_id}/fuel",
+      "module": "fleet",
+      "operation_id": "list_fuel_logs_api_v1_fleet_vehicles__vehicle_id__fuel_get",
+      "summary": "List Fuel Logs",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/fleet/fuel/{log_id}",
+      "module": "fleet",
+      "operation_id": "get_fuel_log_api_v1_fleet_fuel__log_id__get",
+      "summary": "Get Fuel Log",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/grievance",
+      "module": "grievance",
+      "operation_id": "submit_complaint_api_v1_grievance_post",
+      "summary": "Submit Complaint",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/grievance",
+      "module": "grievance",
+      "operation_id": "list_tickets_api_v1_grievance_get",
+      "summary": "List Tickets",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/grievance/feedback",
+      "module": "grievance",
+      "operation_id": "list_feedback_api_v1_grievance_feedback_get",
+      "summary": "List Feedback",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/grievance/feedback",
+      "module": "grievance",
+      "operation_id": "submit_feedback_api_v1_grievance_feedback_post",
+      "summary": "Submit Feedback",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/grievance/{ticket_id}",
+      "module": "grievance",
+      "operation_id": "get_ticket_api_v1_grievance__ticket_id__get",
+      "summary": "Get Ticket",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/grievance/{ticket_id}",
+      "module": "grievance",
+      "operation_id": "update_ticket_api_v1_grievance__ticket_id__put",
+      "summary": "Update Ticket",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/grievance/{ticket_id}",
+      "module": "grievance",
+      "operation_id": "soft_delete_ticket_api_v1_grievance__ticket_id__delete",
+      "summary": "Soft Delete Ticket",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/grievance/{ticket_id}/status",
+      "module": "grievance",
+      "operation_id": "update_ticket_status_api_v1_grievance__ticket_id__status_patch",
+      "summary": "Update Ticket Status",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/grievance/{ticket_id}/assign",
+      "module": "grievance",
+      "operation_id": "assign_ticket_api_v1_grievance__ticket_id__assign_post",
+      "summary": "Assign Ticket",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/grievance/{ticket_id}/escalate",
+      "module": "grievance",
+      "operation_id": "escalate_ticket_api_v1_grievance__ticket_id__escalate_post",
+      "summary": "Escalate Ticket",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/grievance/{ticket_id}/comments",
+      "module": "grievance",
+      "operation_id": "add_comment_api_v1_grievance__ticket_id__comments_post",
+      "summary": "Add Comment",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/grievance/{ticket_id}/comments",
+      "module": "grievance",
+      "operation_id": "list_comments_api_v1_grievance__ticket_id__comments_get",
+      "summary": "List Comments",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/grievance/feedback/{feedback_id}",
+      "module": "grievance",
+      "operation_id": "soft_delete_feedback_api_v1_grievance_feedback__feedback_id__delete",
+      "summary": "Soft Delete Feedback",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/grievance/bulk/delete",
+      "module": "grievance",
+      "operation_id": "bulk_delete_tickets_api_v1_grievance_bulk_delete_post",
+      "summary": "Bulk Delete Tickets",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/grievance/bulk/status",
+      "module": "grievance",
+      "operation_id": "bulk_update_ticket_status_api_v1_grievance_bulk_status_post",
+      "summary": "Bulk Update Ticket Status",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/grievance/feedback/bulk/delete",
+      "module": "grievance",
+      "operation_id": "bulk_delete_feedback_api_v1_grievance_feedback_bulk_delete_post",
+      "summary": "Bulk Delete Feedback",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/notifications",
+      "module": "notifications",
+      "operation_id": "list_notifications_api_v1_notifications_get",
+      "summary": "List Notifications",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/notifications/unread-count",
+      "module": "notifications",
+      "operation_id": "unread_count_api_v1_notifications_unread_count_get",
+      "summary": "Unread Count",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/notifications/{notification_id}/read",
+      "module": "notifications",
+      "operation_id": "mark_read_api_v1_notifications__notification_id__read_put",
+      "summary": "Mark Read",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/notifications/read-all",
+      "module": "notifications",
+      "operation_id": "mark_all_read_api_v1_notifications_read_all_put",
+      "summary": "Mark All Read",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/notifications/{notification_id}",
+      "module": "notifications",
+      "operation_id": "delete_notification_api_v1_notifications__notification_id__delete",
+      "summary": "Delete Notification",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/notifications/bulk/delete",
+      "module": "notifications",
+      "operation_id": "bulk_delete_notifications_api_v1_notifications_bulk_delete_post",
+      "summary": "Bulk Delete Notifications",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/notifications/send",
+      "module": "notifications",
+      "operation_id": "send_notification_api_v1_notifications_send_post",
+      "summary": "Send Notification",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/notifications/preferences",
+      "module": "notifications",
+      "operation_id": "get_preferences_api_v1_notifications_preferences_get",
+      "summary": "Get Preferences",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/notifications/preferences",
+      "module": "notifications",
+      "operation_id": "update_preferences_api_v1_notifications_preferences_put",
+      "summary": "Update Preferences",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/notifications/broadcast",
+      "module": "notifications",
+      "operation_id": "broadcast_notification_api_v1_notifications_broadcast_post",
+      "summary": "Broadcast Notification",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/notifications/test-push",
+      "module": "notifications",
+      "operation_id": "test_push_notification_api_v1_notifications_test_push_post",
+      "summary": "Test Push Notification",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/notifications/fcm-status",
+      "module": "notifications",
+      "operation_id": "fcm_status_api_v1_notifications_fcm_status_get",
+      "summary": "Fcm Status",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/settings/general",
+      "module": "settings",
+      "operation_id": "get_general_settings_api_v1_settings_general_get",
+      "summary": "Get General Settings",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/settings/email",
+      "module": "settings",
+      "operation_id": "get_email_settings_api_v1_settings_email_get",
+      "summary": "Get Email Settings",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/settings/storage",
+      "module": "settings",
+      "operation_id": "get_storage_settings_api_v1_settings_storage_get",
+      "summary": "Get Storage Settings",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/settings/public-content",
+      "module": "settings",
+      "operation_id": "get_public_content_api_v1_settings_public_content_get",
+      "summary": "Get Public Content",
+      "auth": "public",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/settings/public-content",
+      "module": "settings",
+      "operation_id": "update_public_content_api_v1_settings_public_content_put",
+      "summary": "Update Public Content",
+      "auth": "public",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/settings/system",
+      "module": "settings",
+      "operation_id": "list_settings_api_v1_settings_system_get",
+      "summary": "List Settings",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/settings/system",
+      "module": "settings",
+      "operation_id": "create_setting_api_v1_settings_system_post",
+      "summary": "Create Setting",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/settings/system/{key}",
+      "module": "settings",
+      "operation_id": "get_setting_api_v1_settings_system__key__get",
+      "summary": "Get Setting",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/settings/system/{key}",
+      "module": "settings",
+      "operation_id": "update_setting_api_v1_settings_system__key__put",
+      "summary": "Update Setting",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/settings/system/{setting_id}",
+      "module": "settings",
+      "operation_id": "delete_setting_api_v1_settings_system__setting_id__delete",
+      "summary": "Delete Setting",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/settings/password-policy",
+      "module": "settings",
+      "operation_id": "get_password_policy_api_v1_settings_password_policy_get",
+      "summary": "Get Password Policy",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/settings/password-policy",
+      "module": "settings",
+      "operation_id": "update_password_policy_api_v1_settings_password_policy_put",
+      "summary": "Update Password Policy",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/settings/business-rules",
+      "module": "settings",
+      "operation_id": "list_business_rules_api_v1_settings_business_rules_get",
+      "summary": "List Business Rules",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/settings/business-rules",
+      "module": "settings",
+      "operation_id": "create_business_rule_api_v1_settings_business_rules_post",
+      "summary": "Create Business Rule",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/settings/business-rules/{rule_key}",
+      "module": "settings",
+      "operation_id": "get_business_rule_api_v1_settings_business_rules__rule_key__get",
+      "summary": "Get Business Rule",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/settings/business-rules/{rule_key}",
+      "module": "settings",
+      "operation_id": "update_business_rule_api_v1_settings_business_rules__rule_key__put",
+      "summary": "Update Business Rule",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/settings/business-rules/{rule_id}",
+      "module": "settings",
+      "operation_id": "delete_business_rule_api_v1_settings_business_rules__rule_id__delete",
+      "summary": "Delete Business Rule",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/storage/upload-url",
+      "module": "storage",
+      "operation_id": "request_upload_url_api_v1_storage_upload_url_post",
+      "summary": "Request Upload Url",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/storage/{file_id}/confirm",
+      "module": "storage",
+      "operation_id": "confirm_upload_api_v1_storage__file_id__confirm_put",
+      "summary": "Confirm Upload",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/storage/{file_id}/download-url",
+      "module": "storage",
+      "operation_id": "get_download_url_api_v1_storage__file_id__download_url_get",
+      "summary": "Get Download Url",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/storage/{file_id}",
+      "module": "storage",
+      "operation_id": "get_file_api_v1_storage__file_id__get",
+      "summary": "Get File",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/storage/{file_id}",
+      "module": "storage",
+      "operation_id": "delete_file_api_v1_storage__file_id__delete",
+      "summary": "Delete File",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/storage",
+      "module": "storage",
+      "operation_id": "list_files_api_v1_storage_get",
+      "summary": "List Files",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/storage/bulk/delete",
+      "module": "storage",
+      "operation_id": "bulk_delete_files_api_v1_storage_bulk_delete_post",
+      "summary": "Bulk Delete Files",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/storage/entity/{entity_type}/{entity_id}",
+      "module": "storage",
+      "operation_id": "list_files_by_entity_api_v1_storage_entity__entity_type___entity_id__get",
+      "summary": "List Files By Entity",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/finance/accounts",
+      "module": "finance",
+      "operation_id": "create_account_api_v1_finance_accounts_post",
+      "summary": "Create Account",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/finance/accounts",
+      "module": "finance",
+      "operation_id": "list_accounts_api_v1_finance_accounts_get",
+      "summary": "List Accounts",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/finance/accounts/{account_id}",
+      "module": "finance",
+      "operation_id": "get_account_api_v1_finance_accounts__account_id__get",
+      "summary": "Get Account",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/finance/accounts/{account_id}",
+      "module": "finance",
+      "operation_id": "update_account_api_v1_finance_accounts__account_id__put",
+      "summary": "Update Account",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/finance/accounts/{account_id}",
+      "module": "finance",
+      "operation_id": "delete_account_api_v1_finance_accounts__account_id__delete",
+      "summary": "Delete Account",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/finance/transactions",
+      "module": "finance",
+      "operation_id": "create_transaction_api_v1_finance_transactions_post",
+      "summary": "Create Transaction",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/finance/transactions",
+      "module": "finance",
+      "operation_id": "list_transactions_api_v1_finance_transactions_get",
+      "summary": "List Transactions",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/finance/transactions/{tx_id}",
+      "module": "finance",
+      "operation_id": "get_transaction_api_v1_finance_transactions__tx_id__get",
+      "summary": "Get Transaction",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/finance/transactions/{tx_id}",
+      "module": "finance",
+      "operation_id": "delete_transaction_api_v1_finance_transactions__tx_id__delete",
+      "summary": "Delete Transaction",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/finance/transactions/{tx_id}/status",
+      "module": "finance",
+      "operation_id": "update_transaction_status_api_v1_finance_transactions__tx_id__status_patch",
+      "summary": "Update Transaction Status",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/finance/summary",
+      "module": "finance",
+      "operation_id": "get_finance_summary_api_v1_finance_summary_get",
+      "summary": "Get Finance Summary",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/finance/pnl",
+      "module": "finance",
+      "operation_id": "get_pnl_api_v1_finance_pnl_get",
+      "summary": "Get Pnl",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/finance/account-balances",
+      "module": "finance",
+      "operation_id": "get_account_balances_api_v1_finance_account_balances_get",
+      "summary": "Get Account Balances",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/finance/reconcile/donations",
+      "module": "finance",
+      "operation_id": "reconcile_donations_api_v1_finance_reconcile_donations_post",
+      "summary": "Reconcile Donations",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/finance/reconcile/summary",
+      "module": "finance",
+      "operation_id": "get_reconciliation_summary_api_v1_finance_reconcile_summary_get",
+      "summary": "Get Reconciliation Summary",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/finance/budgets",
+      "module": "finance",
+      "operation_id": "create_budget_api_v1_finance_budgets_post",
+      "summary": "Create Budget",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/finance/budgets",
+      "module": "finance",
+      "operation_id": "list_budgets_api_v1_finance_budgets_get",
+      "summary": "List Budgets",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/finance/budgets/{budget_id}",
+      "module": "finance",
+      "operation_id": "get_budget_api_v1_finance_budgets__budget_id__get",
+      "summary": "Get Budget",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/finance/budgets/{budget_id}",
+      "module": "finance",
+      "operation_id": "delete_budget_api_v1_finance_budgets__budget_id__delete",
+      "summary": "Delete Budget",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/finance/budgets/{budget_id}/items",
+      "module": "finance",
+      "operation_id": "add_budget_item_api_v1_finance_budgets__budget_id__items_post",
+      "summary": "Add Budget Item",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/finance/recurring",
+      "module": "finance",
+      "operation_id": "create_recurring_api_v1_finance_recurring_post",
+      "summary": "Create Recurring",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/finance/recurring",
+      "module": "finance",
+      "operation_id": "list_recurring_api_v1_finance_recurring_get",
+      "summary": "List Recurring",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/finance/recurring/{rtx_id}",
+      "module": "finance",
+      "operation_id": "delete_recurring_api_v1_finance_recurring__rtx_id__delete",
+      "summary": "Delete Recurring",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/finance/accounts/bulk/delete",
+      "module": "finance",
+      "operation_id": "bulk_delete_accounts_api_v1_finance_accounts_bulk_delete_post",
+      "summary": "Bulk Delete Accounts",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/finance/transactions/bulk/delete",
+      "module": "finance",
+      "operation_id": "bulk_delete_transactions_api_v1_finance_transactions_bulk_delete_post",
+      "summary": "Bulk Delete Transactions",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/finance/expenses",
+      "module": "finance",
+      "operation_id": "create_expense_api_v1_finance_expenses_post",
+      "summary": "Create Expense",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/finance/expenses",
+      "module": "finance",
+      "operation_id": "list_expenses_api_v1_finance_expenses_get",
+      "summary": "List Expenses",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/finance/expenses/{expense_id}",
+      "module": "finance",
+      "operation_id": "get_expense_api_v1_finance_expenses__expense_id__get",
+      "summary": "Get Expense",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/finance/expenses/{expense_id}",
+      "module": "finance",
+      "operation_id": "update_expense_api_v1_finance_expenses__expense_id__patch",
+      "summary": "Update Expense",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/finance/expenses/{expense_id}",
+      "module": "finance",
+      "operation_id": "delete_expense_api_v1_finance_expenses__expense_id__delete",
+      "summary": "Delete Expense",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/finance/expenses/{expense_id}/submit",
+      "module": "finance",
+      "operation_id": "submit_expense_api_v1_finance_expenses__expense_id__submit_post",
+      "summary": "Submit Expense",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/finance/expenses/{expense_id}/approve",
+      "module": "finance",
+      "operation_id": "approve_expense_api_v1_finance_expenses__expense_id__approve_post",
+      "summary": "Approve Expense",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/finance/expenses/{expense_id}/reject",
+      "module": "finance",
+      "operation_id": "reject_expense_api_v1_finance_expenses__expense_id__reject_post",
+      "summary": "Reject Expense",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/finance/expenses/{expense_id}/pay",
+      "module": "finance",
+      "operation_id": "pay_expense_api_v1_finance_expenses__expense_id__pay_post",
+      "summary": "Pay Expense",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/finance/refunds",
+      "module": "finance",
+      "operation_id": "process_refund_api_v1_finance_refunds_post",
+      "summary": "Process Refund",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/finance/80g-certificate",
+      "module": "finance",
+      "operation_id": "generate_80g_certificate_api_v1_finance_80g_certificate_post",
+      "summary": "Generate 80G Certificate",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/finance/reports/pdf",
+      "module": "finance",
+      "operation_id": "generate_finance_report_pdf_api_v1_finance_reports_pdf_get",
+      "summary": "Generate Finance Report Pdf",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/reports/generate",
+      "module": "reports",
+      "operation_id": "generate_report_api_v1_reports_generate_post",
+      "summary": "Generate Report",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/reports/types",
+      "module": "reports",
+      "operation_id": "list_report_types_api_v1_reports_types_get",
+      "summary": "List Report Types",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/reports/formats",
+      "module": "reports",
+      "operation_id": "list_report_formats_api_v1_reports_formats_get",
+      "summary": "List Report Formats",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/reports/download/{filename}",
+      "module": "reports",
+      "operation_id": "download_report_api_v1_reports_download__filename__get",
+      "summary": "Download Report",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "module": "system",
+      "operation_id": "health_health_get",
+      "summary": "Health",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/live",
+      "module": "system",
+      "operation_id": "live_live_get",
+      "summary": "Live",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/ready",
+      "module": "system",
+      "operation_id": "ready_ready_get",
+      "summary": "Ready",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    },
+    {
+      "method": "GET",
+      "path": "/metrics",
+      "module": "system",
+      "operation_id": "metrics_endpoint_metrics_get",
+      "summary": "Prometheus Metrics Exposition",
+      "auth": "authenticated",
+      "category": "OpenAPI Operation"
+    }
+  ],
+  "internal_routes": [
+    {
+      "path": "/openapi.json",
+      "methods": [
+        "HEAD",
+        "GET"
+      ],
+      "name": "openapi",
+      "type": "Starlette Route / Documentation"
+    },
+    {
+      "path": "/docs",
+      "methods": [
+        "HEAD",
+        "GET"
+      ],
+      "name": "swagger_ui_html",
+      "type": "Starlette Route / Documentation"
+    },
+    {
+      "path": "/docs/oauth2-redirect",
+      "methods": [
+        "HEAD",
+        "GET"
+      ],
+      "name": "swagger_ui_redirect",
+      "type": "Starlette Route / Documentation"
+    },
+    {
+      "path": "/redoc",
+      "methods": [
+        "HEAD",
+        "GET"
+      ],
+      "name": "redoc_html",
+      "type": "Starlette Route / Documentation"
+    },
+    {
+      "path": "/",
+      "methods": [
+        "GET"
+      ],
+      "name": "redirect_to_docs",
+      "type": "Starlette Route / Documentation"
+    },
+    {
+      "path": "/health",
+      "methods": [
+        "GET"
+      ],
+      "name": "health",
+      "type": "Starlette Route / Documentation"
+    },
+    {
+      "path": "/live",
+      "methods": [
+        "GET"
+      ],
+      "name": "live",
+      "type": "Starlette Route / Documentation"
+    },
+    {
+      "path": "/ready",
+      "methods": [
+        "GET"
+      ],
+      "name": "ready",
+      "type": "Starlette Route / Documentation"
+    },
+    {
+      "path": "/metrics",
+      "methods": [
+        "GET"
+      ],
+      "name": "metrics_endpoint",
+      "type": "Starlette Route / Documentation"
+    },
+    {
+      "path": "/metrics/api/v1/status/buildinfo",
+      "methods": [
+        "GET"
+      ],
+      "name": "prometheus_buildinfo",
+      "type": "Starlette Route / Documentation"
+    },
+    {
+      "path": "/api/v1/status/buildinfo",
+      "methods": [
+        "GET"
+      ],
+      "name": "prometheus_buildinfo",
+      "type": "Starlette Route / Documentation"
+    },
+    {
+      "path": "/metrics/api/v1/query_range",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "name": "prometheus_query_stub",
+      "type": "Starlette Route / Documentation"
+    },
+    {
+      "path": "/api/v1/query_range",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "name": "prometheus_query_stub",
+      "type": "Starlette Route / Documentation"
+    },
+    {
+      "path": "/metrics/api/v1/query",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "name": "prometheus_query_stub",
+      "type": "Starlette Route / Documentation"
+    },
+    {
+      "path": "/api/v1/query",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "name": "prometheus_query_stub",
+      "type": "Starlette Route / Documentation"
+    },
+    {
+      "path": "/metrics/api/v1/labels",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "name": "prometheus_labels_stub",
+      "type": "Starlette Route / Documentation"
+    },
+    {
+      "path": "/api/v1/labels",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "name": "prometheus_labels_stub",
+      "type": "Starlette Route / Documentation"
+    }
+  ]
+}
