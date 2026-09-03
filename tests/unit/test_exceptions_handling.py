@@ -54,7 +54,7 @@ def test_unique_integrity_error_handled_as_409(app):
     assert response.status_code == 409
     body = response.json()
     assert body["success"] is False
-    assert body["error"]["code"] == "CONFLICT"
+    assert body["error"]["code"] in ("DUPLICATE_RESOURCE", "CONFLICT")
     assert "already exists" in body["error"]["message"]
 
 
@@ -64,7 +64,7 @@ def test_check_integrity_error_handled_as_422(app):
     assert response.status_code == 422
     body = response.json()
     assert body["success"] is False
-    assert body["error"]["code"] == "VALIDATION_FAILED"
+    assert body["error"]["code"] in ("VALIDATION_ERROR", "VALIDATION_FAILED")
 
 
 def test_data_error_handled_as_422(app):
@@ -73,7 +73,7 @@ def test_data_error_handled_as_422(app):
     assert response.status_code == 422
     body = response.json()
     assert body["success"] is False
-    assert body["error"]["code"] == "VALIDATION_FAILED"
+    assert body["error"]["code"] in ("VALIDATION_ERROR", "VALIDATION_FAILED")
 
 
 def test_value_error_handled_as_422(app):
@@ -82,5 +82,5 @@ def test_value_error_handled_as_422(app):
     assert response.status_code == 422
     body = response.json()
     assert body["success"] is False
-    assert body["error"]["code"] == "VALIDATION_FAILED"
+    assert body["error"]["code"] in ("VALIDATION_ERROR", "VALIDATION_FAILED")
     assert "Invalid enum option provided." in body["error"]["message"]

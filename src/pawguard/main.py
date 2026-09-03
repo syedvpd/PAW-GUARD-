@@ -241,7 +241,7 @@ def create_app() -> FastAPI:
         return ApiResponse(data={"status": "alive"})
 
     @app.get("/ready", response_model=ApiResponse[dict[str, str]])
-    async def ready() -> ApiResponse[dict[str, str]]:
+    async def ready(response: Response) -> ApiResponse[dict[str, str]]:
         db_ok = False
         try:
             async with engine.connect() as conn:
@@ -252,11 +252,15 @@ def create_app() -> FastAPI:
 
         redis_ok = await ping_redis()
 
+        is_ready = db_ok and redis_ok
+        if not is_ready:
+            response.status_code = 503
+
         status_payload = {
             "database": "ok" if db_ok else "unavailable",
             "redis": "ok" if redis_ok else "unavailable",
         }
-        return ApiResponse(data=status_payload, success=db_ok and redis_ok)
+        return ApiResponse(data=status_payload, success=is_ready)
 
     @app.get(
         "/metrics",

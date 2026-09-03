@@ -32,9 +32,12 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
     """Assigns request_id, trace_id, and span_id, binding context for structured logging and distributed tracing."""
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        request_id = request.headers.get(
-            "x-request-id", request.headers.get(REQUEST_ID_HEADER, str(uuid.uuid4()))
-        )
+        raw_req_id = request.headers.get("x-request-id", request.headers.get(REQUEST_ID_HEADER, ""))
+        if raw_req_id and re.match(r"^[a-zA-Z0-9_\-\.]{1,64}$", raw_req_id):
+            request_id = raw_req_id
+        else:
+            request_id = f"req_{uuid.uuid4().hex[:12]}"
+
         trace_id = request.headers.get(
             "x-trace-id", request.headers.get("traceparent", str(uuid.uuid4().hex))
         )
@@ -53,6 +56,7 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
 
         response = await call_next(request)
         response.headers[REQUEST_ID_HEADER] = request_id
+        response.headers["x-request-id"] = request_id
         response.headers["X-Trace-ID"] = trace_id
         response.headers["X-Span-ID"] = span_id
         return response
