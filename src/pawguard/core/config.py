@@ -74,7 +74,8 @@ class Settings(BaseSettings):
     allowed_hosts: str = "*,localhost,127.0.0.1"
     cors_origins: str = (
         "http://localhost:3000,http://localhost:5173,http://localhost:4173,http://localhost:8080,"
-        "https://pawguard-admin.vercel.app,https://pawguard-web-gamma.vercel.app,https://pawguard-web.vercel.app"
+        "https://pawguard-admin.vercel.app,https://pawguard-web-gamma.vercel.app,https://pawguard-web.vercel.app,"
+        "https://pawguard-public-web.vercel.app,https://pawguard-web-v2.vercel.app"
     )
     max_request_body_size: int = 31_457_280  # 30 MB
 
@@ -120,7 +121,12 @@ class Settings(BaseSettings):
     # Audience (client id) of the Google / Apple application this backend
     # verifies provider ID tokens against. OAuth login FAILS CLOSED when
     # unset: a provider token whose `aud` does not match is rejected.
-    google_oauth_client_id: str = ""
+    # Multiple client IDs can be separated by commas.
+    google_oauth_client_id: str = (
+        "485887290260-6vshlthcact0390hlr13af80vhv93i5n.apps.googleusercontent.com,"
+        "485887290260-rsv1vlmk8lq9cnuk9ijhaibb7o3n2dad.apps.googleusercontent.com,"
+        "952074173774-22bn3dldf21oi8boiubtdv0gv1kovg2r.apps.googleusercontent.com"
+    )
     apple_oauth_client_id: str = ""
 
     # --- Cookies ---

@@ -54,6 +54,26 @@ class TestOAuthAudienceValidation:
         assert data["sub"] == "google-user-1"
         assert data["email"] == "alice@example.com"
 
+    async def test_google_accepts_token_with_multiple_configured_clients(self, monkeypatch) -> None:
+        monkeypatch.setattr(
+            get_settings(),
+            "google_oauth_client_id",
+            "client1.apps.googleusercontent.com,client2.apps.googleusercontent.com",
+        )
+        self._patch_provider_http(
+            monkeypatch,
+            {
+                "sub": "google-user-2",
+                "email": "bob@example.com",
+                "email_verified": True,
+                "name": "Bob",
+                "aud": "client2.apps.googleusercontent.com",
+            },
+        )
+        data = await AuthService._verify_oauth_token_unsafe("google", "token")
+        assert data["sub"] == "google-user-2"
+        assert data["email"] == "bob@example.com"
+
     async def test_google_rejects_token_for_another_app(self, monkeypatch) -> None:
         monkeypatch.setattr(
             get_settings(), "google_oauth_client_id", "our-client.apps.googleusercontent.com"
