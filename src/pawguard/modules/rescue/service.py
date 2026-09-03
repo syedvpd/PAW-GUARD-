@@ -513,8 +513,14 @@ class RescueService:
                     f"(vehicle is '{vehicle.status.value}')."
                 )
 
-        if assigned_driver_id is not None and not await self._repo.user_exists(assigned_driver_id):
-            raise NotFoundError(f"Assigned driver user '{assigned_driver_id}' not found.")
+        if assigned_driver_id is not None:
+            driver_user = await self._repo._session.get(User, assigned_driver_id)
+            if driver_user is None or driver_user.deleted_at is not None:
+                raise NotFoundError(f"Assigned driver user '{assigned_driver_id}' not found.")
+            if not getattr(driver_user, "can_drive", False):
+                raise ValidationFailedError(
+                    f"User '{driver_user.full_name}' is not authorized to drive (can_drive=False)."
+                )
 
         # Assemble the full team: the explicit agent list plus the legacy
         # single-driver field, deduplicated. Every member is mirrored into
@@ -635,6 +641,15 @@ class RescueService:
             raise NotFoundError("Rescue dispatch record not found.")
 
         if payload.assigned_driver_id is not None:
+            driver_user = await self._repo._session.get(User, payload.assigned_driver_id)
+            if driver_user is None or driver_user.deleted_at is not None:
+                raise NotFoundError(
+                    f"Assigned driver user '{payload.assigned_driver_id}' not found."
+                )
+            if not getattr(driver_user, "can_drive", False):
+                raise ValidationFailedError(
+                    f"User '{driver_user.full_name}' is not authorized to drive (can_drive=False)."
+                )
             dispatch.assigned_driver_id = payload.assigned_driver_id
         if payload.vehicle_id is not None:
             dispatch.vehicle_id = payload.vehicle_id
@@ -1480,6 +1495,7 @@ class RescueService:
                         "distance_km": geo["distance_km"],
                         "latitude": geo["latitude"],
                         "longitude": geo["longitude"],
+                        "can_drive": getattr(user, "can_drive", False),
                     }
                 )
             # Sort by distance
@@ -1512,6 +1528,7 @@ class RescueService:
                         "distance_km": None,
                         "latitude": None,
                         "longitude": None,
+                        "can_drive": getattr(user, "can_drive", False),
                     }
                 )
 
@@ -1575,6 +1592,7 @@ class RescueService:
                     "last_heartbeat": heartbeat,
                     "latitude": lat,
                     "longitude": lng,
+                    "can_drive": getattr(agent, "can_drive", False),
                 }
             )
         return result

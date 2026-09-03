@@ -320,6 +320,7 @@ class UserProfile(BaseModel):
     push_notifications: bool = True
     is_verified: bool
     mfa_enabled: bool
+    can_drive: bool = False
     has_password: bool = True
     auth_provider: str | None = None
     roles: list[str]

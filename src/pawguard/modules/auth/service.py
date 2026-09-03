@@ -1301,11 +1301,12 @@ class AdminService:
         full_name: str,
         phone: str | None,
         role_names: list[str],
+        can_drive: bool = False,
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
         user_agent: str | None = None,
     ) -> User:
-        normalized_email = email.lower()
+        normalized_email = email.lower().strip()
         existing = await self._users.get_by_email(normalized_email)
         if existing is not None:
             from pawguard.core.exceptions import ConflictError
@@ -1319,6 +1320,7 @@ class AdminService:
             hashed_password=await asyncio.to_thread(hash_password, password),
             is_active=True,
             is_verified=False,
+            can_drive=can_drive,
         )
         await self._users.create(user)
 
@@ -1348,6 +1350,7 @@ class AdminService:
         full_name: str | None = None,
         phone: str | None = None,
         is_active: bool | None = None,
+        can_drive: bool | None = None,
         role_names: list[str] | None = None,
         password: str | None = None,
         actor_id: uuid.UUID | None = None,
@@ -1364,6 +1367,8 @@ class AdminService:
             user.phone = phone
         if is_active is not None:
             user.is_active = is_active
+        if can_drive is not None:
+            user.can_drive = can_drive
 
         if role_names is not None:
             role_ids: list[uuid.UUID] = []

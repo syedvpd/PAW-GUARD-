@@ -141,6 +141,14 @@ async def _seed_roles() -> None:
                     "ALTER TABLE rescue_dispatch_agents ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMP WITH TIME ZONE;"
                 )
             )
+            await session.execute(
+                text(
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS can_drive BOOLEAN NOT NULL DEFAULT FALSE;"
+                )
+            )
+            await session.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_users_can_drive ON users (can_drive);")
+            )
         except Exception as schema_exc:
             logger.warning("schema_idempotent_patch_skipped", error=str(schema_exc))
 

@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class NotificationResponse(BaseModel):
@@ -12,6 +12,8 @@ class NotificationResponse(BaseModel):
     title: str
     body: str
     notification_type: str | None
+    module: str | None = None
+    role: str | None = None
     is_broadcast: bool
     is_read: bool
     action_url: str | None
@@ -19,6 +21,27 @@ class NotificationResponse(BaseModel):
     sent_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def _infer_module_and_role(self) -> "NotificationResponse":
+        if not self.module:
+            url = (self.action_url or "").lower()
+            ntype = (self.notification_type or "").lower()
+            if "/rescue" in url or "rescue" in ntype:
+                self.module = "rescue"
+            elif "/foster" in url or "foster" in ntype:
+                self.module = "foster"
+            elif "/dog" in url or "dog" in ntype:
+                self.module = "dogs"
+            elif "/medical" in url or "medical" in ntype:
+                self.module = "medical"
+            elif "/finance" in url or "finance" in ntype:
+                self.module = "finance"
+            elif "/admin" in url or "admin" in ntype:
+                self.module = "admin"
+            else:
+                self.module = "general"
+        return self
 
 
 class NotificationCreate(BaseModel):

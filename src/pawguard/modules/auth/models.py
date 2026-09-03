@@ -263,6 +263,7 @@ class User(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     postal_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
     push_notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     fcm_token: Mapped[str | None] = mapped_column(String(512), nullable=True, index=True)
+    can_drive: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     roles: Mapped[list["Role"]] = relationship(
         secondary="user_roles", back_populates="users", lazy="selectin"

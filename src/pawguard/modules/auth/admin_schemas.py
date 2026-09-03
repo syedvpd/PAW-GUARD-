@@ -92,6 +92,7 @@ class AdminUserCreateRequest(BaseModel):
     full_name: str = Field(min_length=1, max_length=255, examples=["Alex Rivera"])
     phone: str | None = Field(None, examples=["+1-555-0100"])
     role_names: list[str] = Field(default=[], examples=[["shelter_manager"]])
+    can_drive: bool = Field(default=False, examples=[True])
 
 
 class AdminRestorePasswordRequest(BaseModel):
@@ -103,6 +104,7 @@ class AdminUserUpdateRequest(BaseModel):
     full_name: str | None = Field(None, examples=["Alex Rivera"])
     phone: str | None = Field(None, examples=["+1-555-0100"])
     is_active: bool | None = Field(None, examples=[True])
+    can_drive: bool | None = Field(None, examples=[True])
     role_names: list[str] | None = Field(None, examples=[["shelter_manager"]])
     password: str | None = Field(None, min_length=10, examples=["StrongP@ssw0rd"])
 
@@ -115,6 +117,7 @@ class AdminUserResponse(BaseModel):
     is_active: bool
     is_verified: bool
     mfa_enabled: bool
+    can_drive: bool = False
     roles: list[str]
     direct_permissions: list[str] = []
     created_at: datetime

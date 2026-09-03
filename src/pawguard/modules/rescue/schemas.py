@@ -378,24 +378,26 @@ class RescueDispatchResponse(BaseModel):
             else:
                 photo_keys.append(k)
 
+        def _safe_resolve_url(k: str) -> str:
+            if not k:
+                return ""
+            if k.startswith(("http://", "https://", "data:")):
+                return k
+            try:
+                from pawguard.services.storage_service import get_storage_service
+
+                return get_storage_service().generate_presigned_download_url(object_key=k)
+            except Exception:
+                return f"/api/v1/files/{k}"
+
         urls = []
         photo_urls = []
         video_url = None
         if keys:
-            from pawguard.services.storage_service import get_storage_service
-
-            storage = get_storage_service()
-            try:
-                urls = [storage.generate_presigned_download_url(object_key=k) for k in keys if k]
-                photo_urls = [
-                    storage.generate_presigned_download_url(object_key=k) for k in photo_keys if k
-                ]
-                if video_key:
-                    video_url = storage.generate_presigned_download_url(object_key=video_key)
-            except Exception:
-                urls = []
-                photo_urls = []
-                video_url = None
+            urls = [_safe_resolve_url(k) for k in keys if k]
+            photo_urls = [_safe_resolve_url(k) for k in photo_keys if k]
+            if video_key:
+                video_url = _safe_resolve_url(video_key)
 
         return {
             "id": getattr(data, "id", None),
@@ -467,6 +469,7 @@ class NearbyAgentResponse(BaseModel):
     distance_km: float | None = None
     latitude: float | None = None
     longitude: float | None = None
+    can_drive: bool = False
 
 
 class RescueReportCreate(BaseModel):
@@ -590,28 +593,26 @@ class RescueRequestResponse(BaseModel):
                             photo_keys.append(m_key)
                 keys = photo_keys + ([video_key] if video_key else [])
 
+            def _safe_resolve_url(k: str) -> str:
+                if not k:
+                    return ""
+                if k.startswith(("http://", "https://", "data:")):
+                    return k
+                try:
+                    from pawguard.services.storage_service import get_storage_service
+
+                    return get_storage_service().generate_presigned_download_url(object_key=k)
+                except Exception:
+                    return f"/api/v1/files/{k}"
+
             urls = []
             photo_urls = []
             video_url = None
             if keys:
-                from pawguard.services.storage_service import get_storage_service
-
-                storage = get_storage_service()
-                try:
-                    urls = [
-                        storage.generate_presigned_download_url(object_key=k) for k in keys if k
-                    ]
-                    photo_urls = [
-                        storage.generate_presigned_download_url(object_key=k)
-                        for k in photo_keys
-                        if k
-                    ]
-                    if video_key:
-                        video_url = storage.generate_presigned_download_url(object_key=video_key)
-                except Exception:
-                    urls = []
-                    photo_urls = []
-                    video_url = None
+                urls = [_safe_resolve_url(k) for k in keys if k]
+                photo_urls = [_safe_resolve_url(k) for k in photo_keys if k]
+                if video_key:
+                    video_url = _safe_resolve_url(video_key)
 
             return {
                 "id": data.id,
@@ -682,6 +683,7 @@ class AgentAvailabilityResponse(BaseModel):
     last_heartbeat: str | None = None
     latitude: float | None = None
     longitude: float | None = None
+    can_drive: bool = False
 
 
 class VehicleAvailabilityResponse(BaseModel):
