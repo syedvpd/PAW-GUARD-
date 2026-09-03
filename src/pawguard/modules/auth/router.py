@@ -144,8 +144,8 @@ def _cookie_domain() -> str | None:
 def _set_auth_cookies(response: Response, *, access_token: str, refresh_token: str | None) -> None:
     settings = get_settings()
     domain = _cookie_domain()
-    samesite_mode = "none" if settings.cookie_secure else "lax"
-    is_secure = settings.cookie_secure
+    is_secure = settings.cookie_secure or (settings.env not in ("development", "test"))
+    samesite_mode = "none" if is_secure else "lax"
 
     response.set_cookie(
         ACCESS_TOKEN_COOKIE_NAME,
@@ -171,8 +171,8 @@ def _set_auth_cookies(response: Response, *, access_token: str, refresh_token: s
 def _clear_auth_cookies(response: Response) -> None:
     settings = get_settings()
     domain = _cookie_domain()
-    samesite_mode = "none" if settings.cookie_secure else "lax"
-    is_secure = settings.cookie_secure
+    is_secure = settings.cookie_secure or (settings.env not in ("development", "test"))
+    samesite_mode = "none" if is_secure else "lax"
 
     response.delete_cookie(
         ACCESS_TOKEN_COOKIE_NAME, domain=domain, secure=is_secure, samesite=samesite_mode
@@ -183,11 +183,11 @@ def _clear_auth_cookies(response: Response) -> None:
 
 
 def _to_login_response(
-    tokens: AuthenticatedTokens, *, include_refresh_in_body: bool, is_web: bool = False
+    tokens: AuthenticatedTokens, *, include_refresh_in_body: bool = True, is_web: bool = False
 ) -> LoginResponse:
     return LoginResponse(
-        access_token="" if is_web else tokens.access_token,
-        refresh_token=tokens.refresh_token if (include_refresh_in_body and not is_web) else None,
+        access_token=tokens.access_token,
+        refresh_token=tokens.refresh_token if include_refresh_in_body else None,
         expires_in=tokens.expires_in,
         user=UserProfile.model_validate(tokens.user),
     )
@@ -298,13 +298,29 @@ async def verify_mfa_login(
     dependencies=[Depends(refresh_rate_limiter)],
 )
 async def refresh(
-    payload: RefreshRequest,
     request: Request,
     response: Response,
+    payload: RefreshRequest = RefreshRequest(),
     client_type: str | None = Header(default=None, alias=CLIENT_TYPE_HEADER),
+    x_refresh_token: str | None = Header(default=None, alias="X-Refresh-Token"),
     auth_service: AuthService = Depends(get_auth_service),
 ) -> ApiResponse[RefreshResponse]:
-    raw_token = payload.refresh_token or request.cookies.get(REFRESH_TOKEN_COOKIE_NAME)
+    raw_token = (
+        payload.refresh_token
+        or payload.refreshToken
+        or x_refresh_token
+        or request.cookies.get(REFRESH_TOKEN_COOKIE_NAME)
+        or request.cookies.get("refresh_token")
+        or request.cookies.get("pawguard_refresh_token")
+        or request.query_params.get("refresh_token")
+    )
+    if not raw_token:
+        auth_hdr = request.headers.get("authorization", "")
+        if auth_hdr.lower().startswith("bearer "):
+            candidate = auth_hdr.split(" ", 1)[1].strip()
+            if candidate and candidate.count(".") != 2:
+                raw_token = candidate
+
     if not raw_token:
         raise InvalidRefreshTokenError("No refresh token provided.")
 
@@ -321,7 +337,7 @@ async def refresh(
     return ApiResponse(
         data=RefreshResponse(
             access_token=tokens.access_token,
-            refresh_token=tokens.refresh_token if not is_web else None,
+            refresh_token=tokens.refresh_token,
             expires_in=tokens.expires_in,
         )
     )

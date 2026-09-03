@@ -291,15 +291,17 @@ class AuthService:
 
         ref_time = datetime.now(UTC)
 
+        is_rotated_grace = False
         if existing.revoked_at is not None:
             revoked_at = existing.revoked_at
             if revoked_at.tzinfo is None:
                 revoked_at = revoked_at.replace(tzinfo=UTC)
 
             if existing.revoked_reason == "rotated" and ref_time - revoked_at < timedelta(
-                seconds=30
+                seconds=60
             ):
                 logger.info(f"Rotated refresh token reused within grace period: {existing.id}")
+                is_rotated_grace = True
             else:
                 # Reuse of a rotated/revoked token — treat as a breach signal and kill the session.
                 await self._sessions.revoke(
@@ -341,16 +343,20 @@ class AuthService:
         if user is None or not user.is_active:
             raise AccountInactiveError("This account has been deactivated.")
 
-        new_refresh_raw = generate_opaque_token()
-        new_refresh_token = RefreshToken(
-            session_id=session.id,
-            token_hash=hash_opaque_token(new_refresh_raw),
-            expires_at=datetime.now(UTC) + timedelta(days=self._settings.refresh_token_expire_days),
-        )
-        await self._refresh_tokens.create(new_refresh_token)
-        await self._refresh_tokens.revoke(
-            existing.id, reason="rotated", rotated_to_id=new_refresh_token.id
-        )
+        if is_rotated_grace:
+            new_refresh_raw = raw_refresh_token
+        else:
+            new_refresh_raw = generate_opaque_token()
+            new_refresh_token = RefreshToken(
+                session_id=session.id,
+                token_hash=hash_opaque_token(new_refresh_raw),
+                expires_at=datetime.now(UTC)
+                + timedelta(days=self._settings.refresh_token_expire_days),
+            )
+            await self._refresh_tokens.create(new_refresh_token)
+            await self._refresh_tokens.revoke(
+                existing.id, reason="rotated", rotated_to_id=new_refresh_token.id
+            )
         await self._sessions.touch_last_used(session.id)
 
         access_token = create_access_token(

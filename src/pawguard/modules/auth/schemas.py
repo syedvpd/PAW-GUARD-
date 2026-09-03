@@ -113,6 +113,17 @@ class MFARequiredResponse(BaseModel):
 
 class RefreshRequest(BaseModel):
     refresh_token: str | None = Field(None, examples=["dGhpc2lzYXJlZnJlc2h0b2tlbg=="])
+    refreshToken: str | None = Field(None, examples=["dGhpc2lzYXJlZnJlc2h0b2tlbg=="])
+
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    @model_validator(mode="before")
+    @classmethod
+    def unify_refresh_token(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if not data.get("refresh_token") and data.get("refreshToken"):
+                data["refresh_token"] = data["refreshToken"]
+        return data
 
 
 class RefreshResponse(BaseModel):
