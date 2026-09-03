@@ -295,6 +295,18 @@ class DogService:
                 "Unable to allocate a unique dog registration number. Please retry."
             )
 
+        if payload.weight is not None and payload.weight > 0:
+            await self._repo.create_weight_log(
+                DogWeightLog(
+                    dog_id=dog.id,
+                    measured_by=actor_id,
+                    weight=payload.weight,
+                    measured_at=datetime.now(UTC),
+                    notes="Initial weight recorded at intake",
+                )
+            )
+            await self._repo._session.flush()
+
         await self._record_activity(
             dog_id=dog.id,
             event_type=DogActivityEventType.REGISTERED,

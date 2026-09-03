@@ -196,7 +196,7 @@ async def list_movements(
     "/requisitions",
     response_model=ApiResponse[RequisitionOrderResponse],
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_permission("inventory:create"))],
+    dependencies=[Depends(require_permission("requisition:create"))],
 )
 async def create_requisition(
     payload: RequisitionOrderCreate,

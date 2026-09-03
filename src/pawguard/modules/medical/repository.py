@@ -8,7 +8,7 @@ import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.pagination import PageParams
@@ -255,8 +255,30 @@ class MedicalRepository:
         search_term: str | None = None,
         dog_id: uuid.UUID | None = None,
         vet_id: uuid.UUID | None = None,
+        pending: bool | None = None,
     ) -> tuple[Sequence[VaccinationRecord], int]:
         stmt = select(VaccinationRecord).where(VaccinationRecord.deleted_at.is_(None))
+
+        if pending is True:
+            now = datetime.now(UTC)
+            stmt = stmt.where(
+                or_(
+                    VaccinationRecord.next_due_at <= now,
+                    and_(
+                        VaccinationRecord.lot_number.is_(None),
+                        VaccinationRecord.administered_at <= now,
+                    ),
+                )
+            )
+        elif pending is False:
+            now = datetime.now(UTC)
+            stmt = stmt.where(
+                VaccinationRecord.lot_number.isnot(None),
+                or_(
+                    VaccinationRecord.next_due_at.is_(None),
+                    VaccinationRecord.next_due_at > now,
+                ),
+            )
 
         search_filter = build_search_filter(VaccinationRecord, search_term, self.SEARCH_FIELDS)
         if search_filter is not None:

@@ -396,6 +396,7 @@ async def list_vaccinations(
     search: str | None = Query(None, description="Search by vaccine name"),
     dog_id: uuid.UUID | None = Query(None, description="Filter by dog ID"),
     vet_id: uuid.UUID | None = Query(None, description="Filter by vet ID"),
+    pending: bool | None = Query(None, description="Filter pending/overdue vaccinations"),
     service: MedicalService = Depends(get_medical_service),
 ) -> PaginatedResponse[VaccinationRecordResponse]:
     return await service.list_vaccinations_paginated(
@@ -404,6 +405,7 @@ async def list_vaccinations(
         search_term=search,
         dog_id=dog_id,
         vet_id=vet_id,
+        pending=pending,
     )
 
 

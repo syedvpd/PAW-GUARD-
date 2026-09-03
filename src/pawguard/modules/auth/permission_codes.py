@@ -47,6 +47,7 @@ MEDICAL_READ = "medical:read"
 MEDICAL_UPDATE = "medical:update"
 MEDICAL_CLEARANCE = "medical:clearance"
 MEDICAL_DELETE = "medical:delete"
+DOG_MEDICAL_UPDATE = "dog:medical_update"
 
 # ── Adoption ─────────────────────────────────────────────────────────────────
 ADOPTION_READ = "adoption:read"
@@ -74,6 +75,7 @@ INVENTORY_CREATE = "inventory:create"
 INVENTORY_READ = "inventory:read"
 INVENTORY_UPDATE = "inventory:update"
 INVENTORY_DELETE = "inventory:delete"
+REQUISITION_CREATE = "requisition:create"
 
 # ── Finance ──────────────────────────────────────────────────────────────────
 FINANCE_READ = "finance:read"

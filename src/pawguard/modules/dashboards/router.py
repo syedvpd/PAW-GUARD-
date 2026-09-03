@@ -173,7 +173,7 @@ async def get_shelter_dashboard(
     response_model=ApiResponse[dict[str, Any]],
     dependencies=[Depends(require_permission("dashboard:medical"))],
 )
-@cache_response(ttl_seconds=300, namespace="dashboards")
+@cache_response(ttl_seconds=30, namespace="dashboards")
 async def get_medical_dashboard(
     request: Request,
     db: AsyncSession = Depends(get_db),

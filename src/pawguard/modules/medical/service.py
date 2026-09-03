@@ -434,6 +434,7 @@ class MedicalService:
         search_term: str | None = None,
         dog_id: uuid.UUID | None = None,
         vet_id: uuid.UUID | None = None,
+        pending: bool | None = None,
     ) -> PaginatedResponse[VaccinationRecordResponse]:
         results, total = await self._repo.list_vaccinations_paginated(
             page=page,
@@ -441,6 +442,7 @@ class MedicalService:
             search_term=search_term,
             dog_id=dog_id,
             vet_id=vet_id,
+            pending=pending,
         )
         return PaginatedResponse(
             data=[VaccinationRecordResponse.model_validate(r) for r in results],

@@ -13,7 +13,7 @@ from pawguard.core.bulk import (
     BulkStatusUpdateResponse,
 )
 from pawguard.core.cache_decorator import cache_response
-from pawguard.core.exceptions import NotFoundError, parse_enum
+from pawguard.core.exceptions import ForbiddenError, NotFoundError, parse_enum
 from pawguard.core.logging import get_logger
 from pawguard.core.pagination import PageParams, page_params
 from pawguard.core.rate_limiter import rate_limit, resolve_client_ip
@@ -26,7 +26,11 @@ from pawguard.modules.auth.dependencies import (
     get_current_user,
     get_optional_current_user,
 )
-from pawguard.modules.auth.permission_codes import FOSTER_APPROVE, SHELTER_READ
+from pawguard.modules.auth.permission_codes import (
+    DOG_MEDICAL_UPDATE,
+    FOSTER_APPROVE,
+    SHELTER_READ,
+)
 from pawguard.modules.auth.rbac import has_permission, is_admin_role, require_permission
 from pawguard.modules.companion_pet.router import get_companion_pet_service
 from pawguard.modules.companion_pet.service import CompanionPetService
@@ -39,6 +43,7 @@ from pawguard.modules.dog.models import (
 from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.dog.schemas import (
     DogActivityLogResponse,
+    DogAdoptabilityUpdate,
     DogProfileCreate,
     DogProfileResponse,
     DogProfileUpdate,
@@ -344,7 +349,7 @@ async def dog_qr_image(
     "/{dog_id}/weight",
     response_model=ApiResponse[DogWeightLogResponse],
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_permission("shelter:update"))],
+    dependencies=[Depends(require_permission("shelter:update", DOG_MEDICAL_UPDATE))],
 )
 async def record_dog_weight(
     dog_id: uuid.UUID,
@@ -369,7 +374,7 @@ async def record_dog_weight(
 @router.get(
     "/{dog_id}/weights",
     response_model=ApiResponse[list[DogWeightLogResponse]],
-    dependencies=[Depends(require_permission("shelter:read"))],
+    dependencies=[Depends(require_permission("shelter:read", "medical:read"))],
 )
 async def get_dog_weight_history(
     dog_id: uuid.UUID,
@@ -386,7 +391,7 @@ async def get_dog_weight_history(
 @router.put(
     "/{dog_id}",
     response_model=ApiResponse[DogProfileResponse],
-    dependencies=[Depends(require_permission("shelter:update"))],
+    dependencies=[Depends(require_permission("shelter:update", DOG_MEDICAL_UPDATE))],
 )
 async def update_dog(
     dog_id: uuid.UUID,
@@ -395,6 +400,15 @@ async def update_dog(
     current_user: CurrentUser = Depends(get_current_user),
     service: DogService = Depends(get_dog_service),
 ) -> ApiResponse[DogProfileResponse]:
+    if not (
+        has_permission(current_user.user, "shelter:update") or is_admin_role(current_user.claims)
+    ):
+        updated_fields = set(payload.model_dump(exclude_unset=True).keys())
+        disallowed = updated_fields - {"is_adoptable", "is_quarantine_passed", "weight"}
+        if disallowed:
+            raise ForbiddenError(
+                f"Clinical roles with '{DOG_MEDICAL_UPDATE}' cannot modify non-medical fields: {', '.join(sorted(disallowed))}."
+            )
     dog = await service.update_dog(
         dog_id,
         payload,
@@ -404,6 +418,34 @@ async def update_dog(
     return ApiResponse(
         data=DogProfileResponse.model_validate(dog),
         message="Dog profile updated successfully.",
+    )
+
+
+@router.patch(
+    "/{dog_id}/adoptability",
+    response_model=ApiResponse[DogProfileResponse],
+    dependencies=[Depends(require_permission("shelter:update", DOG_MEDICAL_UPDATE))],
+)
+async def update_dog_adoptability(
+    dog_id: uuid.UUID,
+    payload: DogAdoptabilityUpdate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: DogService = Depends(get_dog_service),
+) -> ApiResponse[DogProfileResponse]:
+    """Dedicated endpoint for veterinary adoption clearance (PRR 3.4)."""
+    dog = await service.update_dog(
+        dog_id,
+        DogProfileUpdate(
+            is_adoptable=payload.is_adoptable,
+            is_quarantine_passed=payload.is_quarantine_passed,
+        ),
+        actor_id=current_user.id,
+        ip_address=resolve_client_ip(request),
+    )
+    return ApiResponse(
+        data=DogProfileResponse.model_validate(dog),
+        message="Dog adoptability updated successfully.",
     )
 
 

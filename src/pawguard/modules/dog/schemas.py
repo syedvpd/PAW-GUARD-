@@ -110,6 +110,11 @@ class DogStatusUpdate(BaseModel):
     status: DogStatus = Field(..., description="New status for the dog", examples=["shelter"])
 
 
+class DogAdoptabilityUpdate(BaseModel):
+    is_adoptable: bool = Field(..., description="Whether dog is cleared and available for adoption")
+    is_quarantine_passed: bool | None = Field(None, description="Whether dog passed quarantine")
+
+
 class DogProfileResponse(BaseModel):
     id: uuid.UUID
     registration_number: str

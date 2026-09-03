@@ -3,14 +3,14 @@ from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import func, select, text
+from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.modules.auth.models import Role, User, UserRole
 from pawguard.modules.donation.models import Donation, DonationStatus
 from pawguard.modules.fleet.models import Vehicle
 from pawguard.modules.inventory.models import InventoryItem
-from pawguard.modules.medical.models import ClinicalExam, MedicalTreatment
+from pawguard.modules.medical.models import ClinicalExam, MedicalTreatment, VaccinationRecord
 from pawguard.modules.rescue.models import (
     RescueDispatch,
     RescueDispatchAgent,
@@ -233,9 +233,25 @@ async def medical_dashboard(session: AsyncSession, redis: Any | None = None) -> 
     treatments = await session.execute(
         select(func.count(MedicalTreatment.id)).where(MedicalTreatment.treatment_date >= recent)
     )
+    now = datetime.now(UTC)
+    pending_vaccinations = await session.execute(
+        select(func.count(VaccinationRecord.id)).where(
+            VaccinationRecord.deleted_at.is_(None),
+            or_(
+                VaccinationRecord.next_due_at <= now,
+                and_(
+                    VaccinationRecord.lot_number.is_(None),
+                    VaccinationRecord.administered_at <= now,
+                ),
+            ),
+        )
+    )
+    pending_count = pending_vaccinations.scalar_one()
     result = {
         "exams_last_30d": exams.scalar_one(),
         "treatments_last_30d": treatments.scalar_one(),
+        "pending_vaccinations": pending_count,
+        "vaccinations_last_30d": pending_count,
     }
     await _set_cache(redis, cache_key, result)
     return result
