@@ -19,6 +19,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    op.execute("SET lock_timeout = '10s'")
     op.execute(
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS can_drive BOOLEAN NOT NULL DEFAULT FALSE"
     )

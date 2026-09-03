@@ -25,6 +25,9 @@ async def _run_worker() -> None:
     logger = get_logger(__name__)
     settings = get_settings()
 
+    # Allow the FastAPI server to bind HTTP port 10000 first
+    await asyncio.sleep(5)
+
     if settings.disable_redis:
         logger.info("redis_disabled_worker_in_noop_mode")
         await asyncio.Event().wait()
