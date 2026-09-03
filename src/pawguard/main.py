@@ -161,6 +161,16 @@ async def _seed_roles() -> None:
             await session.execute(
                 text("CREATE INDEX IF NOT EXISTS ix_users_can_drive ON users (can_drive);")
             )
+            await session.execute(
+                text(
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS managed_facility_id UUID REFERENCES shelter_facilities(id) ON DELETE SET NULL;"
+                )
+            )
+            await session.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_users_managed_facility_id ON users (managed_facility_id);"
+                )
+            )
         except Exception as schema_exc:
             logger.warning("schema_idempotent_patch_skipped", error=str(schema_exc))
 

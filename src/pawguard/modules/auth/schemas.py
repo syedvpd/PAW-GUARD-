@@ -321,6 +321,7 @@ class UserProfile(BaseModel):
     is_verified: bool
     mfa_enabled: bool
     can_drive: bool = False
+    managed_facility_id: uuid.UUID | None = None
     has_password: bool = True
     auth_provider: str | None = None
     roles: list[str]

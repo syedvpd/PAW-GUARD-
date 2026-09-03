@@ -8,6 +8,7 @@ rules, and MFA gating all live here.
 import asyncio
 import uuid
 from datetime import UTC, date, datetime, timedelta
+from typing import Any
 
 import pyotp
 
@@ -79,6 +80,7 @@ logger = get_logger(__name__)
 
 MAX_FAILED_LOGIN_ATTEMPTS = 5
 ACCOUNT_LOCKOUT_MINUTES = 15
+_UNSET: Any = object()
 
 
 class RequestContext:
@@ -1302,6 +1304,7 @@ class AdminService:
         phone: str | None,
         role_names: list[str],
         can_drive: bool = False,
+        managed_facility_id: uuid.UUID | None = None,
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
         user_agent: str | None = None,
@@ -1321,6 +1324,7 @@ class AdminService:
             is_active=True,
             is_verified=False,
             can_drive=can_drive,
+            managed_facility_id=managed_facility_id,
         )
         await self._users.create(user)
 
@@ -1351,6 +1355,7 @@ class AdminService:
         phone: str | None = None,
         is_active: bool | None = None,
         can_drive: bool | None = None,
+        managed_facility_id: Any = _UNSET,
         role_names: list[str] | None = None,
         password: str | None = None,
         actor_id: uuid.UUID | None = None,
@@ -1369,6 +1374,8 @@ class AdminService:
             user.is_active = is_active
         if can_drive is not None:
             user.can_drive = can_drive
+        if managed_facility_id is not _UNSET:
+            user.managed_facility_id = managed_facility_id
 
         if role_names is not None:
             role_ids: list[uuid.UUID] = []

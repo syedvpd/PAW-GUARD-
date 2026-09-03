@@ -6,11 +6,14 @@ import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
 
-from pawguard.core.exceptions import ConflictError, NotFoundError
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+
+from pawguard.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
-from pawguard.modules.auth.models import AuthAuditEventType
+from pawguard.modules.auth.models import AuthAuditEventType, User
 from pawguard.modules.dog.models import DogStatus
 from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.inventory.models import MovementType
@@ -359,6 +362,31 @@ class ShelterService:
             raise ConflictError(
                 "The same user cannot confirm both the sending and receiving side of a transfer."
             )
+
+        if actor_id is not None:
+            import inspect
+
+            actor_stmt = select(User).options(selectinload(User.roles)).where(User.id == actor_id)
+            exec_res = await self._repo._session.execute(actor_stmt)
+            actor = getattr(exec_res, "scalar_one_or_none", lambda: None)()
+            if inspect.isawaitable(actor):
+                actor = await actor
+            if isinstance(actor, User):
+                role_names = {r.name for r in getattr(actor, "roles", []) if hasattr(r, "name")}
+                is_admin_override = bool(role_names & {"super_admin", "rescue_centre_admin"})
+                if not is_admin_override:
+                    required_facility_id = (
+                        transfer.from_facility_id if side == "sender" else transfer.to_facility_id
+                    )
+                    if (
+                        actor.managed_facility_id is None
+                        or actor.managed_facility_id != required_facility_id
+                    ):
+                        facility_label = "sending" if side == "sender" else "receiving"
+                        raise ForbiddenError(
+                            f"User is not authorized to confirm {side} for this transfer. "
+                            f"Caller's managed facility ({actor.managed_facility_id}) does not match the {facility_label} facility ({required_facility_id})."
+                        )
 
         now = datetime.now(UTC)
         setattr(transfer, f"{side}_confirmed_at", now)

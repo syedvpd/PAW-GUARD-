@@ -264,6 +264,13 @@ class User(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     push_notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     fcm_token: Mapped[str | None] = mapped_column(String(512), nullable=True, index=True)
     can_drive: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    managed_facility_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("shelter_facilities.id", ondelete="SET NULL"),
+        nullable=True,
+        default=None,
+        index=True,
+    )
 
     roles: Mapped[list["Role"]] = relationship(
         secondary="user_roles", back_populates="users", lazy="selectin"

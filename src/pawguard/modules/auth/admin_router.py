@@ -5,6 +5,7 @@ Super Administrators can access these.
 """
 
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -212,6 +213,7 @@ async def create_user(
         phone=payload.phone,
         role_names=payload.role_names,
         can_drive=payload.can_drive,
+        managed_facility_id=payload.managed_facility_id,
         actor_id=current_user.id,
         ip_address=resolve_client_ip(request),
         user_agent=request.headers.get("user-agent"),
@@ -244,18 +246,21 @@ async def update_user(
     current_user: CurrentUser = Depends(get_current_user),
     service: AdminService = Depends(_get_admin_service),
 ) -> ApiResponse[AdminUserResponse]:
-    user = await service.update_user(
-        user_id,
-        full_name=payload.full_name,
-        phone=payload.phone,
-        is_active=payload.is_active,
-        can_drive=payload.can_drive,
-        role_names=payload.role_names,
-        password=payload.password,
-        actor_id=current_user.id,
-        ip_address=resolve_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-    )
+    update_kwargs: dict[str, Any] = {
+        "full_name": payload.full_name,
+        "phone": payload.phone,
+        "is_active": payload.is_active,
+        "can_drive": payload.can_drive,
+        "role_names": payload.role_names,
+        "password": payload.password,
+        "actor_id": current_user.id,
+        "ip_address": resolve_client_ip(request),
+        "user_agent": request.headers.get("user-agent"),
+    }
+    if "managed_facility_id" in payload.model_fields_set:
+        update_kwargs["managed_facility_id"] = payload.managed_facility_id
+
+    user = await service.update_user(user_id, **update_kwargs)
     return ApiResponse(data=AdminUserResponse.model_validate(user))
 
 
