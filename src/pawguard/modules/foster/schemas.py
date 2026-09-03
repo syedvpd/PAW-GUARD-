@@ -137,11 +137,12 @@ class FosterProfileUpdate(BaseModel):
     @classmethod
     def normalize_booleans(cls, v: Any) -> Any:
         if isinstance(v, str):
-            if v.strip().lower() in ("true", "1", "yes"):
+            v_clean = v.strip().lower()
+            if v_clean in ("true", "1", "yes", "passed", "cleared", "approved"):
                 return True
-            if v.strip().lower() in ("false", "0", "no"):
+            if v_clean in ("false", "0", "no", "failed", "rejected", "flagged"):
                 return False
-            if v.strip() == "":
+            if v_clean in ("", "none", "null", "pending", "unverified", "in_progress"):
                 return None
         return v
 
@@ -158,6 +159,7 @@ class FosterProfileResponse(BaseModel):
 
     # Vetting & Background Verification
     background_check_passed: bool | None = None
+    background_check_status: str = "pending"
     background_check_notes: str | None = None
     references_checked: bool | None = None
     reference_notes: str | None = None
@@ -166,15 +168,119 @@ class FosterProfileResponse(BaseModel):
 
     # Home Inspection
     home_inspection_passed: bool | None = None
+    home_inspection_status: str = "pending"
     home_inspection_notes: str | None = None
     home_inspection_address: str | None = None
     inspected_at: datetime | None = None
+    home_inspection_details: dict[str, Any] | None = None
 
-    created_at: datetime
-    updated_at: datetime
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
     user: UserProfile | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.background_check_passed is True:
+            self.background_check_status = "cleared"
+        elif self.background_check_passed is False:
+            if self.background_check_notes and "flag" in self.background_check_notes.lower():
+                self.background_check_status = "flagged"
+            else:
+                self.background_check_status = "rejected"
+        elif self.vetted_at is not None:
+            self.background_check_status = "initiated"
+        else:
+            self.background_check_status = "pending"
+
+        if self.home_inspection_passed is True:
+            self.home_inspection_status = "approved"
+        elif self.home_inspection_passed is False:
+            self.home_inspection_status = "rejected"
+        elif self.inspected_at is not None:
+            self.home_inspection_status = "inspected"
+        elif self.home_inspection_address is not None or (
+            self.home_inspection_notes and "scheduled" in self.home_inspection_notes.lower()
+        ):
+            self.home_inspection_status = "scheduled"
+        else:
+            self.home_inspection_status = "pending"
+
+
+class FosterWeightLogCreate(BaseModel):
+    weight_kg: float = Field(..., gt=0, le=999.99, examples=[18.5])
+    notes: str | None = Field(None, examples=["Weekly weigh-in on digital scale"])
+
+
+class FosterBehaviorLogCreate(BaseModel):
+    behavior_notes: str = Field(
+        ..., min_length=1, examples=["Settling in nicely, responds well to recall commands."]
+    )
+    mood_rating: int | None = Field(None, ge=1, le=5, examples=[4])
+    exercise_minutes: int | None = Field(None, ge=0, examples=[45])
+    notes: str | None = Field(None)
+
+
+class FosterMedicationLogCreate(BaseModel):
+    medication_notes: str = Field(
+        ..., min_length=1, examples=["Administered prescribed morning dose with meal."]
+    )
+    verified: bool = Field(True)
+    notes: str | None = Field(None)
+
+
+class FosterMediaLogCreate(BaseModel):
+    photo_urls: list[str] = Field(
+        ..., min_length=1, examples=[["https://storage.pawguard.org/dogs/foster_day3.jpg"]]
+    )
+    caption: str | None = Field(None, examples=["Playing fetch in the fenced yard"])
+    notes: str | None = Field(None)
+
+
+class FosterBackgroundCheckInitiate(BaseModel):
+    provider: str | None = Field(None, examples=["Checkr", "Internal Vetting"])
+    notes: str | None = Field(None, examples=["Initiating criminal and identity verification"])
+
+
+class FosterBackgroundCheckOutcome(BaseModel):
+    outcome: str = Field(..., examples=["cleared", "flagged", "rejected"])
+    notes: str = Field(
+        ..., min_length=1, examples=["Identity verified, no disqualifying records found."]
+    )
+    references_checked: bool = Field(True)
+    reference_notes: str | None = Field(None, examples=["Two personal references verified."])
+
+
+class FosterHomeInspectionSchedule(BaseModel):
+    scheduled_at: datetime = Field(..., examples=["2026-09-10T14:00:00Z"])
+    inspector_id: uuid.UUID | None = Field(None)
+    inspector_name: str | None = Field(None, examples=["Sarah Jenkins"])
+    inspection_type: str = Field("physical", examples=["physical", "virtual"])
+    address: str | None = Field(None, examples=["742 Evergreen Terrace, Paw City"])
+    notes: str | None = Field(None)
+
+
+class FosterHomeInspectionLog(BaseModel):
+    yard_condition: str | None = Field(None, examples=["Spacious grassy yard, clean"])
+    fencing_condition: str | None = Field(
+        None, examples=["6ft cedar privacy fence, secure gate latch"]
+    )
+    household_info: str | None = Field(None, examples=["2 adults, 1 child (age 10)"])
+    existing_pets_info: str | None = Field(None, examples=["1 vaccinated senior cat"])
+    hazards: str | None = Field(None, examples=["None observed, pool securely enclosed"])
+    rating: int | None = Field(None, ge=1, le=5, examples=[5])
+    evidence_urls: list[str] | None = Field(
+        None, examples=[["https://storage.pawguard.org/inspections/fence.jpg"]]
+    )
+    notes: str | None = Field(None, examples=["Excellent home setup, ready for high-energy foster"])
+
+
+class FosterHomeInspectionOutcome(BaseModel):
+    outcome: str = Field(..., examples=["approved", "rejected"])
+    notes: str = Field(
+        ..., min_length=1, examples=["Meets all physical security and home care standards."]
+    )
+    address: str | None = Field(None)
 
 
 class FosterPlacementCreate(BaseModel):

@@ -27,6 +27,14 @@ from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.foster.models import FosterStatus
 from pawguard.modules.foster.repository import FosterRepository
 from pawguard.modules.foster.schemas import (
+    FosterBackgroundCheckInitiate,
+    FosterBackgroundCheckOutcome,
+    FosterBehaviorLogCreate,
+    FosterHomeInspectionLog,
+    FosterHomeInspectionOutcome,
+    FosterHomeInspectionSchedule,
+    FosterMediaLogCreate,
+    FosterMedicationLogCreate,
     FosterPlacementCreate,
     FosterPlacementResponse,
     FosterProfileCreate,
@@ -39,11 +47,12 @@ from pawguard.modules.foster.schemas import (
     FosterSupplyDispatchResponse,
     FosterVetCheckRequest,
     FosterVetCheckResponse,
+    FosterWeightLogCreate,
 )
 from pawguard.modules.foster.service import FosterService
 from pawguard.services.audit_service import AuditService
 
-router = APIRouter(prefix="/fosters", tags=["fosters"])
+router = APIRouter(tags=["fosters"])
 
 
 def get_foster_service(
@@ -227,7 +236,27 @@ async def list_foster_placements(
     dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
 )
 @router.post(
+    "/placements/{placement_id}/return-to-shelter",
+    response_model=ApiResponse[FosterPlacementResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+@router.put(
+    "/placements/{placement_id}/return",
+    response_model=ApiResponse[FosterPlacementResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+@router.put(
+    "/placements/{placement_id}/return-to-shelter",
+    response_model=ApiResponse[FosterPlacementResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+@router.post(
     "/{placement_id}/return",
+    response_model=ApiResponse[FosterPlacementResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+@router.post(
+    "/{placement_id}/return-to-shelter",
     response_model=ApiResponse[FosterPlacementResponse],
     dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
 )
@@ -266,10 +295,15 @@ async def return_dog(
     response_model=ApiResponse[FosterVetCheckResponse],
     status_code=status.HTTP_201_CREATED,
 )
+@router.post(
+    "/{placement_id}/request-vet-check",
+    response_model=ApiResponse[FosterVetCheckResponse],
+    status_code=status.HTTP_201_CREATED,
+)
 async def request_vet_check(
     placement_id: uuid.UUID,
-    payload: FosterVetCheckRequest,
     request: Request,
+    payload: FosterVetCheckRequest = FosterVetCheckRequest(),
     current_user: CurrentUser = Depends(get_current_user),
     service: FosterService = Depends(get_foster_service),
 ) -> ApiResponse[FosterVetCheckResponse]:
@@ -391,6 +425,174 @@ async def log_progress(
     return ApiResponse(
         data=FosterProgressLogResponse.model_validate(log),
         message="Progress logged successfully.",
+    )
+
+
+@router.post(
+    "/placements/{placement_id}/progress/weight",
+    response_model=ApiResponse[FosterProgressLogResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+@router.post(
+    "/{placement_id}/progress/weight",
+    response_model=ApiResponse[FosterProgressLogResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def log_weight(
+    placement_id: uuid.UUID,
+    payload: FosterWeightLogCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FosterService = Depends(get_foster_service),
+) -> ApiResponse[FosterProgressLogResponse]:
+    placement = await service.get_placement(placement_id)
+    is_owner = (
+        placement.foster.user_id == current_user.user.id
+        if (placement.foster and hasattr(placement.foster, "user_id"))
+        else False
+    )
+    if (
+        not is_owner
+        and not has_permission(current_user.user, "foster:approve")
+        and not has_permission(current_user.user, "foster:update")
+    ):
+        raise ForbiddenError("You do not have permission to log weight for this placement.")
+    ip = request.client.host if request.client else None
+    log = await service.log_weight(
+        placement_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=FosterProgressLogResponse.model_validate(log),
+        message="Weight progress logged and synced to dog profile.",
+    )
+
+
+@router.post(
+    "/placements/{placement_id}/progress/behavior",
+    response_model=ApiResponse[FosterProgressLogResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+@router.post(
+    "/{placement_id}/progress/behavior",
+    response_model=ApiResponse[FosterProgressLogResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def log_behavior(
+    placement_id: uuid.UUID,
+    payload: FosterBehaviorLogCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FosterService = Depends(get_foster_service),
+) -> ApiResponse[FosterProgressLogResponse]:
+    placement = await service.get_placement(placement_id)
+    is_owner = (
+        placement.foster.user_id == current_user.user.id
+        if (placement.foster and hasattr(placement.foster, "user_id"))
+        else False
+    )
+    if (
+        not is_owner
+        and not has_permission(current_user.user, "foster:approve")
+        and not has_permission(current_user.user, "foster:update")
+    ):
+        raise ForbiddenError("You do not have permission to log behavior for this placement.")
+    ip = request.client.host if request.client else None
+    log = await service.log_behavior(
+        placement_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=FosterProgressLogResponse.model_validate(log),
+        message="Behavioral observations logged successfully.",
+    )
+
+
+@router.post(
+    "/placements/{placement_id}/progress/medication",
+    response_model=ApiResponse[FosterProgressLogResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+@router.post(
+    "/{placement_id}/progress/medication",
+    response_model=ApiResponse[FosterProgressLogResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def log_medication(
+    placement_id: uuid.UUID,
+    payload: FosterMedicationLogCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FosterService = Depends(get_foster_service),
+) -> ApiResponse[FosterProgressLogResponse]:
+    placement = await service.get_placement(placement_id)
+    is_owner = (
+        placement.foster.user_id == current_user.user.id
+        if (placement.foster and hasattr(placement.foster, "user_id"))
+        else False
+    )
+    if (
+        not is_owner
+        and not has_permission(current_user.user, "foster:approve")
+        and not has_permission(current_user.user, "foster:update")
+    ):
+        raise ForbiddenError("You do not have permission to log medication for this placement.")
+    ip = request.client.host if request.client else None
+    log = await service.log_medication(
+        placement_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=FosterProgressLogResponse.model_validate(log),
+        message="Medication verification check-in logged successfully.",
+    )
+
+
+@router.post(
+    "/placements/{placement_id}/progress/media",
+    response_model=ApiResponse[FosterProgressLogResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+@router.post(
+    "/{placement_id}/progress/media",
+    response_model=ApiResponse[FosterProgressLogResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def log_media(
+    placement_id: uuid.UUID,
+    payload: FosterMediaLogCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FosterService = Depends(get_foster_service),
+) -> ApiResponse[FosterProgressLogResponse]:
+    placement = await service.get_placement(placement_id)
+    is_owner = (
+        placement.foster.user_id == current_user.user.id
+        if (placement.foster and hasattr(placement.foster, "user_id"))
+        else False
+    )
+    if (
+        not is_owner
+        and not has_permission(current_user.user, "foster:approve")
+        and not has_permission(current_user.user, "foster:update")
+    ):
+        raise ForbiddenError("You do not have permission to log media for this placement.")
+    ip = request.client.host if request.client else None
+    log = await service.log_media(
+        placement_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=FosterProgressLogResponse.model_validate(log),
+        message="Media uploads logged successfully.",
     )
 
 
@@ -530,6 +732,11 @@ async def request_supplies(
     response_model=ApiResponse[dict[str, Any]],
     status_code=status.HTTP_201_CREATED,
 )
+@router.post(
+    "/{placement_id}/convert",
+    response_model=ApiResponse[dict[str, Any]],
+    status_code=status.HTTP_201_CREATED,
+)
 async def convert_to_adopt(
     placement_id: uuid.UUID,
     request: Request,
@@ -557,6 +764,161 @@ async def convert_to_adopt(
         ip_address=ip,
     )
     return ApiResponse(
-        data={"adoption_id": str(app.id)},
+        data={
+            "adoption_id": str(app.id),
+            "status": app.status.value,
+            "dog_id": str(app.dog_id),
+            "adoption_agreement_url": app.adoption_agreement_url,
+        },
         message="Foster placement converted to adoption successfully.",
+    )
+
+
+@router.post(
+    "/{profile_id}/background-check/initiate",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+async def initiate_background_check(
+    profile_id: uuid.UUID,
+    request: Request,
+    payload: FosterBackgroundCheckInitiate = FosterBackgroundCheckInitiate(),
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FosterService = Depends(get_foster_service),
+) -> ApiResponse[FosterProfileResponse]:
+    ip = request.client.host if request.client else None
+    profile = await service.initiate_background_check(
+        profile_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=FosterProfileResponse.model_validate(profile),
+        message="Background check initiated successfully.",
+    )
+
+
+@router.post(
+    "/{profile_id}/background-check/outcome",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+@router.post(
+    "/{profile_id}/background-check",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+@router.put(
+    "/{profile_id}/background-check",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+async def record_background_check_outcome(
+    profile_id: uuid.UUID,
+    payload: FosterBackgroundCheckOutcome,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FosterService = Depends(get_foster_service),
+) -> ApiResponse[FosterProfileResponse]:
+    ip = request.client.host if request.client else None
+    profile = await service.record_background_check_outcome(
+        profile_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=FosterProfileResponse.model_validate(profile),
+        message="Background check outcome recorded successfully.",
+    )
+
+
+@router.post(
+    "/{profile_id}/home-inspection/schedule",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+async def schedule_home_inspection(
+    profile_id: uuid.UUID,
+    payload: FosterHomeInspectionSchedule,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FosterService = Depends(get_foster_service),
+) -> ApiResponse[FosterProfileResponse]:
+    ip = request.client.host if request.client else None
+    profile = await service.schedule_home_inspection(
+        profile_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=FosterProfileResponse.model_validate(profile),
+        message="Home inspection scheduled successfully.",
+    )
+
+
+@router.post(
+    "/{profile_id}/home-inspection/log",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+@router.post(
+    "/{profile_id}/home-inspection/audit",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+async def log_home_inspection(
+    profile_id: uuid.UUID,
+    payload: FosterHomeInspectionLog,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FosterService = Depends(get_foster_service),
+) -> ApiResponse[FosterProfileResponse]:
+    ip = request.client.host if request.client else None
+    profile = await service.log_home_inspection_audit(
+        profile_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=FosterProfileResponse.model_validate(profile),
+        message="Home inspection audit details recorded successfully.",
+    )
+
+
+@router.post(
+    "/{profile_id}/home-inspection/outcome",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+@router.post(
+    "/{profile_id}/home-inspection",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+@router.put(
+    "/{profile_id}/home-inspection",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+async def record_home_inspection_outcome(
+    profile_id: uuid.UUID,
+    payload: FosterHomeInspectionOutcome,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FosterService = Depends(get_foster_service),
+) -> ApiResponse[FosterProfileResponse]:
+    ip = request.client.host if request.client else None
+    profile = await service.record_home_inspection_outcome(
+        profile_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=FosterProfileResponse.model_validate(profile),
+        message="Home inspection outcome recorded successfully.",
     )

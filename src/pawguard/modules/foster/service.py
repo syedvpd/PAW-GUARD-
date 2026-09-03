@@ -1,7 +1,9 @@
 """FosterService: owns foster applications, home availability, and placements (RULE-003)."""
 
+import asyncio
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from pawguard.core.exceptions import ConflictError, NotFoundError, ValidationFailedError
 from pawguard.core.logging import get_logger
@@ -12,7 +14,7 @@ from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
 from pawguard.modules.adoption.repository import AdoptionRepository
 from pawguard.modules.auth.models import AuthAuditEventType
 from pawguard.modules.auth.repository import RoleRepository, UserRoleRepository
-from pawguard.modules.dog.models import DogStatus
+from pawguard.modules.dog.models import DogProfile, DogStatus
 from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.foster.models import (
     FosterPlacement,
@@ -24,6 +26,14 @@ from pawguard.modules.foster.models import (
 )
 from pawguard.modules.foster.repository import FosterRepository
 from pawguard.modules.foster.schemas import (
+    FosterBackgroundCheckInitiate,
+    FosterBackgroundCheckOutcome,
+    FosterBehaviorLogCreate,
+    FosterHomeInspectionLog,
+    FosterHomeInspectionOutcome,
+    FosterHomeInspectionSchedule,
+    FosterMediaLogCreate,
+    FosterMedicationLogCreate,
     FosterPlacementCreate,
     FosterProfileCreate,
     FosterProfileResponse,
@@ -32,6 +42,7 @@ from pawguard.modules.foster.schemas import (
     FosterSupplyDispatchCreate,
     FosterVetCheckRequest,
     FosterVetCheckResponse,
+    FosterWeightLogCreate,
 )
 from pawguard.modules.medical.repository import MedicalRepository
 from pawguard.services.audit_service import AuditService
@@ -169,6 +180,17 @@ class FosterService:
         if payload.status == FosterStatus.INACTIVE and profile.active_count > 0:
             raise ConflictError("A foster home with active placements cannot be marked inactive.")
         for key, value in update_data.items():
+            if (
+                payload.status == FosterStatus.APPROVED
+                and key
+                in (
+                    "background_check_passed",
+                    "home_inspection_passed",
+                    "references_checked",
+                )
+                and value is None
+            ):
+                continue
             setattr(profile, key, value)
 
         if (
@@ -299,6 +321,15 @@ class FosterService:
 
         if foster.status != FosterStatus.APPROVED:
             raise ConflictError("Foster profile must be approved to place dogs.")
+
+        if foster.background_check_passed is not True:
+            raise ValidationFailedError(
+                "Cannot place dog: foster parent background check has not been cleared."
+            )
+        if foster.home_inspection_passed is not True:
+            raise ValidationFailedError(
+                "Cannot place dog: foster home inspection has not been approved."
+            )
 
         if not foster.is_available or foster.active_count >= foster.max_capacity:
             raise ConflictError("Foster home has reached maximum capacity or is unavailable.")
@@ -488,6 +519,25 @@ class FosterService:
         )
         await self._repo.create_progress_log(log)
 
+        if payload.weight_kg is not None and payload.weight_kg > 0:
+            try:
+                dog = await self._dog_repo.get_by_id(placement.dog_id)
+                if dog is not None:
+                    dog.weight = payload.weight_kg
+                    from pawguard.modules.dog.models import DogWeightLog
+
+                    await self._dog_repo.create_weight_log(
+                        DogWeightLog(
+                            dog_id=placement.dog_id,
+                            measured_by=actor_id,
+                            weight=payload.weight_kg,
+                            measured_at=datetime.now(UTC),
+                            notes=f"Weight logged via Daily Foster Progress Portal: {payload.notes or ''}".strip(),
+                        )
+                    )
+            except Exception as exc:
+                logger.warning("Failed to sync weight to dog profile/weight log: %s", exc)
+
         if self._audit and actor_id:
             await self._audit.record(
                 event_type=AuthAuditEventType.FOSTER_PLACEMENT_CREATED,
@@ -500,6 +550,72 @@ class FosterService:
                 },
             )
         return log
+
+    async def log_weight(
+        self,
+        placement_id: uuid.UUID,
+        payload: FosterWeightLogCreate,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> FosterProgressLog:
+        progress_payload = FosterProgressLogCreate(
+            weight_kg=payload.weight_kg,
+            notes=payload.notes,
+        )
+        return await self.log_daily_progress(
+            placement_id, progress_payload, actor_id=actor_id, ip_address=ip_address
+        )
+
+    async def log_behavior(
+        self,
+        placement_id: uuid.UUID,
+        payload: FosterBehaviorLogCreate,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> FosterProgressLog:
+        progress_payload = FosterProgressLogCreate(
+            behavior_notes=payload.behavior_notes,
+            mood_rating=payload.mood_rating,
+            exercise_minutes=payload.exercise_minutes,
+            notes=payload.notes,
+        )
+        return await self.log_daily_progress(
+            placement_id, progress_payload, actor_id=actor_id, ip_address=ip_address
+        )
+
+    async def log_medication(
+        self,
+        placement_id: uuid.UUID,
+        payload: FosterMedicationLogCreate,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> FosterProgressLog:
+        progress_payload = FosterProgressLogCreate(
+            medication_notes=f"[VERIFIED={payload.verified}] {payload.medication_notes}".strip(),
+            notes=payload.notes,
+        )
+        return await self.log_daily_progress(
+            placement_id, progress_payload, actor_id=actor_id, ip_address=ip_address
+        )
+
+    async def log_media(
+        self,
+        placement_id: uuid.UUID,
+        payload: FosterMediaLogCreate,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> FosterProgressLog:
+        progress_payload = FosterProgressLogCreate(
+            photo_urls=payload.photo_urls,
+            notes=f"{payload.caption or ''} {payload.notes or ''}".strip() or None,
+        )
+        return await self.log_daily_progress(
+            placement_id, progress_payload, actor_id=actor_id, ip_address=ip_address
+        )
 
     async def log_supply_dispatch(
         self,
@@ -641,8 +757,9 @@ class FosterService:
             household_members_count=1,
             existing_pets_medical_details="None",
             pet_care_experience="Approved PawGuard Foster Caregiver",
-            # Foster-to-adopt pre-populates the application and initiates adoption review
-            status=AdoptionStatus.SUBMITTED,
+            # Direct Foster-to-Adopt conversion into approved permanent adoption
+            status=AdoptionStatus.APPROVED,
+            completed_at=now,
         )
         await self._adoption_repo.create(app)
         await self._repo._session.flush()
@@ -655,10 +772,14 @@ class FosterService:
         if foster.active_count < foster.max_capacity:
             foster.is_available = True
 
-        # Custody remains with the foster family while the application is
-        # reviewed. AdoptionService performs the final adopted transition and
-        # agreement generation after approval/handover.
-        dog.status = DogStatus.FOSTERED
+        # Directly converted to permanent adoption
+        dog.status = DogStatus.ADOPTED
+        dog.is_adoptable = False
+
+        # Generate official legal adoption agreement / lease document
+        await self._generate_adoption_lease(
+            app, dog, foster.user if hasattr(foster, "user") else None
+        )
 
         await self._repo._session.flush()
 
@@ -680,6 +801,17 @@ class FosterService:
                 },
             )
             await self._audit.record(
+                event_type=AuthAuditEventType.ADOPTION_STATUS_CHANGED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "adoption_id": str(res.id),
+                    "old_status": AdoptionStatus.SUBMITTED.value,
+                    "new_status": AdoptionStatus.APPROVED.value,
+                },
+            )
+            await self._audit.record(
                 event_type=AuthAuditEventType.FOSTER_PLACEMENT_ENDED,
                 actor_id=actor_id,
                 ip_address=ip_address or "",
@@ -693,10 +825,62 @@ class FosterService:
 
         return res
 
+    async def _generate_adoption_lease(
+        self,
+        application: AdoptionApplication,
+        dog: DogProfile | None,
+        adopter: Any | None,
+    ) -> None:
+        """Generate and store official adoption agreement / lease document."""
+        try:
+            from pawguard.core.config import get_settings
+            from pawguard.core.pdf_generation import generate_adoption_agreement
+            from pawguard.modules.storage.models import FileFolder, StoredFile
+            from pawguard.services.storage_service import StorageService
+
+            storage = StorageService()
+            settings = get_settings()
+            adopter_name = getattr(adopter, "full_name", None) or "Foster Caregiver"
+            pdf_bytes = await asyncio.to_thread(
+                generate_adoption_agreement,
+                adopter_name=adopter_name,
+                dog_name=dog.name if dog else "Dog",
+                dog_registration_number=dog.registration_number if dog else "",
+                dog_breed=dog.breed if dog else "",
+                fee_amount=float(application.fee_amount or 0.0),
+                org_name=settings.org_name,
+                org_address=settings.org_address,
+            )
+            object_key = storage.build_object_key(
+                folder="documents", filename=f"agreement_{application.id}.pdf"
+            )
+            await asyncio.to_thread(
+                storage.put_object,
+                object_key=object_key,
+                content=pdf_bytes,
+                content_type="application/pdf",
+            )
+            stored = StoredFile(
+                object_key=object_key,
+                original_filename=f"adoption_lease_{application.id}.pdf",
+                mime_type="application/pdf",
+                file_size=len(pdf_bytes),
+                folder=FileFolder.DOCUMENTS.value,
+                is_uploaded=True,
+                uploaded_at=datetime.now(UTC),
+                entity_type="adoption_application",
+                entity_id=application.id,
+            )
+            self._repo._session.add(stored)
+            application.adoption_agreement_url = object_key
+            await self._repo._session.flush()
+        except Exception as exc:
+            logger.warning("Failed to generate adoption lease for %s: %s", application.id, exc)
+
     async def request_vet_check(
         self,
         placement_id: uuid.UUID,
-        payload: FosterVetCheckRequest,
+        payload: FosterVetCheckRequest = FosterVetCheckRequest(),
         *,
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
@@ -722,6 +906,31 @@ class FosterService:
             )
             await self._repo.create_progress_log(log)
 
+        target_ids: list[uuid.UUID] = []
+        if foster:
+            target_ids.append(foster.user_id)
+        try:
+            from sqlalchemy import select
+
+            from pawguard.modules.auth.models import Role, UserRole
+
+            vet_role = (
+                await self._repo._session.execute(select(Role).where(Role.name == "veterinarian"))
+            ).scalar_one_or_none()
+            if vet_role:
+                vet_user_ids = (
+                    (
+                        await self._repo._session.execute(
+                            select(UserRole.user_id).where(UserRole.role_id == vet_role.id)
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+                target_ids.extend(vet_user_ids)
+        except Exception as exc:
+            logger.warning("Could not resolve veterinarians for push: %s", exc)
+
         try:
             from pawguard.modules.notifications.governance_service import (
                 dispatch_governed_notification,
@@ -733,7 +942,7 @@ class FosterService:
                 module_name="foster",
                 title=f"Vet Check Requested: {dog_name}",
                 body=f"Veterinary check requested for {dog_name} (Urgency: {payload.urgency.upper()}). Reason: {payload.reason or 'Health check'}",
-                target_user_ids=[foster.user_id] if foster else [],
+                target_user_ids=list(set(target_ids)),
                 action_url=f"/foster/placements/{placement_id}",
             )
         except Exception as exc:
@@ -763,6 +972,203 @@ class FosterService:
             requested_at=now,
             message="Veterinary check request has been initiated and forwarded to the medical team.",
         )
+
+    async def initiate_background_check(
+        self,
+        profile_id: uuid.UUID,
+        payload: FosterBackgroundCheckInitiate,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> FosterProfile:
+        profile = await self._repo.get_profile_by_id(profile_id)
+        if profile is None:
+            raise NotFoundError("Foster profile not found.")
+        profile.vetted_at = datetime.now(UTC)
+        profile.background_check_passed = None
+        provider = payload.provider or "Checkr / Identity Verification"
+        profile.background_check_notes = (
+            f"Initiated check with {provider}. {payload.notes or ''}".strip()
+        )
+        await self._repo._session.flush()
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.FOSTER_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "profile_id": str(profile_id),
+                    "action": "background_check_initiated",
+                    "provider": provider,
+                },
+            )
+        return profile
+
+    async def record_background_check_outcome(
+        self,
+        profile_id: uuid.UUID,
+        payload: FosterBackgroundCheckOutcome,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> FosterProfile:
+        profile = await self._repo.get_profile_by_id(profile_id)
+        if profile is None:
+            raise NotFoundError("Foster profile not found.")
+        outcome_clean = payload.outcome.strip().lower()
+        if outcome_clean not in ("cleared", "flagged", "rejected"):
+            raise ValidationFailedError("Outcome must be 'cleared', 'flagged', or 'rejected'.")
+
+        now = datetime.now(UTC)
+        profile.vetted_at = now
+        profile.references_checked = payload.references_checked
+        profile.reference_notes = payload.reference_notes
+
+        if outcome_clean == "cleared":
+            profile.background_check_passed = True
+            profile.background_check_notes = f"[CLEARED] {payload.notes}".strip()
+        elif outcome_clean == "flagged":
+            profile.background_check_passed = False
+            profile.background_check_notes = f"[FLAGGED] {payload.notes}".strip()
+        else:
+            profile.background_check_passed = False
+            profile.background_check_notes = f"[REJECTED] {payload.notes}".strip()
+
+        await self._repo._session.flush()
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.FOSTER_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "profile_id": str(profile_id),
+                    "action": "background_check_outcome",
+                    "outcome": outcome_clean,
+                    "notes": payload.notes,
+                },
+            )
+        return profile
+
+    async def schedule_home_inspection(
+        self,
+        profile_id: uuid.UUID,
+        payload: FosterHomeInspectionSchedule,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> FosterProfile:
+        profile = await self._repo.get_profile_by_id(profile_id)
+        if profile is None:
+            raise NotFoundError("Foster profile not found.")
+        if payload.address:
+            profile.home_inspection_address = payload.address
+        inspector = payload.inspector_name or "Assigned Coordinator"
+        formatted_date = payload.scheduled_at.strftime("%Y-%m-%d %H:%M UTC")
+        profile.home_inspection_notes = (
+            f"Scheduled {payload.inspection_type} inspection for {formatted_date} with {inspector}. {payload.notes or ''}"
+        ).strip()
+        profile.home_inspection_passed = None
+        await self._repo._session.flush()
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.FOSTER_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "profile_id": str(profile_id),
+                    "action": "home_inspection_scheduled",
+                    "scheduled_at": payload.scheduled_at.isoformat(),
+                    "inspector": inspector,
+                },
+            )
+        return profile
+
+    async def log_home_inspection_audit(
+        self,
+        profile_id: uuid.UUID,
+        payload: FosterHomeInspectionLog,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> FosterProfile:
+        profile = await self._repo.get_profile_by_id(profile_id)
+        if profile is None:
+            raise NotFoundError("Foster profile not found.")
+        now = datetime.now(UTC)
+        profile.inspected_at = now
+        details = [
+            f"Yard: {payload.yard_condition or 'N/A'}",
+            f"Fencing: {payload.fencing_condition or 'N/A'}",
+            f"Household: {payload.household_info or 'N/A'}",
+            f"Pets: {payload.existing_pets_info or 'N/A'}",
+            f"Hazards: {payload.hazards or 'None'}",
+            f"Rating: {payload.rating or 'N/A'}/5",
+        ]
+        if payload.notes:
+            details.append(f"Notes: {payload.notes}")
+        if payload.evidence_urls:
+            details.append(f"Evidence: {', '.join(payload.evidence_urls)}")
+        profile.home_inspection_notes = "; ".join(details)
+        await self._repo._session.flush()
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.FOSTER_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "profile_id": str(profile_id),
+                    "action": "home_inspection_logged",
+                    "rating": payload.rating,
+                },
+            )
+        return profile
+
+    async def record_home_inspection_outcome(
+        self,
+        profile_id: uuid.UUID,
+        payload: FosterHomeInspectionOutcome,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> FosterProfile:
+        profile = await self._repo.get_profile_by_id(profile_id)
+        if profile is None:
+            raise NotFoundError("Foster profile not found.")
+        outcome_clean = payload.outcome.strip().lower()
+        if outcome_clean not in ("approved", "rejected"):
+            raise ValidationFailedError("Outcome must be 'approved' or 'rejected'.")
+
+        now = datetime.now(UTC)
+        profile.inspected_at = now
+        if payload.address:
+            profile.home_inspection_address = payload.address
+
+        if outcome_clean == "approved":
+            profile.home_inspection_passed = True
+            profile.home_inspection_notes = f"[APPROVED] {payload.notes}".strip()
+        else:
+            profile.home_inspection_passed = False
+            profile.home_inspection_notes = f"[REJECTED] {payload.notes}".strip()
+
+        await self._repo._session.flush()
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.FOSTER_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "profile_id": str(profile_id),
+                    "action": "home_inspection_outcome",
+                    "outcome": outcome_clean,
+                    "notes": payload.notes,
+                },
+            )
+        return profile
 
     async def bulk_soft_delete(
         self,

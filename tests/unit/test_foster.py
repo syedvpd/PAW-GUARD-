@@ -42,6 +42,8 @@ def _make_foster(**kw):
         max_capacity=1,
         active_count=0,
         is_available=True,
+        background_check_passed=True,
+        home_inspection_passed=True,
         created_at=now,
         updated_at=now,
     )
@@ -230,6 +232,8 @@ class TestFosterService:
             max_capacity=2,
             active_count=0,
             is_available=True,
+            background_check_passed=True,
+            home_inspection_passed=True,
         )
         mock_repo.get_profile_by_id_for_update.return_value = foster
         mock_dog_repo.get_by_id_for_update.return_value = DogProfile(
@@ -484,20 +488,24 @@ class TestFosterToAdopt:
             dog_id=dog_id,
             adopter_id=user_id,
             residential_status="foster",
-            status=AdoptionStatus.SUBMITTED,
+            status=AdoptionStatus.APPROVED,
         )
-        with patch(
-            "pawguard.modules.foster.service.MedicalRepository.get_latest_approved_clearance",
-            AsyncMock(return_value=SimpleNamespace(id=uuid.uuid4())),
+        with (
+            patch(
+                "pawguard.modules.foster.service.MedicalRepository.get_latest_approved_clearance",
+                AsyncMock(return_value=SimpleNamespace(id=uuid.uuid4())),
+            ),
+            patch.object(service, "_generate_adoption_lease", AsyncMock()),
         ):
             result = await service.convert_to_adoption(
                 placement_id,
                 actor_id=uuid.uuid4(),
             )
         assert result.id == app_id
-        assert result.status == AdoptionStatus.SUBMITTED
+        assert result.status == AdoptionStatus.APPROVED
         assert placement.is_active is False
-        assert dog.status == DogStatus.FOSTERED
+        assert dog.status == DogStatus.ADOPTED
+        assert dog.is_adoptable is False
 
     @pytest.mark.asyncio
     async def test_convert_to_adopt_already_adopted(

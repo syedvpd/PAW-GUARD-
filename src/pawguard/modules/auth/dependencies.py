@@ -40,12 +40,26 @@ class CurrentUser:
 def _extract_access_token(
     request: Request,
     authorization: str | None = Header(default=None),
+    x_access_token: str | None = Header(default=None, alias="X-Access-Token"),
     access_token_cookie: str | None = Cookie(default=None, alias=ACCESS_TOKEN_COOKIE_NAME),
 ) -> str:
-    if authorization and authorization.lower().startswith("bearer "):
-        return authorization.split(" ", 1)[1]
-    if access_token_cookie:
-        return access_token_cookie
+    if isinstance(authorization, str) and authorization.strip():
+        auth_clean = authorization.strip()
+        if auth_clean.lower().startswith("bearer "):
+            return auth_clean.split(" ", 1)[1].strip()
+        if auth_clean.count(".") == 2:
+            return auth_clean
+    if isinstance(x_access_token, str) and x_access_token.strip():
+        token = x_access_token.strip()
+        if token.lower().startswith("bearer "):
+            return token.split(" ", 1)[1].strip()
+        return token
+    if isinstance(access_token_cookie, str) and access_token_cookie.strip():
+        return access_token_cookie.strip()
+    if hasattr(request, "query_params"):
+        query_token = request.query_params.get("access_token") or request.query_params.get("token")
+        if query_token and query_token.strip():
+            return query_token.strip()
     raise InvalidSessionError("No authentication credentials were provided.")
 
 
