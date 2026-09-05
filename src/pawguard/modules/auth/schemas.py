@@ -331,7 +331,7 @@ class UserProfile(BaseModel):
     push_notifications: bool = True
     is_verified: bool
     mfa_enabled: bool
-    can_drive: bool = False
+    can_drive: bool | None = False
     managed_facility_id: uuid.UUID | None = None
     has_password: bool = True
     auth_provider: str | None = None

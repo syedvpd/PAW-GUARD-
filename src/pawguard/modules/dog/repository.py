@@ -162,6 +162,17 @@ class DogRepository:
                 # inconsistent ``is_adoptable`` flag cannot leak already-adopted
                 # animals into the public adoption directory.
                 stmt = stmt.where(DogProfile.status != DogStatus.ADOPTED)
+                from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
+
+                completed_adoptions = (
+                    select(AdoptionApplication.dog_id)
+                    .where(
+                        AdoptionApplication.status == AdoptionStatus.COMPLETED,
+                        AdoptionApplication.deleted_at.is_(None),
+                    )
+                    .scalar_subquery()
+                )
+                stmt = stmt.where(~DogProfile.id.in_(completed_adoptions))
         if breed is not None:
             stmt = stmt.where(DogProfile.breed.ilike(f"%{breed}%"))
         if breed_classification is not None:

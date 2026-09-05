@@ -62,6 +62,94 @@ class LostFoundRepository:
             stmt = stmt.where(LostReport.status == status)
         return (await self._session.execute(stmt)).scalars().all()
 
+    async def find_active_lost_duplicate(
+        self,
+        *,
+        user_id: uuid.UUID,
+        companion_pet_id: uuid.UUID | None = None,
+        microchip_id: str | None = None,
+        species: Species | None = None,
+        pet_name: str | None = None,
+        breed: str | None = None,
+        location_address: str | None = None,
+    ) -> LostReport | None:
+        """Find an existing ACTIVE lost report for duplicate prevention.
+
+        Safe matching criteria:
+        1. If companion_pet_id is provided: matches user_id + companion_pet_id.
+        2. Else if microchip_id is provided and non-empty: matches user_id + microchip_id.
+        3. Otherwise: matches user_id + species + pet_name + breed + location_address.
+        Only reports with status == ReportStatus.ACTIVE are matched.
+        """
+        stmt = (
+            select(LostReport)
+            .options(
+                selectinload(LostReport.user).selectinload(User.roles),
+                selectinload(LostReport.media),
+            )
+            .where(
+                LostReport.user_id == user_id,
+                LostReport.status == ReportStatus.ACTIVE,
+                LostReport.deleted_at.is_(None),
+            )
+        )
+
+        if companion_pet_id is not None:
+            stmt = stmt.where(LostReport.companion_pet_id == companion_pet_id)
+        elif microchip_id and microchip_id.strip():
+            stmt = stmt.where(
+                func.lower(func.trim(LostReport.microchip_id)) == microchip_id.strip().lower()
+            )
+        else:
+            if species is not None:
+                stmt = stmt.where(LostReport.species == species)
+            if pet_name:
+                stmt = stmt.where(
+                    func.lower(func.trim(LostReport.pet_name)) == pet_name.strip().lower()
+                )
+            if breed:
+                stmt = stmt.where(func.lower(func.trim(LostReport.breed)) == breed.strip().lower())
+            if location_address:
+                stmt = stmt.where(
+                    func.lower(func.trim(LostReport.location_address))
+                    == location_address.strip().lower()
+                )
+
+        stmt = stmt.order_by(LostReport.created_at.desc()).limit(1)
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def find_active_found_duplicate(
+        self,
+        *,
+        user_id: uuid.UUID,
+        species: Species,
+        breed_observed: str,
+        location_address: str,
+    ) -> FoundReport | None:
+        """Find an existing ACTIVE found report for duplicate prevention.
+
+        Matches user_id + species + breed_observed + location_address for ACTIVE reports.
+        """
+        stmt = (
+            select(FoundReport)
+            .options(
+                selectinload(FoundReport.user).selectinload(User.roles),
+                selectinload(FoundReport.media),
+            )
+            .where(
+                FoundReport.user_id == user_id,
+                FoundReport.status == ReportStatus.ACTIVE,
+                FoundReport.deleted_at.is_(None),
+                FoundReport.species == species,
+                func.lower(func.trim(FoundReport.breed_observed)) == breed_observed.strip().lower(),
+                func.lower(func.trim(FoundReport.location_address))
+                == location_address.strip().lower(),
+            )
+            .order_by(FoundReport.created_at.desc())
+            .limit(1)
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
     async def create_found_report(self, report: FoundReport) -> FoundReport:
         self._session.add(report)
         await self._session.flush()

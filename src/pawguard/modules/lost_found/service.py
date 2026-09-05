@@ -1,6 +1,7 @@
 """LostFoundService: owns lost/found registers and reunifying cross-matching logic (RULE-003)."""
 
 import contextlib
+import hashlib
 import math
 import uuid
 from collections.abc import Sequence
@@ -38,7 +39,9 @@ from pawguard.modules.lost_found.schemas import (
 )
 from pawguard.modules.notifications.schemas import BroadcastCreate, NotificationSend
 from pawguard.modules.notifications.service import NotificationService
+from pawguard.redis.client import RedisClient, is_null_redis
 from pawguard.services.audit_service import AuditService
+from pawguard.services.cache_service import CacheService
 
 logger = getLogger(__name__)
 
@@ -50,11 +53,13 @@ class LostFoundService:
         audit_service: AuditService | None = None,
         arq_pool: ArqRedis | None = None,
         notification_service: NotificationService | None = None,
+        redis: RedisClient | None = None,
     ) -> None:
         self._repo = repository
         self._audit = audit_service
         self._arq = arq_pool
         self._notification_svc = notification_service
+        self._redis = redis or arq_pool
 
     async def queue_lost_alert_broadcast(
         self,
@@ -109,86 +114,120 @@ class LostFoundService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> LostReport:
-        from pawguard.services.storage_service import StorageService
+        lock_token = str(uuid.uuid4())
+        lock_acquired = False
+        cache_svc = None
+        ident_hash = ""
+        if self._redis is not None and not is_null_redis(self._redis):
+            ident_str = f"{user_id}:{payload.companion_pet_id}:{payload.microchip_id}:{payload.species}:{payload.pet_name.strip().lower()}:{payload.breed.strip().lower()}:{payload.location_address.strip().lower()}"
+            ident_hash = hashlib.sha256(ident_str.encode()).hexdigest()[:16]
+            cache_svc = CacheService(self._redis, namespace="lost_found")
+            lock_acquired = await cache_svc.acquire_lock(
+                f"lock:lost:{user_id}:{ident_hash}", lock_token, expire_ms=10000
+            )
 
-        # Determine photo keys and video key
-        photo_keys = payload.photo_object_keys
-        if photo_keys is None:
-            photo_keys = [payload.photo_object_key] if payload.photo_object_key else []
-        video_key = payload.video_object_key
-
-        # Validate S3 objects if present
-        if photo_keys or video_key:
-            StorageService().validate_report_media(photo_keys, video_key)
-
-        # Legacy primary key to store on report model
-        primary_key = photo_keys[0] if photo_keys else payload.photo_object_key
-        # Resolve legacy photo url if primary key is present
-        photo_url = payload.photo_url
-        if primary_key:
-            with contextlib.suppress(Exception):
-                photo_url = StorageService().generate_public_url(object_key=primary_key)
-
-        report = LostReport(
-            user_id=user_id,
-            species=payload.species,
-            pet_name=payload.pet_name,
-            breed=payload.breed.lower(),
-            color=payload.color.lower(),
-            microchip_id=payload.microchip_id,
-            collar_color=payload.collar_color,
-            collar_description=payload.collar_description,
-            marker_description=payload.marker_description,
-            location_address=payload.location_address,
-            latitude=payload.latitude,
-            longitude=payload.longitude,
-            lost_at=payload.lost_at,
-            status=ReportStatus.ACTIVE,
-            companion_pet_id=payload.companion_pet_id,
-            photo_url=photo_url,
-            photo_object_key=primary_key,
-        )
-        await self._repo.create_lost_report(report)
-        await self._repo._session.flush()
-
-        # Save ReportMedia entries
-        media_items = []
-        for idx, key in enumerate(photo_keys):
-            media_items.append(
-                ReportMedia(
-                    lost_report_id=report.id,
-                    media_type="photo",
-                    object_key=key,
-                    is_primary=(idx == 0),
-                    display_order=idx,
+        try:
+            # Duplicate prevention check: return existing active report if identical
+            existing = await self._repo.find_active_lost_duplicate(
+                user_id=user_id,
+                companion_pet_id=payload.companion_pet_id,
+                microchip_id=payload.microchip_id,
+                species=payload.species,
+                pet_name=payload.pet_name,
+                breed=payload.breed,
+                location_address=payload.location_address,
+            )
+            if existing is not None and isinstance(existing, LostReport):
+                logger.info(
+                    "duplicate_lost_report_prevented",
+                    user_id=str(user_id),
+                    existing_report_id=str(existing.id),
                 )
+                return existing
+
+            from pawguard.services.storage_service import StorageService
+
+            # Determine photo keys and video key
+            photo_keys = payload.photo_object_keys
+            if photo_keys is None:
+                photo_keys = [payload.photo_object_key] if payload.photo_object_key else []
+            video_key = payload.video_object_key
+
+            # Validate S3 objects if present
+            if photo_keys or video_key:
+                StorageService().validate_report_media(photo_keys, video_key)
+
+            # Legacy primary key to store on report model
+            primary_key = photo_keys[0] if photo_keys else payload.photo_object_key
+            # Resolve legacy photo url if primary key is present
+            photo_url = payload.photo_url
+            if primary_key:
+                with contextlib.suppress(Exception):
+                    photo_url = StorageService().generate_public_url(object_key=primary_key)
+
+            report = LostReport(
+                user_id=user_id,
+                species=payload.species,
+                pet_name=payload.pet_name,
+                breed=payload.breed.lower(),
+                color=payload.color.lower(),
+                microchip_id=payload.microchip_id,
+                collar_color=payload.collar_color,
+                collar_description=payload.collar_description,
+                marker_description=payload.marker_description,
+                location_address=payload.location_address,
+                latitude=payload.latitude,
+                longitude=payload.longitude,
+                lost_at=payload.lost_at,
+                status=ReportStatus.ACTIVE,
+                companion_pet_id=payload.companion_pet_id,
+                photo_url=photo_url,
+                photo_object_key=primary_key,
             )
-        if video_key:
-            media_items.append(
-                ReportMedia(
-                    lost_report_id=report.id,
-                    media_type="video",
-                    object_key=video_key,
-                    is_primary=False,
-                    display_order=len(photo_keys),
+            await self._repo.create_lost_report(report)
+            await self._repo._session.flush()
+
+            # Save ReportMedia entries
+            media_items = []
+            for idx, key in enumerate(photo_keys):
+                media_items.append(
+                    ReportMedia(
+                        lost_report_id=report.id,
+                        media_type="photo",
+                        object_key=key,
+                        is_primary=(idx == 0),
+                        display_order=idx,
+                    )
                 )
-            )
+            if video_key:
+                media_items.append(
+                    ReportMedia(
+                        lost_report_id=report.id,
+                        media_type="video",
+                        object_key=video_key,
+                        is_primary=False,
+                        display_order=len(photo_keys),
+                    )
+                )
 
-        for m in media_items:
-            self._repo._session.add(m)
-        await self._repo._session.flush()
+            for m in media_items:
+                self._repo._session.add(m)
+            await self._repo._session.flush()
 
-        await self._run_matching_for_lost(report)
-        if self._audit and actor_id:
-            await self._audit.record(
-                event_type=AuthAuditEventType.LOST_FOUND_REPORTED,
-                actor_id=actor_id,
-                ip_address=ip_address or "",
-                user_agent="",
-                metadata={"report_id": str(report.id), "type": "lost"},
-            )
-        reloaded = await self._repo.get_lost_report_by_id(report.id)
-        return reloaded or report
+            await self._run_matching_for_lost(report)
+            if self._audit and actor_id:
+                await self._audit.record(
+                    event_type=AuthAuditEventType.LOST_FOUND_REPORTED,
+                    actor_id=actor_id,
+                    ip_address=ip_address or "",
+                    user_agent="",
+                    metadata={"report_id": str(report.id), "type": "lost"},
+                )
+            reloaded = await self._repo.get_lost_report_by_id(report.id)
+            return reloaded or report
+        finally:
+            if lock_acquired and cache_svc is not None:
+                await cache_svc.release_lock(f"lock:lost:{user_id}:{ident_hash}", lock_token)
 
     async def record_public_sighting(
         self, payload: PetSightingCreate, ip_address: str | None = None
@@ -255,83 +294,114 @@ class LostFoundService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> FoundReport:
-        from pawguard.services.storage_service import StorageService
+        lock_token = str(uuid.uuid4())
+        lock_acquired = False
+        cache_svc = None
+        ident_hash = ""
+        if self._redis is not None and not is_null_redis(self._redis):
+            ident_str = f"{user_id}:{payload.species}:{payload.breed_observed.strip().lower()}:{payload.location_address.strip().lower()}"
+            ident_hash = hashlib.sha256(ident_str.encode()).hexdigest()[:16]
+            cache_svc = CacheService(self._redis, namespace="lost_found")
+            lock_acquired = await cache_svc.acquire_lock(
+                f"lock:found:{user_id}:{ident_hash}", lock_token, expire_ms=10000
+            )
 
-        # Determine photo keys and video key
-        photo_keys = payload.photo_object_keys
-        if photo_keys is None:
-            photo_keys = [payload.photo_object_key] if payload.photo_object_key else []
-        video_key = payload.video_object_key
-
-        # Validate S3 objects if present
-        if photo_keys or video_key:
-            StorageService().validate_report_media(photo_keys, video_key)
-
-        # Legacy primary key to store on report model
-        primary_key = photo_keys[0] if photo_keys else payload.photo_object_key
-        # Resolve legacy photo url if primary key is present
-        photo_url = payload.photo_url
-        if primary_key:
-            with contextlib.suppress(Exception):
-                photo_url = StorageService().generate_public_url(object_key=primary_key)
-
-        report = FoundReport(
-            user_id=user_id,
-            species=payload.species,
-            breed_observed=payload.breed_observed.lower(),
-            color_observed=payload.color_observed.lower(),
-            collar_color=payload.collar_color,
-            collar_description=payload.collar_description,
-            marker_description=payload.marker_description,
-            location_address=payload.location_address,
-            latitude=payload.latitude,
-            longitude=payload.longitude,
-            found_at=payload.found_at,
-            status=ReportStatus.ACTIVE,
-            photo_url=photo_url,
-            photo_object_key=primary_key,
-        )
-        await self._repo.create_found_report(report)
-        await self._repo._session.flush()
-
-        # Save ReportMedia entries
-        media_items = []
-        for idx, key in enumerate(photo_keys):
-            media_items.append(
-                ReportMedia(
-                    found_report_id=report.id,
-                    media_type="photo",
-                    object_key=key,
-                    is_primary=(idx == 0),
-                    display_order=idx,
+        try:
+            # Duplicate prevention check: return existing active report if identical
+            existing = await self._repo.find_active_found_duplicate(
+                user_id=user_id,
+                species=payload.species,
+                breed_observed=payload.breed_observed,
+                location_address=payload.location_address,
+            )
+            if existing is not None and isinstance(existing, FoundReport):
+                logger.info(
+                    "duplicate_found_report_prevented",
+                    user_id=str(user_id),
+                    existing_report_id=str(existing.id),
                 )
+                return existing
+
+            from pawguard.services.storage_service import StorageService
+
+            # Determine photo keys and video key
+            photo_keys = payload.photo_object_keys
+            if photo_keys is None:
+                photo_keys = [payload.photo_object_key] if payload.photo_object_key else []
+            video_key = payload.video_object_key
+
+            # Validate S3 objects if present
+            if photo_keys or video_key:
+                StorageService().validate_report_media(photo_keys, video_key)
+
+            # Legacy primary key to store on report model
+            primary_key = photo_keys[0] if photo_keys else payload.photo_object_key
+            # Resolve legacy photo url if primary key is present
+            photo_url = payload.photo_url
+            if primary_key:
+                with contextlib.suppress(Exception):
+                    photo_url = StorageService().generate_public_url(object_key=primary_key)
+
+            report = FoundReport(
+                user_id=user_id,
+                species=payload.species,
+                breed_observed=payload.breed_observed.lower(),
+                color_observed=payload.color_observed.lower(),
+                collar_color=payload.collar_color,
+                collar_description=payload.collar_description,
+                marker_description=payload.marker_description,
+                location_address=payload.location_address,
+                latitude=payload.latitude,
+                longitude=payload.longitude,
+                found_at=payload.found_at,
+                status=ReportStatus.ACTIVE,
+                photo_url=photo_url,
+                photo_object_key=primary_key,
             )
-        if video_key:
-            media_items.append(
-                ReportMedia(
-                    found_report_id=report.id,
-                    media_type="video",
-                    object_key=video_key,
-                    is_primary=False,
-                    display_order=len(photo_keys),
+            await self._repo.create_found_report(report)
+            await self._repo._session.flush()
+
+            # Save ReportMedia entries
+            media_items = []
+            for idx, key in enumerate(photo_keys):
+                media_items.append(
+                    ReportMedia(
+                        found_report_id=report.id,
+                        media_type="photo",
+                        object_key=key,
+                        is_primary=(idx == 0),
+                        display_order=idx,
+                    )
                 )
-            )
+            if video_key:
+                media_items.append(
+                    ReportMedia(
+                        found_report_id=report.id,
+                        media_type="video",
+                        object_key=video_key,
+                        is_primary=False,
+                        display_order=len(photo_keys),
+                    )
+                )
 
-        for m in media_items:
-            self._repo._session.add(m)
-        await self._repo._session.flush()
+            for m in media_items:
+                self._repo._session.add(m)
+            await self._repo._session.flush()
 
-        await self._run_matching_for_found(report)
-        if self._audit and actor_id:
-            await self._audit.record(
-                event_type=AuthAuditEventType.LOST_FOUND_REPORTED,
-                actor_id=actor_id,
-                ip_address=ip_address or "",
-                user_agent="",
-                metadata={"report_id": str(report.id), "type": "found"},
-            )
-        reloaded = await self._repo.get_found_report_by_id(report.id)
-        return reloaded or report
+            await self._run_matching_for_found(report)
+            if self._audit and actor_id:
+                await self._audit.record(
+                    event_type=AuthAuditEventType.LOST_FOUND_REPORTED,
+                    actor_id=actor_id,
+                    ip_address=ip_address or "",
+                    user_agent="",
+                    metadata={"report_id": str(report.id), "type": "found"},
+                )
+            reloaded = await self._repo.get_found_report_by_id(report.id)
+            return reloaded or report
+        finally:
+            if lock_acquired and cache_svc is not None:
+                await cache_svc.release_lock(f"lock:found:{user_id}:{ident_hash}", lock_token)
 
     async def resolve_lost_report(
         self, report_id: uuid.UUID, actor_id: uuid.UUID | None = None, ip_address: str | None = None

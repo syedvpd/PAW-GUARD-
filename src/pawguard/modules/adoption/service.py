@@ -460,6 +460,11 @@ class AdoptionService:
 
         if status == AdoptionStatus.COMPLETED:
             app.completed_at = datetime.now(UTC)
+            if self._redis is not None and not is_null_redis(self._redis):
+                try:
+                    await CacheService(self._redis, namespace="dog").delete_prefix("")
+                except Exception as exc:
+                    logger.warning("dog_cache_invalidation_failed", error=str(exc))
 
         app.status = status
         await self._repo._session.flush()

@@ -45,6 +45,7 @@ from pawguard.modules.notifications.service import NotificationService
 from pawguard.modules.portal.router import get_portal_service
 from pawguard.modules.portal.schemas import SuccessStoryResponse
 from pawguard.modules.portal.service import PortalService
+from pawguard.redis.client import RedisClient, get_redis
 from pawguard.services.audit_service import AuditService
 from pawguard.services.storage_service import StorageService
 from pawguard.workers.pool import get_arq_pool
@@ -96,10 +97,15 @@ def get_lost_found_service(
     audit: AuditService = Depends(get_audit_service),
     arq_pool: ArqRedis = Depends(get_arq_pool),
     notification_svc: NotificationService = Depends(get_notification_service),
+    redis: RedisClient = Depends(get_redis),
 ) -> LostFoundService:
     repo = LostFoundRepository(db)
     return LostFoundService(
-        repo, audit_service=audit, arq_pool=arq_pool, notification_service=notification_svc
+        repo,
+        audit_service=audit,
+        arq_pool=arq_pool,
+        notification_service=notification_svc,
+        redis=redis,
     )
 
 
