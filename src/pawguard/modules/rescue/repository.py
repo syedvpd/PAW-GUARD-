@@ -222,7 +222,7 @@ class RescueRepository:
             .where(
                 RescueDispatch.assigned_vehicle_id == vehicle_id,
                 RescueRequest.status.in_([RescueStatus.DISPATCHED, RescueStatus.LOCATED]),
-                RescueDispatch.deleted_at.is_(None),
+                RescueRequest.deleted_at.is_(None),
             )
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
