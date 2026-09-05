@@ -479,6 +479,7 @@ class RescueService:
         self,
         request_id: uuid.UUID,
         *,
+        assigned_coordinator_id: uuid.UUID | None = None,
         assigned_driver_id: uuid.UUID | None = None,
         assigned_agent_ids: list[uuid.UUID] | None = None,
         vehicle_id: str | None = None,
@@ -502,9 +503,15 @@ class RescueService:
         if existing_dispatch is not None:
             raise ConflictError("Dispatch record already exists for this request.")
 
+        if assigned_coordinator_id is not None:
+            coord_user = await self._repo._session.get(User, assigned_coordinator_id)
+            if coord_user is None or coord_user.deleted_at is not None:
+                raise NotFoundError(
+                    f"Assigned coordinator user '{assigned_coordinator_id}' not found."
+                )
+            request.coordinator_id = assigned_coordinator_id
+
         # Vehicle assignment (PRR 3.2): the vehicle must exist and be ACTIVE.
-        # Delegates existence lookup to the fleet domain and enforces the
-        # operational rule here in the service layer.
         if assigned_vehicle_id is not None:
             vehicle = await self._fleet_service().get_vehicle(assigned_vehicle_id)
             if vehicle.status != VehicleStatus.ACTIVE:
@@ -512,20 +519,22 @@ class RescueService:
                     "Only ACTIVE vehicles can be assigned to a rescue dispatch "
                     f"(vehicle is '{vehicle.status.value}')."
                 )
+            active_dispatch = await self._repo.get_active_dispatch_by_vehicle_id(
+                assigned_vehicle_id
+            )
+            if active_dispatch is not None:
+                raise ConflictError(
+                    "Vehicle is already assigned to another active rescue dispatch."
+                )
 
         if assigned_driver_id is not None:
             driver_user = await self._repo._session.get(User, assigned_driver_id)
             if driver_user is None or driver_user.deleted_at is not None:
                 raise NotFoundError(f"Assigned driver user '{assigned_driver_id}' not found.")
-            if not getattr(driver_user, "can_drive", False):
-                raise ValidationFailedError(
-                    f"User '{driver_user.full_name}' is not authorized to drive (can_drive=False)."
-                )
 
         # Assemble the full team: the explicit agent list plus the legacy
-        # single-driver field, deduplicated. Every member is mirrored into
-        # the dispatch-agent association table so "one or more agents" holds
-        # for both the new multi-agent flow and the back-compat driver flow.
+        # single-driver field, deduplicated. The assigned rescue agent operates
+        # the assigned vehicle; no separate driver authorization is required.
         agent_ids: list[uuid.UUID] = []
         for agent_id in assigned_agent_ids or []:
             if not await self._repo.user_exists(agent_id):
@@ -559,20 +568,17 @@ class RescueService:
 
         # Keep the in-memory relationship consistent: the request was fetched
         # before the dispatch existed, so its `dispatch` attribute is already
-        # loaded as None and the re-fetch below would not overwrite it (the
-        # identity map preserves the loaded value). Without this, the dispatch
-        # response serializes `dispatch: None` even though the row exists.
+        # loaded as None and the re-fetch below would not overwrite it.
         request.dispatch = dispatch
 
-        # Auto-checkout the equipment named on the dispatch (PRR 3.3) so the
-        # fleet ledger tracks what left the shelter for this rescue. Uses the
-        # shared session, so it commits atomically with the dispatch.
+        # Auto-checkout the equipment named on the dispatch (PRR 3.3)
         equipment_names = _parse_equipment_details(equipment_details)
-        if equipment_names:
+        primary_agent_id = agent_ids[0] if agent_ids else assigned_driver_id
+        if equipment_names and primary_agent_id:
             await self._fleet_service().checkout_equipment_for_dispatch(
                 rescue_dispatch_id=dispatch.id,
                 equipment_names=equipment_names,
-                assigned_to_agent_id=assigned_driver_id,
+                assigned_to_agent_id=primary_agent_id,
                 assigned_to_vehicle_id=None,
                 actor_id=actor_id,
                 ip_address=ip_address,
@@ -640,15 +646,21 @@ class RescueService:
         if dispatch is None:
             raise NotFoundError("Rescue dispatch record not found.")
 
+        if payload.assigned_coordinator_id is not None:
+            coord_user = await self._repo._session.get(User, payload.assigned_coordinator_id)
+            if coord_user is None or coord_user.deleted_at is not None:
+                raise NotFoundError(
+                    f"Assigned coordinator user '{payload.assigned_coordinator_id}' not found."
+                )
+            req = await self._repo.get_request_by_id(dispatch.rescue_request_id)
+            if req is not None:
+                req.coordinator_id = payload.assigned_coordinator_id
+
         if payload.assigned_driver_id is not None:
             driver_user = await self._repo._session.get(User, payload.assigned_driver_id)
             if driver_user is None or driver_user.deleted_at is not None:
                 raise NotFoundError(
                     f"Assigned driver user '{payload.assigned_driver_id}' not found."
-                )
-            if not getattr(driver_user, "can_drive", False):
-                raise ValidationFailedError(
-                    f"User '{driver_user.full_name}' is not authorized to drive (can_drive=False)."
                 )
             dispatch.assigned_driver_id = payload.assigned_driver_id
         if payload.vehicle_id is not None:

@@ -374,6 +374,7 @@ async def dispatch_team(
 ) -> ApiResponse[RescueRequestResponse]:
     rescue = await service.dispatch_team(
         request_id,
+        assigned_coordinator_id=payload.assigned_coordinator_id,
         assigned_driver_id=payload.assigned_driver_id,
         assigned_agent_ids=payload.assigned_agent_ids,
         vehicle_id=payload.vehicle_id,

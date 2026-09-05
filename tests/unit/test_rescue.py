@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pydantic import ValidationError
@@ -34,11 +34,13 @@ class TestRescueService:
     def mock_repo(self):
         repo = AsyncMock(spec=RescueRepository)
         repo._session = AsyncMock()
+        repo._session.get.return_value = MagicMock(deleted_at=None)
         # Fast-path ticket-existence check returns None (free) by default so
         # the retry loop proceeds straight to create_request.
         repo.get_request_by_ticket.return_value = None
         # Public status lookup returns None (not found) by default.
         repo.get_request_by_ticket_and_phone.return_value = None
+        repo.get_active_dispatch_by_vehicle_id.return_value = None
         return repo
 
     @pytest.fixture

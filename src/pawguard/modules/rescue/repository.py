@@ -213,6 +213,20 @@ class RescueRepository:
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    async def get_active_dispatch_by_vehicle_id(
+        self, vehicle_id: uuid.UUID
+    ) -> RescueDispatch | None:
+        stmt = (
+            select(RescueDispatch)
+            .join(RescueRequest, RescueDispatch.rescue_request_id == RescueRequest.id)
+            .where(
+                RescueDispatch.assigned_vehicle_id == vehicle_id,
+                RescueRequest.status.in_([RescueStatus.DISPATCHED, RescueStatus.LOCATED]),
+                RescueDispatch.deleted_at.is_(None),
+            )
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
     async def list_dispatches_paginated(
         self,
         page: PageParams,

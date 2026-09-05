@@ -228,15 +228,21 @@ class RescueRequestUpdate(BaseModel):
 
 
 class RescueDispatchCreate(BaseModel):
-    assigned_driver_id: uuid.UUID | None = None
-    # Additional field agents for the dispatch (PRR 3.2 multi-agent teams).
-    # The legacy single-driver flow still works: `assigned_driver_id` is
-    # mirrored into the dispatch-agent association table automatically.
+    assigned_coordinator_id: uuid.UUID | None = Field(
+        None,
+        description="UUID of the Rescue Coordinator assigned to supervise this case.",
+    )
+    assigned_driver_id: uuid.UUID | None = Field(
+        None,
+        description="Legacy optional driver field for backward compatibility.",
+    )
+    # Field rescue agents assigned to the dispatch (PRR 3.2 multi-agent teams).
+    # Assigned rescue agents operate the assigned vehicle.
     assigned_agent_ids: list[uuid.UUID] | None = Field(
         None,
         description=(
-            "Field agents assigned to the dispatch. Combined with "
-            "assigned_driver_id to form the full team."
+            "Field agents assigned to the dispatch. The assigned rescue agent "
+            "operates the assigned vehicle."
         ),
         examples=[[uuid.UUID("a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d")]],
     )
@@ -254,6 +260,7 @@ class RescueDispatchCreate(BaseModel):
 
 
 class RescueDispatchUpdate(BaseModel):
+    assigned_coordinator_id: uuid.UUID | None = None
     assigned_driver_id: uuid.UUID | None = None
     assigned_agent_ids: list[uuid.UUID] | None = None
     vehicle_id: str | None = None

@@ -87,7 +87,7 @@ class TestDriverCapabilityRescue:
         )
         assert res.can_drive is True
 
-    async def test_dispatch_rejects_driver_without_can_drive(self):
+    async def test_dispatch_accepts_agent_without_can_drive(self):
         mock_repo = AsyncMock()
         mock_audit = AsyncMock()
         service = RescueService(repository=mock_repo, audit_service=mock_audit)
@@ -103,14 +103,17 @@ class TestDriverCapabilityRescue:
         )
         mock_repo.get_request_by_id.return_value = MagicMock(status=RescueStatus.VERIFIED)
         mock_repo.get_dispatch_by_request_id.return_value = None
+        mock_repo.get_active_dispatch_by_vehicle_id.return_value = None
         mock_repo._session = AsyncMock()
         mock_repo._session.get.return_value = non_driver
+        mock_repo.create_dispatch.return_value = MagicMock()
+        mock_repo.create_dispatch_agent.return_value = MagicMock()
 
-        with pytest.raises(ValidationFailedError, match="not authorized to drive"):
-            await service.dispatch_team(
-                request_id=request_id,
-                assigned_driver_id=driver_id,
-            )
+        res = await service.dispatch_team(
+            request_id=request_id,
+            assigned_driver_id=driver_id,
+        )
+        assert res is not None
 
     async def test_dispatch_accepts_driver_with_can_drive(self):
         mock_repo = AsyncMock()
@@ -128,11 +131,11 @@ class TestDriverCapabilityRescue:
         )
         mock_repo.get_request_by_id.return_value = MagicMock(status=RescueStatus.VERIFIED)
         mock_repo.get_dispatch_by_request_id.return_value = None
+        mock_repo.get_active_dispatch_by_vehicle_id.return_value = None
         mock_repo._session = AsyncMock()
         mock_repo._session.get.return_value = authorized_driver
         mock_repo.create_dispatch.return_value = MagicMock()
-        mock_repo.set_dispatch_agents.return_value = None
-        mock_repo.update_request_status.return_value = None
+        mock_repo.create_dispatch_agent.return_value = MagicMock()
 
         res = await service.dispatch_team(
             request_id=request_id,
@@ -140,14 +143,15 @@ class TestDriverCapabilityRescue:
         )
         assert res is not None
 
-    async def test_reassign_rejects_driver_without_can_drive(self):
+    async def test_reassign_accepts_driver_without_can_drive(self):
         mock_repo = AsyncMock()
         mock_audit = AsyncMock()
         service = RescueService(repository=mock_repo, audit_service=mock_audit)
 
         dispatch_id = uuid.uuid4()
         new_driver_id = uuid.uuid4()
-        mock_repo.get_dispatch_by_id.return_value = MagicMock(id=dispatch_id)
+        mock_dispatch = MagicMock(id=dispatch_id, rescue_request_id=uuid.uuid4())
+        mock_repo.get_dispatch_by_id.return_value = mock_dispatch
         mock_repo._session = AsyncMock()
         non_driver = User(
             id=new_driver_id,
@@ -158,11 +162,11 @@ class TestDriverCapabilityRescue:
         )
         mock_repo._session.get.return_value = non_driver
 
-        with pytest.raises(ValidationFailedError, match="not authorized to drive"):
-            await service.update_dispatch(
-                dispatch_id=dispatch_id,
-                payload=RescueDispatchUpdate(assigned_driver_id=new_driver_id),
-            )
+        updated = await service.update_dispatch(
+            dispatch_id=dispatch_id,
+            payload=RescueDispatchUpdate(assigned_driver_id=new_driver_id),
+        )
+        assert updated.assigned_driver_id == new_driver_id
 
 
 @pytest.mark.asyncio
