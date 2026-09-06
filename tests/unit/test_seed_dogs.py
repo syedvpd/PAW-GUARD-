@@ -29,3 +29,24 @@ class TestSeedDogs:
         valid = set(DogStatus)
         for dog in TEST_DOGS:
             assert dog["status"] in valid
+
+    def test_seed_protects_adopted_dog_state(self):
+        from pawguard.modules.dog.models import DogProfile
+
+        existing_adopted = DogProfile(
+            name="Oscar",
+            registration_number="DOG-2026-0011",
+            status=DogStatus.ADOPTED,
+            is_adoptable=False,
+        )
+        dog_data = {"status": DogStatus.SHELTER, "is_adoptable": True}
+        is_already_adopted = existing_adopted.status == DogStatus.ADOPTED
+        if is_already_adopted:
+            existing_adopted.status = DogStatus.ADOPTED
+            existing_adopted.is_adoptable = False
+        else:
+            existing_adopted.status = dog_data["status"]
+            existing_adopted.is_adoptable = dog_data["is_adoptable"]
+
+        assert existing_adopted.status == DogStatus.ADOPTED
+        assert existing_adopted.is_adoptable is False

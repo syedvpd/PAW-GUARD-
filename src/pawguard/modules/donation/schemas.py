@@ -57,12 +57,15 @@ class DonorProfileResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+MAX_DONATION_AMOUNT: float = 500_000.0
+
+
 class DonationCreate(BaseModel):
     dog_id: uuid.UUID | None = None
     campaign_id: uuid.UUID | None = Field(
         None, description="Attach this donation to a fundraising campaign."
     )
-    amount: float = Field(..., ge=1.0, examples=[50.0])
+    amount: float = Field(..., ge=1.0, le=MAX_DONATION_AMOUNT, examples=[50.0])
     currency: str = Field(
         default_factory=_default_currency, min_length=3, max_length=3, examples=["USD"]
     )

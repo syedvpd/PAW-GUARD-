@@ -6,7 +6,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from pawguard.core.exceptions import ForbiddenError, NotFoundError, ValidationFailedError
+from pawguard.core.exceptions import (
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+    ValidationFailedError,
+)
 from pawguard.core.pagination import PageParams
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
@@ -879,3 +884,171 @@ class TestOwnershipClaimWorkflow:
         assert res.species == Species.CAT
         assert len(res.media) == 1
         assert res.media[0].id == media_id
+
+
+class TestFoundReportDuplicateAndLockEnforcement:
+    @pytest.fixture
+    def mock_repo(self):
+        repo = AsyncMock(spec=LostFoundRepository)
+        repo._session = AsyncMock()
+        return repo
+
+    @pytest.fixture
+    def mock_audit(self):
+        return AsyncMock(spec=AuditService)
+
+    @pytest.mark.asyncio
+    async def test_redis_lock_failure_stops_execution_lost_report(self, mock_repo, mock_audit):
+        mock_redis = AsyncMock()
+        # acquire_lock returns False (simulate concurrent holder)
+        mock_redis.set = AsyncMock(return_value=False)
+        service = LostFoundService(mock_repo, mock_audit, redis=mock_redis)
+
+        user_id = uuid.uuid4()
+        payload = LostReportCreate(
+            species=Species.DOG,
+            pet_name="Buddy",
+            breed="Labrador",
+            color="Golden",
+            location_address="123 MG Road",
+            lost_at=datetime.now(UTC),
+        )
+        with pytest.raises(ConflictError, match="currently being processed"):
+            await service.report_lost_pet(user_id, payload)
+
+        # Critical section was NOT entered
+        mock_repo.find_active_lost_duplicate.assert_not_called()
+        mock_repo.create_lost_report.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_redis_lock_failure_stops_execution_found_report(self, mock_repo, mock_audit):
+        mock_redis = AsyncMock()
+        mock_redis.set = AsyncMock(return_value=False)
+        service = LostFoundService(mock_repo, mock_audit, redis=mock_redis)
+
+        user_id = uuid.uuid4()
+        payload = FoundReportCreate(
+            species=Species.DOG,
+            breed_observed="Labrador",
+            color_observed="Golden",
+            location_address="123 MG Road",
+            found_at=datetime.now(UTC),
+        )
+        with pytest.raises(ConflictError, match="currently being processed"):
+            await service.report_found_pet(user_id, payload)
+
+        # Critical section was NOT entered
+        mock_repo.find_active_found_duplicate.assert_not_called()
+        mock_repo.create_found_report.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_same_found_incident_repeated_duplicate_prevented(self, mock_repo, mock_audit):
+        # Redis lock succeeds
+        mock_redis = AsyncMock()
+        mock_redis.set = AsyncMock(return_value=True)
+        mock_redis.eval = AsyncMock(return_value=1)
+        service = LostFoundService(mock_repo, mock_audit, redis=mock_redis)
+
+        user_id = uuid.uuid4()
+        existing_report = FoundReport(
+            id=uuid.uuid4(),
+            user_id=user_id,
+            species=Species.DOG,
+            breed_observed="labrador",
+            color_observed="golden",
+            location_address="123 MG Road",
+            found_at=datetime.now(UTC),
+            status=ReportStatus.ACTIVE,
+            created_at=datetime.now(UTC),
+            user=None,
+            media=[],
+        )
+        mock_repo.find_active_found_duplicate.return_value = existing_report
+
+        payload = FoundReportCreate(
+            species=Species.DOG,
+            breed_observed="Labrador",
+            color_observed="Golden",
+            location_address="123 MG Road",
+            found_at=datetime.now(UTC),
+        )
+        result = await service.report_found_pet(user_id, payload)
+        assert result.id == existing_report.id
+        mock_repo.create_found_report.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_same_breed_same_location_different_incident_allowed(self, mock_repo, mock_audit):
+        mock_redis = AsyncMock()
+        mock_redis.set = AsyncMock(return_value=True)
+        mock_redis.eval = AsyncMock(return_value=1)
+        service = LostFoundService(mock_repo, mock_audit, redis=mock_redis)
+
+        user_id = uuid.uuid4()
+        # Different incident (different color, e.g. Black Lab vs Golden Lab on same street)
+        mock_repo.find_active_found_duplicate.return_value = None
+
+        new_report = FoundReport(
+            id=uuid.uuid4(),
+            user_id=user_id,
+            species=Species.DOG,
+            breed_observed="labrador",
+            color_observed="black",
+            location_address="123 MG Road",
+            found_at=datetime.now(UTC),
+            status=ReportStatus.ACTIVE,
+            created_at=datetime.now(UTC),
+            user=None,
+            media=[],
+        )
+        mock_repo.create_found_report.return_value = new_report
+        mock_repo.get_found_report_by_id.return_value = new_report
+
+        payload = FoundReportCreate(
+            species=Species.DOG,
+            breed_observed="Labrador",
+            color_observed="Black",
+            location_address="123 MG Road",
+            found_at=datetime.now(UTC),
+        )
+        result = await service.report_found_pet(user_id, payload)
+        assert result.id == new_report.id
+        mock_repo.create_found_report.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_resolved_old_incident_allows_new_report(self, mock_repo, mock_audit):
+        mock_redis = AsyncMock()
+        mock_redis.set = AsyncMock(return_value=True)
+        mock_redis.eval = AsyncMock(return_value=1)
+        service = LostFoundService(mock_repo, mock_audit, redis=mock_redis)
+
+        user_id = uuid.uuid4()
+        # Repository find_active_found_duplicate filters by status=ReportStatus.ACTIVE,
+        # so an old RESOLVED report is not returned as a duplicate.
+        mock_repo.find_active_found_duplicate.return_value = None
+
+        new_report = FoundReport(
+            id=uuid.uuid4(),
+            user_id=user_id,
+            species=Species.DOG,
+            breed_observed="labrador",
+            color_observed="golden",
+            location_address="123 MG Road",
+            found_at=datetime.now(UTC),
+            status=ReportStatus.ACTIVE,
+            created_at=datetime.now(UTC),
+            user=None,
+            media=[],
+        )
+        mock_repo.create_found_report.return_value = new_report
+        mock_repo.get_found_report_by_id.return_value = new_report
+
+        payload = FoundReportCreate(
+            species=Species.DOG,
+            breed_observed="Labrador",
+            color_observed="Golden",
+            location_address="123 MG Road",
+            found_at=datetime.now(UTC),
+        )
+        result = await service.report_found_pet(user_id, payload)
+        assert result.id == new_report.id
+        mock_repo.create_found_report.assert_awaited_once()

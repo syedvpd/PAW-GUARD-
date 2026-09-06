@@ -32,6 +32,7 @@ from pawguard.modules.donation.models import (
 )
 from pawguard.modules.donation.repository import DonationRepository
 from pawguard.modules.donation.schemas import (
+    MAX_DONATION_AMOUNT,
     DonationCampaignCreate,
     DonationCampaignResponse,
     DonationCampaignUpdate,
@@ -287,6 +288,11 @@ class DonationService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> Donation:
+        if payload.amount > MAX_DONATION_AMOUNT or payload.amount < 1.0:
+            raise ValidationFailedError(
+                f"Donation amount must be between ₹1 and ₹{int(MAX_DONATION_AMOUNT):,}."
+            )
+
         donor = await self.get_or_create_donor(user_id)
 
         if payload.dog_id is not None:
@@ -351,6 +357,11 @@ class DonationService:
         gateway. The client uses the returned order details to open the
         provider's checkout; the donation is only marked SUCCESS once
         `verify_donation_payment` (or the provider webhook) confirms it."""
+        if payload.amount > MAX_DONATION_AMOUNT or payload.amount < 1.0:
+            raise ValidationFailedError(
+                f"Donation amount must be between ₹1 and ₹{int(MAX_DONATION_AMOUNT):,}."
+            )
+
         if self._gateway is None:
             raise ValidationFailedError("Online payments are not configured for this deployment.")
 

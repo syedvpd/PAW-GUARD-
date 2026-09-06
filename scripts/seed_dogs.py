@@ -22,7 +22,10 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from pawguard.core.config import get_settings
 from pawguard.modules.auth import models as auth_models  # noqa: F401  registers User for AuditMixin FKs
 from pawguard.modules.companion_pet import models as companion_pet_models  # noqa: F401  registers SafetyTag
-from pawguard.modules.foster import models as foster_models  # noqa: F401  registers foster_profiles
+from pawguard.modules.adoption.models import (  # noqa: F401
+    AdoptionApplication,
+    AdoptionStatus,
+)
 from pawguard.modules.rescue import models as rescue_models  # noqa: F401  registers rescue_requests
 from pawguard.modules.shelter import models as shelter_models  # noqa: F401  registers shelter_sections
 from pawguard.modules.dog.models import (
@@ -308,8 +311,26 @@ async def seed_dogs() -> None:
                 .first()
             )
             if existing:
-                existing.image_urls = dog_data.get("image_urls")
-                existing.status = dog_data.get("status", existing.status)
+                existing.image_urls = dog_data.get("image_urls", existing.image_urls)
+                # Protect adopted state: if existing dog is already ADOPTED or has an authoritative COMPLETED adoption
+                has_completed_app = (
+                    await session.execute(
+                        select(AdoptionApplication.id).where(
+                            AdoptionApplication.dog_id == existing.id,
+                            AdoptionApplication.status == AdoptionStatus.COMPLETED,
+                            AdoptionApplication.deleted_at.is_(None),
+                        ).limit(1)
+                    )
+                ).scalar_one_or_none() is not None
+
+                if existing.status == DogStatus.ADOPTED or has_completed_app:
+                    existing.status = DogStatus.ADOPTED
+                    existing.is_adoptable = False
+                else:
+                    existing.status = dog_data.get("status", existing.status)
+                    if "is_adoptable" in dog_data:
+                        existing.is_adoptable = dog_data["is_adoptable"]
+
                 if dog_data["registration_number"] == "DOG-2026-0011":
                     adopted_dog_obj = existing
                 continue

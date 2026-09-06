@@ -206,7 +206,7 @@ class TestAdoptionService:
             id=app_id,
             dog_id=dog_id,
             adopter_id=uuid.uuid4(),
-            status=AdoptionStatus.HOME_CHECK,
+            status=AdoptionStatus.APPROVED,
             residential_status="owned",
         )
         mock_repo.get_by_id.side_effect = [app, app, app]
@@ -223,9 +223,9 @@ class TestAdoptionService:
         mock_dog_repo.get_by_id.return_value = dog
         mock_dog_repo.get_by_id_for_update.return_value = dog
         result = await service.update_application_status(
-            app_id, AdoptionStatus.APPROVED, actor_id=uuid.uuid4()
+            app_id, AdoptionStatus.COMPLETED, actor_id=uuid.uuid4()
         )
-        assert result.status == AdoptionStatus.APPROVED
+        assert result.status == AdoptionStatus.COMPLETED
         mock_dog_repo.get_by_id_for_update.assert_awaited_once_with(dog_id)
 
     @pytest.mark.asyncio
@@ -335,10 +335,10 @@ class TestAdoptionService:
         mock_dog_repo.get_by_id_for_update.return_value = dog
         result = await service.update_application_status(app_id, AdoptionStatus.HOME_CHECK)
         assert result.status == AdoptionStatus.HOME_CHECK
-        assert dog.is_adoptable is False
+        assert dog.is_adoptable is True
 
     @pytest.mark.asyncio
-    async def test_home_check_conflicts_with_other_locked_application(
+    async def test_completed_conflicts_with_other_completed_application(
         self, service, mock_repo, mock_dog_repo
     ):
         app_id = uuid.uuid4()
@@ -347,21 +347,87 @@ class TestAdoptionService:
             id=app_id,
             dog_id=dog_id,
             adopter_id=uuid.uuid4(),
-            status=AdoptionStatus.INTERVIEW,
-            interview_completed_at=datetime.now(UTC),
+            status=AdoptionStatus.APPROVED,
             residential_status="owned",
         )
         other_app = AdoptionApplication(
             id=uuid.uuid4(),
             dog_id=dog_id,
             adopter_id=uuid.uuid4(),
-            status=AdoptionStatus.HOME_CHECK,
+            status=AdoptionStatus.COMPLETED,
             residential_status="owned",
         )
         mock_repo.get_by_id.return_value = app
         mock_repo.get_approved_application_for_dog.return_value = other_app
-        with pytest.raises(ConflictError, match="already reached home inspection"):
-            await service.update_application_status(app_id, AdoptionStatus.HOME_CHECK)
+        with pytest.raises(ConflictError, match="already completed adoption"):
+            await service.update_application_status(app_id, AdoptionStatus.COMPLETED)
+
+    @pytest.mark.asyncio
+    async def test_adoption_locking_rules_a_b_c_d(self, service, mock_repo, mock_dog_repo):
+        dog_id = uuid.uuid4()
+        dog = DogProfile(
+            id=dog_id,
+            registration_number="DOG-001",
+            name="Max",
+            breed="Indie",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=True,
+        )
+        mock_dog_repo.get_by_id.return_value = dog
+        mock_dog_repo.get_by_id_for_update.return_value = dog
+        mock_repo.get_application_by_adopter_and_dog.return_value = None
+
+        # A. Applicant A reaches HOME_CHECK -> Applicant B can still apply
+        mock_repo.get_approved_application_for_dog.return_value = (
+            None  # Only COMPLETED is returned by repo
+        )
+        payload_b = AdoptionApplicationCreate(dog_id=dog_id, residential_status="owned")
+        app_b_id = uuid.uuid4()
+        mock_repo.create.return_value = AdoptionApplication(
+            id=app_b_id,
+            dog_id=dog_id,
+            adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.SUBMITTED,
+            residential_status="owned",
+        )
+        created_app = await service.apply_for_adoption(uuid.uuid4(), payload_b)
+        assert created_app is not None
+        assert dog.is_adoptable is True
+
+        # B. Applicant A reaches APPROVED -> Applicant B can still apply
+        mock_repo.get_approved_application_for_dog.return_value = None
+        created_app_2 = await service.apply_for_adoption(uuid.uuid4(), payload_b)
+        assert created_app_2 is not None
+        assert dog.is_adoptable is True
+
+        # C. Applicant A reaches COMPLETED -> Applicant B cannot apply
+        completed_app_a = AdoptionApplication(
+            id=uuid.uuid4(),
+            dog_id=dog_id,
+            adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.COMPLETED,
+            residential_status="owned",
+        )
+        mock_repo.get_approved_application_for_dog.return_value = completed_app_a
+        with pytest.raises(
+            ConflictError, match="already under an approved adoption process|already been adopted"
+        ):
+            await service.apply_for_adoption(uuid.uuid4(), payload_b)
+
+        # D. Completed dog becomes ADOPTED / is_adoptable=false according to completion workflow
+        app_to_complete = AdoptionApplication(
+            id=app_b_id,
+            dog_id=dog_id,
+            adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.APPROVED,
+            residential_status="owned",
+        )
+        mock_repo.get_by_id.return_value = app_to_complete
+        mock_repo.get_approved_application_for_dog.return_value = None  # No prior completed app
+        await service.update_application_status(app_b_id, AdoptionStatus.COMPLETED)
+        assert dog.status == DogStatus.ADOPTED
+        assert dog.is_adoptable is False
 
     @pytest.mark.asyncio
     async def test_get_application(self, service, mock_repo):

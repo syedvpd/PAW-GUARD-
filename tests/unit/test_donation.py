@@ -1159,3 +1159,31 @@ class TestSponsorshipValidation:
         )
         with pytest.raises(ValidationFailedError, match="greater than zero"):
             await service.create_sponsorship(user_id, payload)
+
+    def test_donation_create_schema_amount_limits(self):
+        from pydantic import ValidationError
+
+        # Valid amounts
+        for valid_amt in (1.0, 10.0, 500_000.0):
+            p = DonationCreate(amount=valid_amt, currency="INR")
+            assert p.amount == valid_amt
+
+        # Invalid amounts (> 500,000 or < 1.0)
+        for invalid_amt in (500_000.01, 1_000_000.0, 0.99, 0.0, -10.0):
+            with pytest.raises(ValidationError):
+                DonationCreate(amount=invalid_amt, currency="INR")
+
+    @pytest.mark.asyncio
+    async def test_make_donation_enforces_maximum_at_service_level(self, service, mock_repo):
+        user_id = uuid.uuid4()
+        donor_id = uuid.uuid4()
+        mock_repo.get_donor_by_user_id.return_value = DonorProfile(id=donor_id, user_id=user_id)
+
+        # Bypass schema via model_construct
+        oversized_payload = DonationCreate.model_construct(amount=500_000.01, currency="INR")
+        with pytest.raises(ValidationFailedError, match="between ₹1 and ₹500,000"):
+            await service.make_donation(user_id, oversized_payload)
+
+        # Also for initiate_online_donation
+        with pytest.raises(ValidationFailedError, match="between ₹1 and ₹500,000"):
+            await service.initiate_online_donation(user_id, oversized_payload)

@@ -2,6 +2,7 @@
 
 import uuid
 from collections.abc import Sequence
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -125,11 +126,40 @@ class LostFoundRepository:
         species: Species,
         breed_observed: str,
         location_address: str,
+        color_observed: str | None = None,
+        photo_object_key: str | None = None,
+        window_minutes: int = 120,
     ) -> FoundReport | None:
         """Find an existing ACTIVE found report for duplicate prevention.
 
-        Matches user_id + species + breed_observed + location_address for ACTIVE reports.
+        Prevents accidental double-clicks, immediate retry submissions, and identical incident reports
+        within a scoped duplicate window (default 2 hours) while ensuring genuinely different incidents
+        (e.g. different animal color or reported outside the window) and non-ACTIVE reports (RESOLVED, EXPIRED)
+        are permitted.
         """
+        # If the exact same permanent photo upload key was provided for an active report by this user,
+        # it is an immediate definitive duplicate incident regardless of timestamp.
+        if photo_object_key and photo_object_key.strip():
+            photo_stmt = (
+                select(FoundReport)
+                .options(
+                    selectinload(FoundReport.user).selectinload(User.roles),
+                    selectinload(FoundReport.media),
+                )
+                .where(
+                    FoundReport.user_id == user_id,
+                    FoundReport.status == ReportStatus.ACTIVE,
+                    FoundReport.deleted_at.is_(None),
+                    FoundReport.photo_object_key == photo_object_key.strip(),
+                )
+                .order_by(FoundReport.created_at.desc())
+                .limit(1)
+            )
+            photo_match = (await self._session.execute(photo_stmt)).scalar_one_or_none()
+            if photo_match is not None:
+                return photo_match
+
+        cutoff_time = datetime.now(UTC) - timedelta(minutes=window_minutes)
         stmt = (
             select(FoundReport)
             .options(
@@ -144,10 +174,15 @@ class LostFoundRepository:
                 func.lower(func.trim(FoundReport.breed_observed)) == breed_observed.strip().lower(),
                 func.lower(func.trim(FoundReport.location_address))
                 == location_address.strip().lower(),
+                FoundReport.created_at >= cutoff_time,
             )
-            .order_by(FoundReport.created_at.desc())
-            .limit(1)
         )
+        if color_observed and color_observed.strip():
+            stmt = stmt.where(
+                func.lower(func.trim(FoundReport.color_observed)) == color_observed.strip().lower()
+            )
+
+        stmt = stmt.order_by(FoundReport.created_at.desc()).limit(1)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def create_found_report(self, report: FoundReport) -> FoundReport:

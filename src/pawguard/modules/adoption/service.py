@@ -318,11 +318,7 @@ class AdoptionService:
                         "Complete the interview call before scheduling the home inspection."
                     )
 
-            if new_status in (
-                AdoptionStatus.HOME_CHECK,
-                AdoptionStatus.APPROVED,
-                AdoptionStatus.COMPLETED,
-            ):
+            if new_status == AdoptionStatus.COMPLETED:
                 lock_token = str(uuid.uuid4())
                 lock_acquired = False
                 cache_svc = None
@@ -346,14 +342,12 @@ class AdoptionService:
                     )
                     if existing_approved is not None and existing_approved.id != app_id:
                         raise ConflictError(
-                            "Another application has already reached home inspection or "
-                            "approval for this dog."
+                            "Another application has already completed adoption for this dog."
                         )
 
                     if dog is not None:
                         dog.is_adoptable = False
-                        if new_status == AdoptionStatus.COMPLETED:
-                            dog.status = DogStatus.ADOPTED
+                        dog.status = DogStatus.ADOPTED
                 finally:
                     if lock_acquired and cache_svc is not None:
                         await cache_svc.release_lock(f"lock:dog:{app.dog_id}", lock_token)
@@ -424,7 +418,7 @@ class AdoptionService:
                     "Complete the interview call before scheduling the home inspection."
                 )
 
-        if status in (AdoptionStatus.HOME_CHECK, AdoptionStatus.APPROVED, AdoptionStatus.COMPLETED):
+        if status == AdoptionStatus.COMPLETED:
             lock_token = str(uuid.uuid4())
             lock_acquired = False
             cache_svc = None
@@ -446,14 +440,12 @@ class AdoptionService:
                 existing_approved = await self._repo.get_approved_application_for_dog(app.dog_id)
                 if existing_approved is not None and existing_approved.id != app_id:
                     raise ConflictError(
-                        "Another application has already reached home inspection or "
-                        "approval for this dog."
+                        "Another application has already completed adoption for this dog."
                     )
 
                 if dog is not None:
                     dog.is_adoptable = False
-                    if status == AdoptionStatus.COMPLETED:
-                        dog.status = DogStatus.ADOPTED
+                    dog.status = DogStatus.ADOPTED
             finally:
                 if lock_acquired and cache_svc is not None:
                     await cache_svc.release_lock(f"lock:dog:{app.dog_id}", lock_token)

@@ -11,7 +11,12 @@ from typing import Any
 
 from arq import ArqRedis
 
-from pawguard.core.exceptions import ForbiddenError, NotFoundError, ValidationFailedError
+from pawguard.core.exceptions import (
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+    ValidationFailedError,
+)
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
@@ -125,6 +130,10 @@ class LostFoundService:
             lock_acquired = await cache_svc.acquire_lock(
                 f"lock:lost:{user_id}:{ident_hash}", lock_token, expire_ms=10000
             )
+            if not lock_acquired:
+                raise ConflictError(
+                    "A lost pet report for this incident is currently being processed. Please try again in a few moments."
+                )
 
         try:
             # Duplicate prevention check: return existing active report if identical
@@ -299,12 +308,16 @@ class LostFoundService:
         cache_svc = None
         ident_hash = ""
         if self._redis is not None and not is_null_redis(self._redis):
-            ident_str = f"{user_id}:{payload.species}:{payload.breed_observed.strip().lower()}:{payload.location_address.strip().lower()}"
+            ident_str = f"{user_id}:{payload.species}:{payload.breed_observed.strip().lower()}:{payload.color_observed.strip().lower()}:{payload.location_address.strip().lower()}"
             ident_hash = hashlib.sha256(ident_str.encode()).hexdigest()[:16]
             cache_svc = CacheService(self._redis, namespace="lost_found")
             lock_acquired = await cache_svc.acquire_lock(
                 f"lock:found:{user_id}:{ident_hash}", lock_token, expire_ms=10000
             )
+            if not lock_acquired:
+                raise ConflictError(
+                    "A found pet report for this incident is currently being processed. Please try again in a few moments."
+                )
 
         try:
             # Duplicate prevention check: return existing active report if identical
@@ -313,6 +326,8 @@ class LostFoundService:
                 species=payload.species,
                 breed_observed=payload.breed_observed,
                 location_address=payload.location_address,
+                color_observed=payload.color_observed,
+                photo_object_key=payload.photo_object_key,
             )
             if existing is not None and isinstance(existing, FoundReport):
                 logger.info(

@@ -147,15 +147,9 @@ class AdoptionRepository:
         result = await self._session.execute(stmt)
         return result.rowcount  # type: ignore[attr-defined,no-any-return]
 
-    # Statuses that exclusively lock a dog against other applications. Per the
-    # PRR, exclusivity starts once an application reaches home-inspection
-    # approval (HOME_CHECK), not just final APPROVED - two applicants must
-    # not both be mid-inspection for the same dog at once.
-    LOCKING_STATUSES = (
-        AdoptionStatus.HOME_CHECK,
-        AdoptionStatus.APPROVED,
-        AdoptionStatus.COMPLETED,
-    )
+    # Statuses that exclusively lock a dog against other applications.
+    # Only COMPLETED adoptions prevent new applications.
+    LOCKING_STATUSES = (AdoptionStatus.COMPLETED,)
 
     async def get_approved_application_for_dog(
         self, dog_id: uuid.UUID

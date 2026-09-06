@@ -87,7 +87,6 @@ async def get_storage_settings() -> ApiResponse[dict[str, Any]]:
 @router.get(
     "/public-content",
     response_model=ApiResponse[PublicContentResponse],
-    dependencies=[Depends(require_permission("public:read"))],
 )
 async def get_public_content(
     service: PublicContentService = Depends(get_public_content_service),
