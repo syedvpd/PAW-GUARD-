@@ -223,6 +223,9 @@ class LostFoundService:
                 self._repo._session.add(m)
             await self._repo._session.flush()
 
+            reloaded = await self._repo.get_lost_report_by_id(report.id)
+            report = reloaded or report
+
             await self._run_matching_for_lost(report)
             if self._audit and actor_id:
                 await self._audit.record(
@@ -232,8 +235,7 @@ class LostFoundService:
                     user_agent="",
                     metadata={"report_id": str(report.id), "type": "lost"},
                 )
-            reloaded = await self._repo.get_lost_report_by_id(report.id)
-            return reloaded or report
+            return report
         finally:
             if lock_acquired and cache_svc is not None:
                 await cache_svc.release_lock(f"lock:lost:{user_id}:{ident_hash}", lock_token)
@@ -403,6 +405,9 @@ class LostFoundService:
                 self._repo._session.add(m)
             await self._repo._session.flush()
 
+            reloaded = await self._repo.get_found_report_by_id(report.id)
+            report = reloaded or report
+
             await self._run_matching_for_found(report)
             if self._audit and actor_id:
                 await self._audit.record(
@@ -412,8 +417,7 @@ class LostFoundService:
                     user_agent="",
                     metadata={"report_id": str(report.id), "type": "found"},
                 )
-            reloaded = await self._repo.get_found_report_by_id(report.id)
-            return reloaded or report
+            return report
         finally:
             if lock_acquired and cache_svc is not None:
                 await cache_svc.release_lock(f"lock:found:{user_id}:{ident_hash}", lock_token)

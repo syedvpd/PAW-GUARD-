@@ -7,7 +7,7 @@ resolves the stored object key into a fresh signed download URL.
 """
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -261,6 +261,90 @@ class TestFoundReportPhotoFlow:
             FOUND_ENDPOINT, headers=headers, json=_found_payload("dogs/x.jpg", None)
         )
         assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+class TestMatchNotificationRegression:
+    """A submission that creates a MATCH must not return HTTP 500.
+
+    Regression for the async eager-load bug: ``_notify_match`` read
+    ``lost.user`` / ``found.user`` off a freshly flushed report whose reporter
+    relationship was not eager-loaded, triggering ``MissingGreenlet`` (an
+    InvalidRequestError -> DATABASE_QUERY_FAILED). The new report is now
+    eagerly reloaded (identity-mapped) before the matcher runs.
+    """
+
+    async def test_lost_report_matching_active_found_returns_201(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        finder_headers = await _auth(client, db_session)
+        found = await client.post(
+            FOUND_ENDPOINT,
+            headers=finder_headers,
+            json={
+                "species": "dog",
+                "breed_observed": "labrador",
+                "color_observed": "golden",
+                "location_address": "Indiranagar 100ft Road, Bengaluru",
+                "latitude": 12.971598,
+                "longitude": 77.594562,
+                "found_at": datetime.now(UTC).isoformat(),
+            },
+        )
+        assert found.status_code == 201, found.text
+
+        owner_headers = await _auth(client, db_session)
+        lost = await client.post(
+            LOST_ENDPOINT,
+            headers=owner_headers,
+            json={
+                "species": "dog",
+                "pet_name": f"MatchLost_{uuid.uuid4().hex[:8]}",
+                "breed": "labrador",
+                "color": "golden",
+                "location_address": "Indiranagar 100ft Road, Bengaluru",
+                "latitude": 12.971600,
+                "longitude": 77.594600,
+                "lost_at": (datetime.now(UTC) - timedelta(hours=1)).isoformat(),
+            },
+        )
+        assert lost.status_code == 201, lost.text
+
+    async def test_found_report_matching_active_lost_returns_201(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        owner_headers = await _auth(client, db_session)
+        lost = await client.post(
+            LOST_ENDPOINT,
+            headers=owner_headers,
+            json={
+                "species": "dog",
+                "pet_name": f"MatchLost_{uuid.uuid4().hex[:8]}",
+                "breed": "labrador",
+                "color": "golden",
+                "location_address": "Indiranagar 100ft Road, Bengaluru",
+                "latitude": 12.971598,
+                "longitude": 77.594562,
+                "lost_at": (datetime.now(UTC) - timedelta(hours=1)).isoformat(),
+            },
+        )
+        assert lost.status_code == 201, lost.text
+
+        finder_headers = await _auth(client, db_session)
+        found = await client.post(
+            FOUND_ENDPOINT,
+            headers=finder_headers,
+            json={
+                "species": "dog",
+                "breed_observed": "labrador",
+                "color_observed": "golden",
+                "location_address": "Indiranagar 100ft Road, Bengaluru",
+                "latitude": 12.971600,
+                "longitude": 77.594600,
+                "found_at": datetime.now(UTC).isoformat(),
+            },
+        )
+        assert found.status_code == 201, found.text
 
 
 @pytest.mark.asyncio

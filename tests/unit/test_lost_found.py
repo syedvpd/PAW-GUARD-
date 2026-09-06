@@ -237,6 +237,102 @@ class TestLostFoundService:
         assert response_data.breed_observed == "labrador"
 
     @pytest.mark.asyncio
+    async def test_report_lost_pet_eager_loads_reporter_before_matching(
+        self, service, mock_repo, mock_audit
+    ):
+        """Match notifications must never lazy-load the freshly flushed report's
+        reporter relationship (async MissingGreenlet -> DATABASE_QUERY_FAILED).
+        The report is eagerly reloaded (repo get_lost_report_by_id) BEFORE the
+        matcher runs so _notify_match reads a populated `lost.user`."""
+        user_id = uuid.uuid4()
+        report_id = uuid.uuid4()
+        order: list[str] = []
+
+        async def reload_side_effect(*_args, **_kwargs):
+            order.append("reload")
+            return LostReport(
+                id=report_id,
+                user_id=user_id,
+                species=Species.CAT,
+                pet_name="Max",
+                breed="persian",
+                color="white",
+                location_address="123 Main St",
+                lost_at=datetime.now(UTC),
+                status=ReportStatus.ACTIVE,
+                created_at=datetime.now(UTC),
+                media=[],
+                user=None,
+            )
+
+        async def match_side_effect(*_args, **_kwargs):
+            order.append("match")
+            return []
+
+        mock_repo.create_lost_report.return_value = None
+        mock_repo.get_lost_report_by_id.side_effect = reload_side_effect
+        mock_repo.list_found_reports.side_effect = match_side_effect
+        mock_repo._session.flush.return_value = None
+
+        payload = LostReportCreate(
+            species=Species.CAT,
+            pet_name="Max",
+            breed="Persian",
+            color="White",
+            location_address="123 Main St",
+            lost_at=datetime.now(UTC),
+        )
+        await service.report_lost_pet(user_id, payload)
+        assert order == ["reload", "match"]
+
+    @pytest.mark.asyncio
+    async def test_report_found_pet_eager_loads_reporter_before_matching(
+        self, service, mock_repo, mock_audit
+    ):
+        """Match notifications must never lazy-load the freshly flushed report's
+        reporter relationship (async MissingGreenlet -> DATABASE_QUERY_FAILED).
+        The report is eagerly reloaded (repo get_found_report_by_id) BEFORE the
+        matcher runs so _notify_match reads a populated `found.user`."""
+        user_id = uuid.uuid4()
+        report_id = uuid.uuid4()
+        order: list[str] = []
+
+        async def reload_side_effect(*_args, **_kwargs):
+            order.append("reload")
+            return FoundReport(
+                id=report_id,
+                user_id=user_id,
+                species=Species.DOG,
+                breed_observed="labrador",
+                color_observed="golden",
+                location_address="456 Oak St",
+                found_at=datetime.now(UTC),
+                status=ReportStatus.ACTIVE,
+                created_at=datetime.now(UTC),
+                media=[],
+                user=None,
+            )
+
+        async def match_side_effect(*_args, **_kwargs):
+            order.append("match")
+            return []
+
+        mock_repo.create_found_report.return_value = None
+        mock_repo.get_found_report_by_id.side_effect = reload_side_effect
+        mock_repo.list_lost_reports.side_effect = match_side_effect
+        mock_repo._session.flush.return_value = None
+
+        payload = FoundReportCreate(
+            species=Species.DOG,
+            breed_observed="Labrador",
+            color_observed="Golden",
+            location_address="456 Oak St",
+            found_at=datetime.now(UTC),
+        )
+        await service.report_found_pet(user_id, payload)
+        assert order == ["reload", "match"]
+
+    @pytest.mark.asyncio
     async def test_resolve_lost_report(self, service, mock_repo):
         report_id = uuid.uuid4()
         report = LostReport(
