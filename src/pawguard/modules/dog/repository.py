@@ -84,6 +84,13 @@ class DogRepository:
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    async def get_by_rescue_case_id(self, rescue_case_id: uuid.UUID) -> DogProfile | None:
+        """Find a non-deleted dog associated with a rescue case."""
+        stmt = select(DogProfile).where(
+            DogProfile.rescue_case_id == rescue_case_id, DogProfile.deleted_at.is_(None)
+        )
+        return (await self._session.execute(stmt)).scalars().first()
+
     async def get_duplicate_by_details(
         self,
         *,

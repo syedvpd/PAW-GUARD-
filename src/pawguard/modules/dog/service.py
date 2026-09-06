@@ -214,85 +214,133 @@ class DogService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> DogProfile:
-        # Prevent duplicate intake (PRR 3.4): before allocating identifiers,
-        # reject a dog that already exists in the registry with the same
-        # identifying details.
-        duplicate = await self._repo.get_duplicate_by_details(
-            name=payload.name,
-            breed=payload.breed,
-            gender=payload.gender,
-            color=payload.color,
-            distinctive_markers=payload.distinctive_markers,
-        )
-        if duplicate is not None:
-            raise ConflictError(
-                "A dog with these details (name, breed, gender, color) is already registered."
-            )
-
-        if payload.microchip_id:
-            existing_chip = await self._repo.get_by_microchip(payload.microchip_id)
-            if existing_chip is not None:
-                raise ConflictError("A dog with this microchip ID is already registered.")
-            microchip_id = payload.microchip_id
-        else:
-            microchip_id = await self._allocate_microchip_id()
+        # If this intake is linked to a rescue case, check if an auto-created profile already exists
+        existing_dog: DogProfile | None = None
+        if payload.rescue_case_id:
+            existing_dog = await self._repo.get_by_rescue_case_id(payload.rescue_case_id)
 
         dog: DogProfile | None = None
-        for _ in range(_MAX_REGISTRATION_RETRIES):
-            year_str = datetime.now(UTC).strftime("%Y")
-            rand_suffix = "".join(secrets.choice("0123456789") for _ in range(4))
-            registration_number = f"DOG-{year_str}-{rand_suffix}"
+        if existing_dog is not None:
+            # Formally register the auto-admitted rescue case with official shelter details
+            if payload.microchip_id and payload.microchip_id != existing_dog.microchip_id:
+                existing_chip = await self._repo.get_by_microchip(payload.microchip_id)
+                if existing_chip is not None and existing_chip.id != existing_dog.id:
+                    raise ConflictError("A dog with this microchip ID is already registered.")
+                existing_dog.microchip_id = payload.microchip_id
 
-            # Fast path: skip an already-taken number without a DB error.
-            if await self._repo.get_by_registration(registration_number) is not None:
-                continue
+            existing_dog.name = payload.name
+            existing_dog.breed = payload.breed
+            existing_dog.breed_classification = (
+                payload.breed_classification or _infer_breed_classification(payload.breed)
+            )
+            existing_dog.gender = payload.gender
+            existing_dog.is_spayed_neutered = payload.is_spayed_neutered
+            existing_dog.estimated_age = payload.estimated_age
+            existing_dog.age_months = (
+                payload.age_months
+                if payload.age_months is not None
+                else _parse_age_months(payload.estimated_age)
+            )
+            existing_dog.weight = payload.weight
+            existing_dog.color = payload.color
+            existing_dog.temperament = payload.temperament
+            existing_dog.ear_shape = payload.ear_shape
+            existing_dog.tail_type = payload.tail_type
+            existing_dog.distinctive_markers = payload.distinctive_markers
+            if payload.image_urls:
+                existing_dog.image_urls = payload.image_urls
+            existing_dog.status = payload.status or DogStatus.SHELTER
+            if payload.shelter_facility_id:
+                existing_dog.shelter_facility_id = payload.shelter_facility_id
+            if payload.section_id:
+                existing_dog.section_id = payload.section_id
+            if payload.kennel_id:
+                existing_dog.kennel_id = payload.kennel_id
+            if payload.foster_home_id:
+                existing_dog.foster_home_id = payload.foster_home_id
+            existing_dog.is_adoptable = False
+            existing_dog.is_quarantine_passed = payload.is_quarantine_passed
 
-            dog = DogProfile(
-                registration_number=registration_number,
-                rescue_case_id=payload.rescue_case_id,
-                microchip_id=microchip_id,
+            await self._repo._session.flush()
+            dog = existing_dog
+        else:
+            # Prevent duplicate intake (PRR 3.4): before allocating identifiers,
+            # reject a dog that already exists in the registry with the same identifying details.
+            duplicate = await self._repo.get_duplicate_by_details(
                 name=payload.name,
                 breed=payload.breed,
-                breed_classification=(
-                    payload.breed_classification or _infer_breed_classification(payload.breed)
-                ),
                 gender=payload.gender,
-                is_spayed_neutered=payload.is_spayed_neutered,
-                estimated_age=payload.estimated_age,
-                age_months=(
-                    payload.age_months
-                    if payload.age_months is not None
-                    else _parse_age_months(payload.estimated_age)
-                ),
-                weight=payload.weight,
                 color=payload.color,
-                temperament=payload.temperament,
-                ear_shape=payload.ear_shape,
-                tail_type=payload.tail_type,
                 distinctive_markers=payload.distinctive_markers,
-                image_urls=payload.image_urls or None,
-                status=payload.status or DogStatus.RESCUED,
-                shelter_facility_id=payload.shelter_facility_id,
-                section_id=payload.section_id,
-                kennel_id=payload.kennel_id,
-                foster_home_id=payload.foster_home_id,
-                is_adoptable=False,
-                is_quarantine_passed=payload.is_quarantine_passed,
             )
-            try:
-                dog = await self._repo.create(dog)
-            except IntegrityError:
-                # A concurrent request claimed the same registration number
-                # between the existence check and the flush - roll back and
-                # retry with a fresh suffix.
-                await self._repo._session.rollback()
-                continue
-            break
+            if duplicate is not None:
+                raise ConflictError(
+                    "A dog with these details (name, breed, gender, color) is already registered."
+                )
 
-        if dog is None:
-            raise ConflictError(
-                "Unable to allocate a unique dog registration number. Please retry."
-            )
+            if payload.microchip_id:
+                existing_chip = await self._repo.get_by_microchip(payload.microchip_id)
+                if existing_chip is not None:
+                    raise ConflictError("A dog with this microchip ID is already registered.")
+                microchip_id = payload.microchip_id
+            else:
+                microchip_id = await self._allocate_microchip_id()
+
+            for _ in range(_MAX_REGISTRATION_RETRIES):
+                year_str = datetime.now(UTC).strftime("%Y")
+                rand_suffix = "".join(secrets.choice("0123456789") for _ in range(4))
+                registration_number = f"DOG-{year_str}-{rand_suffix}"
+
+                # Fast path: skip an already-taken number without a DB error.
+                if await self._repo.get_by_registration(registration_number) is not None:
+                    continue
+
+                dog = DogProfile(
+                    registration_number=registration_number,
+                    rescue_case_id=payload.rescue_case_id,
+                    microchip_id=microchip_id,
+                    name=payload.name,
+                    breed=payload.breed,
+                    breed_classification=(
+                        payload.breed_classification or _infer_breed_classification(payload.breed)
+                    ),
+                    gender=payload.gender,
+                    is_spayed_neutered=payload.is_spayed_neutered,
+                    estimated_age=payload.estimated_age,
+                    age_months=(
+                        payload.age_months
+                        if payload.age_months is not None
+                        else _parse_age_months(payload.estimated_age)
+                    ),
+                    weight=payload.weight,
+                    color=payload.color,
+                    temperament=payload.temperament,
+                    ear_shape=payload.ear_shape,
+                    tail_type=payload.tail_type,
+                    distinctive_markers=payload.distinctive_markers,
+                    image_urls=payload.image_urls or None,
+                    status=payload.status or DogStatus.SHELTER,
+                    shelter_facility_id=payload.shelter_facility_id,
+                    section_id=payload.section_id,
+                    kennel_id=payload.kennel_id,
+                    foster_home_id=payload.foster_home_id,
+                    is_adoptable=False,
+                    is_quarantine_passed=payload.is_quarantine_passed,
+                )
+                try:
+                    dog = await self._repo.create(dog)
+                except IntegrityError:
+                    # A concurrent request claimed the same registration number
+                    # between the existence check and the flush - roll back and
+                    # retry with a fresh suffix.
+                    await self._repo._session.rollback()
+                    continue
+                break
+
+            if dog is None:
+                raise ConflictError(
+                    "Unable to allocate a unique dog registration number. Please retry."
+                )
 
         if payload.weight is not None and payload.weight > 0:
             await self._repo.create_weight_log(
@@ -315,16 +363,32 @@ class DogService:
         )
 
         if payload.rescue_case_id:
+            from sqlalchemy import select
+            from sqlalchemy.orm import selectinload
+
             from pawguard.modules.rescue.models import RescueRequest, RescueStatus
 
-            res_req = await self._repo._session.get(RescueRequest, payload.rescue_case_id)
-            if res_req is not None and res_req.status in (
-                RescueStatus.LOCATED,
-                RescueStatus.RESCUED,
-            ):
-                res_req.status = RescueStatus.ADMITTED
-                if hasattr(res_req, "dispatch") and res_req.dispatch is not None:
-                    res_req.dispatch.admitted_at = datetime.now(UTC)
+            stmt = (
+                select(RescueRequest)
+                .options(selectinload(RescueRequest.dispatch))
+                .where(RescueRequest.id == payload.rescue_case_id)
+            )
+            import inspect
+
+            exec_res = await self._repo._session.execute(stmt)
+            if inspect.isawaitable(exec_res):
+                exec_res = await exec_res
+            res_req = (
+                exec_res.scalar_one_or_none() if hasattr(exec_res, "scalar_one_or_none") else None
+            )
+            if inspect.isawaitable(res_req):
+                res_req = await res_req
+            if res_req is not None:
+                if res_req.status != RescueStatus.ADMITTED:
+                    res_req.status = RescueStatus.ADMITTED
+                if res_req.dispatch is not None:
+                    if not res_req.dispatch.admitted_at:
+                        res_req.dispatch.admitted_at = datetime.now(UTC)
                 await self._repo._session.flush()
 
         increment_counter("pawguard_dogs_registered_total")
@@ -336,7 +400,7 @@ class DogService:
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
-                metadata={"dog_id": str(dog.id), "registration_number": registration_number},
+                metadata={"dog_id": str(dog.id), "registration_number": dog.registration_number},
             )
 
         return dog

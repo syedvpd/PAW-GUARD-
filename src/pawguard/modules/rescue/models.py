@@ -22,6 +22,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pawguard.db.base import Base
 from pawguard.db.mixins import AuditMixin, SoftDeleteMixin, TimestampMixin, UUIDPkMixin
+from pawguard.modules.auth.models import User  # noqa: F401
+from pawguard.modules.dog.models import DogProfile  # noqa: F401
 from pawguard.modules.lost_found.models import ReportMedia
 
 

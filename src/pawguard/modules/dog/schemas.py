@@ -65,6 +65,77 @@ class DogProfileCreate(BaseModel):
     @classmethod
     def _normalize_intake_fields(cls, data: Any) -> Any:
         if isinstance(data, dict):
+            # 1. Aliases for common frontend form fields
+            if not data.get("name"):
+                data["name"] = (
+                    data.get("dog_name") or data.get("code_name") or data.get("shelter_name")
+                )
+            if not data.get("rescue_case_id"):
+                data["rescue_case_id"] = data.get("rescue_id") or data.get("case_id")
+            if not data.get("gender") and data.get("sex"):
+                data["gender"] = data.get("sex")
+            if not data.get("distinctive_markers"):
+                data["distinctive_markers"] = data.get("identification_marks") or data.get(
+                    "markers"
+                )
+
+            # 2. Coerce empty strings to None for UUID and optional string fields
+            for uuid_field in (
+                "rescue_case_id",
+                "shelter_facility_id",
+                "section_id",
+                "kennel_id",
+                "foster_home_id",
+                "microchip_id",
+                "breed_classification",
+                "temperament",
+                "ear_shape",
+                "tail_type",
+                "color",
+                "distinctive_markers",
+            ):
+                if data.get(uuid_field) == "":
+                    data[uuid_field] = None
+
+            # 3. Case-insensitive normalization for controlled enums
+            if isinstance(data.get("gender"), str):
+                g_str = data["gender"].strip().lower()
+                for g in DogGender:
+                    if g.value == g_str:
+                        data["gender"] = g
+                        break
+            if isinstance(data.get("status"), str):
+                s_str = data["status"].strip().lower()
+                for s in DogStatus:
+                    if s.value == s_str:
+                        data["status"] = s
+                        break
+            if isinstance(data.get("breed_classification"), str):
+                b_str = data["breed_classification"].strip().lower()
+                for b in DogBreedClassification:
+                    if b.value == b_str:
+                        data["breed_classification"] = b
+                        break
+            if isinstance(data.get("temperament"), str):
+                t_str = data["temperament"].strip().lower()
+                for t in DogTemperament:
+                    if t.value == t_str:
+                        data["temperament"] = t
+                        break
+            if isinstance(data.get("ear_shape"), str):
+                e_str = data["ear_shape"].strip().lower()
+                for e in DogEarShape:
+                    if e.value == e_str:
+                        data["ear_shape"] = e
+                        break
+            if isinstance(data.get("tail_type"), str):
+                tt_str = data["tail_type"].strip().lower()
+                for tt in DogTailType:
+                    if tt.value == tt_str:
+                        data["tail_type"] = tt
+                        break
+
+            # 4. Handle photos and image URLs
             photo = data.get("photo_url") or data.get("image_url")
             raw_urls = data.get("image_urls") or data.get("photo_gallery_urls") or []
             if isinstance(raw_urls, str):
@@ -75,6 +146,12 @@ class DogProfileCreate(BaseModel):
             if photo and str(photo).strip() not in urls:
                 urls.append(str(photo).strip())
             data["image_urls"] = urls
+
+            # 5. Age string normalization
+            if data.get("estimated_age") is not None and not isinstance(
+                data.get("estimated_age"), str
+            ):
+                data["estimated_age"] = str(data["estimated_age"])
         return data
 
     model_config = ConfigDict(
@@ -173,6 +250,8 @@ class DogProfileResponse(BaseModel):
     is_quarantine_passed: bool
     image_urls: list[str] = Field(default_factory=list)
     photo_gallery_urls: list[str] = Field(default_factory=list)
+    photo_url: str | None = None
+    image_url: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -188,9 +267,9 @@ class DogProfileResponse(BaseModel):
 
     @model_validator(mode="after")
     def _sync_photo_fields(self) -> "DogProfileResponse":
-        """Expose image_urls under photo_gallery_urls too so both field
-        names are available for different Flutter app consumers, and
-        dynamically convert raw S3 keys to fresh presigned download URLs."""
+        """Expose image_urls under photo_gallery_urls, photo_url, and image_url
+        so all field names are available for different web and mobile consumers,
+        and dynamically convert raw S3 keys to fresh presigned download URLs."""
         resolved = []
         if self.image_urls:
             from pawguard.services.storage_service import StorageService
@@ -204,6 +283,9 @@ class DogProfileResponse(BaseModel):
                     resolved.append(u)
         self.image_urls = resolved
         self.photo_gallery_urls = resolved
+        primary = resolved[0] if resolved else None
+        self.photo_url = primary
+        self.image_url = primary
         return self
 
     model_config = ConfigDict(from_attributes=True)

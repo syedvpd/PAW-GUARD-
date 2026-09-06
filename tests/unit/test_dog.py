@@ -23,6 +23,7 @@ from pawguard.modules.dog.models import (
 from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.dog.schemas import (
     DogProfileCreate,
+    DogProfileResponse,
     DogProfileUpdate,
     DogWeightLogCreate,
 )
@@ -936,3 +937,137 @@ class TestDogService:
         assert created.ear_shape == DogEarShape.FLOPPY
         assert created.tail_type == DogTailType.CURLED
         assert created.distinctive_markers == "White patch on chest"
+
+    @pytest.mark.asyncio
+    async def test_register_rescued_dog_new_profile(self, service, mock_repo, mock_audit):
+        """Test registration of a rescued dog without prior auto-created profile."""
+        rescue_id = uuid.uuid4()
+        mock_repo.get_by_rescue_case_id.return_value = None
+
+        def _mock_create(dog):
+            dog.id = uuid.uuid4()
+            dog.created_at = datetime.now(UTC)
+            dog.updated_at = datetime.now(UTC)
+            return dog
+
+        mock_repo.create.side_effect = _mock_create
+
+        from pawguard.modules.rescue.models import RescueRequest, RescueStatus
+
+        mock_rescue = MagicMock(spec=RescueRequest)
+        mock_rescue.status = RescueStatus.RESCUED
+        mock_rescue.dispatch = MagicMock()
+        mock_rescue.dispatch.admitted_at = None
+        mock_repo._session.get.return_value = mock_rescue
+        mock_repo._session.execute.return_value.scalar_one_or_none.return_value = mock_rescue
+
+        payload = DogProfileCreate.model_validate(
+            {
+                "rescue_case_id": str(rescue_id),
+                "name": "Rocky",
+                "breed": "German Shepherd Mix",
+                "gender": "MALE",
+                "status": "SHELTER",
+                "estimated_age": "3 years",
+                "weight": 22.5,
+                "color": "Black and Tan",
+                "photo_url": "https://storage.example.com/rescues/rocky.jpg",
+                "distinctive_markers": "Floppy left ear",
+            }
+        )
+
+        dog = await service.register_dog(payload, actor_id=uuid.uuid4())
+        assert dog.name == "Rocky"
+        assert dog.breed == "German Shepherd Mix"
+        assert dog.gender == "male"
+        assert dog.status == DogStatus.SHELTER
+        assert dog.image_urls == ["https://storage.example.com/rescues/rocky.jpg"]
+        assert dog.rescue_case_id == rescue_id
+        assert mock_rescue.status == RescueStatus.ADMITTED
+        assert mock_rescue.dispatch.admitted_at is not None
+
+        # Verify response model compatibility
+        response = DogProfileResponse.model_validate(dog)
+        assert response.photo_url == "https://storage.example.com/rescues/rocky.jpg"
+        assert response.image_url == "https://storage.example.com/rescues/rocky.jpg"
+        assert response.photo_gallery_urls == ["https://storage.example.com/rescues/rocky.jpg"]
+
+    @pytest.mark.asyncio
+    async def test_register_rescued_dog_updates_existing_placeholder(
+        self, service, mock_repo, mock_audit
+    ):
+        """Test registration when an auto-created placeholder profile already exists for the rescue."""
+        rescue_id = uuid.uuid4()
+        existing = _make_dog(
+            id=uuid.uuid4(),
+            registration_number="DOG-2026-9999",
+            name="Unnamed (RES-2026-101)",
+            breed="indie_mix",
+            gender="unknown",
+            status=DogStatus.RESCUED,
+            rescue_case_id=rescue_id,
+        )
+        mock_repo.get_by_rescue_case_id.return_value = existing
+
+        from pawguard.modules.rescue.models import RescueRequest, RescueStatus
+
+        mock_rescue = MagicMock(spec=RescueRequest)
+        mock_rescue.status = RescueStatus.ADMITTED
+        mock_rescue.dispatch = None
+        mock_repo._session.get.return_value = mock_rescue
+        mock_repo._session.execute.return_value.scalar_one_or_none.return_value = mock_rescue
+
+        payload = DogProfileCreate.model_validate(
+            {
+                "rescue_id": str(rescue_id),
+                "dog_name": "Barnaby",
+                "breed": "Golden Indie",
+                "sex": "MALE",
+                "status": "SHELTER",
+                "photo_gallery_urls": ["https://storage.example.com/barnaby1.jpg"],
+                "identification_marks": "White star",
+            }
+        )
+
+        dog = await service.register_dog(payload, actor_id=uuid.uuid4())
+        assert dog.id == existing.id
+        assert dog.registration_number == "DOG-2026-9999"
+        assert dog.name == "Barnaby"
+        assert dog.breed == "Golden Indie"
+        assert dog.gender == "male"
+        assert dog.status == DogStatus.SHELTER
+        assert dog.distinctive_markers == "White star"
+        assert dog.image_urls == ["https://storage.example.com/barnaby1.jpg"]
+        assert not mock_repo.create.called
+
+    def test_dog_profile_create_payload_normalization(self):
+        """Test all frontend alias, enum case-insensitivity, and empty string handling."""
+        p = DogProfileCreate.model_validate(
+            {
+                "dog_name": "Bella",
+                "breed": "Poodle",
+                "breed_classification": "PURE",
+                "sex": "FEMALE",
+                "status": "SHELTER",
+                "temperament": "FRIENDLY",
+                "ear_shape": "FLOPPY",
+                "tail_type": "CURLED",
+                "rescue_id": "",
+                "shelter_facility_id": "",
+                "kennel_id": "",
+                "photo_url": "https://img.com/dog.png",
+                "estimated_age": 2,
+            }
+        )
+        assert p.name == "Bella"
+        assert p.gender == "female"
+        assert p.breed_classification == "pure"
+        assert p.status == "shelter"
+        assert p.temperament == "friendly"
+        assert p.ear_shape == "floppy"
+        assert p.tail_type == "curled"
+        assert p.rescue_case_id is None
+        assert p.shelter_facility_id is None
+        assert p.kennel_id is None
+        assert p.image_urls == ["https://img.com/dog.png"]
+        assert p.estimated_age == "2"
