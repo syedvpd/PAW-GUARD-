@@ -287,6 +287,7 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
             pc.PUBLIC_READ,
             pc.DASHBOARD_SHELTER,
             pc.COMPANION_PET_READ,
+            pc.SAFETY_TAG_MANAGE,
         ],
     ),
     (

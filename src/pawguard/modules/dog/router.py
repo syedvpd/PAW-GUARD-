@@ -547,7 +547,15 @@ async def bulk_delete_dogs(
     "/{dog_id}/safety-tag",
     response_model=ApiResponse[DogSafetyTagProvisionResponse],
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_permission("safety_tag:manage"))],
+    dependencies=[
+        Depends(
+            require_permission(
+                "safety_tag:manage",
+                "shelter:update",
+                "shelter:manage_kennels",
+            )
+        )
+    ],
     summary="Provision a permanent Safety Tag for a Dog Master profile",
 )
 async def provision_dog_safety_tag(
@@ -581,7 +589,15 @@ async def provision_dog_safety_tag(
 @router.get(
     "/{dog_id}/safety-tag",
     response_model=ApiResponse[DogSafetyTagResponse],
-    dependencies=[Depends(require_permission("safety_tag:manage"))],
+    dependencies=[
+        Depends(
+            require_permission(
+                "safety_tag:manage",
+                "shelter:read",
+                "shelter:update",
+            )
+        )
+    ],
     summary="Get active Safety Tag metadata for a Dog Master profile",
 )
 async def get_dog_safety_tag(
@@ -598,7 +614,14 @@ async def get_dog_safety_tag(
 @router.delete(
     "/{dog_id}/safety-tag",
     response_model=ApiResponse[None],
-    dependencies=[Depends(require_permission("safety_tag:manage"))],
+    dependencies=[
+        Depends(
+            require_permission(
+                "safety_tag:manage",
+                "shelter:update",
+            )
+        )
+    ],
     summary="Deactivate/revoke active Safety Tag for tag replacement",
 )
 async def deactivate_dog_safety_tag(

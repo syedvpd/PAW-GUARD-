@@ -453,6 +453,27 @@ class CompanionPetService:
         if dog is None:
             raise NotFoundError("Dog profile not found.")
 
+        # Facility scoping check for shelter managers (super_admin / rescue_centre_admin bypass)
+        if not self._is_admin(current_user):
+            user_roles = set(getattr(current_user.claims, "roles", []))
+            if hasattr(current_user, "user") and hasattr(current_user.user, "roles") and current_user.user.roles:
+                user_roles.update(r.name for r in current_user.user.roles if hasattr(r, "name"))
+            if "shelter_manager" in user_roles:
+                manager_facility_id = (
+                    getattr(current_user.user, "managed_facility_id", None)
+                    if hasattr(current_user, "user")
+                    else None
+                )
+                if (
+                    manager_facility_id is not None
+                    and dog.shelter_facility_id is not None
+                    and manager_facility_id != dog.shelter_facility_id
+                ):
+                    raise ForbiddenError(
+                        f"Shelter manager is not authorized for dog in facility '{dog.shelter_facility_id}' "
+                        f"(assigned: '{manager_facility_id}')."
+                    )
+
         existing_tag = await self._repo.get_active_tag_for_dog(dog.id)
         if existing_tag is not None and not force_reissue:
             raise ConflictError(

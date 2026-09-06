@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from pawguard.core.exceptions import ConflictError
+from pawguard.core.exceptions import ConflictError, ForbiddenError
 from pawguard.modules.auth.models import User
 from pawguard.modules.companion_pet.models import CompanionPet, SafetyTag
 from pawguard.modules.companion_pet.service import CompanionPetService
@@ -382,3 +382,77 @@ class TestDogSafetyTagOptionA:
         assert old_tag.is_active is False  # Old tag revoked
         assert replaced_tag.id == new_tag.id
         assert len(new_raw_token) > 10
+
+    @pytest.mark.asyncio
+    async def test_k_shelter_manager_same_facility_success(
+        self, service, mock_repo, mock_session
+    ):
+        """TEST K: Shelter manager for same facility -> provision Safety Tag -> SUCCESS."""
+        facility_id = uuid.uuid4()
+        dog_id = uuid.uuid4()
+        dog = DogProfile(
+            id=dog_id,
+            name="Chatty",
+            status=DogStatus.SHELTER,
+            shelter_facility_id=facility_id,
+        )
+        db_res = MagicMock()
+        db_res.scalar_one_or_none.return_value = dog
+        mock_session.execute.return_value = db_res
+
+        mock_repo.get_active_tag_for_dog.return_value = None
+        new_tag = SafetyTag(
+            id=uuid.uuid4(),
+            dog_id=dog_id,
+            token_hash="hash_k",
+            token_prefix="tok_k",
+            is_active=True,
+        )
+        mock_repo.create_tag.return_value = new_tag
+
+        manager_user = MagicMock()
+        manager_user.id = uuid.uuid4()
+        manager_user.roles = [MagicMock(name="shelter_manager")]
+        manager_user.managed_facility_id = facility_id
+
+        current_user = MagicMock()
+        current_user.id = manager_user.id
+        current_user.user = manager_user
+        current_user.claims = MagicMock(roles=["shelter_manager"], permissions=["shelter:update"])
+
+        tag, raw_token = await service.provision_dog_safety_tag(dog_id, current_user)
+        assert tag.dog_id == dog_id
+        assert tag.is_active is True
+        assert len(raw_token) > 10
+
+    @pytest.mark.asyncio
+    async def test_l_shelter_manager_different_facility_forbidden(
+        self, service, mock_repo, mock_session
+    ):
+        """TEST L: Shelter manager for different facility -> provision Safety Tag -> 403 Forbidden."""
+        dog_facility_id = uuid.uuid4()
+        manager_facility_id = uuid.uuid4()
+        dog_id = uuid.uuid4()
+        dog = DogProfile(
+            id=dog_id,
+            name="Chatty",
+            status=DogStatus.SHELTER,
+            shelter_facility_id=dog_facility_id,
+        )
+        db_res = MagicMock()
+        db_res.scalar_one_or_none.return_value = dog
+        mock_session.execute.return_value = db_res
+
+        manager_user = MagicMock()
+        manager_user.id = uuid.uuid4()
+        manager_user.roles = [MagicMock(name="shelter_manager")]
+        manager_user.managed_facility_id = manager_facility_id
+
+        current_user = MagicMock()
+        current_user.id = manager_user.id
+        current_user.user = manager_user
+        current_user.claims = MagicMock(roles=["shelter_manager"], permissions=["shelter:update"])
+
+        with pytest.raises(ForbiddenError, match="not authorized for dog in facility"):
+            await service.provision_dog_safety_tag(dog_id, current_user)
+
