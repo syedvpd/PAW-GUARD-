@@ -1,7 +1,7 @@
 """Unit tests for Rescue Notification Governance Engine triggers and reporter_user_id mapping."""
 
 import uuid
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -20,6 +20,7 @@ class TestRescueNotificationsAndReporterMapping:
     def mock_repo(self):
         repo = AsyncMock(spec=RescueRepository)
         repo._session = AsyncMock()
+        repo._session.get.return_value = MagicMock(deleted_at=None)
         return repo
 
     @pytest.fixture

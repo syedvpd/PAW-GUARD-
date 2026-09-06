@@ -126,6 +126,11 @@ class AdminUserResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    @field_validator("can_drive", mode="before")
+    @classmethod
+    def serialize_can_drive(cls, v: Any) -> bool:
+        return bool(v) if v is not None else False
+
     @field_validator("roles", mode="before")
     @classmethod
     def serialize_roles(cls, v: Any) -> list[str]:

@@ -101,10 +101,12 @@ class TestDashboards:
         session.execute.side_effect = [
             _fake_result(scalar_one_val=15),
             _fake_result(scalar_one_val=30),
+            _fake_result(scalar_one_val=5),
         ]
         result = await medical_dashboard(session)
         assert result["exams_last_30d"] == 15
         assert result["treatments_last_30d"] == 30
+        assert result["pending_vaccinations"] == 5
 
     async def test_adoption_dashboard(self, session):
         session.execute.side_effect = [
