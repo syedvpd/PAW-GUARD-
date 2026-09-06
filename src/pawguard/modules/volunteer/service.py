@@ -23,6 +23,7 @@ from pawguard.modules.auth.rbac import has_permission
 from pawguard.modules.auth.repository import RoleRepository, UserRoleRepository
 from pawguard.modules.notifications.service import NotificationService
 from pawguard.modules.storage.models import FileFolder, StoredFile
+from pawguard.modules.storage.schemas import DownloadUrlResponse
 from pawguard.modules.volunteer.models import (
     ApplicationStatus,
     AttendanceStatus,
@@ -1041,6 +1042,11 @@ class VolunteerService:
         else:
             object_key = ""
 
+        profile.is_certified = True
+        profile.certificate_issued_at = datetime.now(UTC)
+        profile.certificate_object_key = object_key
+        await self._repo._session.flush()
+
         if self._audit and actor_id:
             await self._audit.record(
                 event_type=AuthAuditEventType.VOLUNTEER_CERTIFICATE_ISSUED,
@@ -1056,3 +1062,30 @@ class VolunteerService:
                 },
             )
         return pdf_bytes, object_key
+
+    async def get_service_certificate(
+        self,
+        profile_id: uuid.UUID,
+        *,
+        storage_service: StorageService | None = None,
+    ) -> DownloadUrlResponse:
+        """Retrieve presigned download URL for an officially issued volunteer
+        service certificate (PRR 3.9). Retrieval-only: does NOT generate PDF or mutate state."""
+        profile = await self._repo.get_profile_by_id(profile_id)
+        if profile is None:
+            raise NotFoundError("Volunteer profile not found.")
+
+        if not profile.is_certified or not profile.certificate_object_key:
+            raise NotFoundError(
+                "No service certificate has been issued for this volunteer profile."
+            )
+
+        storage = storage_service or StorageService()
+        download_url = storage.generate_presigned_download_url(
+            object_key=profile.certificate_object_key
+        )
+        return DownloadUrlResponse(
+            download_url=download_url,
+            object_key=profile.certificate_object_key,
+            file_id=profile_id,
+        )

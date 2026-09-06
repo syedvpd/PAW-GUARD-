@@ -58,6 +58,9 @@ class VolunteerProfileResponse(BaseModel):
     animal_handling_experience: str | None
     background_check_completed: bool
     background_check_notes: str | None
+    is_certified: bool = False
+    certificate_issued_at: datetime | None = None
+    certificate_object_key: str | None = None
     created_at: datetime
     updated_at: datetime
     user: UserProfile | None = None

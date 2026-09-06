@@ -83,6 +83,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     import contextlib
 
     configure_logging()
+    # Registers all domain models on Base.metadata and configures relationship mappers.
+    import pawguard.db.models  # noqa: F401
+
     logger.info("application_startup")
     try:
         await asyncio.wait_for(asyncio.to_thread(_run_migrations), timeout=15.0)

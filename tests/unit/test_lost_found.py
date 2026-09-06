@@ -1052,3 +1052,31 @@ class TestFoundReportDuplicateAndLockEnforcement:
         result = await service.report_found_pet(user_id, payload)
         assert result.id == new_report.id
         mock_repo.create_found_report.assert_awaited_once()
+
+
+class TestLostFoundModelIntegrity:
+    """Regression test ensuring ReportMedia, FoundReport, and LostReport models
+    correctly configure mappers without NoReferencedTableError or InvalidRequestError.
+    """
+
+    def test_lost_found_mappers_and_foreign_keys_configured(self):
+        from sqlalchemy.orm import configure_mappers
+
+        import pawguard.db.models  # noqa: F401
+        from pawguard.db.base import Base
+
+        configure_mappers()
+
+        # Verify tables are registered in Base.metadata
+        table_names = set(Base.metadata.tables.keys())
+        assert "found_reports" in table_names
+        assert "lost_reports" in table_names
+        assert "report_media" in table_names
+        assert "rescue_requests" in table_names
+        assert "companion_pets" in table_names
+        assert "users" in table_names
+
+        # Verify ReportMedia foreign keys resolve target columns cleanly
+        media_table = Base.metadata.tables["report_media"]
+        for fk in media_table.foreign_keys:
+            assert fk.column is not None

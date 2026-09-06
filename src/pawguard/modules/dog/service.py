@@ -270,14 +270,13 @@ class DogService:
                 ear_shape=payload.ear_shape,
                 tail_type=payload.tail_type,
                 distinctive_markers=payload.distinctive_markers,
+                image_urls=payload.image_urls or None,
                 status=payload.status or DogStatus.RESCUED,
                 shelter_facility_id=payload.shelter_facility_id,
                 section_id=payload.section_id,
                 kennel_id=payload.kennel_id,
                 foster_home_id=payload.foster_home_id,
-                is_adoptable=(payload.status == DogStatus.AVAILABLE_FOR_ADOPTION)
-                if payload.status
-                else False,
+                is_adoptable=False,
                 is_quarantine_passed=payload.is_quarantine_passed,
             )
             try:
@@ -314,6 +313,19 @@ class DogService:
             actor_id=actor_id,
             metadata={"registration_number": dog.registration_number},
         )
+
+        if payload.rescue_case_id:
+            from pawguard.modules.rescue.models import RescueRequest, RescueStatus
+
+            res_req = await self._repo._session.get(RescueRequest, payload.rescue_case_id)
+            if res_req is not None and res_req.status in (
+                RescueStatus.LOCATED,
+                RescueStatus.RESCUED,
+            ):
+                res_req.status = RescueStatus.ADMITTED
+                if hasattr(res_req, "dispatch") and res_req.dispatch is not None:
+                    res_req.dispatch.admitted_at = datetime.now(UTC)
+                await self._repo._session.flush()
 
         increment_counter("pawguard_dogs_registered_total")
         await self._invalidate_caches()

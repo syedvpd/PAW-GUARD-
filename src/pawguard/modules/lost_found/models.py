@@ -3,7 +3,6 @@
 import uuid
 from datetime import datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -12,9 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pawguard.db.base import Base
 from pawguard.db.mixins import AuditMixin, SoftDeleteMixin, TimestampMixin, UUIDPkMixin
-
-if TYPE_CHECKING:
-    from pawguard.modules.auth.models import User
+from pawguard.modules.auth.models import User
 
 
 class Species(StrEnum):

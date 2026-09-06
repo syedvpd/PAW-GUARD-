@@ -54,6 +54,28 @@ class DogProfileCreate(BaseModel):
     foster_home_id: uuid.UUID | None = None
     is_adoptable: bool = False
     is_quarantine_passed: bool = False
+    image_urls: list[str] = Field(default_factory=list)
+    photo_url: str | None = None
+    intake_condition: str | None = None
+    medical_notes: str | None = None
+    rescue_date: datetime | str | None = None
+    rescue_location: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_intake_fields(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            photo = data.get("photo_url") or data.get("image_url")
+            raw_urls = data.get("image_urls") or data.get("photo_gallery_urls") or []
+            if isinstance(raw_urls, str):
+                raw_urls = [raw_urls]
+            elif not isinstance(raw_urls, list):
+                raw_urls = []
+            urls = [str(u).strip() for u in raw_urls if u]
+            if photo and str(photo).strip() not in urls:
+                urls.append(str(photo).strip())
+            data["image_urls"] = urls
+        return data
 
     model_config = ConfigDict(
         json_schema_extra={

@@ -466,9 +466,15 @@ async def bulk_delete_profiles(
     )
 
 
-@router.get(
+@router.post(
     "/{profile_id}/certificate",
     response_model=ApiResponse[DownloadUrlResponse],
+    dependencies=[Depends(require_permission("volunteer:update"))],
+)
+@router.post(
+    "/{profile_id}/certificate/issue",
+    response_model=ApiResponse[DownloadUrlResponse],
+    dependencies=[Depends(require_permission("volunteer:update"))],
 )
 async def issue_service_certificate(
     profile_id: uuid.UUID,
@@ -476,13 +482,8 @@ async def issue_service_certificate(
     current_user: CurrentUser = Depends(get_current_user),
     service: VolunteerService = Depends(get_volunteer_service),
 ) -> ApiResponse[DownloadUrlResponse]:
-    """Generate a verified service certificate (PDF) for a volunteer based on
-    attended shifts (PRR 3.9). The volunteer themself or staff may request it."""
-    profile = await service.get_profile(profile_id)
-    is_owner = profile.user_id == current_user.user.id
-    if not is_owner and not has_permission(current_user.user, "volunteer:update"):
-        raise ForbiddenError("You do not have permission to issue this certificate.")
-
+    """Admin / Coordinator workflow: Officially issue a verified service certificate (PDF)
+    for a volunteer based on attended shifts (PRR 3.9). Sets is_certified=True."""
     ip = request.client.host if request.client else None
     _, object_key = await service.issue_service_certificate(
         profile_id,
@@ -501,7 +502,33 @@ async def issue_service_certificate(
             object_key=object_key,
             file_id=profile_id,
         ),
-        message="Volunteer service certificate generated.",
+        message="Volunteer service certificate officially issued.",
+    )
+
+
+@router.get(
+    "/{profile_id}/certificate",
+    response_model=ApiResponse[DownloadUrlResponse],
+)
+async def get_service_certificate(
+    profile_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: VolunteerService = Depends(get_volunteer_service),
+) -> ApiResponse[DownloadUrlResponse]:
+    """Retrieval-only endpoint for volunteers or staff to download an officially issued
+    service certificate. Does NOT generate PDF or mutate database state."""
+    profile = await service.get_profile(profile_id)
+    is_owner = profile.user_id == current_user.user.id
+    if not is_owner and not has_permission(current_user.user, "volunteer:update"):
+        raise ForbiddenError("You do not have permission to access this certificate.")
+
+    download_data = await service.get_service_certificate(
+        profile_id,
+        storage_service=StorageService(),
+    )
+    return ApiResponse(
+        data=download_data,
+        message="Volunteer service certificate retrieved.",
     )
 
 

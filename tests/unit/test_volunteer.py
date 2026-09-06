@@ -858,6 +858,9 @@ class TestServiceCertificate:
         )
         assert len(pdf_bytes) > 0
         assert object_key == "certificates/service_certificate_test.pdf"
+        assert profile.is_certified is True
+        assert profile.certificate_issued_at is not None
+        assert profile.certificate_object_key == "certificates/service_certificate_test.pdf"
         mock_storage.put_object.assert_called_once()
         assert mock_storage.put_object.call_args.kwargs["content_type"] == "application/pdf"
         mock_audit.record.assert_awaited_once()
@@ -865,6 +868,36 @@ class TestServiceCertificate:
         assert kwargs["event_type"].value == "volunteer_certificate_issued"
         assert kwargs["metadata"]["total_hours"] == "3.0"
         assert kwargs["metadata"]["shifts_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_get_service_certificate_not_issued(self, service, mock_repo):
+        profile = self._profile(is_certified=False, certificate_object_key=None)
+        mock_repo.get_profile_by_id.return_value = profile
+        mock_storage = AsyncMock(spec=StorageService)
+
+        with pytest.raises(NotFoundError, match="No service certificate has been issued"):
+            await service.get_service_certificate(profile.id, storage_service=mock_storage)
+
+        mock_storage.put_object.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_service_certificate_issued_success(self, service, mock_repo):
+        object_key = "certificates/service_certificate_test.pdf"
+        profile = self._profile(is_certified=True, certificate_object_key=object_key)
+        mock_repo.get_profile_by_id.return_value = profile
+        mock_storage = Mock(spec=StorageService)
+        mock_storage.generate_presigned_download_url.return_value = (
+            "https://s3.example.com/download.pdf"
+        )
+
+        res = await service.get_service_certificate(profile.id, storage_service=mock_storage)
+
+        assert res.download_url == "https://s3.example.com/download.pdf"
+        assert res.object_key == object_key
+        assert res.file_id == profile.id
+        mock_storage.generate_presigned_download_url.assert_called_once_with(object_key=object_key)
+        # Verify no put_object (write) was called
+        assert not hasattr(mock_storage, "put_object") or not mock_storage.put_object.called
 
     @pytest.mark.asyncio
     async def test_issue_certificate_no_shifts(self, service, mock_repo):

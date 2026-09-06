@@ -119,6 +119,13 @@ class VolunteerProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin,
     medical_conditions: Mapped[str | None] = mapped_column(Text, nullable=True)
     animal_handling_experience: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Official Certificate Issuance state (PRR 3.9)
+    is_certified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    certificate_issued_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    certificate_object_key: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id], lazy="joined")
     attendances: Mapped[list["ShiftAttendance"]] = relationship(
         back_populates="volunteer", cascade="all, delete-orphan"

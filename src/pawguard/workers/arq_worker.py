@@ -8,6 +8,7 @@ from arq import Retry
 from arq.connections import RedisSettings
 from arq.cron import cron
 
+import pawguard.db.models  # noqa: F401
 from pawguard.api.v1.router import api_v1_router  # noqa: F401  (side effects)
 from pawguard.core.config import get_settings
 from pawguard.core.logging import configure_logging, get_logger
