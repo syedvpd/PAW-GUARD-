@@ -384,9 +384,7 @@ class TestDogSafetyTagOptionA:
         assert len(new_raw_token) > 10
 
     @pytest.mark.asyncio
-    async def test_k_shelter_manager_same_facility_success(
-        self, service, mock_repo, mock_session
-    ):
+    async def test_k_shelter_manager_same_facility_success(self, service, mock_repo, mock_session):
         """TEST K: Shelter manager for same facility -> provision Safety Tag -> SUCCESS."""
         facility_id = uuid.uuid4()
         dog_id = uuid.uuid4()
@@ -455,4 +453,3 @@ class TestDogSafetyTagOptionA:
 
         with pytest.raises(ForbiddenError, match="not authorized for dog in facility"):
             await service.provision_dog_safety_tag(dog_id, current_user)
-

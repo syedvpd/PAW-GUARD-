@@ -456,7 +456,11 @@ class CompanionPetService:
         # Facility scoping check for shelter managers (super_admin / rescue_centre_admin bypass)
         if not self._is_admin(current_user):
             user_roles = set(getattr(current_user.claims, "roles", []))
-            if hasattr(current_user, "user") and hasattr(current_user.user, "roles") and current_user.user.roles:
+            if (
+                hasattr(current_user, "user")
+                and hasattr(current_user.user, "roles")
+                and current_user.user.roles
+            ):
                 user_roles.update(r.name for r in current_user.user.roles if hasattr(r, "name"))
             if "shelter_manager" in user_roles:
                 manager_facility_id = (
