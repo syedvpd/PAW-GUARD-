@@ -17,6 +17,7 @@ from pawguard.workers.jobs.scheduled_jobs import (
     _staff_user_ids,
     check_inventory_expiry,
     check_inventory_low_stock,
+    check_missed_daily_care_logs,
     check_vaccination_renewals,
     post_adoption_followups,
     process_sponsorship_charges,
@@ -199,6 +200,84 @@ class TestScheduledJobs:
         self._assert_notification_payloads(mock_notif, {"Vaccination Renewal Reminder"})
         payload = mock_notif.create_notification.call_args.kwargs["payload"]
         assert "Rabies" in payload.body
+
+    @pytest.mark.asyncio
+    @patch("pawguard.workers.jobs.scheduled_jobs.AsyncSessionLocal")
+    @patch("pawguard.workers.jobs.scheduled_jobs.NotificationService")
+    async def test_check_missed_daily_care_logs_alerts_shelter_manager(
+        self, mock_notif_cls, mock_session_factory
+    ):
+        """End-of-day sweep: a housed dog with no care log today must alert
+        the Shelter Manager; one that was logged must not be named."""
+        dog_id_missed, dog_id_logged = uuid.uuid4(), uuid.uuid4()
+
+        housed_result = MagicMock()
+        housed_result.all.return_value = [(dog_id_missed, "Rex"), (dog_id_logged, "Milo")]
+        logged_result = MagicMock()
+        logged_result.all.return_value = [(dog_id_logged,)]
+
+        mock_session = AsyncMock()
+        mock_session.execute.side_effect = [housed_result, logged_result]
+        mock_session_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_notif = AsyncMock()
+        mock_notif_cls.return_value = mock_notif
+
+        await check_missed_daily_care_logs({})
+
+        mock_notif.broadcast.assert_awaited_once()
+        payload = mock_notif.broadcast.call_args.kwargs["payload"]
+        assert payload.notification_type == "shelter_missed_daily_care"
+        assert payload.target_roles == ["shelter_manager"]
+        assert "Rex" in payload.body
+        assert "Milo" not in payload.body
+
+    @pytest.mark.asyncio
+    @patch("pawguard.workers.jobs.scheduled_jobs.AsyncSessionLocal")
+    @patch("pawguard.workers.jobs.scheduled_jobs.NotificationService")
+    async def test_check_missed_daily_care_logs_no_alert_when_all_logged(
+        self, mock_notif_cls, mock_session_factory
+    ):
+        dog_id = uuid.uuid4()
+        housed_result = MagicMock()
+        housed_result.all.return_value = [(dog_id, "Rex")]
+        logged_result = MagicMock()
+        logged_result.all.return_value = [(dog_id,)]
+
+        mock_session = AsyncMock()
+        mock_session.execute.side_effect = [housed_result, logged_result]
+        mock_session_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_notif = AsyncMock()
+        mock_notif_cls.return_value = mock_notif
+
+        await check_missed_daily_care_logs({})
+
+        mock_notif.broadcast.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    @patch("pawguard.workers.jobs.scheduled_jobs.AsyncSessionLocal")
+    @patch("pawguard.workers.jobs.scheduled_jobs.NotificationService")
+    async def test_check_missed_daily_care_logs_no_housed_dogs_skips_second_query(
+        self, mock_notif_cls, mock_session_factory
+    ):
+        housed_result = MagicMock()
+        housed_result.all.return_value = []
+
+        mock_session = AsyncMock()
+        mock_session.execute.return_value = housed_result
+        mock_session_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_notif = AsyncMock()
+        mock_notif_cls.return_value = mock_notif
+
+        await check_missed_daily_care_logs({})
+
+        assert mock_session.execute.call_count == 1
+        mock_notif.broadcast.assert_not_awaited()
 
     @pytest.mark.asyncio
     @patch("pawguard.workers.jobs.scheduled_jobs.AsyncSessionLocal")

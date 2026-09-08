@@ -20,6 +20,7 @@ from pawguard.db.session import AsyncSessionLocal
 from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
 from pawguard.modules.auth.models import Permission, Role, User
 from pawguard.modules.auth.repository import UserRepository
+from pawguard.modules.dog.models import DogProfile
 from pawguard.modules.donation.models import (
     Donation,
     DonationStatus,
@@ -31,8 +32,13 @@ from pawguard.modules.inventory.models import InventoryItem
 from pawguard.modules.medical.models import VaccinationRecord
 from pawguard.modules.notifications.models import Notification
 from pawguard.modules.notifications.repository import NotificationRepository
-from pawguard.modules.notifications.schemas import NotificationCreate, NotificationSend
+from pawguard.modules.notifications.schemas import (
+    BroadcastCreate,
+    NotificationCreate,
+    NotificationSend,
+)
 from pawguard.modules.notifications.service import NotificationService
+from pawguard.modules.shelter.models import DailyCareLog
 from pawguard.modules.volunteer.repository import VolunteerRepository
 from pawguard.workers.jobs.retry import retry_defer
 
@@ -212,6 +218,51 @@ async def check_vaccination_renewals(ctx: dict[str, object]) -> None:
                 f"Vaccination '{vax.vaccine_name}' for dog {vax.dog_id} is due on {vax.next_due_at.date()}.",
                 "/medical",
             )
+        await session.commit()
+
+
+async def check_missed_daily_care_logs(ctx: dict[str, object]) -> None:
+    """End-of-day sweep: alert the Shelter Manager about housed dogs with no
+    daily care log recorded today (PRR §3.6 / workflow doc §14). Mirrors the
+    Flutter app's own "Today's Care Checklist" definition of housed/logged —
+    kennel_id is not null, and a DailyCareLog exists with created_at today."""
+    today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    async with AsyncSessionLocal() as session:
+        housed_result = await session.execute(
+            select(DogProfile.id, DogProfile.name).where(
+                DogProfile.kennel_id.isnot(None),
+                DogProfile.deleted_at.is_(None),
+            )
+        )
+        housed_dogs = housed_result.all()
+        if not housed_dogs:
+            return
+
+        logged_result = await session.execute(
+            select(DailyCareLog.dog_id).where(DailyCareLog.created_at >= today_start).distinct()
+        )
+        logged_dog_ids = {row[0] for row in logged_result.all()}
+
+        missed = [(dog_id, name) for dog_id, name in housed_dogs if dog_id not in logged_dog_ids]
+        if not missed:
+            return
+
+        notification_svc = _notification_service(session, ctx)
+        preview = ", ".join(name for _, name in missed[:10])
+        remainder = f" and {len(missed) - 10} more" if len(missed) > 10 else ""
+        await notification_svc.broadcast(
+            payload=BroadcastCreate(
+                title="Missed Daily Care Logs",
+                body=(
+                    f"{len(missed)} housed dog(s) have no daily care log today: {preview}{remainder}."
+                ),
+                notification_type="shelter_missed_daily_care",
+                action_url="/shelter/daily-care",
+                target_roles=["shelter_manager"],
+            ),
+            user_ids=[],
+        )
         await session.commit()
 
 

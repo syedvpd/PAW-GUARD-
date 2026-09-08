@@ -28,6 +28,7 @@ from pawguard.workers.jobs.lost_found_jobs import broadcast_lost_pet_alert
 from pawguard.workers.jobs.scheduled_jobs import (
     check_inventory_expiry,
     check_inventory_low_stock,
+    check_missed_daily_care_logs,
     check_vaccination_renewals,
     post_adoption_followups,
     process_sponsorship_charges,
@@ -130,6 +131,7 @@ _send_notification_email_job = _track_failures(send_notification_email_job)
 _check_inventory_low_stock = _track_failures(check_inventory_low_stock)
 _check_inventory_expiry = _track_failures(check_inventory_expiry)
 _check_vaccination_renewals = _track_failures(check_vaccination_renewals)
+_check_missed_daily_care_logs = _track_failures(check_missed_daily_care_logs)
 _post_adoption_followups = _track_failures(post_adoption_followups)
 _process_sponsorship_charges = _track_failures(process_sponsorship_charges)
 _send_companion_pet_reminders = _track_failures(send_companion_pet_reminders)
@@ -166,6 +168,7 @@ class WorkerSettings:
         cron(_process_sponsorship_charges, hour={8}, minute={0}, max_tries=2),
         cron(_send_companion_pet_reminders, hour={9}, minute={45}, max_tries=2),
         cron(_send_volunteer_shift_reminders, hour={11}, minute={0}, max_tries=2),
+        cron(_check_missed_daily_care_logs, hour={21}, minute={0}, max_tries=2),
     ]
     on_startup = startup
     on_shutdown = shutdown
