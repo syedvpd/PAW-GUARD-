@@ -41,6 +41,7 @@ class TestRescueService:
         # Public status lookup returns None (not found) by default.
         repo.get_request_by_ticket_and_phone.return_value = None
         repo.get_active_dispatch_by_vehicle_id.return_value = None
+        repo.find_active_duplicate.return_value = None
         return repo
 
     @pytest.fixture
@@ -1589,3 +1590,275 @@ class TestRescueFailureReasonSchema:
     def test_none_accepted(self) -> None:
         payload = self._dispatch_response(None)
         assert payload.failure_reason is None
+
+
+class TestEmergencyDuplicateAndMediaContract:
+    """Authoritative test suite for duplicate emergency prevention and media contract (Tasks 1-5)."""
+
+    @pytest.fixture
+    def mock_repo(self):
+        repo = AsyncMock(spec=RescueRepository)
+        repo._session = AsyncMock()
+        repo._session.get.return_value = MagicMock(deleted_at=None)
+        repo.get_request_by_ticket.return_value = None
+        repo.get_request_by_ticket_and_phone.return_value = None
+        repo.get_active_dispatch_by_vehicle_id.return_value = None
+        repo.find_active_duplicate.return_value = None
+        return repo
+
+    @pytest.fixture
+    def mock_audit(self):
+        return AsyncMock(spec=AuditService)
+
+    @pytest.fixture
+    def mock_dog_repo(self):
+        return AsyncMock(spec=DogRepository)
+
+    @pytest.fixture
+    def service(self, mock_repo, mock_audit, mock_dog_repo):
+        return RescueService(mock_repo, mock_audit, dog_repo=mock_dog_repo)
+
+    @pytest.mark.asyncio
+    async def test_1_new_critical_emergency_succeeds(self, service, mock_repo):
+        request_id = uuid.uuid4()
+        mock_repo.create_request.return_value = None
+        mock_repo.get_request_by_id.return_value = RescueRequest(
+            id=request_id,
+            ticket_number="RES-20260908-0001",
+            reporter_name="Critical Reporter",
+            reporter_phone="+919876543210",
+            location_address="Highway Junction 4",
+            physical_condition=RescuePhysicalCondition.CRITICAL,
+            severity=RescueSeverity.CRITICAL,
+            is_urgent=True,
+            status=RescueStatus.REPORTED,
+        )
+
+        res = await service.report_incident(
+            reporter_name="Critical Reporter",
+            reporter_phone="+919876543210",
+            location_address="Highway Junction 4",
+            physical_condition=RescuePhysicalCondition.CRITICAL,
+            severity=RescueSeverity.CRITICAL,
+            is_urgent=True,
+        )
+        assert res.id == request_id
+        assert res.severity == RescueSeverity.CRITICAL
+        assert res.is_urgent is True
+        assert getattr(res, "_is_duplicate", False) is False
+        assert mock_repo.create_request.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_2_new_non_critical_emergency_succeeds(self, service, mock_repo):
+        request_id = uuid.uuid4()
+        mock_repo.create_request.return_value = None
+        mock_repo.get_request_by_id.return_value = RescueRequest(
+            id=request_id,
+            ticket_number="RES-20260908-0002",
+            reporter_name="Citizen A",
+            reporter_phone="+919876543211",
+            location_address="Street 10, Sector 2",
+            physical_condition=RescuePhysicalCondition.MALNOURISHED,
+            severity=RescueSeverity.LOW,
+            is_urgent=False,
+            status=RescueStatus.REPORTED,
+        )
+
+        res = await service.report_incident(
+            reporter_name="Citizen A",
+            reporter_phone="+919876543211",
+            location_address="Street 10, Sector 2",
+            physical_condition=RescuePhysicalCondition.MALNOURISHED,
+            severity=RescueSeverity.LOW,
+            is_urgent=False,
+        )
+        assert res.id == request_id
+        assert res.severity == RescueSeverity.LOW
+        assert getattr(res, "_is_duplicate", False) is False
+        assert mock_repo.create_request.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_3_same_emergency_submitted_twice_only_one_case_exists(self, service, mock_repo):
+        existing_case = RescueRequest(
+            id=uuid.uuid4(),
+            ticket_number="RES-20260908-8888",
+            reporter_name="Repeated Caller",
+            reporter_phone="+919999988888",
+            location_address="Central Park Gate 3",
+            physical_condition=RescuePhysicalCondition.INJURED,
+            severity=RescueSeverity.HIGH,
+            status=RescueStatus.REPORTED,
+        )
+        # Duplicate detection returns existing active case
+        mock_repo.find_active_duplicate.return_value = existing_case
+
+        res = await service.report_incident(
+            reporter_name="Repeated Caller",
+            reporter_phone="+919999988888",
+            location_address="Central Park Gate 3",
+            physical_condition=RescuePhysicalCondition.INJURED,
+        )
+        assert res.id == existing_case.id
+        assert res.ticket_number == "RES-20260908-8888"
+        assert getattr(res, "_is_duplicate", False) is True
+        # Ensure no new record was created in the database
+        assert mock_repo.create_request.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_4_rapid_concurrent_duplicate_requests_returns_active_case(
+        self, mock_repo, mock_audit, mock_dog_repo
+    ):
+        mock_redis = AsyncMock()
+        # Simulate lock contention: lock cannot be acquired because competing request holds it
+        mock_redis.set.return_value = None
+
+        existing_case = RescueRequest(
+            id=uuid.uuid4(),
+            ticket_number="RES-20260908-7777",
+            reporter_name="Rapid Doubleclicker",
+            reporter_phone="+919999977777",
+            location_address="Market Square",
+            physical_condition=RescuePhysicalCondition.INJURED,
+            status=RescueStatus.REPORTED,
+        )
+        mock_repo.find_active_duplicate.return_value = existing_case
+
+        svc_with_redis = RescueService(
+            mock_repo, mock_audit, dog_repo=mock_dog_repo, redis_client=mock_redis
+        )
+        res = await svc_with_redis.report_incident(
+            reporter_name="Rapid Doubleclicker",
+            reporter_phone="+919999977777",
+            location_address="Market Square",
+            physical_condition=RescuePhysicalCondition.INJURED,
+        )
+        assert res.id == existing_case.id
+        assert getattr(res, "_is_duplicate", False) is True
+        assert mock_repo.create_request.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_5_retry_after_network_retry_prevents_duplicate(self, service, mock_repo):
+        existing_case = RescueRequest(
+            id=uuid.uuid4(),
+            ticket_number="RES-20260908-5555",
+            reporter_name="Network Retryer",
+            reporter_phone="+919888855555",
+            location_address="Airport Road Km 4",
+            physical_condition=RescuePhysicalCondition.INJURED,
+            status=RescueStatus.VERIFIED,
+        )
+        mock_repo.find_active_duplicate.return_value = existing_case
+
+        res = await service.report_incident(
+            reporter_name="Network Retryer",
+            reporter_phone="+91 98888-55555",
+            location_address="Airport Road Km 4",
+            physical_condition=RescuePhysicalCondition.INJURED,
+        )
+        assert res.id == existing_case.id
+        assert getattr(res, "_is_duplicate", False) is True
+        assert mock_repo.create_request.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_6_new_emergency_after_old_resolved_case_allowed(self, service, mock_repo):
+        # find_active_duplicate returns None because previous case is in terminal/resolved status (e.g. RESCUED)
+        mock_repo.find_active_duplicate.return_value = None
+
+        new_request_id = uuid.uuid4()
+        mock_repo.create_request.return_value = None
+        mock_repo.get_request_by_id.return_value = RescueRequest(
+            id=new_request_id,
+            ticket_number="RES-20260908-6666",
+            reporter_name="Returning Reporter",
+            reporter_phone="+919888866666",
+            location_address="Sector 5 Park",
+            physical_condition=RescuePhysicalCondition.INJURED,
+            status=RescueStatus.REPORTED,
+        )
+
+        res = await service.report_incident(
+            reporter_name="Returning Reporter",
+            reporter_phone="+919888866666",
+            location_address="Sector 5 Park",
+            physical_condition=RescuePhysicalCondition.INJURED,
+        )
+        assert res.id == new_request_id
+        assert getattr(res, "_is_duplicate", False) is False
+        assert mock_repo.create_request.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_7_five_media_files_within_50mb_accepted(self, service, mock_repo):
+        from pawguard.services.storage_service import StorageService
+
+        mock_s3 = MagicMock()
+        mock_s3.head_object.side_effect = lambda Bucket, Key: {
+            "ContentType": "video/mp4" if Key.endswith(".mp4") else "image/jpeg",
+            "ContentLength": 5 * 1024 * 1024,  # 5MB each * 5 = 25MB total <= 50MB
+        }
+        storage = StorageService()
+        storage._client = mock_s3
+        # 4 photos + 1 video = 5 total
+        storage.validate_report_media(
+            ["rescue/photo1.jpg", "rescue/photo2.jpg", "rescue/photo3.jpg", "rescue/photo4.jpg"],
+            "rescue/video1.mp4",
+        )
+
+    def test_8_more_than_five_files_rejected(self):
+        from pawguard.services.storage_service import StorageService
+
+        # 5 photos + 1 video = 6 items > 5
+        with pytest.raises(ValidationFailedError, match="Maximum 5 photos/videos"):
+            StorageService().validate_report_media(
+                [
+                    "rescue/p1.jpg",
+                    "rescue/p2.jpg",
+                    "rescue/p3.jpg",
+                    "rescue/p4.jpg",
+                    "rescue/p5.jpg",
+                ],
+                "rescue/video.mp4",
+            )
+
+        # Also verified at schema level
+        with pytest.raises(ValidationError):
+            RescueRequestCreate(
+                reporter_name="Test",
+                reporter_phone="+12345",
+                location_address="123 Street",
+                physical_condition="injured",
+                photo_object_keys=[
+                    "rescue/p1.jpg",
+                    "rescue/p2.jpg",
+                    "rescue/p3.jpg",
+                    "rescue/p4.jpg",
+                    "rescue/p5.jpg",
+                ],
+                video_object_key="rescue/v.mp4",
+            )
+
+    def test_9_combined_media_exceeding_50mb_rejected(self):
+        from pawguard.services.storage_service import StorageService
+
+        mock_s3 = MagicMock()
+        # 2 files each 30MB = 60MB > 50MB
+        mock_s3.head_object.return_value = {
+            "ContentType": "image/jpeg",
+            "ContentLength": 30 * 1024 * 1024,
+        }
+        storage = StorageService()
+        storage._client = mock_s3
+        with pytest.raises(ValidationFailedError, match="50MB limit"):
+            storage.validate_report_media(["rescue/p1.jpg", "rescue/p2.jpg"], None)
+
+    def test_10_invalid_media_mime_type_rejected(self):
+        from pawguard.services.storage_service import StorageService
+
+        mock_s3 = MagicMock()
+        mock_s3.head_object.return_value = {
+            "ContentType": "application/pdf",
+            "ContentLength": 1024,
+        }
+        storage = StorageService()
+        storage._client = mock_s3
+        with pytest.raises(ValidationFailedError, match="Unsupported image type"):
+            storage.validate_report_media(["rescue/doc.pdf"], None)

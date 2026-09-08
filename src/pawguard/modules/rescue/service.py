@@ -1,6 +1,6 @@
-"""RescueService: owns all rescue business behavior (RULE-003)."""
-
+import asyncio
 import contextlib
+import hashlib
 import json
 import re
 import secrets
@@ -58,7 +58,7 @@ from pawguard.modules.rescue.schemas import (
     RescueRequestResponse,
     normalise_failure_reason,
 )
-from pawguard.redis.client import RedisClient
+from pawguard.redis.client import RedisClient, is_null_redis
 from pawguard.services.audit_service import AuditService
 
 logger = getLogger(__name__)
@@ -248,15 +248,23 @@ class RescueService:
         if photo_keys is None and video_key is None and media_evidence is not None:
             photo_keys = []
             video_key = None
-            video_exts = (".mp4", ".webm", ".mov")
+            video_exts = (".mp4", ".webm", ".mov", ".quicktime")
             for key in media_evidence:
                 if any(key.lower().endswith(ext) for ext in video_exts):
                     if not video_key:
                         video_key = key
+                    else:
+                        photo_keys.append(key)
                 else:
                     photo_keys.append(key)
         else:
-            photo_keys = photo_keys or []
+            photo_keys = list(photo_keys) if photo_keys else []
+
+        total_media_count = len(photo_keys) + (1 if video_key else 0)
+        if total_media_count > 5:
+            raise ValidationFailedError(
+                "Maximum 5 photos/videos total allowed per emergency report."
+            )
 
         if photo_keys or video_key:
             StorageService().validate_report_media(photo_keys, video_key)
@@ -290,82 +298,144 @@ class RescueService:
             except Exception:
                 pass  # Non-blocking: if lookup fails, continue without linking
 
-        # Allocate a unique ticket number (RES-YYYYMMDD-XXXX). The 4-digit
-        # suffix yields 10k combinations per day, so under heavy intake volume
-        # collisions are possible; retry with a fresh suffix rather than
-        # letting the unique constraint surface as a 500 (PRR 3.2 tracking key).
-        request: RescueRequest | None = None
-        for _ in range(_MAX_TICKET_RETRIES):
-            ticket_number = _generate_ticket_number()
-            # Fast path: skip an already-taken ticket without a DB error.
-            if await self._repo.get_request_by_ticket(ticket_number) is not None:
-                continue
-            candidate = RescueRequest(
-                ticket_number=ticket_number,
-                reporter_name=reporter_name,
+        lock_token = str(uuid.uuid4())
+        lock_acquired = False
+        cache_svc = None
+        lock_key = ""
+
+        # Construct deterministic duplicate signature
+        clean_phone = "".join(c for c in reporter_phone if c.isalnum() or c == "+")
+        clean_address = location_address.strip().lower()
+        ident_str = f"{clean_phone}:{clean_address}:{physical_condition}"
+        ident_hash = hashlib.sha256(ident_str.encode()).hexdigest()[:16]
+
+        if self._redis is not None and not is_null_redis(self._redis):
+            from pawguard.services.cache_service import CacheService
+
+            cache_svc = CacheService(self._redis, namespace="rescue")
+            lock_key = f"lock:rescue:report:{ident_hash}"
+            lock_acquired = await cache_svc.acquire_lock(lock_key, lock_token, expire_ms=10000)
+            if not lock_acquired:
+                # Concurrent request / rapid double-click in-flight: wait briefly and check for newly created active record
+                await asyncio.sleep(0.5)
+                existing_concurrent = await self._repo.find_active_duplicate(
+                    reporter_phone=reporter_phone,
+                    location_address=location_address,
+                    reporter_email=reporter_email,
+                    reporter_user_id=reporter_user_id,
+                    latitude=latitude,
+                    longitude=longitude,
+                )
+                if existing_concurrent is not None:
+                    existing_concurrent._is_duplicate = True
+                    return existing_concurrent
+                raise ConflictError(
+                    "An emergency report for this incident is currently being processed. Please wait a moment."
+                )
+
+        try:
+            # Check for existing active duplicate in database
+            existing = await self._repo.find_active_duplicate(
                 reporter_phone=reporter_phone,
-                reporter_alternate_phone=reporter_alternate_phone,
-                reporter_email=reporter_email,
-                is_anonymous=is_anonymous,
-                reporter_user_id=reporter_user_id,
                 location_address=location_address,
-                location_landmark=location_landmark,
+                reporter_email=reporter_email,
+                reporter_user_id=reporter_user_id,
                 latitude=latitude,
                 longitude=longitude,
-                animal_count=animal_count,
-                physical_condition=physical_condition,
-                behavioral_indicators=behavioral_indicators,
-                severity=severity,
-                is_urgent=is_urgent,
-                media_evidence=combined_evidence,
-                environmental_factors=environmental_factors,
-                reporter_notes=reporter_notes,
-                status=RescueStatus.REPORTED,
             )
-            try:
-                await self._repo.create_request(candidate)
-            except IntegrityError:
-                # A concurrent request claimed the same ticket between the
-                # existence check and the flush - roll back and try again.
-                await self._repo._session.rollback()
-                continue
-
-            # Save ReportMedia entries
-            media_items = []
-            for idx, key in enumerate(photo_keys):
-                media_items.append(
-                    ReportMedia(
-                        rescue_request_id=candidate.id,
-                        media_type="photo",
-                        object_key=key,
-                        is_primary=(idx == 0),
-                        display_order=idx,
-                    )
+            if existing is not None:
+                logger.info(
+                    "duplicate_rescue_request_prevented",
+                    ticket_number=existing.ticket_number,
+                    existing_id=str(existing.id),
+                    reporter_phone=reporter_phone,
+                    location_address=location_address,
                 )
-            if video_key:
-                media_items.append(
-                    ReportMedia(
-                        rescue_request_id=candidate.id,
-                        media_type="video",
-                        object_key=video_key,
-                        is_primary=False,
-                        display_order=len(photo_keys),
+                existing._is_duplicate = True
+                return existing
+
+            # Allocate a unique ticket number (RES-YYYYMMDD-XXXX). The 4-digit
+            # suffix yields 10k combinations per day, so under heavy intake volume
+            # collisions are possible; retry with a fresh suffix rather than
+            # letting the unique constraint surface as a 500 (PRR 3.2 tracking key).
+            request: RescueRequest | None = None
+            for _ in range(_MAX_TICKET_RETRIES):
+                ticket_number = _generate_ticket_number()
+                # Fast path: skip an already-taken ticket without a DB error.
+                if await self._repo.get_request_by_ticket(ticket_number) is not None:
+                    continue
+                candidate = RescueRequest(
+                    ticket_number=ticket_number,
+                    reporter_name=reporter_name,
+                    reporter_phone=reporter_phone,
+                    reporter_alternate_phone=reporter_alternate_phone,
+                    reporter_email=reporter_email,
+                    is_anonymous=is_anonymous,
+                    reporter_user_id=reporter_user_id,
+                    location_address=location_address,
+                    location_landmark=location_landmark,
+                    latitude=latitude,
+                    longitude=longitude,
+                    animal_count=animal_count,
+                    physical_condition=physical_condition,
+                    behavioral_indicators=behavioral_indicators,
+                    severity=severity,
+                    is_urgent=is_urgent,
+                    media_evidence=combined_evidence,
+                    environmental_factors=environmental_factors,
+                    reporter_notes=reporter_notes,
+                    status=RescueStatus.REPORTED,
+                )
+                try:
+                    await self._repo.create_request(candidate)
+                except IntegrityError:
+                    # A concurrent request claimed the same ticket between the
+                    # existence check and the flush - roll back and try again.
+                    await self._repo._session.rollback()
+                    continue
+
+                # Save ReportMedia entries
+                media_items = []
+                for idx, key in enumerate(photo_keys):
+                    media_items.append(
+                        ReportMedia(
+                            rescue_request_id=candidate.id,
+                            media_type="photo",
+                            object_key=key,
+                            is_primary=(idx == 0),
+                            display_order=idx,
+                        )
                     )
+                if video_key:
+                    media_items.append(
+                        ReportMedia(
+                            rescue_request_id=candidate.id,
+                            media_type="video",
+                            object_key=video_key,
+                            is_primary=False,
+                            display_order=len(photo_keys),
+                        )
+                    )
+
+                for m in media_items:
+                    self._repo._session.add(m)
+                await self._repo._session.flush()
+
+                request = candidate
+                break
+
+            if request is None:
+                raise ConflictError(
+                    "Unable to allocate a unique rescue ticket number. Please retry."
                 )
 
-            for m in media_items:
-                self._repo._session.add(m)
-            await self._repo._session.flush()
-
-            request = candidate
-            break
-
-        if request is None:
-            raise ConflictError("Unable to allocate a unique rescue ticket number. Please retry.")
-
-        res = await self._repo.get_request_by_id(request.id)
-        if res is None:
-            raise NotFoundError("Failed to fetch newly created rescue request.")
+            res = await self._repo.get_request_by_id(request.id)
+            if res is None:
+                raise NotFoundError("Failed to fetch newly created rescue request.")
+        finally:
+            if lock_acquired and cache_svc is not None and lock_key:
+                with contextlib.suppress(Exception):
+                    await cache_svc.release_lock(lock_key, lock_token)
 
         # Anonymous reports (actor_id=None) MUST still be audited - the public
         # intake is the highest-abuse surface, so the record is written with

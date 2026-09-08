@@ -4,7 +4,7 @@ import uuid
 from collections.abc import Sequence
 from typing import Any
 
-from sqlalchemy import exists, func, or_, select
+from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -91,6 +91,69 @@ class RescueRepository:
         stmt = self._base_stmt().where(
             RescueRequest.ticket_number == ticket_number,
             RescueRequest.reporter_phone == phone,
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def find_active_duplicate(
+        self,
+        *,
+        reporter_phone: str,
+        location_address: str,
+        reporter_email: str | None = None,
+        reporter_user_id: uuid.UUID | None = None,
+        latitude: float | None = None,
+        longitude: float | None = None,
+    ) -> RescueRequest | None:
+        """Find an existing active rescue request matching reporter contact and incident location.
+
+        Active cases are in REPORTED, VERIFIED, DISPATCHED, or LOCATED status.
+        Resolved or terminal cases (RESCUED, ADMITTED, REJECTED) do not block a new report.
+        """
+        active_statuses = [
+            RescueStatus.REPORTED,
+            RescueStatus.VERIFIED,
+            RescueStatus.DISPATCHED,
+            RescueStatus.LOCATED,
+        ]
+        clean_phone = reporter_phone.strip()
+        clean_address = location_address.strip().lower()
+
+        phone_filter = or_(
+            RescueRequest.reporter_phone == clean_phone,
+            func.replace(
+                func.replace(func.replace(RescueRequest.reporter_phone, " ", ""), "-", ""), "(", ""
+            )
+            == "".join(c for c in clean_phone if c.isalnum() or c == "+"),
+        )
+        if reporter_user_id is not None:
+            phone_filter = or_(phone_filter, RescueRequest.reporter_user_id == reporter_user_id)
+        if reporter_email:
+            phone_filter = or_(
+                phone_filter,
+                func.lower(RescueRequest.reporter_email) == reporter_email.strip().lower(),
+            )
+
+        address_filter = func.lower(RescueRequest.location_address) == clean_address
+
+        if latitude is not None and longitude is not None:
+            coord_filter = and_(
+                func.abs(RescueRequest.latitude - latitude) < 0.001,
+                func.abs(RescueRequest.longitude - longitude) < 0.001,
+            )
+            location_filter = or_(address_filter, coord_filter)
+        else:
+            location_filter = address_filter
+
+        stmt = (
+            self._base_stmt()
+            .where(
+                RescueRequest.status.in_(active_statuses),
+                RescueRequest.deleted_at.is_(None),
+                phone_filter,
+                location_filter,
+            )
+            .order_by(RescueRequest.created_at.desc())
+            .limit(1)
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 

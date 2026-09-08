@@ -181,6 +181,15 @@ class RescueRequestCreate(BaseModel):
             )
         return value
 
+    @model_validator(mode="after")
+    def _validate_total_media_count(self) -> "RescueRequestCreate":
+        total_photos = len(self.photo_object_keys or [])
+        total_videos = 1 if self.video_object_key else 0
+        total_evidence = len(self.media_evidence or [])
+        if max(total_photos + total_videos, total_evidence) > 5:
+            raise ValueError("Maximum 5 photos/videos total allowed per emergency report.")
+        return self
+
     _normalise_condition = field_validator("physical_condition", mode="before")(
         _normalise_physical_condition
     )
@@ -208,7 +217,7 @@ class PublicRescueStatusResponse(BaseModel):
 class RescueMediaUploadUrlRequest(BaseModel):
     filename: str = Field(..., examples=["incident_photo1.jpg"])
     mime_type: str = Field(..., examples=["image/jpeg"])
-    file_size: int = Field(..., ge=1, le=104857600, description="Max 100MB file size limit")
+    file_size: int = Field(..., ge=1, le=52428800, description="Max 50MB file size limit")
 
 
 class RescueMediaUploadUrlResponse(BaseModel):
@@ -540,6 +549,7 @@ class RescueRequestResponse(BaseModel):
     behavioral_indicators: str | None
     severity: RescueSeverity
     is_urgent: bool
+    is_duplicate: bool = False
     media_evidence: list[str] | None
     media_urls: list[str] = Field(default_factory=list)
     photo_urls: list[str] = Field(default_factory=list)
@@ -638,6 +648,7 @@ class RescueRequestResponse(BaseModel):
                 "behavioral_indicators": data.behavioral_indicators,
                 "severity": data.severity,
                 "is_urgent": data.is_urgent,
+                "is_duplicate": getattr(data, "_is_duplicate", False),
                 "media_evidence": keys,
                 "media_urls": urls,
                 "photo_urls": photo_urls,
