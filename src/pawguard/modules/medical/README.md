@@ -86,14 +86,31 @@ POST /medical/clearance/{dog_id} {status: "approved", ...}
      -> dog.is_adoptable = True
      -> dog.is_quarantine_passed = True
      -> dog.status = SHELTER
+     -> Broadcast "medical_clearance_approved" to adoption_coordinator + foster_coordinator
+  -> If denied:
+     -> Broadcast "medical_clearance_denied" to shelter_manager
+  -> Audit: MEDICAL_RECORD_UPDATED
+```
+
+### Prescription Deactivation
+```
+PATCH /medical/prescriptions/{id}/status {is_active: false}
+  -> Set prescription.is_active
+  -> If it was active and is now being set inactive (a mid-course stop, e.g.
+     adverse reaction — not a bulk course-completion sweep, which stays silent):
+     -> Broadcast "prescription_deactivated" to shelter_manager
   -> Audit: MEDICAL_RECORD_UPDATED
 ```
 
 ### Inventory Consumption
 Both treatments and prescriptions can consume inventory:
-- Each item: `{item_id, quantity}`
+- Each item: `{item_id, quantity, emergency_override?, override_notes?}`
 - Creates `CHECK_OUT` movement with `reference_type` + `reference_id`
 - Triggers expiry enforcement, stock validation, low-stock alerts
+- `emergency_override=true` (with a mandatory `override_notes` justification) bypasses the
+  insufficient-stock block for a welfare-critical treatment — see the Inventory module's
+  README for the full mechanics. Only this module forwards the flag; Shelter's care-log
+  consumption path does not, so the bypass is reachable only via a vet-authored write.
 
 ## Cross-Module Interactions
 

@@ -211,6 +211,65 @@ class TestMedicalService:
             await service.authorize_adoption_clearance(uuid.uuid4(), roles={"user"})
 
     @pytest.mark.asyncio
+    async def test_authorize_adoption_clearance_approved_notifies_adoption_and_foster(
+        self, mock_repo, mock_dog_repo, mock_audit
+    ):
+        """Workflow 6 §14: an approval must reach the coordinators who act on
+        it next, not just sit in the dog's record until someone reopens it."""
+        notification_svc = AsyncMock()
+        service = MedicalService(
+            mock_repo, mock_dog_repo, mock_audit, notification_service=notification_svc
+        )
+        dog_id = uuid.uuid4()
+        mock_dog_repo.get_by_id.return_value = DogProfile(
+            id=dog_id,
+            registration_number="DOG-002",
+            name="Rex",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+        )
+        await service.authorize_adoption_clearance(
+            dog_id,
+            roles={"veterinarian"},
+            actor_id=uuid.uuid4(),
+            payload=MedicalClearanceCreate(status="approved"),
+        )
+        notification_svc.broadcast.assert_awaited_once()
+        payload = notification_svc.broadcast.await_args.kwargs["payload"]
+        assert payload.notification_type == "medical_clearance_approved"
+        assert payload.target_roles == ["adoption_coordinator", "foster_coordinator"]
+        assert "Rex" in payload.body
+
+    @pytest.mark.asyncio
+    async def test_authorize_adoption_clearance_denied_notifies_shelter_manager(
+        self, mock_repo, mock_dog_repo, mock_audit
+    ):
+        notification_svc = AsyncMock()
+        service = MedicalService(
+            mock_repo, mock_dog_repo, mock_audit, notification_service=notification_svc
+        )
+        dog_id = uuid.uuid4()
+        mock_dog_repo.get_by_id.return_value = DogProfile(
+            id=dog_id,
+            registration_number="DOG-003",
+            name="Milo",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+        )
+        await service.authorize_adoption_clearance(
+            dog_id,
+            roles={"veterinarian"},
+            actor_id=uuid.uuid4(),
+            payload=MedicalClearanceCreate(status="denied"),
+        )
+        notification_svc.broadcast.assert_awaited_once()
+        payload = notification_svc.broadcast.await_args.kwargs["payload"]
+        assert payload.notification_type == "medical_clearance_denied"
+        assert payload.target_roles == ["shelter_manager"]
+
+    @pytest.mark.asyncio
     async def test_list_exams_paginated(self, service, mock_repo):
         now = datetime.now(UTC)
         exam = ClinicalExam(
@@ -320,6 +379,63 @@ class TestMedicalService:
         payload = PrescriptionUpdate(dosage="1g")
         result = await service.update_prescription(rx_id, payload, actor_id=uuid.uuid4())
         assert result.dosage == "1g"
+
+    @pytest.mark.asyncio
+    async def test_update_prescription_status_deactivation_notifies_shelter_manager(
+        self, mock_repo, mock_dog_repo, mock_audit
+    ):
+        """Workflow 6 §17.3: a prescription stopped mid-course (e.g. adverse
+        reaction) needs to reach the Shelter Manager for care planning."""
+        notification_svc = AsyncMock()
+        service = MedicalService(
+            mock_repo, mock_dog_repo, mock_audit, notification_service=notification_svc
+        )
+        rx_id = uuid.uuid4()
+        dog_id = uuid.uuid4()
+        rx = Prescription(
+            id=rx_id,
+            dog_id=dog_id,
+            vet_id=uuid.uuid4(),
+            drug_name="Amox",
+            dosage="500mg",
+            route="Oral",
+            start_at=datetime.now(UTC),
+            end_at=datetime.now(UTC),
+            is_active=True,
+        )
+        mock_repo.get_prescription_by_id.return_value = rx
+        await service.update_prescription_status(rx_id, is_active=False, actor_id=uuid.uuid4())
+        notification_svc.broadcast.assert_awaited_once()
+        payload = notification_svc.broadcast.await_args.kwargs["payload"]
+        assert payload.notification_type == "prescription_deactivated"
+        assert payload.target_roles == ["shelter_manager"]
+        assert "Amox" in payload.body
+
+    @pytest.mark.asyncio
+    async def test_update_prescription_status_reactivation_does_not_notify(
+        self, mock_repo, mock_dog_repo, mock_audit
+    ):
+        """Only a stop mid-course is notification-worthy; reactivating (or
+        redundantly setting the same status) is routine and silent."""
+        notification_svc = AsyncMock()
+        service = MedicalService(
+            mock_repo, mock_dog_repo, mock_audit, notification_service=notification_svc
+        )
+        rx_id = uuid.uuid4()
+        rx = Prescription(
+            id=rx_id,
+            dog_id=uuid.uuid4(),
+            vet_id=uuid.uuid4(),
+            drug_name="Amox",
+            dosage="500mg",
+            route="Oral",
+            start_at=datetime.now(UTC),
+            end_at=datetime.now(UTC),
+            is_active=False,
+        )
+        mock_repo.get_prescription_by_id.return_value = rx
+        await service.update_prescription_status(rx_id, is_active=True, actor_id=uuid.uuid4())
+        notification_svc.broadcast.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_list_treatments_paginated(self, service, mock_repo):

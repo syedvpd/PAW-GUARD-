@@ -46,6 +46,8 @@ from pawguard.modules.medical.schemas import (
     VaccinationRecordResponse,
     VaccineProtocolCreate,
 )
+from pawguard.modules.notifications.schemas import BroadcastCreate
+from pawguard.modules.notifications.service import NotificationService
 from pawguard.services.audit_service import AuditService
 
 logger = get_logger(__name__)
@@ -58,11 +60,34 @@ class MedicalService:
         dog_repo: DogRepository,
         audit_service: AuditService | None = None,
         inventory_service: InventoryService | None = None,
+        notification_service: NotificationService | None = None,
     ) -> None:
         self._repo = repository
         self._dog_repo = dog_repo
         self._audit = audit_service
         self._inventory = inventory_service
+        self._notification_svc = notification_service
+
+    async def _notify(
+        self, *, title: str, body: str, notification_type: str, target_roles: list[str]
+    ) -> None:
+        if self._notification_svc is None:
+            return
+        try:
+            await self._notification_svc.broadcast(
+                payload=BroadcastCreate(
+                    title=title,
+                    body=body,
+                    notification_type=notification_type,
+                    action_url="/medical",
+                    target_roles=target_roles,
+                ),
+                user_ids=[],
+            )
+        except Exception:  # pragma: no cover - alerting must never break the clinical write
+            logger.warning(
+                "Failed to send medical notification %r", notification_type, exc_info=True
+            )
 
     async def perform_clinical_exam(
         self,
@@ -295,6 +320,24 @@ class MedicalService:
                     "clearance_id": str(clearance.id),
                     "status": clearance.status,
                 },
+            )
+        # Workflow 6 §14 Notification Flow: clearance decisions gate the
+        # Adoption/Foster pipeline and shelter care planning, so the
+        # relevant coordinators need to hear about it immediately rather
+        # than discovering it next time they open the dog's record.
+        if clearance.status == "approved":
+            await self._notify(
+                title="Adoption Medical Clearance Approved",
+                body=f"{dog.name} has been cleared by a veterinarian and is now eligible for adoption.",
+                notification_type="medical_clearance_approved",
+                target_roles=["adoption_coordinator", "foster_coordinator"],
+            )
+        elif clearance.status == "denied":
+            await self._notify(
+                title="Adoption Medical Clearance Denied",
+                body=f"{dog.name}'s adoption medical clearance was denied — continued care/planning needed.",
+                notification_type="medical_clearance_denied",
+                target_roles=["shelter_manager"],
             )
         return True
 
@@ -584,6 +627,7 @@ class MedicalService:
         prescription = await self._repo.get_prescription_by_id(p_id)
         if prescription is None:
             raise NotFoundError("Prescription not found.")
+        was_active = prescription.is_active
         prescription.is_active = is_active
         await self._repo._session.flush()
         await self._repo._session.refresh(prescription)
@@ -594,6 +638,16 @@ class MedicalService:
                 ip_address=ip_address or "",
                 user_agent="",
                 metadata={"prescription_id": str(p_id), "is_active": is_active},
+            )
+        # Workflow 6 §14/§17.3: a single prescription going inactive mid-course
+        # (as opposed to a routine bulk course-completion sweep) is usually an
+        # adverse-reaction stop — Shelter Manager needs to know for care planning.
+        if was_active and not is_active:
+            await self._notify(
+                title="Prescription Deactivated",
+                body=f"{prescription.drug_name} for dog {prescription.dog_id} was deactivated mid-course.",
+                notification_type="prescription_deactivated",
+                target_roles=["shelter_manager"],
             )
         return prescription
 
@@ -677,15 +731,19 @@ class MedicalService:
         if not self._inventory or not consumptions:
             return
         for item in consumptions:
+            notes = f"Consumed for {reference_type} {reference_id}"
+            if item.emergency_override:
+                notes = f"[EMERGENCY OVERRIDE] {item.override_notes} — {notes}"
             await self._inventory.record_movement(
                 user_id=user_id,
                 payload=InventoryMovementCreate(
                     item_id=item.item_id,
                     movement_type=MovementType.CHECK_OUT,
                     quantity=item.quantity,
-                    notes=f"Consumed for {reference_type} {reference_id}",
+                    notes=notes,
                     reference_type=reference_type,
                     reference_id=reference_id,
+                    emergency_override=item.emergency_override,
                 ),
                 actor_id=actor_id,
                 ip_address=ip_address,

@@ -46,7 +46,10 @@ from pawguard.modules.medical.schemas import (
     VaccineProtocolResponse,
 )
 from pawguard.modules.medical.service import MedicalService
+from pawguard.modules.notifications.repository import NotificationRepository
+from pawguard.modules.notifications.service import NotificationService
 from pawguard.services.audit_service import AuditService
+from pawguard.workers.pool import get_arq_pool
 
 router = APIRouter(prefix="/medical", tags=["medical"])
 
@@ -54,11 +57,21 @@ router = APIRouter(prefix="/medical", tags=["medical"])
 def get_medical_service(
     db: AsyncSession = Depends(get_db),
     audit: AuditService = Depends(get_audit_service),
+    arq_pool: Any = Depends(get_arq_pool),
 ) -> MedicalService:
     repo = MedicalRepository(db)
     dog_repo = DogRepository(db)
-    inventory = InventoryService(InventoryRepository(db), audit_service=audit)
-    return MedicalService(repo, dog_repo, audit_service=audit, inventory_service=inventory)
+    notification_svc = NotificationService(repository=NotificationRepository(db), arq_pool=arq_pool)
+    inventory = InventoryService(
+        InventoryRepository(db), audit_service=audit, notification_service=notification_svc
+    )
+    return MedicalService(
+        repo,
+        dog_repo,
+        audit_service=audit,
+        inventory_service=inventory,
+        notification_service=notification_svc,
+    )
 
 
 @router.post(
