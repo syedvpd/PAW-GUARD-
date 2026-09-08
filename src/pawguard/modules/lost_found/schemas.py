@@ -160,6 +160,7 @@ class LostReportResponse(BaseModel):
     created_at: datetime
     user: UserProfile | None = None
     media: list[ReportMediaResponse] = Field(default_factory=list)
+    is_duplicate: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -245,6 +246,7 @@ class FoundReportResponse(BaseModel):
     created_at: datetime
     user: UserProfile | None = None
     media: list[ReportMediaResponse] = Field(default_factory=list)
+    is_duplicate: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 

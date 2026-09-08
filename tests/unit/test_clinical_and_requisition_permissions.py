@@ -114,8 +114,8 @@ class TestRoleAndPermissionDefinitions:
         assert pc.DASHBOARD_INVENTORY in im_perms
         assert pc.PUBLIC_READ in im_perms
 
-        # Explicitly verify no shelter facility access (PAW-INV-002)
-        assert pc.SHELTER_READ not in im_perms
+        # Shelter read-only access for inventory visibility (PAW-INV-002)
+        assert pc.SHELTER_READ in im_perms
         assert pc.SHELTER_UPDATE not in im_perms
         assert pc.SHELTER_MANAGE_KENNELS not in im_perms
         assert pc.SHELTER_TRANSFER not in im_perms
@@ -127,6 +127,34 @@ class TestRoleAndPermissionDefinitions:
 
         assert pc.REQUISITION_CREATE in sm_perms
         assert pc.SHELTER_UPDATE in sm_perms
+
+    def test_adoption_coordinator_role_permissions(self):
+        role_map = {r[0]: set(r[3]) for r in ROLE_DEFINITIONS}
+        ac_perms = role_map["adoption_coordinator"]
+
+        assert pc.ADOPTION_READ in ac_perms
+        assert pc.ADOPTION_PROCESS in ac_perms
+        assert pc.ADOPTION_APPROVE in ac_perms
+        assert pc.ADOPTION_LOCK in ac_perms
+        assert pc.SHELTER_READ in ac_perms
+        assert pc.MEDICAL_READ in ac_perms
+        assert pc.PUBLIC_READ in ac_perms
+        assert pc.DASHBOARD_ADOPTION in ac_perms
+        assert pc.COMPANION_PET_READ in ac_perms
+
+    def test_foster_coordinator_role_permissions(self):
+        role_map = {r[0]: set(r[3]) for r in ROLE_DEFINITIONS}
+        fc_perms = role_map["foster_coordinator"]
+
+        assert pc.FOSTER_CREATE in fc_perms
+        assert pc.FOSTER_READ in fc_perms
+        assert pc.FOSTER_UPDATE in fc_perms
+        assert pc.FOSTER_APPROVE in fc_perms
+        assert pc.SHELTER_READ in fc_perms
+        assert pc.INVENTORY_READ in fc_perms
+        assert pc.PUBLIC_READ in fc_perms
+        assert pc.DASHBOARD_FOSTER in fc_perms
+        assert pc.COMPANION_PET_READ in fc_perms
 
 
 @pytest.mark.asyncio

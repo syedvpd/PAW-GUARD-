@@ -250,6 +250,7 @@ class ShelterService:
 
         await self._dog_repo._session.flush()
         await invalidate_route_cache("dog")
+        await invalidate_route_cache("dashboards")
         if self._audit and actor_id:
             await self._audit.record(
                 event_type=AuthAuditEventType.KENNEL_ASSIGNED,

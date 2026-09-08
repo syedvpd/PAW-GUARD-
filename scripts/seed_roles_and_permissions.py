@@ -304,6 +304,7 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
             pc.MEDICAL_READ,
             pc.PUBLIC_READ,
             pc.DASHBOARD_ADOPTION,
+            pc.COMPANION_PET_READ,
         ],
     ),
     (
@@ -315,9 +316,11 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
             pc.FOSTER_READ,
             pc.FOSTER_UPDATE,
             pc.FOSTER_APPROVE,
+            pc.SHELTER_READ,
             pc.INVENTORY_READ,
             pc.PUBLIC_READ,
             pc.DASHBOARD_FOSTER,
+            pc.COMPANION_PET_READ,
         ],
     ),
     (
@@ -343,6 +346,7 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
             pc.INVENTORY_UPDATE,
             pc.INVENTORY_DELETE,
             pc.REQUISITION_CREATE,
+            pc.SHELTER_READ,
             pc.PUBLIC_READ,
             pc.DASHBOARD_INVENTORY,
         ],

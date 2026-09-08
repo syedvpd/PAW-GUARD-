@@ -179,9 +179,15 @@ async def report_incident(
         actor_id=current_user.id,
         ip_address=request.client.host if request.client else None,
     )
+    is_dup = getattr(request_obj, "_is_duplicate", False)
+    message = (
+        f"An active emergency rescue request already exists for this incident (Ticket: {request_obj.ticket_number})."
+        if is_dup
+        else "Emergency incident reported successfully."
+    )
     return ApiResponse(
         data=RescueRequestResponse.model_validate(request_obj),
-        message="Emergency incident reported successfully.",
+        message=message,
     )
 
 
@@ -233,9 +239,15 @@ async def public_report_incident(
         actor_id=None,
         ip_address=request.client.host if request.client else None,
     )
+    is_dup = getattr(request_obj, "_is_duplicate", False)
+    message = (
+        f"An active emergency rescue request already exists for this incident (Ticket: {request_obj.ticket_number})."
+        if is_dup
+        else "Emergency incident reported successfully."
+    )
     return ApiResponse(
         data=RescueRequestResponse.model_validate(request_obj),
-        message="Emergency incident reported successfully.",
+        message=message,
     )
 
 

@@ -414,10 +414,9 @@ class StorageService:
         from pawguard.core.exceptions import ValidationFailedError
 
         photos = photo_keys or []
-        if len(photos) > 5:
-            raise ValidationFailedError("Maximum 5 photos allowed per report.")
-
         videos = [video_key] if video_key else []
+        if len(photos) + len(videos) > 5:
+            raise ValidationFailedError("Maximum 5 photos/videos total allowed per report.")
 
         allowed_photo_mimes = {"image/jpeg", "image/png", "image/webp"}
         allowed_video_mimes = {"video/mp4", "video/webm", "video/quicktime"}

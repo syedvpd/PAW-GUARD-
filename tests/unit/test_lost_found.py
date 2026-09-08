@@ -1176,3 +1176,580 @@ class TestLostFoundModelIntegrity:
         media_table = Base.metadata.tables["report_media"]
         for fk in media_table.foreign_keys:
             assert fk.column is not None
+
+
+class TestLostFoundDuplicateResponseContract:
+    """Authoritative test suite for Lost & Found duplicate response contract (Tasks 1-6)."""
+
+    @pytest.fixture
+    def mock_repo(self):
+        repo = AsyncMock(spec=LostFoundRepository)
+        repo._session = AsyncMock()
+        return repo
+
+    @pytest.fixture
+    def mock_audit(self):
+        return AsyncMock(spec=AuditService)
+
+    @pytest.fixture
+    def mock_redis(self):
+        redis = AsyncMock()
+        redis.set = AsyncMock(return_value=True)
+        redis.eval = AsyncMock(return_value=1)
+        return redis
+
+    @pytest.fixture
+    def service(self, mock_repo, mock_audit, mock_redis):
+        return LostFoundService(mock_repo, mock_audit, redis=mock_redis)
+
+    # ── TEST A: First submission (Lost & Found) ─────────────────────────
+    @pytest.mark.asyncio
+    async def test_lost_report_first_submission_is_duplicate_false(self, service, mock_repo):
+        user_id = uuid.uuid4()
+        mock_repo.find_active_lost_duplicate.return_value = None
+        new_id = uuid.uuid4()
+        new_report = LostReport(
+            id=new_id,
+            user_id=user_id,
+            species=Species.DOG,
+            pet_name="Bruno",
+            breed="labrador",
+            color="golden",
+            location_address="Banjara Hills Rd 12",
+            lost_at=datetime.now(UTC),
+            status=ReportStatus.ACTIVE,
+            created_at=datetime.now(UTC),
+            user=None,
+            media=[],
+        )
+        mock_repo.create_lost_report.return_value = new_report
+        mock_repo.get_lost_report_by_id.return_value = new_report
+
+        payload = LostReportCreate(
+            species=Species.DOG,
+            pet_name="Bruno",
+            breed="Labrador",
+            color="Golden",
+            location_address="Banjara Hills Rd 12",
+            lost_at=datetime.now(UTC),
+        )
+        result = await service.report_lost_pet(user_id, payload)
+        assert result.id == new_id
+        assert getattr(result, "is_duplicate", None) is False
+        assert getattr(result, "_is_duplicate", None) is False
+
+        response_data = LostReportResponse.model_validate(result)
+        assert response_data.is_duplicate is False
+        mock_repo.create_lost_report.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_found_report_first_submission_is_duplicate_false(self, service, mock_repo):
+        user_id = uuid.uuid4()
+        mock_repo.find_active_found_duplicate.return_value = None
+        new_id = uuid.uuid4()
+        new_report = FoundReport(
+            id=new_id,
+            user_id=user_id,
+            species=Species.DOG,
+            breed_observed="beagle",
+            color_observed="tricolor",
+            location_address="Jubilee Hills Checkpost",
+            found_at=datetime.now(UTC),
+            status=ReportStatus.ACTIVE,
+            created_at=datetime.now(UTC),
+            user=None,
+            media=[],
+        )
+        mock_repo.create_found_report.return_value = new_report
+        mock_repo.get_found_report_by_id.return_value = new_report
+
+        payload = FoundReportCreate(
+            species=Species.DOG,
+            breed_observed="Beagle",
+            color_observed="Tricolor",
+            location_address="Jubilee Hills Checkpost",
+            found_at=datetime.now(UTC),
+        )
+        result = await service.report_found_pet(user_id, payload)
+        assert result.id == new_id
+        assert getattr(result, "is_duplicate", None) is False
+        assert getattr(result, "_is_duplicate", None) is False
+
+        response_data = FoundReportResponse.model_validate(result)
+        assert response_data.is_duplicate is False
+        mock_repo.create_found_report.assert_awaited_once()
+
+    # ── TEST B: Sequential duplicate (Lost & Found) ──────────────────────
+    @pytest.mark.asyncio
+    async def test_lost_report_sequential_duplicate_returns_existing_with_is_duplicate_true(
+        self, service, mock_repo
+    ):
+        user_id = uuid.uuid4()
+        existing_id = uuid.uuid4()
+        existing_report = LostReport(
+            id=existing_id,
+            user_id=user_id,
+            species=Species.DOG,
+            pet_name="Bruno",
+            breed="labrador",
+            color="golden",
+            location_address="Banjara Hills Rd 12",
+            lost_at=datetime.now(UTC),
+            status=ReportStatus.ACTIVE,
+            created_at=datetime.now(UTC),
+            user=None,
+            media=[],
+        )
+        mock_repo.find_active_lost_duplicate.return_value = existing_report
+
+        payload = LostReportCreate(
+            species=Species.DOG,
+            pet_name="Bruno",
+            breed="Labrador",
+            color="Golden",
+            location_address="Banjara Hills Rd 12",
+            lost_at=datetime.now(UTC),
+        )
+        result = await service.report_lost_pet(user_id, payload)
+        assert result.id == existing_id
+        assert getattr(result, "is_duplicate", None) is True
+        assert getattr(result, "_is_duplicate", None) is True
+
+        response_data = LostReportResponse.model_validate(result)
+        assert response_data.is_duplicate is True
+        mock_repo.create_lost_report.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_found_report_sequential_duplicate_returns_existing_with_is_duplicate_true(
+        self, service, mock_repo
+    ):
+        user_id = uuid.uuid4()
+        existing_id = uuid.uuid4()
+        existing_report = FoundReport(
+            id=existing_id,
+            user_id=user_id,
+            species=Species.DOG,
+            breed_observed="beagle",
+            color_observed="tricolor",
+            location_address="Jubilee Hills Checkpost",
+            found_at=datetime.now(UTC),
+            status=ReportStatus.ACTIVE,
+            created_at=datetime.now(UTC),
+            user=None,
+            media=[],
+        )
+        mock_repo.find_active_found_duplicate.return_value = existing_report
+
+        payload = FoundReportCreate(
+            species=Species.DOG,
+            breed_observed="Beagle",
+            color_observed="Tricolor",
+            location_address="Jubilee Hills Checkpost",
+            found_at=datetime.now(UTC),
+        )
+        result = await service.report_found_pet(user_id, payload)
+        assert result.id == existing_id
+        assert getattr(result, "is_duplicate", None) is True
+        assert getattr(result, "_is_duplicate", None) is True
+
+        response_data = FoundReportResponse.model_validate(result)
+        assert response_data.is_duplicate is True
+        mock_repo.create_found_report.assert_not_called()
+
+    # ── TEST C: Concurrent duplicate (Redis lock contention) ────────────
+    @pytest.mark.asyncio
+    async def test_lost_concurrent_duplicate_redis_lock_contention(self, mock_repo, mock_audit):
+        mock_redis = AsyncMock()
+        mock_redis.set = AsyncMock(return_value=False)
+        service = LostFoundService(mock_repo, mock_audit, redis=mock_redis)
+
+        user_id = uuid.uuid4()
+        payload = LostReportCreate(
+            species=Species.DOG,
+            pet_name="Bruno",
+            breed="Labrador",
+            color="Golden",
+            location_address="Banjara Hills Rd 12",
+            lost_at=datetime.now(UTC),
+        )
+        with pytest.raises(ConflictError, match="currently being processed"):
+            await service.report_lost_pet(user_id, payload)
+
+        mock_repo.find_active_lost_duplicate.assert_not_called()
+        mock_repo.create_lost_report.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_found_concurrent_duplicate_redis_lock_contention(self, mock_repo, mock_audit):
+        mock_redis = AsyncMock()
+        mock_redis.set = AsyncMock(return_value=False)
+        service = LostFoundService(mock_repo, mock_audit, redis=mock_redis)
+
+        user_id = uuid.uuid4()
+        payload = FoundReportCreate(
+            species=Species.DOG,
+            breed_observed="Beagle",
+            color_observed="Tricolor",
+            location_address="Jubilee Hills Checkpost",
+            found_at=datetime.now(UTC),
+        )
+        with pytest.raises(ConflictError, match="currently being processed"):
+            await service.report_found_pet(user_id, payload)
+
+        mock_repo.find_active_found_duplicate.assert_not_called()
+        mock_repo.create_found_report.assert_not_called()
+
+    # ── TEST D: Resolved / expired behavior ─────────────────────────────
+    @pytest.mark.asyncio
+    async def test_lost_resolved_report_does_not_block_new_submission(self, service, mock_repo):
+        user_id = uuid.uuid4()
+        mock_repo.find_active_lost_duplicate.return_value = None
+        new_report = LostReport(
+            id=uuid.uuid4(),
+            user_id=user_id,
+            species=Species.DOG,
+            pet_name="Bruno",
+            breed="labrador",
+            color="golden",
+            location_address="Banjara Hills Rd 12",
+            lost_at=datetime.now(UTC),
+            status=ReportStatus.ACTIVE,
+            created_at=datetime.now(UTC),
+            user=None,
+            media=[],
+        )
+        mock_repo.create_lost_report.return_value = new_report
+        mock_repo.get_lost_report_by_id.return_value = new_report
+
+        payload = LostReportCreate(
+            species=Species.DOG,
+            pet_name="Bruno",
+            breed="Labrador",
+            color="Golden",
+            location_address="Banjara Hills Rd 12",
+            lost_at=datetime.now(UTC),
+        )
+        result = await service.report_lost_pet(user_id, payload)
+        assert getattr(result, "is_duplicate", False) is False
+        mock_repo.create_lost_report.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_found_resolved_report_does_not_block_new_submission(self, service, mock_repo):
+        user_id = uuid.uuid4()
+        mock_repo.find_active_found_duplicate.return_value = None
+        new_report = FoundReport(
+            id=uuid.uuid4(),
+            user_id=user_id,
+            species=Species.DOG,
+            breed_observed="beagle",
+            color_observed="tricolor",
+            location_address="Jubilee Hills Checkpost",
+            found_at=datetime.now(UTC),
+            status=ReportStatus.ACTIVE,
+            created_at=datetime.now(UTC),
+            user=None,
+            media=[],
+        )
+        mock_repo.create_found_report.return_value = new_report
+        mock_repo.get_found_report_by_id.return_value = new_report
+
+        payload = FoundReportCreate(
+            species=Species.DOG,
+            breed_observed="Beagle",
+            color_observed="Tricolor",
+            location_address="Jubilee Hills Checkpost",
+            found_at=datetime.now(UTC),
+        )
+        result = await service.report_found_pet(user_id, payload)
+        assert getattr(result, "is_duplicate", False) is False
+        mock_repo.create_found_report.assert_awaited_once()
+
+    # ── TEST E: Lost vs Found isolation ─────────────────────────────────
+    @pytest.mark.asyncio
+    async def test_lost_and_found_duplicate_isolation(self, service, mock_repo):
+        user_id = uuid.uuid4()
+        mock_repo.find_active_lost_duplicate.return_value = None
+        new_lost = LostReport(
+            id=uuid.uuid4(),
+            user_id=user_id,
+            species=Species.DOG,
+            pet_name="Bruno",
+            breed="labrador",
+            color="golden",
+            location_address="Banjara Hills Rd 12",
+            lost_at=datetime.now(UTC),
+            status=ReportStatus.ACTIVE,
+            created_at=datetime.now(UTC),
+            user=None,
+            media=[],
+        )
+        mock_repo.create_lost_report.return_value = new_lost
+        mock_repo.get_lost_report_by_id.return_value = new_lost
+
+        lost_payload = LostReportCreate(
+            species=Species.DOG,
+            pet_name="Bruno",
+            breed="Labrador",
+            color="Golden",
+            location_address="Banjara Hills Rd 12",
+            lost_at=datetime.now(UTC),
+        )
+        await service.report_lost_pet(user_id, lost_payload)
+        mock_repo.find_active_lost_duplicate.assert_awaited_once()
+        mock_repo.find_active_found_duplicate.assert_not_called()
+
+        mock_repo.reset_mock()
+        mock_repo.find_active_found_duplicate.return_value = None
+        new_found = FoundReport(
+            id=uuid.uuid4(),
+            user_id=user_id,
+            species=Species.DOG,
+            breed_observed="labrador",
+            color_observed="golden",
+            location_address="Banjara Hills Rd 12",
+            found_at=datetime.now(UTC),
+            status=ReportStatus.ACTIVE,
+            created_at=datetime.now(UTC),
+            user=None,
+            media=[],
+        )
+        mock_repo.create_found_report.return_value = new_found
+        mock_repo.get_found_report_by_id.return_value = new_found
+
+        found_payload = FoundReportCreate(
+            species=Species.DOG,
+            breed_observed="Labrador",
+            color_observed="Golden",
+            location_address="Banjara Hills Rd 12",
+            found_at=datetime.now(UTC),
+        )
+        await service.report_found_pet(user_id, found_payload)
+        mock_repo.find_active_found_duplicate.assert_awaited_once()
+        mock_repo.find_active_lost_duplicate.assert_not_called()
+
+
+class TestLostFoundDuplicateRouterContract:
+    """HTTP router endpoint tests asserting status code 201 and is_duplicate boolean value in response."""
+
+    @pytest.mark.asyncio
+    async def test_router_lost_report_first_submission_and_duplicate(self):
+        from fastapi import FastAPI
+        from httpx import ASGITransport, AsyncClient
+
+        from pawguard.core.security import AccessTokenClaims
+        from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
+        from pawguard.modules.lost_found.router import get_lost_found_service, router
+
+        app = FastAPI()
+        app.include_router(router, prefix="/api/v1")
+
+        user_id = uuid.uuid4()
+        now = datetime.now(UTC)
+        mock_user_obj = User(
+            id=user_id,
+            email="owner@example.com",
+            full_name="Pet Owner",
+            phone="+919876543210",
+            hashed_password="hash",
+            is_active=True,
+            is_verified=True,
+            mfa_enabled=False,
+            created_at=now,
+            updated_at=now,
+        )
+        mock_user = CurrentUser(
+            user=mock_user_obj,
+            claims=AccessTokenClaims(
+                user_id=user_id,
+                session_id=uuid.uuid4(),
+                roles=["pet_owner"],
+                jti=str(uuid.uuid4()),
+                expires_at=datetime.now(UTC),
+            ),
+            db=AsyncMock(),
+            redis=AsyncMock(),
+        )
+
+        mock_svc = AsyncMock(spec=LostFoundService)
+        first_report = LostReport(
+            id=uuid.uuid4(),
+            user_id=user_id,
+            species=Species.DOG,
+            pet_name="Charlie",
+            breed="golden retriever",
+            color="golden",
+            location_address="Sector 4",
+            lost_at=now,
+            status=ReportStatus.ACTIVE,
+            created_at=now,
+            user=None,
+            media=[],
+        )
+        first_report._is_duplicate = False
+        first_report.is_duplicate = False
+        mock_svc.report_lost_pet.return_value = first_report
+
+        app.dependency_overrides[get_current_user] = lambda: mock_user
+        app.dependency_overrides[get_lost_found_service] = lambda: mock_svc
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp1 = await client.post(
+                "/api/v1/lost-found/lost",
+                json={
+                    "species": "dog",
+                    "pet_name": "Charlie",
+                    "breed": "Golden Retriever",
+                    "color": "Golden",
+                    "location_address": "Sector 4",
+                    "lost_at": now.isoformat(),
+                },
+            )
+            assert resp1.status_code == 201
+            data1 = resp1.json()["data"]
+            assert data1["is_duplicate"] is False
+            assert data1["id"] == str(first_report.id)
+
+            # Second submission: sequential duplicate
+            dup_report = LostReport(
+                id=first_report.id,
+                user_id=user_id,
+                species=Species.DOG,
+                pet_name="Charlie",
+                breed="golden retriever",
+                color="golden",
+                location_address="Sector 4",
+                lost_at=now,
+                status=ReportStatus.ACTIVE,
+                created_at=now,
+                user=None,
+                media=[],
+            )
+            dup_report._is_duplicate = True
+            dup_report.is_duplicate = True
+            mock_svc.report_lost_pet.return_value = dup_report
+
+            resp2 = await client.post(
+                "/api/v1/lost-found/lost",
+                json={
+                    "species": "dog",
+                    "pet_name": "Charlie",
+                    "breed": "Golden Retriever",
+                    "color": "Golden",
+                    "location_address": "Sector 4",
+                    "lost_at": now.isoformat(),
+                },
+            )
+            assert resp2.status_code == 201
+            data2 = resp2.json()["data"]
+            assert data2["is_duplicate"] is True
+            assert data2["id"] == str(first_report.id)
+
+    @pytest.mark.asyncio
+    async def test_router_found_report_first_submission_and_duplicate(self):
+        from fastapi import FastAPI
+        from httpx import ASGITransport, AsyncClient
+
+        from pawguard.core.security import AccessTokenClaims
+        from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
+        from pawguard.modules.lost_found.router import get_lost_found_service, router
+
+        app = FastAPI()
+        app.include_router(router, prefix="/api/v1")
+
+        user_id = uuid.uuid4()
+        now = datetime.now(UTC)
+        mock_user_obj = User(
+            id=user_id,
+            email="finder@example.com",
+            full_name="Pet Finder",
+            phone="+919876543211",
+            hashed_password="hash",
+            is_active=True,
+            is_verified=True,
+            mfa_enabled=False,
+            created_at=now,
+            updated_at=now,
+        )
+        mock_user = CurrentUser(
+            user=mock_user_obj,
+            claims=AccessTokenClaims(
+                user_id=user_id,
+                session_id=uuid.uuid4(),
+                roles=["pet_owner"],
+                jti=str(uuid.uuid4()),
+                expires_at=datetime.now(UTC),
+            ),
+            db=AsyncMock(),
+            redis=AsyncMock(),
+        )
+
+        mock_svc = AsyncMock(spec=LostFoundService)
+        first_report = FoundReport(
+            id=uuid.uuid4(),
+            user_id=user_id,
+            species=Species.DOG,
+            breed_observed="husky",
+            color_observed="grey",
+            location_address="Sector 9",
+            found_at=now,
+            status=ReportStatus.ACTIVE,
+            created_at=now,
+            user=None,
+            media=[],
+        )
+        first_report._is_duplicate = False
+        first_report.is_duplicate = False
+        mock_svc.report_found_pet.return_value = first_report
+
+        app.dependency_overrides[get_current_user] = lambda: mock_user
+        app.dependency_overrides[get_lost_found_service] = lambda: mock_svc
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp1 = await client.post(
+                "/api/v1/lost-found/found",
+                json={
+                    "species": "dog",
+                    "breed_observed": "Husky",
+                    "color_observed": "Grey",
+                    "location_address": "Sector 9",
+                    "found_at": now.isoformat(),
+                },
+            )
+            assert resp1.status_code == 201
+            data1 = resp1.json()["data"]
+            assert data1["is_duplicate"] is False
+            assert data1["id"] == str(first_report.id)
+
+            # Second submission: sequential duplicate
+            dup_report = FoundReport(
+                id=first_report.id,
+                user_id=user_id,
+                species=Species.DOG,
+                breed_observed="husky",
+                color_observed="grey",
+                location_address="Sector 9",
+                found_at=now,
+                status=ReportStatus.ACTIVE,
+                created_at=now,
+                user=None,
+                media=[],
+            )
+            dup_report._is_duplicate = True
+            dup_report.is_duplicate = True
+            mock_svc.report_found_pet.return_value = dup_report
+
+            resp2 = await client.post(
+                "/api/v1/lost-found/found",
+                json={
+                    "species": "dog",
+                    "breed_observed": "Husky",
+                    "color_observed": "Grey",
+                    "location_address": "Sector 9",
+                    "found_at": now.isoformat(),
+                },
+            )
+            assert resp2.status_code == 201
+            data2 = resp2.json()["data"]
+            assert data2["is_duplicate"] is True
+            assert data2["id"] == str(first_report.id)

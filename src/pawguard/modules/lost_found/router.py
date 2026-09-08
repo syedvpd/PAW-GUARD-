@@ -205,9 +205,17 @@ async def report_lost_pet(
         actor_id=current_user.id,
         ip_address=ip,
     )
+    is_dup = getattr(report, "_is_duplicate", False) or getattr(report, "is_duplicate", False)
+    data = LostReportResponse.model_validate(report)
+    data.is_duplicate = is_dup
+    message = (
+        "An active lost pet report already exists for this incident."
+        if is_dup
+        else "Lost pet report registered successfully."
+    )
     return ApiResponse(
-        data=LostReportResponse.model_validate(report),
-        message="Lost pet report registered successfully.",
+        data=data,
+        message=message,
     )
 
 
@@ -253,9 +261,17 @@ async def report_found_pet(
         actor_id=current_user.id,
         ip_address=ip,
     )
+    is_dup = getattr(report, "_is_duplicate", False) or getattr(report, "is_duplicate", False)
+    data = FoundReportResponse.model_validate(report)
+    data.is_duplicate = is_dup
+    message = (
+        "An active found pet report already exists for this incident."
+        if is_dup
+        else "Found roaming animal report registered successfully."
+    )
     return ApiResponse(
-        data=FoundReportResponse.model_validate(report),
-        message="Found roaming animal report registered successfully.",
+        data=data,
+        message=message,
     )
 
 

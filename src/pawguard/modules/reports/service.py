@@ -401,13 +401,16 @@ class ReportService:
         vaccinations_task = asyncio.ensure_future(self._fetch_vaccinations(start, end))
         prescriptions_task = asyncio.ensure_future(self._fetch_prescriptions(start, end))
         total_dogs_task = asyncio.ensure_future(self._fetch_total_dogs())
-        treatments, vaccinations, prescriptions, total_dogs = await asyncio.gather(
+        vet_expenses_task = asyncio.ensure_future(self._fetch_veterinary_expenditures(start, end))
+        treatments, vaccinations, prescriptions, total_dogs, vet_expenses = await asyncio.gather(
             treatments_task,
             vaccinations_task,
             prescriptions_task,
             total_dogs_task,
+            vet_expenses_task,
         )
         total_dogs = int(total_dogs)
+        vet_expenses = float(vet_expenses)
 
         # Vaccination coverage (PRR 4.1 Medical Care & Immunization Compliance).
         vaccine_counts: dict[str, int] = {}
@@ -420,8 +423,8 @@ class ReportService:
             vaccinated_dog_ids.add(dog_key)
         coverage_pct = (len(vaccinated_dog_ids) / total_dogs * 100.0) if total_dogs else 0.0
 
-        # Follow-up / compliance (PRR 4.1): vaccinations whose next_due_at is
-        # past their due date are overdue.
+        # Follow-up exam compliance (PRR 4.1 / REP-003):
+        # Vaccinations/treatments with scheduled follow-ups.
         overdue = 0
         on_track = 0
         no_followup = 0
@@ -432,6 +435,12 @@ class ReportService:
                 overdue += 1
             else:
                 on_track += 1
+
+        total_followups = on_track + overdue
+        followup_compliance_pct = (on_track / total_followups * 100.0) if total_followups else 100.0
+
+        # Total veterinary expenditure per dog (REP-003)
+        cost_per_dog = (vet_expenses / total_dogs) if total_dogs else 0.0
 
         prescription_counts: dict[str, int] = {}
         active_prescriptions = 0
@@ -452,7 +461,7 @@ class ReportService:
         if vaccinations:
             sections.append(
                 {
-                    "title": "Vaccination Coverage",
+                    "title": "Vaccination Coverage by Vaccine",
                     "headers": ["Vaccine Name", "Doses Administered", "Dogs Vaccinated"],
                     "rows": [
                         [name, str(count), str(len(vaccine_dogs.get(name, set())))]
@@ -464,15 +473,31 @@ class ReportService:
             )
         sections.append(
             {
-                "title": "Vaccination & Follow-up Compliance",
+                "title": "Medical Care & Immunization Compliance Summary",
                 "headers": ["Metric", "Value"],
                 "rows": [
-                    ["Total Dogs", str(total_dogs)],
+                    ["Total Dogs in Shelter Population", str(total_dogs)],
                     ["Dogs Vaccinated", str(len(vaccinated_dog_ids))],
-                    ["Vaccination Coverage", f"{coverage_pct:.1f}%"],
-                    ["Follow-ups Overdue", str(overdue)],
-                    ["Follow-ups On Track", str(on_track)],
+                    ["Vaccination Coverage Rate", f"{coverage_pct:.1f}%"],
+                    ["Follow-up Exams Scheduled / Due", str(total_followups)],
+                    ["Follow-up Exams On Track", str(on_track)],
+                    ["Follow-up Exams Overdue", str(overdue)],
+                    ["Follow-up Exam Compliance Rate", f"{followup_compliance_pct:.1f}%"],
                     ["No Follow-up Scheduled", str(no_followup)],
+                    ["Total Veterinary Expenditure", f"₹{vet_expenses:.2f}"],
+                    ["Total Veterinary Expenditure per Dog", f"₹{cost_per_dog:.2f}"],
+                ],
+            }
+        )
+        sections.append(
+            {
+                "title": "Veterinary Expenditure Analysis",
+                "headers": ["Metric", "Value"],
+                "rows": [
+                    ["Shelter Population Audited", str(total_dogs)],
+                    ["Total Medical Treatments Rendered", str(len(treatments))],
+                    ["Total Veterinary Expenditure", f"₹{vet_expenses:.2f}"],
+                    ["Average Expenditure per Dog", f"₹{cost_per_dog:.2f}"],
                 ],
             }
         )
@@ -510,12 +535,13 @@ class ReportService:
             sections.append(
                 {
                     "title": "Pending Surgery Backlog (surgery-type treatments without post-op notes)",
-                    "headers": ["Treatment ID", "Dog ID", "Vet ID", "Date"],
+                    "headers": ["Treatment ID", "Dog ID", "Vet ID", "Treatment Type", "Date"],
                     "rows": [
                         [
                             str(t.id),
                             str(t.dog_id),
                             str(t.vet_id),
+                            str(t.treatment_type or "Surgery"),
                             t.treatment_date.date()
                             if hasattr(t.treatment_date, "date")
                             else t.treatment_date,
@@ -526,7 +552,7 @@ class ReportService:
             )
 
         return {
-            "title": "Medical Treatment Report",
+            "title": "Medical Care & Immunization Compliance Report",
             "subtitle": f"{start or 'N/A'} to {end or 'N/A'}",
             "headers": ["ID", "Dog ID", "Vet ID", "Treatment Type", "Date"],
             "rows": [
@@ -575,6 +601,33 @@ class ReportService:
             )
         ).scalar() or 0
 
+    async def _fetch_veterinary_expenditures(self, start: date | None, end: date | None):
+        from sqlalchemy import or_
+
+        stmt = select(func.coalesce(func.sum(FinancialTransaction.amount), 0)).where(
+            FinancialTransaction.deleted_at.is_(None),
+            FinancialTransaction.transaction_type == TransactionType.EXPENSE,
+            FinancialTransaction.status.in_(
+                (TransactionStatus.POSTED, TransactionStatus.RECONCILED)
+            ),
+        )
+        if start:
+            stmt = stmt.where(FinancialTransaction.transaction_date >= start)
+        if end:
+            stmt = stmt.where(FinancialTransaction.transaction_date <= end)
+        stmt = stmt.where(
+            or_(
+                FinancialTransaction.reference_type.in_(
+                    ["medical", "veterinary", "medical_treatment", "dog"]
+                ),
+                FinancialTransaction.description.ilike("%medical%"),
+                FinancialTransaction.description.ilike("%vet%"),
+                FinancialTransaction.description.ilike("%surg%"),
+                FinancialTransaction.description.ilike("%vaccin%"),
+            )
+        )
+        return (await self._session.execute(stmt)).scalar() or 0.0
+
     async def _inventory_report(self, filters: dict[str, Any] | None) -> dict[str, Any]:
         stmt = select(InventoryItem)
         if filters and "category" in filters:
@@ -586,10 +639,10 @@ class ReportService:
         total_value = sum(float(i.quantity * i.unit_cost) for i in results)
         item_costs = {str(i.id): float(i.unit_cost) for i in results}
 
-        # Movement / usage analytics (PRR 4.1 Inventory Consumption & Expiry
-        # Audit): volume by reference type and movement direction, movement
-        # speed (avg interval), and loss / write-off value (negative
-        # adjustments valued at the item's unit cost).
+        # Movement / usage analytics (PRR 4.1 / REP-04):
+        # Stock movement speeds (avg movement interval, turnover velocity),
+        # inventory loss rates (negative adjustments / total value),
+        # expired product values, and upcoming purchase order requirements.
         movement_by_ref: dict[str, dict[str, dict]] = {}
         write_off_value = 0.0
         check_in_total = check_out_total = adjustment_total = 0.0
@@ -620,12 +673,36 @@ class ReportService:
             for earlier, later in zip(timestamps, timestamps[1:], strict=True)
         ]
         avg_movement_interval = sum(gaps) / len(gaps) if gaps else None
+        loss_rate_pct = (write_off_value / total_value * 100.0) if total_value else 0.0
 
         today = date.today()
         expired_items = [i for i in results if i.expiry_date is not None and i.expiry_date < today]
         expired_value = sum(float(i.quantity * i.unit_cost) for i in expired_items)
 
+        # Upcoming purchase order requirements: items at or below reorder threshold
         reorder_items = [i for i in results if float(i.quantity) <= float(i.reorder_threshold)]
+        po_requirements_rows = []
+        total_estimated_po_cost = 0.0
+        for i in reorder_items:
+            current_qty = float(i.quantity)
+            threshold = float(i.reorder_threshold)
+            unit_cost = float(i.unit_cost)
+            required_qty = max(1.0, (threshold * 2.0) - current_qty)
+            est_cost = required_qty * unit_cost
+            total_estimated_po_cost += est_cost
+            po_requirements_rows.append(
+                [
+                    str(i.id),
+                    i.name,
+                    i.category,
+                    f"{current_qty:.1f}",
+                    f"{threshold:.1f}",
+                    f"{required_qty:.1f} {i.unit}",
+                    f"₹{unit_cost:.2f}",
+                    f"₹{est_cost:.2f}",
+                ]
+            )
+
         pending_requisitions = [r for r in requisitions if r.status == RequisitionStatus.PENDING]
         requisition_status_counts: dict[str, int] = {}
         for r in requisitions:
@@ -656,6 +733,73 @@ class ReportService:
         ] + ([["", "", "", "", "", "", "TOTAL", f"{total_value:.2f}"]] if results else [])
 
         sections = []
+        sections.append(
+            {
+                "title": "Inventory Health & Loss Audit",
+                "headers": ["Metric", "Value"],
+                "rows": [
+                    ["Total Catalog Items", str(len(results))],
+                    ["Total Inventory Value", f"₹{total_value:.2f}"],
+                    ["Expired Product Value", f"₹{expired_value:.2f}"],
+                    ["Inventory Loss / Write-off Value", f"₹{write_off_value:.2f}"],
+                    ["Inventory Loss Rate", f"{loss_rate_pct:.1f}%"],
+                    [
+                        "Stock Movement Speed (Avg Interval)",
+                        f"{avg_movement_interval:.1f} days"
+                        if avg_movement_interval is not None
+                        else "N/A",
+                    ],
+                    ["Total Stock Check-In Volume", f"{check_in_total:.1f}"],
+                    ["Total Stock Check-Out Volume", f"{check_out_total:.1f}"],
+                    [
+                        "Upcoming Purchase Order Requirements Exposure",
+                        f"₹{total_estimated_po_cost:.2f}",
+                    ],
+                ],
+            }
+        )
+        if po_requirements_rows:
+            sections.append(
+                {
+                    "title": "Upcoming Purchase Order Requirements (Items Below Reorder Threshold)",
+                    "headers": [
+                        "Item ID",
+                        "Name",
+                        "Category",
+                        "Current Stock",
+                        "Reorder Threshold",
+                        "Suggested Order Qty",
+                        "Unit Cost",
+                        "Estimated Cost",
+                    ],
+                    "rows": po_requirements_rows,
+                }
+            )
+        if expired_items:
+            sections.append(
+                {
+                    "title": "Expired Product Values Audit",
+                    "headers": [
+                        "Name",
+                        "Category",
+                        "Quantity",
+                        "Expiry Date",
+                        "Unit Cost",
+                        "Loss Value",
+                    ],
+                    "rows": [
+                        [
+                            i.name,
+                            i.category,
+                            float(i.quantity),
+                            i.expiry_date,
+                            f"₹{float(i.unit_cost):.2f}",
+                            f"₹{float(i.quantity * i.unit_cost):.2f}",
+                        ]
+                        for i in expired_items
+                    ],
+                }
+            )
         if movements:
             movement_rows = []
             for reference, type_buckets in sorted(movement_by_ref.items()):
@@ -682,7 +826,7 @@ class ReportService:
             )
             sections.append(
                 {
-                    "title": "Movement & Usage Summary",
+                    "title": "Stock Movement & Usage Summary",
                     "headers": [
                         "Reference Type",
                         "Check-In Qty",
@@ -693,64 +837,10 @@ class ReportService:
                     "rows": movement_rows,
                 }
             )
-        sections.append(
-            {
-                "title": "Inventory Health Metrics",
-                "headers": ["Metric", "Value"],
-                "rows": [
-                    ["Total Items", str(len(results))],
-                    ["Total Inventory Value", f"{total_value:.2f}"],
-                    ["Expired Value", f"{expired_value:.2f}"],
-                    ["Write-off / Loss Value", f"{write_off_value:.2f}"],
-                    [
-                        "Avg Movement Interval (days)",
-                        f"{avg_movement_interval:.1f}"
-                        if avg_movement_interval is not None
-                        else "N/A",
-                    ],
-                ],
-            }
-        )
-        if expired_items:
-            sections.append(
-                {
-                    "title": "Expired Items",
-                    "headers": [
-                        "Name",
-                        "Category",
-                        "Quantity",
-                        "Expiry Date",
-                        "Unit Cost",
-                        "Value",
-                    ],
-                    "rows": [
-                        [
-                            i.name,
-                            i.category,
-                            float(i.quantity),
-                            i.expiry_date,
-                            float(i.unit_cost),
-                            float(i.quantity * i.unit_cost),
-                        ]
-                        for i in expired_items
-                    ],
-                }
-            )
-        if reorder_items:
-            sections.append(
-                {
-                    "title": "Reorder in Progress (Below Threshold)",
-                    "headers": ["Name", "Quantity", "Reorder Threshold", "Unit"],
-                    "rows": [
-                        [i.name, float(i.quantity), float(i.reorder_threshold), i.unit]
-                        for i in reorder_items
-                    ],
-                }
-            )
         if pending_requisitions:
             sections.append(
                 {
-                    "title": "Pending Requisition Orders",
+                    "title": "Pending Purchase Requisition Orders",
                     "headers": ["Requisition ID", "Item ID", "Quantity", "Status"],
                     "rows": [
                         [str(r.id), str(r.item_id), float(r.quantity), r.status]
@@ -771,7 +861,7 @@ class ReportService:
             )
 
         return {
-            "title": "Inventory Report",
+            "title": "Inventory Consumption & Expiry Audit Report",
             "headers": headers,
             "rows": rows,
             "sections": sections,
@@ -858,29 +948,40 @@ class ReportService:
                 }
             )
 
-        # Dispatch & response analytics (PRR 4.1 Rescue Case Efficiency):
-        # average response time, success ratio, failure-reason breakdown and
-        # per-status distribution.
+        # Dispatch & response analytics (PRR 4.1 / REP-001):
+        # average response times (incident to dispatch & incident to on-site arrival),
+        # success ratios, failure reason breakdowns with percentages, and outcomes.
         if results:
             total = len(results)
             successful = sum(
                 1 for r in results if r.status in (RescueStatus.RESCUED, RescueStatus.ADMITTED)
             )
-            response_times: list[float] = []
+            success_ratio_pct = (successful / total * 100.0) if total else 0.0
+
+            dispatch_response_times: list[float] = []
+            arrival_response_times: list[float] = []
             for request, dispatch in pairs:
-                disp_time = dispatch.dispatched_at or dispatch.created_at
-                req_time = request.created_at
+                req_time = _coerce_utc(request.created_at)
+                disp_time = _coerce_utc(dispatch.dispatched_at or dispatch.created_at)
+                loc_time = _coerce_utc(dispatch.located_at or dispatch.rescued_at)
                 if disp_time and req_time:
-                    if disp_time.tzinfo is not None and req_time.tzinfo is None:
-                        req_time = req_time.replace(tzinfo=UTC)
-                    elif disp_time.tzinfo is None and req_time.tzinfo is not None:
-                        disp_time = disp_time.replace(tzinfo=UTC)
                     diff_hours = (disp_time - req_time).total_seconds() / 3600.0
                     if diff_hours >= 0:
-                        response_times.append(diff_hours)
+                        dispatch_response_times.append(diff_hours)
+                if loc_time and req_time:
+                    diff_arr_hours = (loc_time - req_time).total_seconds() / 3600.0
+                    if diff_arr_hours >= 0:
+                        arrival_response_times.append(diff_arr_hours)
 
-            avg_response_time = (
-                sum(response_times) / len(response_times) if response_times else None
+            avg_dispatch_response = (
+                sum(dispatch_response_times) / len(dispatch_response_times)
+                if dispatch_response_times
+                else None
+            )
+            avg_arrival_response = (
+                sum(arrival_response_times) / len(arrival_response_times)
+                if arrival_response_times
+                else (avg_dispatch_response if avg_dispatch_response is not None else None)
             )
 
             status_counts: dict[str, int] = {}
@@ -889,9 +990,10 @@ class ReportService:
             sections.append(
                 {
                     "title": "Rescue Outcomes by Status",
-                    "headers": ["Status", "Count"],
+                    "headers": ["Status", "Count", "Percentage"],
                     "rows": [
-                        [status, str(count)] for status, count in sorted(status_counts.items())
+                        [status, str(count), f"{count / total * 100.0:.1f}%"]
+                        for status, count in sorted(status_counts.items())
                     ],
                 }
             )
@@ -901,30 +1003,44 @@ class ReportService:
                     "headers": ["Metric", "Value"],
                     "rows": [
                         ["Total Rescue Requests", str(total)],
-                        ["Dispatched", str(len(pairs))],
-                        ["Successful (Rescued/Admitted)", str(successful)],
-                        ["Success Ratio", f"{successful / total * 100.0:.1f}%"],
+                        ["Dispatched Cases", str(len(pairs))],
+                        ["Successful Rescues (Rescued/Admitted)", str(successful)],
+                        ["Successful Rescue Ratio", f"{success_ratio_pct:.1f}%"],
                         [
-                            "Avg Response Time",
-                            f"{avg_response_time:.1f}h" if avg_response_time is not None else "N/A",
+                            "Avg Response Time (Incident to Dispatch)",
+                            f"{avg_dispatch_response:.1f}h"
+                            if avg_dispatch_response is not None
+                            else "N/A",
+                        ],
+                        [
+                            "Avg Response Time (Incident to On-Site Arrival)",
+                            f"{avg_arrival_response:.1f}h"
+                            if avg_arrival_response is not None
+                            else "N/A",
                         ],
                     ],
                 }
             )
 
             failure_counts: dict[str, int] = {}
+            total_failed = 0
             for dispatch in dispatches:
                 if dispatch.failure_reason:
                     failure_counts[dispatch.failure_reason] = (
                         failure_counts.get(dispatch.failure_reason, 0) + 1
                     )
+                    total_failed += 1
             if failure_counts:
                 sections.append(
                     {
                         "title": "Failure Reason Breakdown",
-                        "headers": ["Failure Reason", "Count"],
+                        "headers": ["Failure Reason", "Count", "Percentage"],
                         "rows": [
-                            [reason, str(count)]
+                            [
+                                reason,
+                                str(count),
+                                f"{count / total_failed * 100.0:.1f}%" if total_failed else "0.0%",
+                            ]
                             for reason, count in sorted(
                                 failure_counts.items(), key=lambda item: item[1], reverse=True
                             )
@@ -960,7 +1076,7 @@ class ReportService:
                 )
 
         return {
-            "title": "Rescue Report",
+            "title": "Rescue Operational Efficiency Report",
             "subtitle": f"{start or 'N/A'} to {end or 'N/A'}",
             "headers": headers,
             "rows": rows,
@@ -1275,10 +1391,17 @@ class ReportService:
             "Kennel Capacity",
             "Dogs Housed",
             "Avg LOS (days)",
+            "Kennel Utilization %",
             "Facility Utilization %",
         ]
         main_rows = []
         kennel_util_rows = []
+        total_capacity_sum = 0
+        total_kennels_sum = 0
+        total_dogs_sum = 0
+        total_occupied_kennels_sum = 0
+        all_los_values: list[float] = []
+
         for f in facilities:
             key = str(f.id)
             ks = kennel_stats.get(key, {"count": 0, "capacity": 0.0})
@@ -1287,6 +1410,14 @@ class ReportService:
                 round(ds["dogs"] / float(f.total_capacity) * 100, 1) if f.total_capacity else 0.0
             )
             kennel_util = round(ds["occupied"] / ks["count"] * 100, 1) if ks["count"] else 0.0
+
+            total_capacity_sum += f.total_capacity or 0
+            total_kennels_sum += ks["count"]
+            total_dogs_sum += ds["dogs"]
+            total_occupied_kennels_sum += ds["occupied"]
+            if ds["avg_los"] is not None:
+                all_los_values.append(ds["avg_los"])
+
             main_rows.append(
                 [
                     key,
@@ -1298,18 +1429,29 @@ class ReportService:
                     f"{ks['capacity']:.1f}",
                     ds["dogs"],
                     f"{ds['avg_los']:.1f}" if ds["avg_los"] is not None else "",
-                    f"{facility_util:.1f}",
+                    f"{kennel_util:.1f}%",
+                    f"{facility_util:.1f}%",
                 ]
             )
             kennel_util_rows.append(
                 [
                     f.name,
-                    ks["count"],
+                    str(ks["count"]),
                     f"{ks['capacity']:.1f}",
-                    ds["occupied"],
-                    f"{kennel_util:.1f}",
+                    str(ds["occupied"]),
+                    f"{kennel_util:.1f}%",
                 ]
             )
+
+        overall_avg_los = (sum(all_los_values) / len(all_los_values)) if all_los_values else None
+        overall_kennel_util = (
+            round(total_occupied_kennels_sum / total_kennels_sum * 100, 1)
+            if total_kennels_sum > 0
+            else 0.0
+        )
+        overall_facility_util = (
+            round(total_dogs_sum / total_capacity_sum * 100, 1) if total_capacity_sum > 0 else 0.0
+        )
 
         intake_log_rows = [
             [
@@ -1318,32 +1460,63 @@ class ReportService:
                 dog.registration_number,
                 dog.name,
                 dog.status,
-                dog.created_at.date() if hasattr(dog.created_at, "date") else dog.created_at,
+                str(dog.created_at.date() if hasattr(dog.created_at, "date") else dog.created_at),
             ]
             for dog, facility_name in intake_rows
         ]
 
         quarantine_rows_out = [
-            [facility_names.get(key, key), f"{days:.1f}"]
+            [
+                facility_names.get(key, key),
+                str(len(quarantine_days.get(key, []))),
+                f"{days:.1f} days",
+            ]
             for key, days in sorted(quarantine_avg.items())
         ]
 
         transfer_rows = [
             [
                 f.name,
-                transfers_in.get(str(f.id), 0),
-                transfers_out.get(str(f.id), 0),
-                transfers_in_completed.get(str(f.id), 0),
-                transfers_out_completed.get(str(f.id), 0),
+                str(transfers_in.get(str(f.id), 0)),
+                str(transfers_out.get(str(f.id), 0)),
+                str(transfers_in_completed.get(str(f.id), 0)),
+                str(transfers_out_completed.get(str(f.id), 0)),
+                str(
+                    transfers_in_completed.get(str(f.id), 0)
+                    - transfers_out_completed.get(str(f.id), 0)
+                ),
             ]
             for f in facilities
         ]
 
         sections = []
+        sections.append(
+            {
+                "title": "Shelter Capacity & Turnover Audit Summary",
+                "headers": ["Metric", "Value"],
+                "rows": [
+                    ["Total Operating Facilities", str(len(facilities))],
+                    ["Total Shelter Capacity", str(total_capacity_sum)],
+                    ["Total Kennels", str(total_kennels_sum)],
+                    ["Total Dogs Currently Housed", str(total_dogs_sum)],
+                    ["Occupied Kennels", str(total_occupied_kennels_sum)],
+                    ["Overall Kennel Utilization Rate", f"{overall_kennel_util:.1f}%"],
+                    ["Overall Facility Capacity Utilization Rate", f"{overall_facility_util:.1f}%"],
+                    [
+                        "Average Length of Stay per Animal",
+                        f"{overall_avg_los:.1f} days" if overall_avg_los is not None else "N/A",
+                    ],
+                    [
+                        "Total Inter-Facility Transfers Completed",
+                        str(sum(transfers_in_completed.values())),
+                    ],
+                ],
+            }
+        )
         if kennel_util_rows:
             sections.append(
                 {
-                    "title": "Kennel Capacity & Utilization",
+                    "title": "Kennel Capacity & Utilization by Facility",
                     "headers": [
                         "Facility",
                         "Kennel Count",
@@ -1352,6 +1525,29 @@ class ReportService:
                         "Kennel Utilization %",
                     ],
                     "rows": kennel_util_rows,
+                }
+            )
+        if quarantine_rows_out:
+            sections.append(
+                {
+                    "title": "Quarantine Clearing Speeds by Facility",
+                    "headers": ["Facility", "Dogs Cleared", "Avg Days to Clear"],
+                    "rows": quarantine_rows_out,
+                }
+            )
+        if transfer_rows:
+            sections.append(
+                {
+                    "title": "Inter-Facility Transfer Volumes",
+                    "headers": [
+                        "Facility",
+                        "Transfers In",
+                        "Transfers Out",
+                        "Completed In",
+                        "Completed Out",
+                        "Net Transfer Movement",
+                    ],
+                    "rows": transfer_rows,
                 }
             )
         if intake_log_rows:
@@ -1369,31 +1565,9 @@ class ReportService:
                     "rows": intake_log_rows,
                 }
             )
-        if quarantine_rows_out:
-            sections.append(
-                {
-                    "title": "Quarantine-to-Clear Speed (proxy: intake to first vaccination)",
-                    "headers": ["Facility", "Avg Days to Clear"],
-                    "rows": quarantine_rows_out,
-                }
-            )
-        if transfer_rows:
-            sections.append(
-                {
-                    "title": "Facility Transfer Volumes",
-                    "headers": [
-                        "Facility",
-                        "Transfers In",
-                        "Transfers Out",
-                        "Completed In",
-                        "Completed Out",
-                    ],
-                    "rows": transfer_rows,
-                }
-            )
 
         return {
-            "title": "Shelter Report",
+            "title": "Shelter Capacity & Turnover Audit Report",
             "subtitle": f"{start or 'N/A'} to {end or 'N/A'}",
             "headers": headers,
             "rows": main_rows,

@@ -1,5 +1,6 @@
 from datetime import date
 from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -30,6 +31,21 @@ class ReportRequest(BaseModel):
     period_start: date | None = Field(None, examples=["2026-01-01"])
     period_end: date | None = Field(None, examples=["2026-07-31"])
     filters: dict[str, str] | None = Field(None, examples=[{"status": "completed"}])
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_payload(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            fmt = data.get("format")
+            if isinstance(fmt, str):
+                fmt_lower = fmt.lower().strip()
+                if fmt_lower in ("excel", "xlsx", "xls"):
+                    data["format"] = ReportFormat.EXCEL
+                elif fmt_lower == "csv":
+                    data["format"] = ReportFormat.CSV
+                elif fmt_lower == "pdf":
+                    data["format"] = ReportFormat.PDF
+        return data
 
     @model_validator(mode="after")
     def _validate_date_range(self) -> "ReportRequest":
