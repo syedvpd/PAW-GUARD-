@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from pawguard.modules.auth.schemas import UserProfile
 from pawguard.modules.dog.schemas import DogProfileResponse
@@ -286,6 +286,21 @@ class FosterHomeInspectionOutcome(BaseModel):
 class FosterPlacementCreate(BaseModel):
     dog_id: uuid.UUID
     notes: str | None = Field(None, examples=["Placing for post-surgery recovery, 4-6 weeks."])
+    vet_exception: bool = Field(
+        False,
+        description=(
+            "A veterinarian's medical exception override, used when the dog has no "
+            "approved medical clearance but a vet judges it foster-eligible anyway. "
+            "Only usable by a caller holding medical:clearance; requires exception_notes."
+        ),
+    )
+    exception_notes: str | None = Field(None, max_length=1000, description="Required when vet_exception is set.")
+
+    @model_validator(mode="after")
+    def _require_exception_justification(self) -> "FosterPlacementCreate":
+        if self.vet_exception and not (self.exception_notes and self.exception_notes.strip()):
+            raise ValueError("exception_notes is required when vet_exception is set.")
+        return self
 
 
 class FosterPlacementResponse(BaseModel):

@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from pawguard.core.exceptions import ConflictError, NotFoundError
+from pawguard.core.exceptions import ConflictError, NotFoundError, ValidationFailedError
 from pawguard.core.pagination import PageParams
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
@@ -278,6 +278,73 @@ class TestFosterService:
         mock_repo.get_profile_by_id_for_update.return_value = foster
         with pytest.raises(ConflictError, match="must be approved"):
             await service.place_dog(uuid.uuid4(), FosterPlacementCreate(dog_id=uuid.uuid4()))
+
+    def _placement_ready_foster_and_dog(self, mock_repo, mock_dog_repo):
+        """Shared setup for the vet-exception tests: an approved, available
+        foster home and an eligible (non-adopted, non-fostered) dog — the
+        only missing piece is the dog's medical clearance."""
+        foster_id, dog_id = uuid.uuid4(), uuid.uuid4()
+        foster = FosterProfile(
+            id=foster_id,
+            user_id=uuid.uuid4(),
+            status=FosterStatus.APPROVED,
+            max_capacity=2,
+            active_count=0,
+            is_available=True,
+            background_check_passed=True,
+            home_inspection_passed=True,
+        )
+        mock_repo.get_profile_by_id_for_update.return_value = foster
+        mock_dog_repo.get_by_id_for_update.return_value = DogProfile(
+            id=dog_id,
+            registration_number="DOG-002",
+            name="Milo",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+            is_adoptable=False,
+        )
+        mock_repo.get_active_placement_for_dog.return_value = None
+        mock_repo.get_placement_by_id.return_value = FosterPlacement(
+            id=uuid.uuid4(), foster_id=foster_id, dog_id=dog_id, is_active=True, placed_at=datetime.now()
+        )
+        return foster_id, dog_id, foster
+
+    @pytest.mark.asyncio
+    async def test_place_dog_without_clearance_and_no_exception_blocked(self, service, mock_repo, mock_dog_repo):
+        foster_id, dog_id, _ = self._placement_ready_foster_and_dog(mock_repo, mock_dog_repo)
+        with patch(
+            "pawguard.modules.foster.service.MedicalRepository.get_latest_approved_clearance",
+            AsyncMock(return_value=None),
+        ), pytest.raises(ValidationFailedError, match="not medically eligible"):
+            await service.place_dog(foster_id, FosterPlacementCreate(dog_id=dog_id))
+
+    @pytest.mark.asyncio
+    async def test_place_dog_vet_exception_by_non_veterinarian_still_blocked(self, service, mock_repo, mock_dog_repo):
+        """Master-spec rule (workflow doc §16): the medical exception override
+        is Veterinarian-only — a Foster Coordinator can't self-authorize it
+        just by setting the flag."""
+        foster_id, dog_id, _ = self._placement_ready_foster_and_dog(mock_repo, mock_dog_repo)
+        payload = FosterPlacementCreate(dog_id=dog_id, vet_exception=True, exception_notes="Looks fine to me.")
+        with patch(
+            "pawguard.modules.foster.service.MedicalRepository.get_latest_approved_clearance",
+            AsyncMock(return_value=None),
+        ), pytest.raises(ValidationFailedError, match="not medically eligible"):
+            await service.place_dog(foster_id, payload, caller_roles={"foster_coordinator"})
+
+    @pytest.mark.asyncio
+    async def test_place_dog_vet_exception_by_veterinarian_succeeds(self, service, mock_repo, mock_dog_repo):
+        foster_id, dog_id, foster = self._placement_ready_foster_and_dog(mock_repo, mock_dog_repo)
+        payload = FosterPlacementCreate(
+            dog_id=dog_id, vet_exception=True, exception_notes="Cleared on exam; labs pending, not a blocker."
+        )
+        with patch(
+            "pawguard.modules.foster.service.MedicalRepository.get_latest_approved_clearance",
+            AsyncMock(return_value=None),
+        ):
+            result = await service.place_dog(foster_id, payload, caller_roles={"veterinarian"})
+        assert result.dog_id == dog_id
+        assert foster.active_count == 1
 
     @pytest.mark.asyncio
     async def test_return_dog(self, service, mock_repo, mock_dog_repo):

@@ -258,6 +258,7 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
             pc.DOG_MEDICAL_UPDATE,
             pc.SHELTER_READ,
             pc.ADOPTION_READ,
+            pc.FOSTER_READ,
             pc.INVENTORY_READ,
             pc.REQUISITION_CREATE,
             pc.PUBLIC_READ,

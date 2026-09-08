@@ -167,13 +167,13 @@ async def approve_profile(
     "/{profile_id}",
     response_model=ApiResponse[None],
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(require_permission("foster:update"))],
+    dependencies=[Depends(require_permission("foster:delete"))],
 )
 @router.delete(
     "/admin/fosters/{profile_id}",
     response_model=ApiResponse[None],
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(require_permission("foster:update"))],
+    dependencies=[Depends(require_permission("foster:delete"))],
 )
 async def soft_delete_profile(
     profile_id: uuid.UUID,
@@ -194,7 +194,10 @@ async def soft_delete_profile(
     "/{profile_id}/placements",
     response_model=ApiResponse[FosterPlacementResponse],
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_permission("foster:approve"))],
+    # medical:clearance is included so a veterinarian can submit a placement
+    # under a medical exception (payload.vet_exception) — see place_dog(),
+    # which still requires the veterinarian role for that path specifically.
+    dependencies=[Depends(require_permission("foster:approve", "medical:clearance"))],
 )
 async def place_dog(
     profile_id: uuid.UUID,
@@ -204,11 +207,15 @@ async def place_dog(
     service: FosterService = Depends(get_foster_service),
 ) -> ApiResponse[FosterPlacementResponse]:
     ip = request.client.host if request.client else None
+    caller_roles = set(current_user.claims.roles)
+    if hasattr(current_user.user, "roles") and current_user.user.roles:
+        caller_roles.update(r.name for r in current_user.user.roles)
     placement = await service.place_dog(
         profile_id,
         payload,
         actor_id=current_user.id,
         ip_address=ip,
+        caller_roles=caller_roles,
     )
     return ApiResponse(
         data=FosterPlacementResponse.model_validate(placement),
@@ -362,7 +369,7 @@ async def list_profiles(
 @router.post(
     "/bulk/delete",
     response_model=ApiResponse[BulkDeleteResponse],
-    dependencies=[Depends(require_permission("foster:update"))],
+    dependencies=[Depends(require_permission("foster:delete"))],
 )
 async def bulk_delete_profiles(
     payload: BulkDeleteRequest,

@@ -82,6 +82,34 @@ class FosterService:
         except Exception as exc:
             logger.warning("Failed to send foster push notification: %s", exc)
 
+    async def _notify_vet_exception(
+        self, *, dog_name: str, placement_id: uuid.UUID, notes: str | None
+    ) -> None:
+        """Workflow 9 §16: a vet-authorized medical exception is a documented
+        exception path, not a silent bypass — Foster Coordinator and Centre
+        Admin need to know it was used and why."""
+        try:
+            from pawguard.modules.notifications.repository import NotificationRepository
+            from pawguard.modules.notifications.schemas import BroadcastCreate
+            from pawguard.modules.notifications.service import NotificationService
+
+            svc = NotificationService(repository=NotificationRepository(self._repo._session))
+            await svc.broadcast(
+                payload=BroadcastCreate(
+                    title=f"Vet medical exception used: {dog_name}",
+                    body=(
+                        f"{dog_name} was placed in foster care without an approved medical "
+                        f"clearance, under a veterinarian's medical exception. Justification: {notes}."
+                    ),
+                    notification_type="foster_vet_exception",
+                    action_url=f"/foster/placements/{placement_id}",
+                    target_roles=["foster_coordinator", "rescue_centre_admin"],
+                ),
+                user_ids=[],
+            )
+        except Exception as exc:
+            logger.warning("Failed to send foster vet-exception alert: %s", exc)
+
     async def apply_to_foster(
         self,
         user_id: uuid.UUID,
@@ -312,6 +340,7 @@ class FosterService:
         payload: FosterPlacementCreate,
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
+        caller_roles: set[str] | None = None,
     ) -> FosterPlacement:
         # Lock allocation before checking capacity so two coordinators cannot
         # consume the final foster slot concurrently.
@@ -345,12 +374,17 @@ class FosterService:
 
         medical_repo = MedicalRepository(self._repo._session)
         clearance = await medical_repo.get_latest_approved_clearance(payload.dog_id)
+        used_vet_exception = False
         if clearance is None:
-            raise ValidationFailedError(
-                "Dog is not medically eligible for foster placement. Record an "
-                "approved, non-expired medical clearance or veterinarian foster "
-                "exception first."
-            )
+            is_vet = bool(caller_roles and "veterinarian" in caller_roles)
+            if not (payload.vet_exception and is_vet):
+                raise ValidationFailedError(
+                    "Dog is not medically eligible for foster placement. Record an "
+                    "approved, non-expired medical clearance first, or have a "
+                    "veterinarian submit this placement with a medical exception "
+                    "and justification note."
+                )
+            used_vet_exception = True
 
         existing_placement = await self._repo.get_active_placement_for_dog(payload.dog_id)
         if existing_placement is not None:
@@ -400,8 +434,11 @@ class FosterService:
                     "placement_id": str(res.id),
                     "dog_id": str(payload.dog_id),
                     "foster_id": str(foster_id),
+                    "vet_medical_exception": used_vet_exception,
                 },
             )
+        if used_vet_exception:
+            await self._notify_vet_exception(dog_name=dog.name, placement_id=res.id, notes=payload.exception_notes)
 
         try:
             from pawguard.modules.notifications.governance_service import (
