@@ -33,7 +33,7 @@ class TestReportMultiMediaValidation:
     def test_six_photos_raises_validation_error(self) -> None:
         svc = StorageService()
         photos = [f"lost-found/photo_{i}.jpg" for i in range(6)]
-        with pytest.raises(ValidationFailedError, match="Maximum 5 photos allowed"):
+        with pytest.raises(ValidationFailedError, match="Maximum 5 photos/videos total allowed"):
             svc.validate_report_media(photo_keys=photos, video_key=None)
 
     def test_one_video_valid(self) -> None:
@@ -41,11 +41,18 @@ class TestReportMultiMediaValidation:
         # Should not raise
         svc.validate_report_media(photo_keys=[], video_key="lost-found/clip.mp4")
 
-    def test_five_photos_and_one_video_valid(self) -> None:
+    def test_four_photos_and_one_video_valid(self) -> None:
+        svc = StorageService()
+        photos = [f"rescue/photo_{i}.jpg" for i in range(4)]
+        # 4 photos + 1 video = 5 total, within the combined cap. Should not raise.
+        svc.validate_report_media(photo_keys=photos, video_key="rescue/clip.mp4")
+
+    def test_five_photos_and_one_video_raises(self) -> None:
         svc = StorageService()
         photos = [f"rescue/photo_{i}.jpg" for i in range(5)]
-        # Should not raise
-        svc.validate_report_media(photo_keys=photos, video_key="rescue/clip.mp4")
+        # 5 photos + 1 video = 6 total, over the combined cap of 5.
+        with pytest.raises(ValidationFailedError, match="Maximum 5 photos/videos total allowed"):
+            svc.validate_report_media(photo_keys=photos, video_key="rescue/clip.mp4")
 
     def test_unsupported_image_mime_type_raises(self) -> None:
         mock_client = MagicMock()

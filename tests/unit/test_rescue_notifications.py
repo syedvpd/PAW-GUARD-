@@ -37,6 +37,7 @@ class TestRescueNotificationsAndReporterMapping:
     async def test_report_incident_binds_actor_id_as_reporter_user_id(self, service, mock_repo):
         actor_id = uuid.uuid4()
         mock_repo.get_request_by_ticket.return_value = None
+        mock_repo.find_active_duplicate.return_value = None
 
         created_request = None
 
