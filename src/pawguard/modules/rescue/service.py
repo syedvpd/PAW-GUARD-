@@ -37,6 +37,7 @@ from pawguard.modules.fleet.repository import FleetRepository
 from pawguard.modules.fleet.service import FleetService
 from pawguard.modules.lost_found.models import ReportMedia
 from pawguard.modules.rescue.models import (
+    ACTIVE_DISPATCH_STATUSES,
     RescueDispatch,
     RescueDispatchAgent,
     RescueEscalationStatus,
@@ -1564,7 +1565,7 @@ class RescueService:
                     User.id.in_(agent_geo_data.keys()),
                     User.deleted_at.is_(None),
                     User.is_active.is_(True),
-                    Role.name.in_(["rescue_agent", "rescue_coordinator"]),
+                    Role.name == "rescue_agent",
                 )
                 .distinct()
             )
@@ -1598,7 +1599,7 @@ class RescueService:
                 .where(
                     User.is_active.is_(True),
                     User.deleted_at.is_(None),
-                    Role.name.in_(["rescue_agent", "rescue_coordinator", "super_admin"]),
+                    Role.name == "rescue_agent",
                 )
                 .distinct()
             )
@@ -1624,11 +1625,7 @@ class RescueService:
     async def get_agent_availability(self) -> list[dict[str, Any]]:
         """List rescue agents with dynamic availability derived from active dispatches."""
         session = self._repo._session
-        active_statuses = [
-            RescueStatus.DISPATCHED,
-            RescueStatus.LOCATED,
-            RescueStatus.RESCUED,
-        ]
+        active_statuses = ACTIVE_DISPATCH_STATUSES
         # Agents currently on an in-progress dispatch are "busy".
         busy_stmt = (
             select(RescueDispatchAgent.agent_id, RescueDispatch.id.label("dispatch_id"))
@@ -1685,11 +1682,7 @@ class RescueService:
     async def get_vehicle_availability(self) -> list[dict[str, Any]]:
         """List fleet vehicles with availability derived from active dispatches."""
         session = self._repo._session
-        active_statuses = [
-            RescueStatus.DISPATCHED,
-            RescueStatus.LOCATED,
-            RescueStatus.RESCUED,
-        ]
+        active_statuses = ACTIVE_DISPATCH_STATUSES
         # Vehicles currently assigned to an in-progress dispatch.
         assigned_stmt = (
             select(

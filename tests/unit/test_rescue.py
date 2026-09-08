@@ -15,6 +15,7 @@ from pawguard.core.search import SortParams
 from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.fleet.models import VehicleStatus
 from pawguard.modules.rescue.models import (
+    ACTIVE_DISPATCH_STATUSES,
     RescueDispatch,
     RescueEscalationType,
     RescueFailureReason,
@@ -1447,6 +1448,34 @@ class TestRescueService:
                 request_id,
                 escalation_type=RescueEscalationType.BACKUP_PERSONNEL,
             )
+
+
+class TestRescueRepositoryVehicleBusy:
+    """get_active_dispatch_by_vehicle_id must agree with get_vehicle_availability's
+    definition of "busy" (both driven by ACTIVE_DISPATCH_STATUSES) so a vehicle
+    still out on a RESCUED-stage dispatch can't be double-booked onto a new one."""
+
+    @pytest.mark.asyncio
+    async def test_query_checks_all_active_dispatch_statuses(self):
+        assert RescueStatus.RESCUED in ACTIVE_DISPATCH_STATUSES
+
+        session = AsyncMock()
+        captured = {}
+
+        async def fake_execute(stmt):
+            captured["stmt"] = stmt
+            result = MagicMock()
+            result.scalar_one_or_none.return_value = None
+            return result
+
+        session.execute = fake_execute
+        repo = RescueRepository(session)
+
+        await repo.get_active_dispatch_by_vehicle_id(uuid.uuid4())
+
+        compiled = str(captured["stmt"].compile(compile_kwargs={"literal_binds": True}))
+        for status in ACTIVE_DISPATCH_STATUSES:
+            assert f"'{status.value}'" in compiled
 
 
 class TestRescueRequestCreateSchema:

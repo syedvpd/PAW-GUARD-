@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from pawguard.core.pagination import PageParams
 from pawguard.core.search import SortParams, apply_sorting, build_search_filter
 from pawguard.modules.rescue.models import (
+    ACTIVE_DISPATCH_STATUSES,
     RescueDispatch,
     RescueDispatchAgent,
     RescueEscalationStatus,
@@ -232,7 +233,7 @@ class RescueRepository:
             .join(RescueRequest, RescueDispatch.rescue_request_id == RescueRequest.id)
             .where(
                 RescueDispatch.assigned_vehicle_id == vehicle_id,
-                RescueRequest.status.in_([RescueStatus.DISPATCHED, RescueStatus.LOCATED]),
+                RescueRequest.status.in_(ACTIVE_DISPATCH_STATUSES),
                 RescueRequest.deleted_at.is_(None),
             )
         )

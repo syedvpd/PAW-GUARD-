@@ -93,6 +93,30 @@ class TestRescueGeo:
         assert results[0]["name"] == "Fallback Agent"
         assert results[0]["distance_km"] is None
 
+    @pytest.mark.asyncio
+    async def test_get_nearest_agents_excludes_non_field_roles(self, service, mock_repo, mock_redis):
+        """Suggestions must only surface rescue_agent — not coordinators/admins (PRR dispatch scope)."""
+        agent_id = uuid.uuid4()
+        mock_redis.geosearch.return_value = [[str(agent_id), 5.0, (78.3741, 17.4482)]]
+        mock_redis.get.return_value = "1"
+
+        captured = {}
+
+        async def fake_execute(stmt):
+            captured["stmt"] = stmt
+            result = MagicMock()
+            result.scalars().all.return_value = []
+            return result
+
+        mock_repo._session.execute = fake_execute
+
+        await service.get_nearest_agents(17.4480, 78.3740, radius_km=50.0)
+
+        compiled = str(captured["stmt"].compile(compile_kwargs={"literal_binds": True}))
+        assert "rescue_agent" in compiled
+        assert "rescue_coordinator" not in compiled
+        assert "super_admin" not in compiled
+
     def test_rescue_dispatch_response_properties(self):
         request_id = uuid.uuid4()
         dispatch_id = uuid.uuid4()

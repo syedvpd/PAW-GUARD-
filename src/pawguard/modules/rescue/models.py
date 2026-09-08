@@ -37,6 +37,16 @@ class RescueStatus(StrEnum):
     REJECTED = "rejected"
 
 
+# Statuses during which a dispatch's assigned vehicle/agents are still in the
+# field and must not be double-booked onto another dispatch. Once a request
+# leaves this set (ADMITTED or REJECTED), its resources are released.
+ACTIVE_DISPATCH_STATUSES = (
+    RescueStatus.DISPATCHED,
+    RescueStatus.LOCATED,
+    RescueStatus.RESCUED,
+)
+
+
 class RescuePhysicalCondition(StrEnum):
     """Controlled physical-condition categories per PRR 3.2 intake payload.
 
