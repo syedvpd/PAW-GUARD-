@@ -2,14 +2,15 @@
 
 import uuid
 from datetime import datetime
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from pawguard.core.exceptions import ConflictError, NotFoundError
+from pawguard.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from pawguard.core.pagination import PageParams
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
+from pawguard.modules.auth.models import Role, User
 from pawguard.modules.dog.models import DogProfile, DogStatus
 from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.inventory.service import InventoryService
@@ -226,6 +227,126 @@ class TestShelterService:
         mock_dog_repo.count_by_kennel.return_value = 1
         with pytest.raises(ConflictError, match="at capacity"):
             await service.assign_dog_to_kennel(dog_id, kennel_id)
+
+    def _mock_actor_role(self, mock_repo, role_name: str) -> None:
+        """Wires mock_repo._session.execute(...).scalar_one_or_none() to
+        return a User holding the given role, for the clinical-section
+        actor-role lookup in assign_dog_to_kennel. scalar_one_or_none() is a
+        synchronous call on the awaited Result, so it must be a plain
+        MagicMock, not the AsyncMock that `_session`'s auto-speccing would
+        otherwise give it (which would make it return a coroutine)."""
+        actor = User(
+            id=uuid.uuid4(), email="actor@test.com", full_name="Actor", roles=[Role(name=role_name)]
+        )
+        mock_repo._session.execute = AsyncMock(
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=actor))
+        )
+
+    def _clinical_kennel_and_section(self, kennel_id: uuid.UUID) -> tuple[Kennel, ShelterSection]:
+        section_id = uuid.uuid4()
+        kennel = Kennel(
+            id=kennel_id,
+            section_id=section_id,
+            identifier="Q-01",
+            capacity=1,
+            sanitation_state=KennelSanitationState.CLEAN,
+        )
+        section = ShelterSection(
+            id=section_id,
+            facility_id=uuid.uuid4(),
+            name="Quarantine",
+            section_type=SectionType.QUARANTINE,
+            capacity=10,
+        )
+        return kennel, section
+
+    @pytest.mark.asyncio
+    async def test_assign_dog_to_clinical_kennel_blocked_for_shelter_manager(
+        self, service, mock_repo, mock_dog_repo
+    ):
+        """Master-spec rule (PRR §3.6): clinical sections require a vet —
+        a Shelter Manager without emergency_override must be rejected."""
+        dog_id, kennel_id = uuid.uuid4(), uuid.uuid4()
+        mock_dog_repo.get_by_id.return_value = DogProfile(
+            id=dog_id,
+            registration_number="DOG-001",
+            name="Rex",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.RESCUED,
+            is_adoptable=False,
+        )
+        kennel, section = self._clinical_kennel_and_section(kennel_id)
+        mock_repo.get_kennel_for_update.return_value = kennel
+        mock_repo.get_section.return_value = section
+        mock_dog_repo.count_by_kennel.return_value = 0
+        self._mock_actor_role(mock_repo, "shelter_manager")
+
+        with pytest.raises(ForbiddenError, match="Veterinary sign-off required"):
+            await service.assign_dog_to_kennel(dog_id, kennel_id, actor_id=uuid.uuid4())
+
+    @pytest.mark.asyncio
+    async def test_assign_dog_to_clinical_kennel_allowed_for_veterinarian(
+        self, service, mock_repo, mock_dog_repo
+    ):
+        dog_id, kennel_id = uuid.uuid4(), uuid.uuid4()
+        mock_dog_repo.get_by_id.return_value = DogProfile(
+            id=dog_id,
+            registration_number="DOG-001",
+            name="Rex",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.RESCUED,
+            is_adoptable=False,
+        )
+        kennel, section = self._clinical_kennel_and_section(kennel_id)
+        mock_repo.get_kennel_for_update.return_value = kennel
+        mock_repo.get_section.return_value = section
+        mock_dog_repo.count_by_kennel.return_value = 0
+        self._mock_actor_role(mock_repo, "veterinarian")
+
+        result = await service.assign_dog_to_kennel(dog_id, kennel_id, actor_id=uuid.uuid4())
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_assign_dog_to_clinical_kennel_emergency_override_notifies_vet(
+        self, mock_repo, mock_dog_repo, mock_audit
+    ):
+        """Documented exception path: a Shelter Manager can force the
+        assignment with a justification note when no vet is available —
+        flagged for vet review, not a silent bypass."""
+        notification_svc = AsyncMock()
+        service = ShelterService(
+            mock_repo, mock_dog_repo, mock_audit, notification_service=notification_svc
+        )
+        dog_id, kennel_id = uuid.uuid4(), uuid.uuid4()
+        mock_dog_repo.get_by_id.return_value = DogProfile(
+            id=dog_id,
+            registration_number="DOG-001",
+            name="Rex",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.RESCUED,
+            is_adoptable=False,
+        )
+        kennel, section = self._clinical_kennel_and_section(kennel_id)
+        mock_repo.get_kennel_for_update.return_value = kennel
+        mock_repo.get_section.return_value = section
+        mock_dog_repo.count_by_kennel.return_value = 0
+        self._mock_actor_role(mock_repo, "shelter_manager")
+
+        result = await service.assign_dog_to_kennel(
+            dog_id,
+            kennel_id,
+            actor_id=uuid.uuid4(),
+            emergency_override=True,
+            override_notes="No vet on site; dog needs immediate isolation.",
+        )
+        assert result is True
+        notification_svc.broadcast.assert_awaited_once()
+        payload = notification_svc.broadcast.await_args.kwargs["payload"]
+        assert payload.notification_type == "shelter_clinical_override"
+        assert payload.target_roles == ["veterinarian"]
 
     @pytest.mark.asyncio
     async def test_update_kennel_sanitation(self, service, mock_repo):

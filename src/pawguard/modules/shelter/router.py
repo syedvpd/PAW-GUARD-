@@ -4,6 +4,7 @@ Routers only validate and call services (RULE-004).
 """
 
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +26,8 @@ from pawguard.modules.auth.rbac import require_permission
 from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.inventory.repository import InventoryRepository
 from pawguard.modules.inventory.service import InventoryService
+from pawguard.modules.notifications.repository import NotificationRepository
+from pawguard.modules.notifications.service import NotificationService
 from pawguard.modules.shelter.models import (
     FacilityStatus,
     FacilityType,
@@ -38,6 +41,7 @@ from pawguard.modules.shelter.schemas import (
     FacilityStatusUpdate,
     FacilityTransferCreate,
     FacilityTransferResponse,
+    KennelAssignmentRequest,
     KennelCleaningLogCreate,
     KennelCleaningLogResponse,
     KennelCreate,
@@ -50,6 +54,7 @@ from pawguard.modules.shelter.schemas import (
 )
 from pawguard.modules.shelter.service import ShelterService
 from pawguard.services.audit_service import AuditService
+from pawguard.workers.pool import get_arq_pool
 
 router = APIRouter(prefix="/shelter", tags=["shelter"])
 
@@ -57,11 +62,19 @@ router = APIRouter(prefix="/shelter", tags=["shelter"])
 def get_shelter_service(
     db: AsyncSession = Depends(get_db),
     audit: AuditService = Depends(get_audit_service),
+    arq_pool: Any = Depends(get_arq_pool),
 ) -> ShelterService:
     repo = ShelterRepository(db)
     dog_repo = DogRepository(db)
-    inventory = InventoryService(InventoryRepository(db), audit_service=audit)
-    return ShelterService(repo, dog_repo, audit_service=audit, inventory_service=inventory)
+    notification_svc = NotificationService(repository=NotificationRepository(db), arq_pool=arq_pool)
+    inventory = InventoryService(InventoryRepository(db), audit_service=audit, notification_service=notification_svc)
+    return ShelterService(
+        repo,
+        dog_repo,
+        audit_service=audit,
+        inventory_service=inventory,
+        notification_service=notification_svc,
+    )
 
 
 @router.post(
@@ -295,14 +308,18 @@ async def assign_dog_to_kennel(
     kennel_id: uuid.UUID,
     dog_id: uuid.UUID,
     request: Request,
+    payload: KennelAssignmentRequest | None = None,
     current_user: CurrentUser = Depends(get_current_user),
     service: ShelterService = Depends(get_shelter_service),
 ) -> ApiResponse[bool]:
+    body = payload or KennelAssignmentRequest()
     success = await service.assign_dog_to_kennel(
         dog_id,
         kennel_id,
         actor_id=current_user.id,
         ip_address=request.client.host if request.client else None,
+        emergency_override=body.emergency_override,
+        override_notes=body.override_notes,
     )
     return ApiResponse(
         data=success,

@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from pawguard.modules.dog.models import DogGender, DogStatus, DogTemperament
 from pawguard.modules.inventory.schemas import InventoryConsumptionItem
@@ -77,6 +77,27 @@ class ShelterSectionResponse(BaseModel):
 class KennelCreate(BaseModel):
     identifier: str = Field(..., min_length=1, max_length=64, examples=["K-08"])
     capacity: int = Field(1, ge=1, examples=[2])
+
+
+class KennelAssignmentRequest(BaseModel):
+    """Optional body for assigning a dog to a kennel.
+
+    Quarantine/Isolation/Surgical sections normally require a veterinarian
+    (PRR master-spec rule). A Shelter Manager can force the assignment in a
+    genuine emergency (no vet immediately available) via emergency_override,
+    with a mandatory justification note — flagged for vet review rather than
+    a silent bypass. Optional so the endpoint stays backward compatible with
+    a bodyless call for the common (non-clinical, or vet-authored) case.
+    """
+
+    emergency_override: bool = False
+    override_notes: str | None = Field(None, max_length=1000)
+
+    @model_validator(mode="after")
+    def _require_override_justification(self) -> "KennelAssignmentRequest":
+        if self.emergency_override and not (self.override_notes and self.override_notes.strip()):
+            raise ValueError("override_notes is required when emergency_override is set.")
+        return self
 
 
 class KennelResponse(BaseModel):

@@ -64,13 +64,21 @@ Facility (shelter/clinic/foster_home/partner)
 ## Kennel Assignment
 
 ```
-POST /shelter/kennels/{kennel_id}/assign/{dog_id}
+POST /shelter/kennels/{kennel_id}/assign/{dog_id} [{emergency_override?, override_notes?}]
   -> Row-lock kennel (SELECT FOR UPDATE)
   -> Sanitation check: FAIL if NEEDS_CLEANING / DISINFECTING / OUT_OF_SERVICE
   -> Capacity check: FAIL if occupancy >= capacity
+  -> If section is Quarantine/Isolation/Surgical (CLINICAL_SECTION_TYPES):
+     -> FAIL ("Veterinary sign-off required for this section type") unless caller
+        holds veterinarian/super_admin/rescue_centre_admin, OR emergency_override=true
+        with a mandatory override_notes justification
+     -> If the override was actually used: broadcast "shelter_clinical_override" to
+        veterinarian (flagged for review — documented exception, not a silent bypass)
   -> Update dog: shelter_facility_id, kennel_id, status=SHELTER
-  -> Audit: KENNEL_ASSIGNED
+  -> Audit: KENNEL_ASSIGNED (metadata includes emergency_override: bool)
 ```
+
+The request body is optional — a bodyless call behaves exactly as before for non-clinical sections or a vet/admin caller.
 
 ## Sanitation Lifecycle
 
@@ -113,6 +121,12 @@ POST /shelter/care-logs {dog_id, exercise_hours, inventory_consumptions?}
      -> InventoryService.record_movement(CHECK_OUT, reference_type="daily_care_log")
 ```
 
+## Missed Daily Care Log Sweep
+
+`check_missed_daily_care_logs` (ARQ cron, daily at 21:00) alerts `shelter_manager` for every
+housed dog (`dog.kennel_id IS NOT NULL`) with no `DailyCareLog` created since midnight —
+mirrors the Flutter app's own "Today's Care Checklist" definition of housed/logged.
+
 ## Cross-Module Interactions
 
 | Trigger | Target | Effect |
@@ -120,3 +134,5 @@ POST /shelter/care-logs {dog_id, exercise_hours, inventory_consumptions?}
 | Care log with consumptions | Inventory | `CHECK_OUT` movements |
 | Kennel assignment | Dog | Updates `dog.shelter_facility_id`, `dog.kennel_id` |
 | Transfer completion | Dog | Moves dog to destination facility |
+| Clinical kennel emergency override | Notifications | Broadcasts `shelter_clinical_override` to `veterinarian` |
+| End-of-day sweep | Notifications | Broadcasts `shelter_missed_daily_care` to `shelter_manager` |

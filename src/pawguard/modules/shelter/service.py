@@ -9,16 +9,20 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from pawguard.core.cache_decorator import invalidate_route_cache
 from pawguard.core.exceptions import ConflictError, ForbiddenError, NotFoundError
+from pawguard.core.logging import get_logger
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
 from pawguard.modules.auth.models import AuthAuditEventType, User
-from pawguard.modules.dog.models import DogStatus
+from pawguard.modules.dog.models import DogProfile, DogStatus
 from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.inventory.models import MovementType
 from pawguard.modules.inventory.schemas import InventoryConsumptionItem, InventoryMovementCreate
 from pawguard.modules.inventory.service import InventoryService
+from pawguard.modules.notifications.schemas import BroadcastCreate
+from pawguard.modules.notifications.service import NotificationService
 from pawguard.modules.shelter.models import (
     DailyCareLog,
     FacilityStatus,
@@ -48,6 +52,12 @@ from pawguard.modules.shelter.schemas import (
 )
 from pawguard.services.audit_service import AuditService
 
+logger = get_logger(__name__)
+
+# Sections requiring veterinary sign-off for kennel assignment (master-spec
+# rule, PRR §3.6) — mirrors the Flutter app's clinicalSectionTypes.
+CLINICAL_SECTION_TYPES = {SectionType.QUARANTINE, SectionType.ISOLATION, SectionType.SURGICAL}
+
 
 class ShelterService:
     def __init__(
@@ -56,11 +66,22 @@ class ShelterService:
         dog_repo: DogRepository,
         audit_service: AuditService | None = None,
         inventory_service: InventoryService | None = None,
+        notification_service: NotificationService | None = None,
     ) -> None:
         self._repo = repository
         self._dog_repo = dog_repo
         self._audit = audit_service
         self._inventory = inventory_service
+        self._notification_svc = notification_service
+
+    async def _actor_role_names(self, actor_id: uuid.UUID | None) -> set[str]:
+        if actor_id is None:
+            return set()
+        stmt = select(User).options(selectinload(User.roles)).where(User.id == actor_id)
+        actor = (await self._repo._session.execute(stmt)).scalar_one_or_none()
+        if actor is None:
+            return set()
+        return {r.name for r in actor.roles}
 
     async def create_facility(
         self,
@@ -171,6 +192,8 @@ class ShelterService:
         kennel_id: uuid.UUID,
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
+        emergency_override: bool = False,
+        override_notes: str | None = None,
     ) -> bool:
         dog = await self._dog_repo.get_by_id(dog_id)
         if dog is None:
@@ -205,11 +228,28 @@ class ShelterService:
         if section is None:
             raise NotFoundError("Associated shelter section not found.")
 
+        # Master-spec rule: Quarantine/Isolation/Surgical assignment normally
+        # requires a veterinarian. A Shelter Manager may force it through in
+        # a genuine emergency via emergency_override — a documented exception
+        # path (mandatory justification, flagged for vet review), not a
+        # silent bypass of the sign-off requirement.
+        used_override = False
+        if section.section_type in CLINICAL_SECTION_TYPES:
+            actor_roles = await self._actor_role_names(actor_id)
+            is_privileged = bool(
+                actor_roles & {"veterinarian", "super_admin", "rescue_centre_admin"}
+            )
+            if not is_privileged:
+                if not emergency_override:
+                    raise ForbiddenError("Veterinary sign-off required for this section type")
+                used_override = True
+
         dog.shelter_facility_id = section.facility_id
         dog.kennel_id = kennel.id
         dog.status = DogStatus.SHELTER
 
         await self._dog_repo._session.flush()
+        await invalidate_route_cache("dog")
         if self._audit and actor_id:
             await self._audit.record(
                 event_type=AuthAuditEventType.KENNEL_ASSIGNED,
@@ -219,9 +259,44 @@ class ShelterService:
                 metadata={
                     "dog_id": str(dog_id),
                     "kennel_id": str(kennel_id),
+                    "emergency_override": used_override,
                 },
             )
+        if used_override:
+            await self._notify_clinical_override(dog, section, kennel, override_notes, actor_id)
         return True
+
+    async def _notify_clinical_override(
+        self,
+        dog: DogProfile,
+        section: ShelterSection,
+        kennel: Kennel,
+        override_notes: str | None,
+        actor_id: uuid.UUID | None,
+    ) -> None:
+        if self._notification_svc is None:
+            return
+        try:
+            await self._notification_svc.broadcast(
+                payload=BroadcastCreate(
+                    title=f"Emergency clinical kennel assignment: {section.name}",
+                    body=(
+                        f"A Shelter Manager assigned dog {dog.name} to kennel {kennel.identifier} "
+                        f"in {section.name} ({section.section_type.value}) without veterinary sign-off — "
+                        f"no vet immediately available. Justification: {override_notes}. "
+                        "Please review within 24h."
+                    ),
+                    notification_type="shelter_clinical_override",
+                    action_url=f"/dogs/{dog.id}",
+                    target_roles=["veterinarian"],
+                ),
+                user_ids=[],
+                actor_id=actor_id,
+            )
+        except Exception:  # pragma: no cover - alerting must never break the assignment
+            logger.warning(
+                "Failed to send clinical-override alert for dog %s", dog.id, exc_info=True
+            )
 
     async def update_kennel_sanitation(
         self,
