@@ -346,6 +346,7 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
             pc.INVENTORY_UPDATE,
             pc.INVENTORY_DELETE,
             pc.REQUISITION_CREATE,
+            pc.SHELTER_READ,
             pc.PUBLIC_READ,
             pc.DASHBOARD_INVENTORY,
         ],

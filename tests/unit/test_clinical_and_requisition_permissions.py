@@ -114,8 +114,8 @@ class TestRoleAndPermissionDefinitions:
         assert pc.DASHBOARD_INVENTORY in im_perms
         assert pc.PUBLIC_READ in im_perms
 
-        # Explicitly verify no shelter facility access (PAW-INV-002)
-        assert pc.SHELTER_READ not in im_perms
+        # Shelter read-only access for inventory visibility (PAW-INV-002)
+        assert pc.SHELTER_READ in im_perms
         assert pc.SHELTER_UPDATE not in im_perms
         assert pc.SHELTER_MANAGE_KENNELS not in im_perms
         assert pc.SHELTER_TRANSFER not in im_perms
