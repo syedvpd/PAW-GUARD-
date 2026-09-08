@@ -368,7 +368,6 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
         "Duty acceptance, shift check-in/out, activity logging.",
         False,
         [
-            pc.VOLUNTEER_READ,
             pc.DASHBOARD_VOLUNTEER,
         ],
     ),

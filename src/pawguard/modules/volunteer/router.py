@@ -140,7 +140,7 @@ async def get_my_application(
 @router.get(
     "/applications",
     response_model=PaginatedResponse[VolunteerApplicationResponse],
-    dependencies=[Depends(require_permission("volunteer:read"))],
+    dependencies=[Depends(require_permission("volunteer:update"))],
 )
 async def list_applications(
     params: PageParams = Depends(page_params),
@@ -234,7 +234,7 @@ async def update_profile(
     "/{profile_id}",
     response_model=ApiResponse[None],
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(require_permission("volunteer:update"))],
+    dependencies=[Depends(require_permission("volunteer:delete"))],
 )
 async def soft_delete_profile(
     profile_id: uuid.UUID,
@@ -407,7 +407,7 @@ async def cancel_attendance(
 @router.get(
     "/shifts/{shift_id}/attendance",
     response_model=PaginatedResponse[ShiftAttendanceResponse],
-    dependencies=[Depends(require_permission("volunteer:read"))],
+    dependencies=[Depends(require_permission("volunteer:update"))],
 )
 async def list_shift_attendance(
     shift_id: uuid.UUID,
@@ -424,7 +424,7 @@ async def list_shift_attendance(
 @router.get(
     "",
     response_model=PaginatedResponse[VolunteerProfileResponse],
-    dependencies=[Depends(require_permission("volunteer:read"))],
+    dependencies=[Depends(require_permission("volunteer:update"))],
 )
 async def list_profiles(
     params: PageParams = Depends(page_params),
@@ -453,7 +453,7 @@ async def list_profiles(
 @router.post(
     "/bulk/delete",
     response_model=BulkDeleteResponse,
-    dependencies=[Depends(require_permission("volunteer:update"))],
+    dependencies=[Depends(require_permission("volunteer:delete"))],
 )
 async def bulk_delete_profiles(
     payload: BulkDeleteRequest,
