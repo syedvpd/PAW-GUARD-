@@ -232,7 +232,7 @@ class RescueDispatchCreate(BaseModel):
         None,
         description="UUID of the Rescue Coordinator assigned to supervise this case.",
     )
-    assigned_driver_id: uuid.UUID | None = Field(
+    assigned_driver_id: uuid.UUID | str | None = Field(
         None,
         description="Legacy optional driver field for backward compatibility.",
     )
@@ -247,9 +247,9 @@ class RescueDispatchCreate(BaseModel):
         examples=[[uuid.UUID("a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d")]],
     )
     vehicle_id: str | None = Field(None, max_length=64)
-    assigned_vehicle_id: uuid.UUID | None = Field(
+    assigned_vehicle_id: uuid.UUID | str | None = Field(
         None,
-        description="UUID of the ACTIVE fleet vehicle assigned to this dispatch.",
+        description="UUID or identifier of the ACTIVE fleet vehicle assigned to this dispatch.",
     )
     equipment_details: str | None = None
     # Escalation Protocol (PRR 3.3): agents request back-up personnel,
@@ -261,10 +261,10 @@ class RescueDispatchCreate(BaseModel):
 
 class RescueDispatchUpdate(BaseModel):
     assigned_coordinator_id: uuid.UUID | None = None
-    assigned_driver_id: uuid.UUID | None = None
+    assigned_driver_id: uuid.UUID | str | None = None
     assigned_agent_ids: list[uuid.UUID] | None = None
     vehicle_id: str | None = None
-    assigned_vehicle_id: uuid.UUID | None = None
+    assigned_vehicle_id: uuid.UUID | str | None = None
     equipment_details: str | None = None
     status: RescueStatus | str | None = None
     failure_reason: RescueFailureReason | str | None = None

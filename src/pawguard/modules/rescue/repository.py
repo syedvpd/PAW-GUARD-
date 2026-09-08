@@ -71,6 +71,17 @@ class RescueRepository:
         stmt = self._base_stmt().where(RescueRequest.ticket_number == ticket_number)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    async def resolve_request(self, identifier: uuid.UUID | str) -> RescueRequest | None:
+        """Resolve a rescue request by either UUID or human-readable ticket number."""
+        if isinstance(identifier, uuid.UUID):
+            return await self.get_request_by_id(identifier)
+        identifier_str = str(identifier).strip()
+        try:
+            parsed_uuid = uuid.UUID(identifier_str)
+            return await self.get_request_by_id(parsed_uuid)
+        except ValueError:
+            return await self.get_request_by_ticket(identifier_str)
+
     async def get_request_by_ticket_and_phone(
         self, ticket_number: str, phone: str
     ) -> RescueRequest | None:

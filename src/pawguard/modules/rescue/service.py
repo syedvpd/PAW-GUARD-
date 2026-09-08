@@ -202,6 +202,17 @@ class RescueService:
             audit_service=self._audit,
         )
 
+    async def _resolve_request(self, identifier: uuid.UUID | str) -> RescueRequest | None:
+        """Resolve a rescue request by either UUID or human-readable ticket number."""
+        if isinstance(identifier, uuid.UUID):
+            return await self._repo.get_request_by_id(identifier)
+        identifier_str = str(identifier).strip()
+        try:
+            parsed_uuid = uuid.UUID(identifier_str)
+            return await self._repo.get_request_by_id(parsed_uuid)
+        except ValueError:
+            return await self._repo.get_request_by_ticket(identifier_str)
+
     async def report_incident(
         self,
         *,
@@ -415,7 +426,7 @@ class RescueService:
 
     async def verify_request(
         self,
-        request_id: uuid.UUID,
+        request_id: uuid.UUID | str,
         *,
         approve: bool,
         rationale: str | None = None,
@@ -424,9 +435,10 @@ class RescueService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> RescueRequest:
-        request = await self._repo.get_request_by_id(request_id)
+        request = await self._resolve_request(request_id)
         if request is None:
             raise NotFoundError("Rescue request not found.")
+        actual_request_id = request.id
 
         if request.status != RescueStatus.REPORTED:
             raise ConflictError(f"Cannot verify request in status: {request.status}")
@@ -464,7 +476,7 @@ class RescueService:
                 ip_address=ip_address or "",
                 user_agent="",
                 metadata={
-                    "rescue_id": str(request_id),
+                    "rescue_id": str(actual_request_id),
                     "new_status": str(request.status),
                     "rationale": rationale,
                     "severity": str(request.severity),
@@ -477,13 +489,13 @@ class RescueService:
 
     async def dispatch_team(
         self,
-        request_id: uuid.UUID,
+        request_id: uuid.UUID | str,
         *,
         assigned_coordinator_id: uuid.UUID | None = None,
-        assigned_driver_id: uuid.UUID | None = None,
+        assigned_driver_id: uuid.UUID | str | None = None,
         assigned_agent_ids: list[uuid.UUID] | None = None,
         vehicle_id: str | None = None,
-        assigned_vehicle_id: uuid.UUID | None = None,
+        assigned_vehicle_id: uuid.UUID | str | None = None,
         equipment_details: str | None = None,
         escalation_type: RescueEscalationType | None = None,
         escalation_notes: str | None = None,
@@ -491,15 +503,17 @@ class RescueService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> RescueRequest:
-        request = await self._repo.get_request_by_id(request_id)
+        request = await self._resolve_request(request_id)
         if request is None:
             raise NotFoundError("Rescue request not found.")
+
+        actual_request_id = request.id
 
         if request.status != RescueStatus.VERIFIED:
             raise ConflictError(f"Cannot dispatch for request in status: {request.status}")
 
         # Check if already has active dispatch
-        existing_dispatch = await self._repo.get_dispatch_by_request_id(request_id)
+        existing_dispatch = await self._repo.get_dispatch_by_request_id(actual_request_id)
         if existing_dispatch is not None:
             raise ConflictError("Dispatch record already exists for this request.")
 
@@ -512,43 +526,88 @@ class RescueService:
             request.coordinator_id = assigned_coordinator_id
 
         # Vehicle assignment (PRR 3.2): the vehicle must exist and be ACTIVE.
+        actual_vehicle_id: uuid.UUID | None = None
+        vehicle_code_display: str | None = vehicle_id
+
         if assigned_vehicle_id is not None:
-            vehicle = await self._fleet_service().get_vehicle(assigned_vehicle_id)
+            if isinstance(assigned_vehicle_id, uuid.UUID):
+                actual_vehicle_id = assigned_vehicle_id
+            else:
+                vehicle_str = str(assigned_vehicle_id).strip()
+                try:
+                    actual_vehicle_id = uuid.UUID(vehicle_str)
+                except ValueError:
+                    fleet_svc = self._fleet_service()
+                    vehicle_by_plate = await fleet_svc._repo.get_vehicle_by_plate(vehicle_str)
+                    if vehicle_by_plate is not None:
+                        actual_vehicle_id = vehicle_by_plate.id
+                        if not vehicle_code_display:
+                            vehicle_code_display = vehicle_by_plate.license_plate
+                    else:
+                        raise NotFoundError(f"Vehicle '{assigned_vehicle_id}' not found.") from None
+        elif vehicle_id is not None:
+            vehicle_str = str(vehicle_id).strip()
+            try:
+                actual_vehicle_id = uuid.UUID(vehicle_str)
+            except ValueError:
+                fleet_svc = self._fleet_service()
+                vehicle_by_plate = await fleet_svc._repo.get_vehicle_by_plate(vehicle_str)
+                if vehicle_by_plate is not None:
+                    actual_vehicle_id = vehicle_by_plate.id
+
+        if actual_vehicle_id is not None:
+            vehicle = await self._fleet_service().get_vehicle(actual_vehicle_id)
             if vehicle.status != VehicleStatus.ACTIVE:
                 raise ValidationFailedError(
                     "Only ACTIVE vehicles can be assigned to a rescue dispatch "
                     f"(vehicle is '{vehicle.status.value}')."
                 )
-            active_dispatch = await self._repo.get_active_dispatch_by_vehicle_id(
-                assigned_vehicle_id
-            )
+            active_dispatch = await self._repo.get_active_dispatch_by_vehicle_id(actual_vehicle_id)
             if active_dispatch is not None:
                 raise ConflictError(
                     "Vehicle is already assigned to another active rescue dispatch."
                 )
+            if not vehicle_code_display:
+                vehicle_code_display = vehicle.license_plate
 
+        # Driver / Agent resolution:
+        # Resolve assigned_driver_id if passed as a string or UUID
+        resolved_driver_id: uuid.UUID | None = None
         if assigned_driver_id is not None:
-            driver_user = await self._repo._session.get(User, assigned_driver_id)
-            if driver_user is None or driver_user.deleted_at is not None:
-                raise NotFoundError(f"Assigned driver user '{assigned_driver_id}' not found.")
+            if isinstance(assigned_driver_id, uuid.UUID):
+                resolved_driver_id = assigned_driver_id
+            else:
+                try:
+                    resolved_driver_id = uuid.UUID(str(assigned_driver_id).strip())
+                except ValueError:
+                    raise NotFoundError(
+                        f"Assigned driver user '{assigned_driver_id}' not found."
+                    ) from None
 
-        # Assemble the full team: the explicit agent list plus the legacy
-        # single-driver field, deduplicated. The assigned rescue agent operates
-        # the assigned vehicle; no separate driver authorization is required.
+        # Fallback: if driver not provided, assigned rescue agent operates the vehicle
+        effective_driver_id = resolved_driver_id
+        if effective_driver_id is None and assigned_agent_ids:
+            effective_driver_id = assigned_agent_ids[0]
+
+        if effective_driver_id is not None:
+            if not await self._repo.user_exists(effective_driver_id):
+                raise NotFoundError(f"Assigned driver user '{effective_driver_id}' not found.")
+
+        # Assemble full team: explicit agents + driver deduplicated
         agent_ids: list[uuid.UUID] = []
         for agent_id in assigned_agent_ids or []:
             if not await self._repo.user_exists(agent_id):
                 raise NotFoundError(f"Assigned agent user '{agent_id}' not found.")
             if agent_id not in agent_ids:
                 agent_ids.append(agent_id)
-        if assigned_driver_id is not None and assigned_driver_id not in agent_ids:
-            agent_ids.append(assigned_driver_id)
+        if effective_driver_id is not None and effective_driver_id not in agent_ids:
+            agent_ids.append(effective_driver_id)
 
         dispatch = RescueDispatch(
-            rescue_request_id=request_id,
-            assigned_driver_id=assigned_driver_id,
-            vehicle_id=vehicle_id,
-            assigned_vehicle_id=assigned_vehicle_id,
+            rescue_request_id=actual_request_id,
+            assigned_driver_id=effective_driver_id,
+            vehicle_id=vehicle_code_display,
+            assigned_vehicle_id=actual_vehicle_id,
             equipment_details=equipment_details,
             dispatched_at=datetime.now(UTC),
             escalation_type=escalation_type,
@@ -573,20 +632,23 @@ class RescueService:
 
         # Auto-checkout the equipment named on the dispatch (PRR 3.3)
         equipment_names = _parse_equipment_details(equipment_details)
-        primary_agent_id = agent_ids[0] if agent_ids else assigned_driver_id
+        primary_agent_id = agent_ids[0] if agent_ids else effective_driver_id
         if equipment_names and primary_agent_id:
-            await self._fleet_service().checkout_equipment_for_dispatch(
-                rescue_dispatch_id=dispatch.id,
-                equipment_names=equipment_names,
-                assigned_to_agent_id=primary_agent_id,
-                assigned_to_vehicle_id=None,
-                actor_id=actor_id,
-                ip_address=ip_address,
-            )
+            try:
+                await self._fleet_service().checkout_equipment_for_dispatch(
+                    rescue_dispatch_id=dispatch.id,
+                    equipment_names=equipment_names,
+                    assigned_to_agent_id=primary_agent_id,
+                    assigned_to_vehicle_id=actual_vehicle_id,
+                    actor_id=actor_id,
+                    ip_address=ip_address,
+                )
+            except Exception as eq_exc:
+                logger.warning("Equipment auto-checkout warning: %s", eq_exc)
 
         request.status = RescueStatus.DISPATCHED
         await self._repo._session.flush()
-        res = await self._repo.get_request_by_id(request_id)
+        res = await self._repo.get_request_by_id(actual_request_id)
         if res is None:
             raise NotFoundError("Rescue request not found after dispatch.")
 
@@ -597,13 +659,13 @@ class RescueService:
                 ip_address=ip_address or "",
                 user_agent="",
                 metadata={
-                    "rescue_id": str(request_id),
-                    "assigned_driver_id": str(assigned_driver_id) if assigned_driver_id else None,
-                    "assigned_agent_ids": [str(i) for i in agent_ids],
-                    "vehicle_id": vehicle_id,
-                    "assigned_vehicle_id": (
-                        str(assigned_vehicle_id) if assigned_vehicle_id else None
+                    "rescue_id": str(actual_request_id),
+                    "assigned_driver_id": (
+                        str(effective_driver_id) if effective_driver_id else None
                     ),
+                    "assigned_agent_ids": [str(i) for i in agent_ids],
+                    "vehicle_id": vehicle_code_display,
+                    "assigned_vehicle_id": (str(actual_vehicle_id) if actual_vehicle_id else None),
                     "escalation_type": escalation_type.value if escalation_type else None,
                 },
             )
@@ -624,7 +686,7 @@ class RescueService:
                     title="Rescue Team Dispatched",
                     body=f"A rescue officer has been dispatched for case {request.ticket_number}.",
                     target_user_ids=target_ids,
-                    action_url=f"/rescue/{request_id}",
+                    action_url=f"/rescue/{actual_request_id}",
                     requested_by=actor_id,
                 )
             except Exception as exc:
@@ -722,18 +784,19 @@ class RescueService:
 
     async def escalate(
         self,
-        request_id: uuid.UUID,
+        request_id: uuid.UUID | str,
         *,
         escalation_type: RescueEscalationType,
         escalation_notes: str | None = None,
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> RescueRequest:
-        request = await self._repo.get_request_by_id(request_id)
+        request = await self._resolve_request(request_id)
         if request is None:
             raise NotFoundError("Rescue request not found.")
+        actual_request_id = request.id
 
-        dispatch = await self._repo.get_dispatch_by_request_id(request_id)
+        dispatch = await self._repo.get_dispatch_by_request_id(actual_request_id)
         if dispatch is None:
             raise NotFoundError("Dispatch record not found for this request.")
 
@@ -750,13 +813,13 @@ class RescueService:
                 ip_address=ip_address or "",
                 user_agent="",
                 metadata={
-                    "rescue_id": str(request_id),
+                    "rescue_id": str(actual_request_id),
                     "escalation_type": escalation_type.value,
                     "escalation_notes": escalation_notes,
                 },
             )
 
-        res = await self._repo.get_request_by_id(request_id)
+        res = await self._repo.get_request_by_id(actual_request_id)
         if res is None:
             raise NotFoundError("Rescue request not found after escalation.")
 
@@ -776,7 +839,7 @@ class RescueService:
                     title=f"Rescue Escalation: {escalation_type.value}",
                     body=f"Rescue case {request.ticket_number} has been escalated. Notes: {escalation_notes or 'None'}",
                     target_user_ids=admin_ids,
-                    action_url=f"/rescue/{request_id}",
+                    action_url=f"/rescue/{actual_request_id}",
                     requested_by=actor_id,
                 )
         except Exception as exc:
@@ -786,16 +849,17 @@ class RescueService:
 
     async def accept_dispatch(
         self,
-        request_id: uuid.UUID,
+        request_id: uuid.UUID | str,
         *,
         agent_id: uuid.UUID,
         ip_address: str | None = None,
     ) -> RescueRequest:
-        request = await self._repo.get_request_by_id(request_id)
+        request = await self._resolve_request(request_id)
         if request is None:
             raise NotFoundError("Rescue request not found.")
+        actual_request_id = request.id
 
-        dispatch = await self._repo.get_dispatch_by_request_id(request_id)
+        dispatch = await self._repo.get_dispatch_by_request_id(actual_request_id)
         if dispatch is None:
             raise NotFoundError("Dispatch record not found for this request.")
 
@@ -827,30 +891,31 @@ class RescueService:
                 ip_address=ip_address or "",
                 user_agent="",
                 metadata={
-                    "rescue_id": str(request_id),
+                    "rescue_id": str(actual_request_id),
                     "action": "dispatch_accepted",
                     "accepted_at": now.isoformat(),
                 },
             )
 
-        fresh_req = await self._repo.get_request_by_id(request_id)
+        fresh_req = await self._repo.get_request_by_id(actual_request_id)
         return fresh_req or request
 
     async def add_observation_report(
         self,
-        request_id: uuid.UUID,
+        request_id: uuid.UUID | str,
         *,
         agent_id: uuid.UUID,
         notes: str | None = None,
         photos: list[str] | None = None,
         ip_address: str | None = None,
     ) -> RescueRequest:
-        request = await self._repo.get_request_by_id(request_id)
+        request = await self._resolve_request(request_id)
         if request is None:
             raise NotFoundError("Rescue request not found.")
+        actual_request_id = request.id
 
         report = RescueReport(
-            rescue_request_id=request_id,
+            rescue_request_id=actual_request_id,
             agent_id=agent_id,
             notes=notes,
             photos=photos,
@@ -867,7 +932,7 @@ class RescueService:
                 ip_address=ip_address or "",
                 user_agent="",
                 metadata={
-                    "rescue_id": str(request_id),
+                    "rescue_id": str(actual_request_id),
                     "action": "observation_report_added",
                     "media_count": len(photos) if photos else 0,
                 },
@@ -877,7 +942,7 @@ class RescueService:
 
     async def update_dispatch_status(
         self,
-        request_id: uuid.UUID,
+        request_id: uuid.UUID | str,
         *,
         status: RescueStatus,
         agent_id: uuid.UUID,
@@ -887,11 +952,12 @@ class RescueService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> RescueRequest:
-        request = await self._repo.get_request_by_id(request_id)
+        request = await self._resolve_request(request_id)
         if request is None:
             raise NotFoundError("Rescue request not found.")
+        actual_request_id = request.id
 
-        dispatch = await self._repo.get_dispatch_by_request_id(request_id)
+        dispatch = await self._repo.get_dispatch_by_request_id(actual_request_id)
         if dispatch is None:
             raise NotFoundError("Dispatch record not found for this request.")
 
@@ -919,7 +985,7 @@ class RescueService:
                         title="Rescue Location Reached",
                         body=f"Rescue team has reached the location for case {request.ticket_number}.",
                         target_user_ids=agent_ids,
-                        action_url=f"/rescue/{request_id}",
+                        action_url=f"/rescue/{actual_request_id}",
                         requested_by=actor_id,
                     )
             except Exception as exc:
@@ -948,7 +1014,7 @@ class RescueService:
                         title="Animal Secured",
                         body=f"Animal from case {request.ticket_number} has been secured and is in transit.",
                         target_user_ids=agent_ids,
-                        action_url=f"/rescue/{request_id}",
+                        action_url=f"/rescue/{actual_request_id}",
                         requested_by=actor_id,
                     )
             except Exception as exc:
@@ -970,7 +1036,7 @@ class RescueService:
 
             # Create internal report
             report = RescueReport(
-                rescue_request_id=request_id,
+                rescue_request_id=actual_request_id,
                 agent_id=agent_id,
                 notes=notes,
                 photos=photos,
@@ -1002,7 +1068,7 @@ class RescueService:
                         title="Animal Admitted to Shelter",
                         body=f"Animal from case {request.ticket_number} has been admitted to the shelter.",
                         target_user_ids=vet_ids,
-                        action_url=f"/rescue/{request_id}",
+                        action_url=f"/rescue/{actual_request_id}",
                         requested_by=actor_id,
                     )
             except Exception as exc:
@@ -1038,7 +1104,7 @@ class RescueService:
                         title="Rescue Operation Failed",
                         body=f"Rescue case {request.ticket_number} has been marked as failed. Reason: {failure_reason or 'Unknown'}",
                         target_user_ids=agent_ids,
-                        action_url=f"/rescue/{request_id}",
+                        action_url=f"/rescue/{actual_request_id}",
                         requested_by=actor_id,
                     )
             except Exception as exc:
@@ -1048,7 +1114,7 @@ class RescueService:
             raise ConflictError(f"Unsupported status update: {status}")
 
         await self._repo._session.flush()
-        res = await self._repo.get_request_by_id(request_id)
+        res = await self._repo.get_request_by_id(actual_request_id)
         if res is None:
             raise NotFoundError("Rescue request not found after status update.")
 
@@ -1059,7 +1125,7 @@ class RescueService:
                 ip_address=ip_address or "",
                 user_agent="",
                 metadata={
-                    "rescue_id": str(request_id),
+                    "rescue_id": str(actual_request_id),
                     "old_status": str(old_status),
                     "new_status": str(request.status),
                     "requested_status": status.value,
@@ -1133,15 +1199,15 @@ class RescueService:
                 for key in keys:
                     await self._redis.delete(key)
 
-    async def get_request(self, request_id: uuid.UUID) -> RescueRequest:
-        request = await self._repo.get_request_by_id(request_id)
+    async def get_request(self, request_id: uuid.UUID | str) -> RescueRequest:
+        request = await self._resolve_request(request_id)
         if request is None:
             raise NotFoundError("Rescue request not found.")
         return request
 
     async def assign_coordinator(
         self,
-        request_id: uuid.UUID,
+        request_id: uuid.UUID | str,
         coordinator_id: uuid.UUID,
         notes: str | None = None,
         *,
@@ -1149,9 +1215,10 @@ class RescueService:
         ip_address: str | None = None,
     ) -> RescueRequest:
         """Assign a coordinator to a rescue case and notify them (PRR 3.2)."""
-        request = await self._repo.get_request_by_id(request_id)
+        request = await self._resolve_request(request_id)
         if request is None:
             raise NotFoundError("Rescue request not found.")
+        actual_request_id = request.id
 
         # Validate the coordinator user exists and is active.
         from sqlalchemy import select as sa_select
@@ -1179,7 +1246,7 @@ class RescueService:
                 ip_address=ip_address or "",
                 user_agent="",
                 metadata={
-                    "rescue_id": str(request_id),
+                    "rescue_id": str(actual_request_id),
                     "coordinator_id": str(coordinator_id),
                     "notes": notes,
                 },
@@ -1260,14 +1327,15 @@ class RescueService:
 
     async def soft_delete_request(
         self,
-        request_id: uuid.UUID,
+        request_id: uuid.UUID | str,
         *,
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> None:
-        request = await self._repo.get_request_by_id(request_id)
+        request = await self._resolve_request(request_id)
         if request is None:
             raise NotFoundError("Rescue request not found.")
+        actual_request_id = request.id
         request.deleted_at = datetime.now(UTC)
 
         await self._repo._session.flush()
@@ -1278,7 +1346,10 @@ class RescueService:
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
-                metadata={"rescue_id": str(request_id), "ticket_number": request.ticket_number},
+                metadata={
+                    "rescue_id": str(actual_request_id),
+                    "ticket_number": request.ticket_number,
+                },
             )
 
     async def bulk_update_status(
@@ -1673,7 +1744,7 @@ class RescueService:
                 return data
         return default
 
-    async def _set_tracking_state(self, request_id: uuid.UUID, state: dict[str, Any]) -> None:
+    async def _set_tracking_state(self, request_id: uuid.UUID | str, state: dict[str, Any]) -> None:
         if self._redis is None:
             return
         with contextlib.suppress(Exception):
@@ -1681,18 +1752,23 @@ class RescueService:
 
     async def start_tracking(
         self,
-        request_id: uuid.UUID,
+        request_id: uuid.UUID | str,
         *,
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> dict[str, Any]:
-        dispatch = await self._repo.get_dispatch_by_request_id(request_id)
+        request = await self._resolve_request(request_id)
+        if request is None:
+            raise NotFoundError("Rescue request not found.")
+        actual_request_id = request.id
+
+        dispatch = await self._repo.get_dispatch_by_request_id(actual_request_id)
         if dispatch is None:
             raise NotFoundError("No dispatch exists for this rescue request.")
-        state = await self._get_tracking_state(request_id)
+        state = await self._get_tracking_state(actual_request_id)
         state["active"] = True
         state["started_at"] = datetime.now(UTC).isoformat()
-        await self._set_tracking_state(request_id, state)
+        await self._set_tracking_state(actual_request_id, state)
         if self._audit:
             await self._audit.record(
                 event_type=AuthAuditEventType.RESCUE_STATUS_UPDATED,
@@ -1700,7 +1776,7 @@ class RescueService:
                 ip_address=ip_address or "",
                 user_agent="",
                 metadata={
-                    "rescue_id": str(request_id),
+                    "rescue_id": str(actual_request_id),
                     "action": "tracking_started",
                 },
             )
@@ -1708,18 +1784,23 @@ class RescueService:
 
     async def stop_tracking(
         self,
-        request_id: uuid.UUID,
+        request_id: uuid.UUID | str,
         *,
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> dict[str, Any]:
-        dispatch = await self._repo.get_dispatch_by_request_id(request_id)
+        request = await self._resolve_request(request_id)
+        if request is None:
+            raise NotFoundError("Rescue request not found.")
+        actual_request_id = request.id
+
+        dispatch = await self._repo.get_dispatch_by_request_id(actual_request_id)
         if dispatch is None:
             raise NotFoundError("No dispatch exists for this rescue request.")
-        state = await self._get_tracking_state(request_id)
+        state = await self._get_tracking_state(actual_request_id)
         state["active"] = False
         state["stopped_at"] = datetime.now(UTC).isoformat()
-        await self._set_tracking_state(request_id, state)
+        await self._set_tracking_state(actual_request_id, state)
         if self._audit:
             await self._audit.record(
                 event_type=AuthAuditEventType.RESCUE_STATUS_UPDATED,
@@ -1727,18 +1808,26 @@ class RescueService:
                 ip_address=ip_address or "",
                 user_agent="",
                 metadata={
-                    "rescue_id": str(request_id),
+                    "rescue_id": str(actual_request_id),
                     "action": "tracking_stopped",
                 },
             )
         return state
 
-    async def get_tracking_status(self, request_id: uuid.UUID) -> dict[str, Any]:
-        return await self._get_tracking_state(request_id)
+    async def get_tracking_status(self, request_id: uuid.UUID | str) -> dict[str, Any]:
+        request = await self._resolve_request(request_id)
+        if request is None:
+            raise NotFoundError("Rescue request not found.")
+        return await self._get_tracking_state(request.id)
 
-    async def get_rescue_location(self, request_id: uuid.UUID) -> dict[str, Any]:
+    async def get_rescue_location(self, request_id: uuid.UUID | str) -> dict[str, Any]:
         """Return latest GPS positions for all agents assigned to a rescue dispatch."""
-        dispatch = await self._repo.get_dispatch_by_request_id(request_id)
+        request = await self._resolve_request(request_id)
+        if request is None:
+            raise NotFoundError("Rescue request not found.")
+        actual_request_id = request.id
+
+        dispatch = await self._repo.get_dispatch_by_request_id(actual_request_id)
         if dispatch is None:
             raise NotFoundError("No dispatch exists for this rescue request.")
 
@@ -1772,7 +1861,7 @@ class RescueService:
                 updated_at = ts
 
         return {
-            "request_id": str(request_id),
+            "request_id": str(actual_request_id),
             "agents": agents_out,
             "vehicle": None,
             "updated_at": updated_at,
@@ -1782,15 +1871,20 @@ class RescueService:
 
     async def get_rescue_events(
         self,
-        request_id: uuid.UUID,
+        request_id: uuid.UUID | str,
         page: PageParams,
     ) -> PaginatedResponse[RescueEventResponse]:
         """Return rescue-related audit events for a specific case."""
+        request = await self._resolve_request(request_id)
+        if request is None:
+            raise NotFoundError("Rescue request not found.")
+        actual_request_id = request.id
+
         session = self._repo._session
         stmt = (
             select(AuthAuditLog)
             .where(
-                AuthAuditLog.event_metadata["rescue_id"].astext == str(request_id),
+                AuthAuditLog.event_metadata["rescue_id"].astext == str(actual_request_id),
                 AuthAuditLog.event_type.like("rescue_%"),
             )
             .order_by(AuthAuditLog.created_at.desc())

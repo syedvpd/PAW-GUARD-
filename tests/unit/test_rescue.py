@@ -407,6 +407,87 @@ class TestRescueService:
         assert _parse_equipment_details(None) == []
 
     @pytest.mark.asyncio
+    async def test_dispatch_team_resolves_ticket_number(self, service, mock_repo):
+        """Dispatching using a ticket number like 'RES-20260907-8236' resolves the underlying request safely."""
+        request_id = uuid.uuid4()
+        agent_id = uuid.uuid4()
+        request = RescueRequest(
+            id=request_id,
+            ticket_number="RES-20260907-8236",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
+            physical_condition=RescuePhysicalCondition.UNKNOWN,
+            status=RescueStatus.VERIFIED,
+        )
+        mock_repo.get_request_by_ticket.return_value = request
+        mock_repo.get_request_by_id.return_value = request
+        mock_repo.get_dispatch_by_request_id.return_value = None
+        mock_repo.create_dispatch.side_effect = lambda d: d
+        mock_repo.user_exists.return_value = True
+
+        result = await service.dispatch_team(
+            "RES-20260907-8236",
+            assigned_agent_ids=[agent_id],
+            notes="Dispatched via ticket string",
+        )
+        assert result.status == RescueStatus.DISPATCHED
+        mock_repo.get_request_by_ticket.assert_awaited_with("RES-20260907-8236")
+        created_dispatch = mock_repo.create_dispatch.call_args[0][0]
+        assert created_dispatch.rescue_request_id == request_id
+        # Driver fallback: assigned_agent_ids[0] becomes the driver
+        assert created_dispatch.assigned_driver_id == agent_id
+
+    @pytest.mark.asyncio
+    @patch("pawguard.modules.rescue.service.FleetService")
+    async def test_dispatch_team_vehicle_code_lookup(self, mock_fleet_cls, service, mock_repo):
+        """Passing vehicle display code like 'VAN-001' resolves vehicle UUID and attaches to dispatch."""
+        request_id = uuid.uuid4()
+        agent_id = uuid.uuid4()
+        vehicle_uuid = uuid.uuid4()
+        request = RescueRequest(
+            id=request_id,
+            ticket_number="RES-20260907-8236",
+            reporter_name="A",
+            reporter_phone="+1",
+            location_address="Addr",
+            physical_condition=RescuePhysicalCondition.UNKNOWN,
+            status=RescueStatus.VERIFIED,
+        )
+        mock_repo.get_request_by_id.return_value = request
+        mock_repo.get_dispatch_by_request_id.return_value = None
+        mock_repo.create_dispatch.side_effect = lambda d: d
+        mock_repo.user_exists.return_value = True
+
+        mock_fleet = AsyncMock()
+        mock_fleet._repo = AsyncMock()
+        mock_vehicle = MagicMock(
+            id=vehicle_uuid,
+            license_plate="VAN-001",
+            status=VehicleStatus.ACTIVE,
+        )
+        mock_fleet._repo.get_vehicle_by_plate.return_value = mock_vehicle
+        mock_fleet.get_vehicle.return_value = mock_vehicle
+        mock_fleet_cls.return_value = mock_fleet
+
+        result = await service.dispatch_team(
+            request_id,
+            assigned_agent_ids=[agent_id],
+            assigned_vehicle_id="VAN-001",
+        )
+        assert result.status == RescueStatus.DISPATCHED
+        created_dispatch = mock_repo.create_dispatch.call_args[0][0]
+        assert created_dispatch.assigned_vehicle_id == vehicle_uuid
+        assert created_dispatch.vehicle_id == "VAN-001"
+
+    @pytest.mark.asyncio
+    async def test_dispatch_team_invalid_request_id_raises_404(self, service, mock_repo):
+        """Non-existent ticket or UUID raises NotFoundError (not database 500)."""
+        mock_repo.get_request_by_ticket.return_value = None
+        with pytest.raises(NotFoundError, match="Rescue request not found"):
+            await service.dispatch_team("RES-NON-EXISTENT")
+
+    @pytest.mark.asyncio
     async def test_dispatch_team_already_dispatched(self, service, mock_repo):
         request_id = uuid.uuid4()
         request = RescueRequest(

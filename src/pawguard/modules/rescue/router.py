@@ -311,7 +311,7 @@ async def request_rescue_media_upload_url(
     dependencies=[Depends(require_permission("rescue:verify"))],
 )
 async def verify_request(
-    request_id: uuid.UUID,
+    request_id: str,
     payload: RescueRequestUpdate,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
@@ -340,7 +340,7 @@ async def verify_request(
     dependencies=[Depends(require_permission("rescue:dispatch"))],
 )
 async def assign_coordinator(
-    request_id: uuid.UUID,
+    request_id: str,
     payload: RescueAssignCoordinator,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
@@ -366,7 +366,7 @@ async def assign_coordinator(
     dependencies=[Depends(require_permission("rescue:dispatch"))],
 )
 async def dispatch_team(
-    request_id: uuid.UUID,
+    request_id: str,
     payload: RescueDispatchCreate,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
@@ -452,7 +452,7 @@ async def delete_dispatch(
     dependencies=[Depends(require_permission("rescue:update"))],
 )
 async def escalate_rescue(
-    request_id: uuid.UUID,
+    request_id: str,
     payload: RescueEscalateCreate,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
@@ -480,7 +480,7 @@ async def escalate_rescue(
     dependencies=[Depends(require_permission("rescue:execute"))],
 )
 async def mark_located(
-    request_id: uuid.UUID,
+    request_id: str,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: RescueService = Depends(get_rescue_service),
@@ -507,7 +507,7 @@ async def mark_located(
     dependencies=[Depends(require_permission("rescue:execute"))],
 )
 async def mark_rescued(
-    request_id: uuid.UUID,
+    request_id: str,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: RescueService = Depends(get_rescue_service),
@@ -534,7 +534,7 @@ async def mark_rescued(
     dependencies=[Depends(require_permission("rescue:dispatch"))],
 )
 async def mark_admitted(
-    request_id: uuid.UUID,
+    request_id: str,
     payload: RescueReportCreate,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
@@ -562,7 +562,7 @@ async def mark_admitted(
     dependencies=[Depends(require_permission("rescue:execute"))],
 )
 async def fail_rescue(
-    request_id: uuid.UUID,
+    request_id: str,
     failure_reason: str,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
@@ -591,7 +591,7 @@ async def fail_rescue(
     dependencies=[Depends(require_permission("rescue:execute"))],
 )
 async def accept_dispatch(
-    request_id: uuid.UUID,
+    request_id: str,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: RescueService = Depends(get_rescue_service),
@@ -616,7 +616,7 @@ async def accept_dispatch(
     dependencies=[Depends(require_permission("rescue:execute"))],
 )
 async def add_observation_report(
-    request_id: uuid.UUID,
+    request_id: str,
     payload: RescueReportCreate,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
@@ -726,7 +726,7 @@ async def list_dispatches(
     response_model=ApiResponse[RescueRequestResponse],
 )
 async def get_request(
-    request_id: uuid.UUID,
+    request_id: str,
     current_user: CurrentUser | None = Depends(get_optional_current_user),
     service: RescueService = Depends(get_rescue_service),
 ) -> ApiResponse[RescueRequestResponse]:
@@ -777,7 +777,7 @@ async def list_requests(
     dependencies=[Depends(require_permission("rescue:execute"))],
 )
 async def soft_delete_request(
-    request_id: uuid.UUID,
+    request_id: str,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: RescueService = Depends(get_rescue_service),
@@ -864,7 +864,7 @@ async def update_agent_location(
     dependencies=[Depends(require_permission("rescue:dispatch"))],
 )
 async def suggest_nearest_agents(
-    request_id: uuid.UUID,
+    request_id: str,
     radius: float = Query(50.0, ge=0.1, le=500.0, description="Search radius in kilometers"),
     service: RescueService = Depends(get_rescue_service),
 ) -> ApiResponse[list[NearbyAgentResponse]]:
@@ -918,7 +918,7 @@ async def list_vehicle_availability(
     dependencies=[Depends(require_permission("rescue:execute"))],
 )
 async def start_rescue_tracking(
-    request_id: uuid.UUID,
+    request_id: str,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: RescueService = Depends(get_rescue_service),
@@ -933,7 +933,7 @@ async def start_rescue_tracking(
     )
     return ApiResponse(
         data=RescueTrackingResponse(
-            request_id=request_id,
+            request_id=rescue_req.id,
             tracking_active=bool(state["active"]),
             started_at=state.get("started_at"),
             stopped_at=state.get("stopped_at"),
@@ -948,7 +948,7 @@ async def start_rescue_tracking(
     dependencies=[Depends(require_permission("rescue:execute"))],
 )
 async def stop_rescue_tracking(
-    request_id: uuid.UUID,
+    request_id: str,
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: RescueService = Depends(get_rescue_service),
@@ -963,7 +963,7 @@ async def stop_rescue_tracking(
     )
     return ApiResponse(
         data=RescueTrackingResponse(
-            request_id=request_id,
+            request_id=rescue_req.id,
             tracking_active=bool(state["active"]),
             started_at=state.get("started_at"),
             stopped_at=state.get("stopped_at"),
@@ -978,7 +978,7 @@ async def stop_rescue_tracking(
     dependencies=[Depends(require_permission("rescue:read"))],
 )
 async def get_rescue_location(
-    request_id: uuid.UUID,
+    request_id: str,
     current_user: CurrentUser = Depends(get_current_user),
     service: RescueService = Depends(get_rescue_service),
 ) -> ApiResponse[RescueLocationResponse]:
@@ -998,7 +998,7 @@ async def get_rescue_location(
     dependencies=[Depends(require_permission("rescue:read"))],
 )
 async def list_rescue_events(
-    request_id: uuid.UUID,
+    request_id: str,
     page: PageParams = Depends(page_params),
     current_user: CurrentUser = Depends(get_current_user),
     service: RescueService = Depends(get_rescue_service),
