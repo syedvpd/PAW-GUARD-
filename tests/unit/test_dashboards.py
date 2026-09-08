@@ -67,35 +67,56 @@ class TestDashboards:
         session.execute.side_effect = [
             _fake_result(
                 total_facilities=2,
+                total_capacity=100,
                 total_dogs=50,
                 adoptable_dogs=20,
                 total_kennels=60,
+                occupied_kennels=50,
                 pending_transfers=0,
                 isolation_count=0,
-                pending_cleaning=0,
+                quarantine_count=5,
+                pending_cleaning=2,
+                daily_intake_today=3,
+                daily_exits_today=1,
             ),
+            _fake_result(all_val=[]),
         ]
         result = await shelter_dashboard(session)
         assert result["total_facilities"] == 2
+        assert result["total_capacity"] == 100
         assert result["total_dogs"] == 50
         assert result["adoptable_dogs"] == 20
         assert result["total_kennels"] == 60
+        assert result["occupied_kennels"] == 50
+        assert result["available_kennels"] == 10
         assert result["occupancy_rate"] == pytest.approx(83.3, rel=0.1)
+        assert result["facility_utilization_rate"] == 50.0
+        assert result["daily_intake_today"] == 3
+        assert result["daily_exits_today"] == 1
+        assert result["quarantine_count"] == 5
+        assert result["facility_breakdown"] == []
 
     async def test_shelter_dashboard_no_kennels(self, session):
         session.execute.side_effect = [
             _fake_result(
                 total_facilities=0,
+                total_capacity=0,
                 total_dogs=0,
                 adoptable_dogs=0,
                 total_kennels=0,
+                occupied_kennels=0,
                 pending_transfers=0,
                 isolation_count=0,
+                quarantine_count=0,
                 pending_cleaning=0,
+                daily_intake_today=0,
+                daily_exits_today=0,
             ),
+            _fake_result(all_val=[]),
         ]
         result = await shelter_dashboard(session)
         assert result["occupancy_rate"] == 0
+        assert result["facility_utilization_rate"] == 0.0
 
     async def test_medical_dashboard(self, session):
         session.execute.side_effect = [
@@ -249,7 +270,7 @@ class TestDashboards:
             # rescue_dashboard (2 queries)
             _fake_result(total=200, pending=10, dispatched=5, rescued=20),
             _fake_result(scalars_all=[]),
-            # shelter_dashboard (1 query)
+            # shelter_dashboard (2 queries: stats and facility breakdown)
             _fake_result(
                 total_facilities=3,
                 total_dogs=80,
@@ -259,6 +280,7 @@ class TestDashboards:
                 isolation_count=0,
                 pending_cleaning=0,
             ),
+            _fake_result(all_val=[]),
             # inventory_dashboard (2 queries)
             _fake_result(all_val=[]),
             _fake_result(scalars_all=[]),

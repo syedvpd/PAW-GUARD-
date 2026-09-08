@@ -195,28 +195,100 @@ async def shelter_dashboard(session: AsyncSession, redis: Any | None = None) -> 
     stmt = text("""
         SELECT
             (SELECT COUNT(*) FROM shelter_facilities WHERE deleted_at IS NULL) AS total_facilities,
+            (SELECT COALESCE(SUM(total_capacity), 0) FROM shelter_facilities WHERE deleted_at IS NULL) AS total_capacity,
             (SELECT COUNT(*) FROM dog_profiles WHERE deleted_at IS NULL) AS total_dogs,
             (SELECT COUNT(*) FROM dog_profiles WHERE status = 'shelter' AND deleted_at IS NULL) AS adoptable_dogs,
             (SELECT COUNT(*) FROM kennels) AS total_kennels,
+            (SELECT COUNT(DISTINCT kennel_id) FROM dog_profiles WHERE kennel_id IS NOT NULL AND deleted_at IS NULL) AS occupied_kennels,
             (SELECT COUNT(*) FROM facility_transfers WHERE status = 'pending') AS pending_transfers,
             (SELECT COUNT(*) FROM dog_profiles d JOIN shelter_sections s ON d.section_id = s.id WHERE s.section_type = 'isolation' AND d.deleted_at IS NULL) AS isolation_count,
-            (SELECT COUNT(*) FROM kennels WHERE sanitation_state = 'needs_cleaning') AS pending_cleaning
+            (SELECT COUNT(*) FROM dog_profiles WHERE is_quarantine_passed = false AND deleted_at IS NULL) AS quarantine_count,
+            (SELECT COUNT(*) FROM kennels WHERE sanitation_state = 'needs_cleaning') AS pending_cleaning,
+            (SELECT COUNT(*) FROM dog_profiles WHERE created_at >= CURRENT_DATE AND deleted_at IS NULL) AS daily_intake_today,
+            (SELECT (SELECT COUNT(*) FROM adoption_applications WHERE completed_at >= CURRENT_DATE) +
+                    (SELECT COUNT(*) FROM facility_transfers WHERE updated_at >= CURRENT_DATE AND status = 'completed')) AS daily_exits_today
     """)
     row = (await session.execute(stmt)).one()
 
-    total_dogs = row.total_dogs
-    total_kennels = row.total_kennels
+    total_dogs_val = getattr(row, "total_dogs", 0)
+    total_dogs = int(total_dogs_val) if isinstance(total_dogs_val, (int, float)) else 0
+
+    total_kennels_val = getattr(row, "total_kennels", 0)
+    total_kennels = int(total_kennels_val) if isinstance(total_kennels_val, (int, float)) else 0
+
+    occupied_val = getattr(row, "occupied_kennels", None)
+    occupied_kennels = int(occupied_val) if isinstance(occupied_val, (int, float)) else total_dogs
+
+    cap_val = getattr(row, "total_capacity", None)
+    total_capacity = int(cap_val) if isinstance(cap_val, (int, float)) else 0
+
+    available_kennels = max(0, total_kennels - occupied_kennels)
+
+    daily_intake_val = getattr(row, "daily_intake_today", 0)
+    daily_intake_today = int(daily_intake_val) if isinstance(daily_intake_val, (int, float)) else 0
+
+    daily_exits_val = getattr(row, "daily_exits_today", 0)
+    daily_exits_today = int(daily_exits_val) if isinstance(daily_exits_val, (int, float)) else 0
+
+    quarantine_val = getattr(row, "quarantine_count", 0)
+    quarantine_count = int(quarantine_val) if isinstance(quarantine_val, (int, float)) else 0
+
+    # Live facility-level capacity breakdown
+    facility_stmt = text("""
+        SELECT
+            sf.id,
+            sf.name,
+            sf.total_capacity,
+            COUNT(DISTINCT k.id) AS kennel_count,
+            COUNT(DISTINCT dp.id) AS dogs_count,
+            COUNT(DISTINCT dp.kennel_id) AS occupied_kennels
+        FROM shelter_facilities sf
+        LEFT JOIN shelter_sections ss ON ss.facility_id = sf.id
+        LEFT JOIN kennels k ON k.section_id = ss.id
+        LEFT JOIN dog_profiles dp ON dp.shelter_facility_id = sf.id AND dp.deleted_at IS NULL
+        WHERE sf.deleted_at IS NULL
+        GROUP BY sf.id, sf.name, sf.total_capacity
+        ORDER BY sf.name
+    """)
+    facility_rows = (await session.execute(facility_stmt)).all()
+    facility_breakdown = [
+        {
+            "facility_id": str(f[0]),
+            "name": f[1],
+            "capacity": f[2] or 0,
+            "kennel_count": f[3] or 0,
+            "dogs_count": f[4] or 0,
+            "occupied_kennels": f[5] or 0,
+            "occupancy_rate": round((f[5] / f[3] * 100.0), 1) if f[3] else 0.0,
+        }
+        for f in facility_rows
+    ]
+
     result = {
         "total_facilities": row.total_facilities,
+        "total_capacity": total_capacity,
         "total_dogs": total_dogs,
         "adoptable_dogs": row.adoptable_dogs,
         "total_kennels": total_kennels,
-        "occupancy_rate": (round(total_dogs / total_kennels * 100, 1) if total_kennels > 0 else 0),
+        "occupied_kennels": occupied_kennels,
+        "available_kennels": available_kennels,
+        "occupancy_rate": (
+            round(occupied_kennels / total_kennels * 100, 1)
+            if total_kennels > 0
+            else (round(total_dogs / total_kennels * 100, 1) if total_kennels > 0 else 0)
+        ),
+        "facility_utilization_rate": (
+            round(total_dogs / total_capacity * 100, 1) if total_capacity > 0 else 0.0
+        ),
         "pending_transfers": row.pending_transfers,
         "isolation_count": row.isolation_count,
+        "quarantine_count": quarantine_count,
         "pending_cleaning": row.pending_cleaning,
+        "daily_intake_today": daily_intake_today,
+        "daily_exits_today": daily_exits_today,
+        "facility_breakdown": facility_breakdown,
     }
-    await _set_cache(redis, cache_key, result)
+    await _set_cache(redis, cache_key, result, ttl=10)
     return result
 
 

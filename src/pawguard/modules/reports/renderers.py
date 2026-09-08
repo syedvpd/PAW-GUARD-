@@ -29,6 +29,22 @@ def generate_csv(
     return output.getvalue().encode("utf-8-sig")
 
 
+def _clean_sheet_title(name: str, existing_names: set[str]) -> str:
+    import re
+
+    cleaned = re.sub(r"[\\/*?:\[\]]", "-", name).strip()[:31]
+    if not cleaned:
+        cleaned = "Sheet"
+    base = cleaned[:28]
+    candidate = cleaned
+    idx = 1
+    while candidate.lower() in existing_names:
+        candidate = f"{base}_{idx}"[:31]
+        idx += 1
+    existing_names.add(candidate.lower())
+    return candidate
+
+
 def generate_excel(
     sheet_name: str,
     headers: list[str],
@@ -41,10 +57,12 @@ def generate_excel(
 
     wb = Workbook()
     ws = wb.active
-    ws.title = sheet_name[:31]
+    existing_sheets: set[str] = set()
+    initial_title = _clean_sheet_title(sheet_name, existing_sheets)
+    ws.title = initial_title
 
     if title:
-        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(headers))
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=max(len(headers), 1))
         title_cell = ws.cell(row=1, column=1, value=title)
         title_cell.font = Font(bold=True, size=14)
 
@@ -64,16 +82,20 @@ def generate_excel(
 
     for col_idx in range(1, len(headers) + 1):
         max_length = max(
-            len(str(ws.cell(row=r, column=col_idx).value or ""))
-            for r in range(header_row, data_start + len(rows))
+            [
+                len(str(ws.cell(row=r, column=col_idx).value or ""))
+                for r in range(header_row, data_start + len(rows))
+            ]
+            or [10]
         )
-        ws.column_dimensions[chr(64 + col_idx)].width = min(max_length + 4, 50)
+        col_letter = chr(64 + col_idx) if col_idx <= 26 else f"A{chr(64 + col_idx - 26)}"
+        ws.column_dimensions[col_letter].width = min(max_length + 4, 50)
 
-    # Secondary sections render as their own worksheets (e.g. campaign
-    # progress metrics inside the Donor & Financial Reconciliation Report).
+    # Secondary sections render as their own worksheets
     if sections:
         for section in sections:
-            sec_ws = wb.create_sheet(title=f"{section.get('title', 'Section')}"[:31])
+            sec_title = _clean_sheet_title(section.get("title", "Section"), existing_sheets)
+            sec_ws = wb.create_sheet(title=sec_title)
             sec_headers = section.get("headers", [])
             sec_rows = section.get("rows", [])
             for col_idx, header in enumerate(sec_headers, start=1):
@@ -87,6 +109,16 @@ def generate_excel(
                         column=col_idx,
                         value=str(cell_value) if cell_value is not None else "",
                     )
+            for col_idx in range(1, len(sec_headers) + 1):
+                max_length = max(
+                    [
+                        len(str(sec_ws.cell(row=r, column=col_idx).value or ""))
+                        for r in range(1, 2 + len(sec_rows))
+                    ]
+                    or [10]
+                )
+                col_letter = chr(64 + col_idx) if col_idx <= 26 else f"A{chr(64 + col_idx - 26)}"
+                sec_ws.column_dimensions[col_letter].width = min(max_length + 4, 50)
 
     output = io.BytesIO()
     wb.save(output)
@@ -115,7 +147,9 @@ def generate_pdf(
     )
 
     buf = io.BytesIO()
-    page_size = landscape_size(A4) if landscape else A4
+    # Auto-landscape for wide tables (8+ columns)
+    is_landscape = landscape or len(headers) >= 8
+    page_size = landscape_size(A4) if is_landscape else A4
     doc = SimpleDocTemplate(
         buf,
         pagesize=page_size,

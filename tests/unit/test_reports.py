@@ -243,7 +243,7 @@ class TestReportService:
         mock_session.execute.return_value = mock_result
 
         result = await service._shelter_report(None, None, None)
-        assert result["title"] == "Shelter Report"
+        assert result["title"] == "Shelter Capacity & Turnover Audit Report"
         assert len(result["rows"]) == 1
         assert result["rows"][0][1] == "Main Shelter"
 
@@ -264,8 +264,147 @@ class TestReportService:
         result = await service._shelter_report(None, None, None)
         assert "sections" in result
         section_titles = [s["title"] for s in result["sections"]]
-        assert "Kennel Capacity & Utilization" in section_titles
-        assert "Facility Transfer Volumes" in section_titles
+        assert "Shelter Capacity & Turnover Audit Summary" in section_titles
+        assert "Kennel Capacity & Utilization by Facility" in section_titles
+        assert "Inter-Facility Transfer Volumes" in section_titles
+
+    @pytest.mark.asyncio
+    async def test_rep_001_rescue_operational_efficiency_metrics(self, service, mock_session):
+        from datetime import UTC, datetime, timedelta
+
+        now = datetime.now(UTC)
+        req = MagicMock()
+        req.id = "req-1"
+        req.ticket_number = "RC-100"
+        req.status = "rescued"
+        req.reporter_name = "Reporter X"
+        req.location_address = "Sector 14"
+        req.animal_count = 1
+        req.created_at = now - timedelta(hours=2)
+        req.latitude = 12.97
+        req.longitude = 77.59
+
+        disp = MagicMock()
+        disp.id = "disp-1"
+        disp.rescue_request_id = "req-1"
+        disp.dispatched_at = now - timedelta(hours=1, minutes=45)
+        disp.located_at = now - timedelta(hours=1)
+        disp.failure_reason = None
+        disp.assigned_driver_id = "driver-1"
+        disp.vehicle_id = "VH-01"
+
+        mock_result = MagicMock()
+        mock_result.all.return_value = [(req, disp)]
+        mock_session.execute.return_value = mock_result
+
+        result = await service._rescue_report(None, None, None)
+        assert result["title"] == "Rescue Operational Efficiency Report"
+        section_titles = [s["title"] for s in result["sections"]]
+        assert "Dispatch & Response Analytics" in section_titles
+        analytics_sec = next(
+            s for s in result["sections"] if s["title"] == "Dispatch & Response Analytics"
+        )
+        metrics_dict = {row[0]: row[1] for row in analytics_sec["rows"]}
+        assert "Successful Rescue Ratio" in metrics_dict
+        assert "Avg Response Time (Incident to On-Site Arrival)" in metrics_dict
+        assert "Avg Response Time (Incident to Dispatch)" in metrics_dict
+
+    @pytest.mark.asyncio
+    async def test_rep_003_medical_compliance_metrics(self, service, mock_session):
+        from datetime import UTC, datetime
+
+        now = datetime.now(UTC)
+        mock_treatment = MagicMock()
+        mock_treatment.id = "treat-1"
+        mock_treatment.dog_id = "dog-1"
+        mock_treatment.vet_id = "vet-1"
+        mock_treatment.treatment_type = "Routine Checkup"
+        mock_treatment.treatment_date = now
+        mock_treatment.post_op_notes = "Normal"
+
+        mock_vax = MagicMock()
+        mock_vax.dog_id = "dog-1"
+        mock_vax.vaccine_name = "Rabies"
+        mock_vax.administered_at = now
+        mock_vax.next_due_at = now + datetime.resolution
+
+        mock_session.execute.side_effect = [
+            MagicMock(
+                scalars=MagicMock(
+                    return_value=MagicMock(all=MagicMock(return_value=[mock_treatment]))
+                )
+            ),
+            MagicMock(
+                scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[mock_vax])))
+            ),
+            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))),
+            MagicMock(scalar=MagicMock(return_value=1)),
+            MagicMock(scalar=MagicMock(return_value=500.0)),
+        ]
+
+        result = await service._medical_report(None, None, None)
+        assert result["title"] == "Medical Care & Immunization Compliance Report"
+        section_titles = [s["title"] for s in result["sections"]]
+        assert "Medical Care & Immunization Compliance Summary" in section_titles
+        assert "Veterinary Expenditure Analysis" in section_titles
+        summary_sec = next(
+            s
+            for s in result["sections"]
+            if s["title"] == "Medical Care & Immunization Compliance Summary"
+        )
+        metrics = {row[0]: row[1] for row in summary_sec["rows"]}
+        assert "Vaccination Coverage Rate" in metrics
+        assert "Follow-up Exam Compliance Rate" in metrics
+        assert "Total Veterinary Expenditure per Dog" in metrics
+
+    @pytest.mark.asyncio
+    async def test_rep_004_inventory_loss_and_po_requirements(self, service, mock_session):
+        item = MagicMock()
+        item.id = "item-1"
+        item.name = "Bandages"
+        item.category = "Consumables"
+        item.quantity = 5.0
+        item.reorder_threshold = 10.0
+        item.unit = "boxes"
+        item.unit_cost = 20.0
+        item.expiry_date = None
+
+        mock_session.execute.side_effect = [
+            MagicMock(
+                scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[item])))
+            ),
+            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))),
+            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))),
+        ]
+
+        result = await service._inventory_report(None)
+        assert result["title"] == "Inventory Consumption & Expiry Audit Report"
+        section_titles = [s["title"] for s in result["sections"]]
+        assert "Inventory Health & Loss Audit" in section_titles
+        assert any("Upcoming Purchase Order Requirements" in t for t in section_titles)
+        health_sec = next(
+            s for s in result["sections"] if s["title"] == "Inventory Health & Loss Audit"
+        )
+        metrics = {row[0]: row[1] for row in health_sec["rows"]}
+        assert "Inventory Loss Rate" in metrics
+        assert "Stock Movement Speed (Avg Interval)" in metrics
+        assert "Upcoming Purchase Order Requirements Exposure" in metrics
+
+    @pytest.mark.asyncio
+    async def test_rep_005_report_format_normalization(self):
+        from pawguard.modules.reports.schemas import ReportRequest
+
+        req_excel = ReportRequest(report_type=ReportType.RESCUE, format="excel")
+        assert req_excel.format == ReportFormat.EXCEL
+
+        req_xlsx = ReportRequest(report_type=ReportType.RESCUE, format="xlsx")
+        assert req_xlsx.format == ReportFormat.EXCEL
+
+        req_csv = ReportRequest(report_type=ReportType.RESCUE, format="CSV")
+        assert req_csv.format == ReportFormat.CSV
+
+        req_pdf = ReportRequest(report_type=ReportType.RESCUE, format="PDF")
+        assert req_pdf.format == ReportFormat.PDF
 
     @pytest.mark.asyncio
     async def test_download_url_in_response(self, service, mock_session):
