@@ -152,6 +152,8 @@ class LostFoundService:
                     user_id=str(user_id),
                     existing_report_id=str(existing.id),
                 )
+                existing._is_duplicate = True
+                existing.is_duplicate = True
                 return existing
 
             from pawguard.services.storage_service import StorageService
@@ -235,6 +237,8 @@ class LostFoundService:
                     user_agent="",
                     metadata={"report_id": str(report.id), "type": "lost"},
                 )
+            report._is_duplicate = False
+            report.is_duplicate = False
             return report
         finally:
             if lock_acquired and cache_svc is not None:
@@ -337,6 +341,8 @@ class LostFoundService:
                     user_id=str(user_id),
                     existing_report_id=str(existing.id),
                 )
+                existing._is_duplicate = True
+                existing.is_duplicate = True
                 return existing
 
             from pawguard.services.storage_service import StorageService
@@ -417,6 +423,8 @@ class LostFoundService:
                     user_agent="",
                     metadata={"report_id": str(report.id), "type": "found"},
                 )
+            report._is_duplicate = False
+            report.is_duplicate = False
             return report
         finally:
             if lock_acquired and cache_svc is not None:
