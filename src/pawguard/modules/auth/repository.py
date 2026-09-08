@@ -119,6 +119,11 @@ class UserRepository:
         )
         return list((await self._session.execute(stmt)).scalars().all())
 
+    async def get_all_active_user_ids(self) -> list[uuid.UUID]:
+        """Every active, non-deleted user. Used for untargeted broadcasts."""
+        stmt = select(User.id).where(User.is_active.is_(True), User.deleted_at.is_(None))
+        return list((await self._session.execute(stmt)).scalars().all())
+
 
 class SessionRepository:
     def __init__(self, session: AsyncSession) -> None:

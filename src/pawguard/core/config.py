@@ -190,6 +190,9 @@ class Settings(BaseSettings):
     force_in_process_jobs: bool = False
     disable_redis: bool = False
 
+    # --- Lost-pet alerts ---
+    lost_pet_broadcast_radius_km: float = 25.0
+
     # --- Organisation ---
     org_name: str = "PawGuard Rescue & Care"
     org_address: str = "123 Shelter Lane, Petville, PA 12345"

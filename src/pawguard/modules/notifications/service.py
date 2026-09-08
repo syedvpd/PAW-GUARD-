@@ -69,14 +69,16 @@ class NotificationService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> list[Notification]:
+        from pawguard.modules.auth.repository import UserRepository
+
+        user_repo = UserRepository(self._repo._session)
+
         # Merge explicit user_ids with users resolved from target_roles
         target_ids = set(user_ids)
         if payload.target_roles:
-            from pawguard.modules.auth.repository import UserRepository
-
-            user_repo = UserRepository(self._repo._session)
-            role_user_ids = await user_repo.get_user_ids_by_roles(payload.target_roles)
-            target_ids.update(role_user_ids)
+            target_ids.update(await user_repo.get_user_ids_by_roles(payload.target_roles))
+        elif not target_ids:
+            target_ids.update(await user_repo.get_all_active_user_ids())
 
         if not target_ids:
             return []
@@ -106,6 +108,12 @@ class NotificationService:
                     "target_roles": payload.target_roles,
                 },
             )
+
+        if payload.send_push:
+            await self._send_push_to_users(
+                list(target_ids), payload.title, payload.body, payload.action_url
+            )
+
         return created
 
     async def list_paginated(

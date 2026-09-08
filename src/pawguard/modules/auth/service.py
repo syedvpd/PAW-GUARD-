@@ -1043,6 +1043,8 @@ class AuthService:
         state: str | None = None,
         country: str | None = None,
         postal_code: str | None = None,
+        latitude: float | None = None,
+        longitude: float | None = None,
         push_notifications_enabled: bool | None = None,
         fcm_token: str | None = None,
         ctx: RequestContext,
@@ -1075,6 +1077,10 @@ class AuthService:
             user.country = country
         if postal_code is not None:
             user.postal_code = postal_code
+        if latitude is not None:
+            user.latitude = latitude
+        if longitude is not None:
+            user.longitude = longitude
         if push_notifications_enabled is not None:
             user.push_notifications_enabled = push_notifications_enabled
         if fcm_token is not None:

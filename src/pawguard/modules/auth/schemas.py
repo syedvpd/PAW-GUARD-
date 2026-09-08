@@ -219,6 +219,8 @@ class UserProfileUpdate(BaseModel):
     state: str | None = Field(None, examples=["Telangana"])
     country: str | None = Field(None, examples=["India"])
     postal_code: str | None = Field(None, alias="pin_code", examples=["500081"])
+    latitude: float | None = Field(None, ge=-90, le=90, examples=[17.385044])
+    longitude: float | None = Field(None, ge=-180, le=180, examples=[78.486671])
     push_notifications_enabled: bool | None = Field(
         None, alias="push_notifications", examples=[True]
     )
@@ -327,6 +329,8 @@ class UserProfile(BaseModel):
     postal_code: str | None = None
     pin_code: str | None = None
     zip_code: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
     push_notifications_enabled: bool = True
     push_notifications: bool = True
     is_verified: bool

@@ -223,13 +223,13 @@ async def update_preferences(
 async def broadcast_notification(
     payload: BroadcastCreate,
     request: Request,
-    user_ids: list[uuid.UUID] = Query(...),
+    user_ids: list[uuid.UUID] | None = Query(None),
     current_user: CurrentUser = Depends(get_current_user),
     service: NotificationService = Depends(get_notification_service),
 ) -> ApiResponse[list[NotificationResponse]]:
     notifications = await service.broadcast(
         payload,
-        user_ids,
+        user_ids or [],
         actor_id=current_user.id,
         ip_address=request.client.host if request.client else None,
     )

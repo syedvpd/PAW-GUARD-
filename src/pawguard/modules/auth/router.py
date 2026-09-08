@@ -397,6 +397,8 @@ async def update_profile(
         state=payload.state,
         country=payload.country,
         postal_code=payload.postal_code,
+        latitude=payload.latitude,
+        longitude=payload.longitude,
         push_notifications_enabled=payload.push_notifications_enabled,
         fcm_token=payload.fcm_token,
         ctx=_build_request_context(request),

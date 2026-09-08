@@ -66,6 +66,10 @@ class BroadcastCreate(BaseModel):
         examples=[["rescue_centre_admin", "shelter_manager"]],
         description="Broadcast to all active users holding any of these roles.",
     )
+    send_push: bool = Field(
+        False,
+        description="Also deliver as a push notification via FCM when configured.",
+    )
 
 
 class NotificationPreferenceResponse(BaseModel):
