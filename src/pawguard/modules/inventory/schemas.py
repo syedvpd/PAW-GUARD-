@@ -31,13 +31,13 @@ def _normalize_expiry_date(v: Any) -> Any:
 
 
 class InventoryItemCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=255, examples=["Rabies Vaccine"])
-    category: ItemCategory = Field(..., examples=["vaccine"])
-    quantity: float = Field(0.0, ge=0.0, examples=[50.0])
-    unit: str = Field(..., min_length=1, max_length=32, examples=["vial"])
-    reorder_threshold: float = Field(10.0, ge=0.0, examples=[10.0])
-    expiry_date: date | None = Field(None, examples=["2027-03-01"])
-    unit_cost: float = Field(0.0, ge=0.0, examples=[4.50])
+    name: str = Field(..., min_length=1, max_length=255)
+    category: ItemCategory = Field(...)
+    quantity: float = Field(0.0, ge=0.0)
+    unit: str = Field(..., min_length=1, max_length=32)
+    reorder_threshold: float = Field(0.0, ge=0.0)
+    expiry_date: date | None = Field(None)
+    unit_cost: float = Field(0.0, ge=0.0)
 
     @field_validator("category", mode="before")
     @classmethod

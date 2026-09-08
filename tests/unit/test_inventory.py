@@ -390,6 +390,18 @@ class TestInventoryService:
         assert item.quantity == 50.0
         assert item.expiry_date is None
 
+    def test_inventory_item_create_clean_defaults(self):
+        """A new item created with only required fields starts with 0/None defaults (PAW-INV-001)."""
+        item = InventoryItemCreate(
+            name="Surgical Gloves",
+            category=ItemCategory.CONSUMABLE,
+            unit="box",
+        )
+        assert item.quantity == 0.0
+        assert item.reorder_threshold == 0.0
+        assert item.unit_cost == 0.0
+        assert item.expiry_date is None
+
     @pytest.mark.asyncio
     async def test_router_create_item_success(self):
         from unittest.mock import MagicMock

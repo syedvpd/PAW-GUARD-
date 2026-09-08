@@ -107,7 +107,19 @@ class TestRoleAndPermissionDefinitions:
         im_perms = role_map["inventory_manager"]
 
         assert pc.INVENTORY_CREATE in im_perms
+        assert pc.INVENTORY_READ in im_perms
+        assert pc.INVENTORY_UPDATE in im_perms
+        assert pc.INVENTORY_DELETE in im_perms
         assert pc.REQUISITION_CREATE in im_perms
+        assert pc.DASHBOARD_INVENTORY in im_perms
+        assert pc.PUBLIC_READ in im_perms
+
+        # Explicitly verify no shelter facility access (PAW-INV-002)
+        assert pc.SHELTER_READ not in im_perms
+        assert pc.SHELTER_UPDATE not in im_perms
+        assert pc.SHELTER_MANAGE_KENNELS not in im_perms
+        assert pc.SHELTER_TRANSFER not in im_perms
+        assert pc.DASHBOARD_SHELTER not in im_perms
 
     def test_shelter_manager_role_permissions(self):
         role_map = {r[0]: set(r[3]) for r in ROLE_DEFINITIONS}

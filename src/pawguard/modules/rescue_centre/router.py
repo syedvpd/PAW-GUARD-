@@ -24,7 +24,6 @@ from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import (
     CurrentUser,
     get_current_user,
-    get_optional_current_user,
 )
 from pawguard.modules.auth.rbac import require_permission
 from pawguard.modules.dog.repository import DogRepository
@@ -57,6 +56,7 @@ def get_shelter_service(
 @router.get(
     "",
     response_model=PaginatedResponse[ShelterFacilityResponse],
+    dependencies=[Depends(require_permission("shelter:read"))],
 )
 async def list_rescue_centres(
     page: PageParams = Depends(page_params),
@@ -64,7 +64,7 @@ async def list_rescue_centres(
     search: str | None = None,
     status: FacilityStatus | None = None,
     facility_type: FacilityType | None = None,
-    current_user: CurrentUser | None = Depends(get_optional_current_user),
+    current_user: CurrentUser = Depends(get_current_user),
     service: ShelterService = Depends(get_shelter_service),
 ) -> PaginatedResponse[ShelterFacilityResponse]:
     result = await service.list_facilities_paginated(
@@ -106,6 +106,7 @@ async def create_rescue_centre(
 @router.get(
     "/{facility_id}",
     response_model=ApiResponse[ShelterFacilityResponse],
+    dependencies=[Depends(require_permission("shelter:read"))],
 )
 async def get_rescue_centre(
     facility_id: uuid.UUID,
