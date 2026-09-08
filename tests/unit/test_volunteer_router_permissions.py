@@ -64,3 +64,11 @@ class TestVolunteerRosterRouterPermissions:
         assert _required_codes("/volunteers/shifts/{shift_id}/attendance", "GET") == (
             "volunteer:update",
         )
+
+
+class TestVolunteerShiftAssignRouterPermissions:
+    def test_assign_volunteer_requires_volunteer_schedule_or_update(self):
+        assert _required_codes("/volunteers/shifts/{shift_id}/assign", "POST") == (
+            "volunteer:schedule",
+            "volunteer:update",
+        )

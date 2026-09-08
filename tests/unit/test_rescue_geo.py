@@ -94,7 +94,9 @@ class TestRescueGeo:
         assert results[0]["distance_km"] is None
 
     @pytest.mark.asyncio
-    async def test_get_nearest_agents_excludes_non_field_roles(self, service, mock_repo, mock_redis):
+    async def test_get_nearest_agents_excludes_non_field_roles(
+        self, service, mock_repo, mock_redis
+    ):
         """Suggestions must only surface rescue_agent — not coordinators/admins (PRR dispatch scope)."""
         agent_id = uuid.uuid4()
         mock_redis.geosearch.return_value = [[str(agent_id), 5.0, (78.3741, 17.4482)]]

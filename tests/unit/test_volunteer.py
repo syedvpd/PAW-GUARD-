@@ -925,3 +925,434 @@ class TestServiceCertificate:
         assert len(result) == 2
         assert result == expected
         mock_repo.list_all_attendance_for_volunteer.assert_called_once_with(profile.id)
+
+
+class TestVolunteerShiftAssignment:
+    """Authoritative test suite for Volunteer Coordinator shift assignment (Volunteer Bug #1)."""
+
+    @pytest.fixture
+    def mock_repo(self):
+        repo = AsyncMock(spec=VolunteerRepository)
+        repo._session = AsyncMock()
+        repo._session.add = Mock()
+        return repo
+
+    @pytest.fixture
+    def mock_audit(self):
+        return AsyncMock(spec=AuditService)
+
+    @pytest.fixture
+    def service(self, mock_repo, mock_audit):
+        return VolunteerService(mock_repo, audit_service=mock_audit)
+
+    # ── TEST A: Volunteer Coordinator assigns approved volunteer → SUCCESS ─
+    @pytest.mark.asyncio
+    async def test_assign_approved_volunteer_by_profile_id_success(
+        self, service, mock_repo, mock_audit
+    ):
+        shift_id = uuid.uuid4()
+        volunteer_id = uuid.uuid4()
+        user_id = uuid.uuid4()
+        actor_id = uuid.uuid4()
+        now = datetime.now(UTC)
+
+        mock_profile = VolunteerProfile(
+            id=volunteer_id,
+            user_id=user_id,
+            status=VolunteerStatus.ACTIVE,
+        )
+        mock_repo.get_profile_by_id.return_value = mock_profile
+        mock_repo.get_shift_by_id_for_update.return_value = VolunteerShift(
+            id=shift_id,
+            role_name="Feeding & Cleaning",
+            start_at=now,
+            end_at=now,
+            capacity=5,
+        )
+        mock_repo.get_attendance_by_shift_and_volunteer.return_value = None
+        mock_repo.list_attendance_for_shift.return_value = []
+
+        att_id = uuid.uuid4()
+        mock_repo.create_attendance.return_value = ShiftAttendance(
+            id=att_id,
+            shift_id=shift_id,
+            volunteer_id=volunteer_id,
+            status=AttendanceStatus.CLAIMED,
+        )
+
+        result = await service.assign_volunteer_to_shift(
+            shift_id=shift_id,
+            volunteer_target_id=volunteer_id,
+            actor_id=actor_id,
+            ip_address="192.168.1.1",
+        )
+
+        assert result.id == att_id
+        assert result.shift_id == shift_id
+        assert result.volunteer_id == volunteer_id
+        assert result.status == AttendanceStatus.CLAIMED
+        mock_repo.create_attendance.assert_awaited_once()
+        mock_audit.record.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_assign_approved_volunteer_by_user_id_fallback_success(self, service, mock_repo):
+        shift_id = uuid.uuid4()
+        profile_id = uuid.uuid4()
+        user_id = uuid.uuid4()
+        now = datetime.now(UTC)
+
+        mock_profile = VolunteerProfile(
+            id=profile_id,
+            user_id=user_id,
+            status=VolunteerStatus.ACTIVE,
+        )
+        # ID lookup returns None, user_id lookup succeeds
+        mock_repo.get_profile_by_id.return_value = None
+        mock_repo.get_profile_by_user_id.return_value = mock_profile
+        mock_repo.get_shift_by_id_for_update.return_value = VolunteerShift(
+            id=shift_id,
+            role_name="Dog Walking",
+            start_at=now,
+            end_at=now,
+            capacity=3,
+        )
+        mock_repo.get_attendance_by_shift_and_volunteer.return_value = None
+        mock_repo.list_attendance_for_shift.return_value = []
+
+        mock_repo.create_attendance.return_value = ShiftAttendance(
+            id=uuid.uuid4(),
+            shift_id=shift_id,
+            volunteer_id=profile_id,
+            status=AttendanceStatus.CLAIMED,
+        )
+
+        result = await service.assign_volunteer_to_shift(
+            shift_id=shift_id,
+            volunteer_target_id=user_id,
+        )
+        assert result.volunteer_id == profile_id
+        mock_repo.create_attendance.assert_awaited_once()
+
+    # ── TEST B: Same volunteer assigned again → correctly rejected ─────────
+    @pytest.mark.asyncio
+    async def test_assign_duplicate_volunteer_rejected(self, service, mock_repo):
+        shift_id = uuid.uuid4()
+        volunteer_id = uuid.uuid4()
+        now = datetime.now(UTC)
+
+        mock_repo.get_profile_by_id.return_value = VolunteerProfile(
+            id=volunteer_id,
+            user_id=uuid.uuid4(),
+            status=VolunteerStatus.ACTIVE,
+        )
+        mock_repo.get_shift_by_id_for_update.return_value = VolunteerShift(
+            id=shift_id,
+            role_name="Walking",
+            start_at=now,
+            end_at=now,
+            capacity=5,
+        )
+        # Already enrolled
+        mock_repo.get_attendance_by_shift_and_volunteer.return_value = ShiftAttendance(
+            id=uuid.uuid4(),
+            shift_id=shift_id,
+            volunteer_id=volunteer_id,
+            status=AttendanceStatus.CLAIMED,
+        )
+
+        with pytest.raises(ConflictError, match="already been assigned"):
+            await service.assign_volunteer_to_shift(
+                shift_id=shift_id,
+                volunteer_target_id=volunteer_id,
+            )
+        mock_repo.create_attendance.assert_not_called()
+
+    # ── TEST C: Shift at capacity → correctly rejected ─────────────────────
+    @pytest.mark.asyncio
+    async def test_assign_shift_at_capacity_rejected(self, service, mock_repo):
+        shift_id = uuid.uuid4()
+        volunteer_id = uuid.uuid4()
+        now = datetime.now(UTC)
+
+        mock_repo.get_profile_by_id.return_value = VolunteerProfile(
+            id=volunteer_id,
+            user_id=uuid.uuid4(),
+            status=VolunteerStatus.ACTIVE,
+        )
+        mock_repo.get_shift_by_id_for_update.return_value = VolunteerShift(
+            id=shift_id,
+            role_name="Walking",
+            start_at=now,
+            end_at=now,
+            capacity=2,
+        )
+        mock_repo.get_attendance_by_shift_and_volunteer.return_value = None
+        mock_repo.list_attendance_for_shift.return_value = [
+            ShiftAttendance(
+                id=uuid.uuid4(),
+                shift_id=shift_id,
+                volunteer_id=uuid.uuid4(),
+                status=AttendanceStatus.CLAIMED,
+            ),
+            ShiftAttendance(
+                id=uuid.uuid4(),
+                shift_id=shift_id,
+                volunteer_id=uuid.uuid4(),
+                status=AttendanceStatus.CLAIMED,
+            ),
+        ]
+
+        with pytest.raises(ConflictError, match="maximum volunteer capacity"):
+            await service.assign_volunteer_to_shift(
+                shift_id=shift_id,
+                volunteer_target_id=volunteer_id,
+            )
+        mock_repo.create_attendance.assert_not_called()
+
+    # ── TEST D: Unapproved volunteer → correctly rejected ───────────────────
+    @pytest.mark.asyncio
+    async def test_assign_unapproved_volunteer_rejected(self, service, mock_repo):
+        shift_id = uuid.uuid4()
+        volunteer_id = uuid.uuid4()
+
+        mock_repo.get_profile_by_id.return_value = VolunteerProfile(
+            id=volunteer_id,
+            user_id=uuid.uuid4(),
+            status=VolunteerStatus.APPLIED,  # Not ACTIVE/approved
+        )
+
+        with pytest.raises(ValidationFailedError, match="approved/active volunteers"):
+            await service.assign_volunteer_to_shift(
+                shift_id=shift_id,
+                volunteer_target_id=volunteer_id,
+            )
+        mock_repo.get_shift_by_id_for_update.assert_not_called()
+        mock_repo.create_attendance.assert_not_called()
+
+    # ── Non-existent volunteer / shift ─────────────────────────────────────
+    @pytest.mark.asyncio
+    async def test_assign_non_existent_volunteer_raises_not_found(self, service, mock_repo):
+        mock_repo.get_profile_by_id.return_value = None
+        mock_repo.get_profile_by_user_id.return_value = None
+        with pytest.raises(NotFoundError, match="Volunteer profile not found"):
+            await service.assign_volunteer_to_shift(uuid.uuid4(), uuid.uuid4())
+
+    @pytest.mark.asyncio
+    async def test_assign_non_existent_shift_raises_not_found(self, service, mock_repo):
+        volunteer_id = uuid.uuid4()
+        mock_repo.get_profile_by_id.return_value = VolunteerProfile(
+            id=volunteer_id,
+            user_id=uuid.uuid4(),
+            status=VolunteerStatus.ACTIVE,
+        )
+        mock_repo.get_shift_by_id_for_update.return_value = None
+        with pytest.raises(NotFoundError, match="Volunteer shift not found"):
+            await service.assign_volunteer_to_shift(uuid.uuid4(), volunteer_id)
+
+
+class TestVolunteerShiftAssignmentRouter:
+    """Router-level contract tests for POST /api/v1/volunteers/shifts/{shift_id}/assign and /join."""
+
+    @pytest.mark.asyncio
+    async def test_router_coordinator_assign_volunteer_success(self):
+        from fastapi import FastAPI
+        from httpx import ASGITransport, AsyncClient
+
+        from pawguard.core.exceptions import register_exception_handlers
+        from pawguard.core.security import AccessTokenClaims
+        from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
+        from pawguard.modules.volunteer.router import get_volunteer_service, router
+
+        app = FastAPI()
+        register_exception_handlers(app)
+        app.include_router(router, prefix="/api/v1")
+
+        coordinator_id = uuid.uuid4()
+        now = datetime.now(UTC)
+        mock_user_obj = User(
+            id=coordinator_id,
+            email="coordinator@pawguard.org",
+            full_name="Volunteer Coordinator",
+            phone="+919876543210",
+            hashed_password="hash",
+            is_active=True,
+            is_verified=True,
+            mfa_enabled=False,
+            created_at=now,
+            updated_at=now,
+        )
+        mock_user = CurrentUser(
+            user=mock_user_obj,
+            claims=AccessTokenClaims(
+                user_id=coordinator_id,
+                session_id=uuid.uuid4(),
+                roles=["super_admin"],
+                jti=str(uuid.uuid4()),
+                expires_at=datetime.now(UTC),
+            ),
+            db=AsyncMock(),
+            redis=AsyncMock(),
+        )
+
+        mock_svc = AsyncMock(spec=VolunteerService)
+        shift_id = uuid.uuid4()
+        vol_id = uuid.uuid4()
+        att_id = uuid.uuid4()
+        mock_svc.assign_volunteer_to_shift.return_value = ShiftAttendance(
+            id=att_id,
+            shift_id=shift_id,
+            volunteer_id=vol_id,
+            status=AttendanceStatus.CLAIMED,
+            created_at=now,
+            updated_at=now,
+        )
+
+        app.dependency_overrides[get_current_user] = lambda: mock_user
+        app.dependency_overrides[get_volunteer_service] = lambda: mock_svc
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.post(
+                f"/api/v1/volunteers/shifts/{shift_id}/assign",
+                json={"volunteer_id": str(vol_id)},
+            )
+            assert resp.status_code == 201
+            data = resp.json()["data"]
+            assert data["id"] == str(att_id)
+            assert data["shift_id"] == str(shift_id)
+            assert data["volunteer_id"] == str(vol_id)
+            assert data["status"] == "claimed"
+
+    @pytest.mark.asyncio
+    async def test_router_normal_volunteer_cannot_call_assign_endpoint(self):
+        from fastapi import FastAPI
+        from httpx import ASGITransport, AsyncClient
+
+        from pawguard.core.exceptions import register_exception_handlers
+        from pawguard.core.security import AccessTokenClaims
+        from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
+        from pawguard.modules.volunteer.router import get_volunteer_service, router
+
+        app = FastAPI()
+        register_exception_handlers(app)
+        app.include_router(router, prefix="/api/v1")
+
+        volunteer_id = uuid.uuid4()
+        now = datetime.now(UTC)
+        mock_user_obj = User(
+            id=volunteer_id,
+            email="volunteer@example.com",
+            full_name="Regular Volunteer",
+            phone="+919876543210",
+            hashed_password="hash",
+            is_active=True,
+            is_verified=True,
+            mfa_enabled=False,
+            created_at=now,
+            updated_at=now,
+        )
+        mock_redis = AsyncMock()
+        mock_redis.get = AsyncMock(return_value=None)
+        mock_user = CurrentUser(
+            user=mock_user_obj,
+            claims=AccessTokenClaims(
+                user_id=volunteer_id,
+                session_id=uuid.uuid4(),
+                roles=["volunteer"],
+                jti=str(uuid.uuid4()),
+                expires_at=datetime.now(UTC),
+            ),
+            db=AsyncMock(),
+            redis=mock_redis,
+        )
+
+        app.dependency_overrides[get_current_user] = lambda: mock_user
+        app.dependency_overrides[get_volunteer_service] = lambda: AsyncMock(spec=VolunteerService)
+
+        with (
+            patch(
+                "pawguard.modules.auth.rbac.get_role_permission_codes",
+                AsyncMock(return_value={"volunteer:read"}),
+            ),
+            patch(
+                "pawguard.modules.auth.rbac.get_user_permission_codes",
+                AsyncMock(return_value=set()),
+            ),
+        ):
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                resp = await client.post(
+                    f"/api/v1/volunteers/shifts/{uuid.uuid4()}/assign",
+                    json={"volunteer_id": str(uuid.uuid4())},
+                )
+                assert resp.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_router_normal_volunteer_can_still_self_join_shift(self):
+        from fastapi import FastAPI
+        from httpx import ASGITransport, AsyncClient
+
+        from pawguard.core.security import AccessTokenClaims
+        from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
+        from pawguard.modules.volunteer.router import get_volunteer_service, router
+
+        app = FastAPI()
+        app.include_router(router, prefix="/api/v1")
+
+        user_id = uuid.uuid4()
+        profile_id = uuid.uuid4()
+        shift_id = uuid.uuid4()
+        att_id = uuid.uuid4()
+        now = datetime.now(UTC)
+
+        mock_user_obj = User(
+            id=user_id,
+            email="volunteer@example.com",
+            full_name="Regular Volunteer",
+            phone="+919876543210",
+            hashed_password="hash",
+            is_active=True,
+            is_verified=True,
+            mfa_enabled=False,
+            created_at=now,
+            updated_at=now,
+        )
+        mock_user = CurrentUser(
+            user=mock_user_obj,
+            claims=AccessTokenClaims(
+                user_id=user_id,
+                session_id=uuid.uuid4(),
+                roles=["volunteer"],
+                jti=str(uuid.uuid4()),
+                expires_at=datetime.now(UTC),
+            ),
+            db=AsyncMock(),
+            redis=AsyncMock(),
+        )
+
+        mock_svc = AsyncMock(spec=VolunteerService)
+        mock_svc.get_profile_by_user.return_value = VolunteerProfile(
+            id=profile_id,
+            user_id=user_id,
+            status=VolunteerStatus.ACTIVE,
+        )
+        mock_svc.join_shift.return_value = ShiftAttendance(
+            id=att_id,
+            shift_id=shift_id,
+            volunteer_id=profile_id,
+            status=AttendanceStatus.CLAIMED,
+            created_at=now,
+            updated_at=now,
+        )
+
+        app.dependency_overrides[get_current_user] = lambda: mock_user
+        app.dependency_overrides[get_volunteer_service] = lambda: mock_svc
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.post(f"/api/v1/volunteers/shifts/{shift_id}/join")
+            assert resp.status_code == 200
+            data = resp.json()["data"]
+            assert data["id"] == str(att_id)
+            assert data["shift_id"] == str(shift_id)
+            assert data["volunteer_id"] == str(profile_id)

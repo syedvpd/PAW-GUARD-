@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from pawguard.modules.auth.schemas import UserProfile
 from pawguard.modules.volunteer.models import ApplicationStatus, AttendanceStatus, VolunteerStatus
@@ -98,6 +98,27 @@ class VolunteerShiftCreate(BaseModel):
     allowed_radius_meters: int | None = Field(
         500, ge=1, le=10000, description="Geofence radius in meters"
     )
+
+
+class VolunteerShiftAssignRequest(BaseModel):
+    """Administrative shift assignment payload for Volunteer Coordinator / Admin."""
+
+    volunteer_id: uuid.UUID | None = Field(
+        None,
+        description="Volunteer Profile ID or User ID of the approved volunteer to assign.",
+        examples=["00000000-0000-0000-0000-000000000000"],
+    )
+    volunteer_profile_id: uuid.UUID | None = Field(
+        None,
+        description="Volunteer Profile ID of the approved volunteer to assign (optional alias).",
+        examples=["00000000-0000-0000-0000-000000000000"],
+    )
+
+    @model_validator(mode="after")
+    def _validate_target(self) -> "VolunteerShiftAssignRequest":
+        if self.volunteer_id is None and self.volunteer_profile_id is None:
+            raise ValueError("Either volunteer_id or volunteer_profile_id must be provided.")
+        return self
 
 
 class VolunteerShiftResponse(BaseModel):

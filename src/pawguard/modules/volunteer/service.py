@@ -656,6 +656,90 @@ class VolunteerService:
         )
         return await self._repo.create_attendance(attendance)
 
+    async def assign_volunteer_to_shift(
+        self,
+        shift_id: uuid.UUID,
+        volunteer_target_id: uuid.UUID,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> ShiftAttendance:
+        """Assign an approved volunteer to a shift administratively by a coordinator.
+
+        Validates:
+        1. Shift exists.
+        2. Volunteer exists (looks up by profile ID, falls back to user ID).
+        3. Volunteer application is approved / profile is in ACTIVE status.
+        4. Volunteer is not already enrolled/claimed for this shift.
+        5. Shift capacity is not exceeded.
+        """
+        # 1. Resolve volunteer profile
+        volunteer = await self._repo.get_profile_by_id(volunteer_target_id)
+        if volunteer is None:
+            volunteer = await self._repo.get_profile_by_user_id(volunteer_target_id)
+        if volunteer is None:
+            raise NotFoundError("Volunteer profile not found.")
+
+        # 2. Validate volunteer is approved / active
+        if volunteer.status != VolunteerStatus.ACTIVE:
+            raise ValidationFailedError(
+                "Only approved/active volunteers can be assigned to shifts."
+            )
+
+        # 3. Lock shift row to serialize concurrent capacity updates
+        shift = await self._repo.get_shift_by_id_for_update(shift_id)
+        if shift is None:
+            raise NotFoundError("Volunteer shift not found.")
+
+        # 4. Check duplicate enrollment
+        existing = await self._repo.get_attendance_by_shift_and_volunteer(shift_id, volunteer.id)
+        if existing is not None:
+            raise ConflictError("This volunteer has already been assigned to or joined this shift.")
+
+        # 5. Check capacity
+        attendances = await self._repo.list_attendance_for_shift(shift_id)
+        active_attendances = [a for a in attendances if a.status != AttendanceStatus.CANCELLED]
+        if len(active_attendances) >= shift.capacity:
+            raise ConflictError("This shift has reached its maximum volunteer capacity.")
+
+        # 6. Create attendance record
+        attendance = ShiftAttendance(
+            shift_id=shift_id,
+            volunteer_id=volunteer.id,
+            status=AttendanceStatus.CLAIMED,
+        )
+        created = await self._repo.create_attendance(attendance)
+
+        # 7. Audit log
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.VOLUNTEER_ATTENDANCE_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "action": "assign_volunteer",
+                    "shift_id": str(shift_id),
+                    "volunteer_id": str(volunteer.id),
+                    "attendance_id": str(created.id),
+                },
+            )
+
+        # 8. Notify volunteer of assignment
+        if volunteer.user is not None:
+            await self._notify_volunteer(
+                volunteer,
+                title="Assigned to Volunteer Shift",
+                body=(
+                    f"You have been assigned to the {shift.role_name} shift on "
+                    f"{shift.start_at.strftime('%Y-%m-%d %H:%M UTC')}."
+                ),
+                notification_type="volunteer_shift_assigned",
+                action_url=f"/volunteers/shifts/{shift_id}",
+            )
+
+        return created
+
     async def list_attendance(
         self,
         shift_id: uuid.UUID,

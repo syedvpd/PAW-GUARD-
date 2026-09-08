@@ -15,7 +15,7 @@ from pawguard.core.bulk import (
     BulkStatusUpdateRequest,
     BulkStatusUpdateResponse,
 )
-from pawguard.core.exceptions import ForbiddenError, parse_enum
+from pawguard.core.exceptions import ForbiddenError, ValidationFailedError, parse_enum
 from pawguard.core.pagination import PageParams, page_params
 from pawguard.core.rate_limiter import rate_limit
 from pawguard.core.responses import ApiResponse, PaginatedResponse
@@ -43,6 +43,7 @@ from pawguard.modules.volunteer.schemas import (
     VolunteerProfileResponse,
     VolunteerProfileUpdate,
     VolunteerServiceSummary,
+    VolunteerShiftAssignRequest,
     VolunteerShiftCreate,
     VolunteerShiftResponse,
 )
@@ -313,6 +314,41 @@ async def join_shift(
     return ApiResponse(
         data=ShiftAttendanceResponse.model_validate(attendance),
         message="Joined volunteer shift successfully.",
+    )
+
+
+@router.post(
+    "/shifts/{shift_id}/assign",
+    response_model=ApiResponse[ShiftAttendanceResponse],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("volunteer:schedule", "volunteer:update"))],
+    summary="Coordinator administrative assignment of an approved volunteer to a shift",
+)
+async def assign_volunteer_to_shift(
+    shift_id: uuid.UUID,
+    payload: VolunteerShiftAssignRequest,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: VolunteerService = Depends(get_volunteer_service),
+) -> ApiResponse[ShiftAttendanceResponse]:
+    """Administrative assignment of an approved volunteer to a shift.
+
+    Authorized for Volunteer Coordinator (`volunteer:schedule` / `volunteer:update`) and Super Admin.
+    Validates that the volunteer is approved/active, shift is open and not full, and prevents duplicates.
+    """
+    target_id = payload.volunteer_id or payload.volunteer_profile_id
+    if target_id is None:
+        raise ValidationFailedError("Either volunteer_id or volunteer_profile_id must be provided.")
+    ip = request.client.host if request.client else None
+    attendance = await service.assign_volunteer_to_shift(
+        shift_id=shift_id,
+        volunteer_target_id=target_id,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=ShiftAttendanceResponse.model_validate(attendance),
+        message="Volunteer assigned to shift successfully.",
     )
 
 
