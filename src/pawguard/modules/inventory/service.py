@@ -108,6 +108,7 @@ class InventoryService:
             raise NotFoundError("Inventory item not found.")
 
         qty_change = payload.quantity
+        was_insufficient = False
         from datetime import date
 
         if payload.movement_type in (MovementType.CHECK_OUT, MovementType.CONSUMPTION):
@@ -117,12 +118,13 @@ class InventoryService:
                     f"Cannot check out expired inventory item '{item.name}'. "
                     f"Expired on: {item.expiry_date}"
                 )
-            if item.quantity < qty_change:
+            if item.quantity < qty_change and not payload.emergency_override:
                 raise ConflictError(
                     f"Insufficient stock for '{item.name}'. "
                     f"Available: {item.quantity} {item.unit}, "
                     f"Requested: {qty_change}"
                 )
+            was_insufficient = item.quantity < qty_change
             item.quantity -= qty_change
         elif payload.movement_type == MovementType.CHECK_IN:
             item.quantity += qty_change
@@ -152,6 +154,7 @@ class InventoryService:
                     "item_id": str(item.id),
                     "quantity": qty_change,
                     "movement_type": payload.movement_type.value,
+                    "emergency_override": was_insufficient and payload.emergency_override,
                 },
             )
         # Workflow 8: when stock falls to/below the reorder threshold, alert
@@ -159,6 +162,11 @@ class InventoryService:
         # raised (avoids silent stock-outs of medicine/food).
         if item.quantity <= item.reorder_threshold:
             await self._alert_low_stock(item)
+        # Medical suite edge case: a welfare-critical treatment proceeded
+        # despite insufficient stock (negative-stock override) — flag it for
+        # Inventory Manager review rather than letting it pass silently.
+        if was_insufficient and payload.emergency_override:
+            await self._alert_emergency_override(item, movement, moved_by=user_id)
         return movement
 
     async def _alert_low_stock(self, item: InventoryItem) -> None:
@@ -182,6 +190,36 @@ class InventoryService:
             )
         except Exception:  # pragma: no cover - alerting must never break stock ops
             logger.warning("Failed to send low-stock alert for item %s", item.id, exc_info=True)
+
+    async def _alert_emergency_override(
+        self, item: InventoryItem, movement: InventoryMovement, moved_by: uuid.UUID
+    ) -> None:
+        if self._notification_svc is None:
+            return
+        try:
+            await self._notification_svc.broadcast(
+                payload=BroadcastCreate(
+                    title=f"Emergency stock override: {item.name}",
+                    body=(
+                        f"A welfare-critical check-out took '{item.name}' below tracked stock "
+                        f"(now {item.quantity} {item.unit}). Note: {movement.notes or 'none provided'}. "
+                        "Review and reconcile stock."
+                    ),
+                    notification_type="inventory_emergency_override",
+                    action_url="/inventory",
+                    target_roles=["inventory_manager", "rescue_centre_admin"],
+                ),
+                # Workflow 6 §14: this alert must also reach the requesting
+                # vet directly, not just the inventory-side roles — they're
+                # the one who needs to know their override went through (or
+                # follow up if reconciliation later reverses it).
+                user_ids=[moved_by],
+                actor_id=moved_by,
+            )
+        except Exception:  # pragma: no cover - alerting must never break stock ops
+            logger.warning(
+                "Failed to send emergency-override alert for item %s", item.id, exc_info=True
+            )
 
     async def create_requisition(
         self,

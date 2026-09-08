@@ -86,6 +86,15 @@ class InventoryMovementCreate(BaseModel):
     notes: str | None = Field(None, examples=["Used during morning treatment rounds."])
     reference_type: str | None = Field(None, examples=["medical_treatment"])
     reference_id: uuid.UUID | None = None
+    emergency_override: bool = Field(
+        False,
+        description=(
+            "Bypass the insufficient-stock check for a welfare-critical check-out "
+            "(PRR edge case: emergency treatment with zero relevant stock). Lets "
+            "quantity go negative rather than blocking the movement, and alerts "
+            "inventory staff for reconciliation."
+        ),
+    )
 
 
 class InventoryConsumptionItem(BaseModel):
@@ -93,6 +102,21 @@ class InventoryConsumptionItem(BaseModel):
 
     item_id: uuid.UUID = Field(..., examples=["3fa85f64-5717-4562-b3fc-2c963f66afa6"])
     quantity: float = Field(..., gt=0.0, examples=[2.0])
+    emergency_override: bool = Field(
+        False, description="See InventoryMovementCreate.emergency_override."
+    )
+    override_notes: str | None = Field(
+        None,
+        max_length=1000,
+        description="Required justification when emergency_override is set.",
+        examples=["No stock; used clinic's emergency reserve, welfare-critical."],
+    )
+
+    @model_validator(mode="after")
+    def _require_override_justification(self) -> "InventoryConsumptionItem":
+        if self.emergency_override and not (self.override_notes and self.override_notes.strip()):
+            raise ValueError("override_notes is required when emergency_override is set.")
+        return self
 
 
 class InventoryMovementResponse(BaseModel):

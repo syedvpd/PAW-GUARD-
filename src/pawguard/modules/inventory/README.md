@@ -53,11 +53,13 @@ inventory/
 ## Stock Movement Flow
 
 ```
-POST /inventory/movements {item_id, movement_type, quantity, reference_type?, reference_id?}
+POST /inventory/movements {item_id, movement_type, quantity, reference_type?, reference_id?, emergency_override?}
   -> Fetch item
   -> If CHECK_OUT/CONSUMPTION:
      -> Expiry check: ConflictError if item.expiry_date is in the past
-     -> Stock check: ConflictError if quantity < requested
+     -> Stock check: ConflictError if quantity < requested, UNLESS emergency_override=true
+        (welfare-critical treatment with zero relevant stock — PRR edge case; lets
+        item.quantity go negative instead of blocking the movement)
      -> Subtract from item.quantity
   -> If CHECK_IN:
      -> Add to item.quantity
@@ -66,7 +68,13 @@ POST /inventory/movements {item_id, movement_type, quantity, reference_type?, re
   -> Create InventoryMovement
   -> If quantity <= reorder_threshold:
      -> Broadcast notification to inventory_manager + rescue_centre_admin
+  -> If emergency_override was actually needed (stock was insufficient):
+     -> Broadcast "inventory_emergency_override" notification to inventory_manager +
+        rescue_centre_admin (reconciliation review) AND directly to the requesting
+        user (moved_by) — they need to know their override actually went through
 ```
+
+`InventoryConsumptionItem` (the shared schema used by Medical treatments and Shelter care logs to draw down stock) carries the same `emergency_override` flag plus a required `override_notes` justification when set — enforced by a pydantic validator, not by role. Only the Medical module's `_record_inventory_consumptions` forwards the flag through to `InventoryMovementCreate` today; Shelter's care-log consumption path ignores it, so the bypass is only reachable via a veterinarian-authored treatment/prescription, matching the PRR's "vet proceeds with emergency procurement" framing.
 
 ## Requisition Workflow
 

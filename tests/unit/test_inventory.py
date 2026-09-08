@@ -188,6 +188,81 @@ class TestInventoryService:
             await service.record_movement(uuid.uuid4(), payload)
 
     @pytest.mark.asyncio
+    async def test_record_movement_emergency_override_allows_negative_stock_and_alerts(
+        self, mock_repo, mock_audit
+    ):
+        """PRR edge case: welfare-critical treatment with zero relevant stock —
+        the vet proceeds via emergency_override rather than being blocked, the
+        item goes negative to reflect the untracked deficit, and Inventory
+        Manager gets alerted for reconciliation instead of a silent bypass."""
+        item_id = uuid.uuid4()
+        item = InventoryItem(
+            id=item_id,
+            name="Emergency Antibiotic",
+            category=ItemCategory.PHARMACEUTICAL,
+            quantity=2.0,
+            unit="vial",
+            reorder_threshold=1.0,
+        )
+        mock_repo.get_item.return_value = item
+        notification_svc = AsyncMock()
+        service = InventoryService(mock_repo, mock_audit, notification_service=notification_svc)
+
+        payload = InventoryMovementCreate(
+            item_id=item_id,
+            movement_type=MovementType.CHECK_OUT,
+            quantity=5.0,
+            notes="[EMERGENCY OVERRIDE] no stock; welfare-critical",
+            emergency_override=True,
+        )
+        vet_id = uuid.uuid4()
+        movement = await service.record_movement(vet_id, payload)
+
+        assert movement.quantity == 5.0
+        assert item.quantity == -3.0
+        # The resulting -3.0 is also <= reorder_threshold, so the existing
+        # low-stock alert fires too — assert on the override-specific call
+        # rather than assuming this is the only broadcast.
+        override_calls = [
+            call
+            for call in notification_svc.broadcast.await_args_list
+            if call.kwargs["payload"].notification_type == "inventory_emergency_override"
+        ]
+        assert len(override_calls) == 1
+        assert override_calls[0].kwargs["payload"].target_roles == [
+            "inventory_manager",
+            "rescue_centre_admin",
+        ]
+        # Workflow 6 §14: the requesting vet must also be notified directly,
+        # not just the inventory-side roles.
+        assert override_calls[0].kwargs["user_ids"] == [vet_id]
+
+    @pytest.mark.asyncio
+    async def test_record_movement_emergency_override_not_used_when_stock_sufficient(
+        self, service, mock_repo
+    ):
+        """The override must not fire an alert (or be recorded as used) when
+        stock was actually sufficient — it's a bypass, not a blanket flag."""
+        item_id = uuid.uuid4()
+        item = InventoryItem(
+            id=item_id,
+            name="Bandages",
+            category=ItemCategory.CONSUMABLE,
+            quantity=10.0,
+            unit="pack",
+            reorder_threshold=1.0,
+        )
+        mock_repo.get_item.return_value = item
+        payload = InventoryMovementCreate(
+            item_id=item_id,
+            movement_type=MovementType.CHECK_OUT,
+            quantity=3.0,
+            emergency_override=True,
+        )
+        await service.record_movement(uuid.uuid4(), payload)
+        assert item.quantity == 7.0
+
+    @pytest.mark.asyncio
     async def test_record_movement_item_not_found(self, service, mock_repo):
         mock_repo.get_item.return_value = None
         payload = InventoryMovementCreate(
