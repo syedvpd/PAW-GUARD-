@@ -11,6 +11,17 @@ from pawguard.redis.client import _ensure_client
 from pawguard.services.cache_service import CacheService
 
 
+async def invalidate_route_cache(namespace: str) -> None:
+    """Drop every cached response in a ``cache_response`` namespace."""
+    with contextlib.suppress(Exception):
+        redis = await _ensure_client()
+        from pawguard.redis.client import is_null_redis
+
+        if is_null_redis(redis):
+            return
+        await CacheService(redis, namespace=namespace).delete_prefix("")
+
+
 def cache_response(ttl_seconds: int = 300, namespace: str = "route_cache"):
     """FastAPI route decorator to cache GET responses in Redis with support for ETags and cache partitioning.
 

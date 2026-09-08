@@ -14,6 +14,7 @@ from urllib.parse import urlsplit
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from pawguard.core.cache_decorator import invalidate_route_cache
 from pawguard.core.config import get_settings
 from pawguard.core.exceptions import (
     ConflictError,
@@ -189,6 +190,7 @@ class DogService:
 
     async def _invalidate_caches(self) -> None:
         """Invalidate public portal and dashboard metrics cache so live counts refresh immediately."""
+        await invalidate_route_cache("dog")
         if self._redis is None:
             return
         with suppress(Exception):

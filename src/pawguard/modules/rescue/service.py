@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
+from pawguard.core.cache_decorator import invalidate_route_cache
 from pawguard.core.exceptions import (
     ConflictError,
     NotFoundError,
@@ -1165,6 +1166,7 @@ class RescueService:
             is_adoptable=False,
         )
         await self._dog_repo.create(dog)
+        await invalidate_route_cache("dog")
         # Attach the newly created profile to the in-session request so the
         # admit response can surface its id. The `dog_profile` relationship is
         # viewonly, and the subsequent re-fetch returns the same identity-mapped
