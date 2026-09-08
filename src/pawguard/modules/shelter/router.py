@@ -67,7 +67,9 @@ def get_shelter_service(
     repo = ShelterRepository(db)
     dog_repo = DogRepository(db)
     notification_svc = NotificationService(repository=NotificationRepository(db), arq_pool=arq_pool)
-    inventory = InventoryService(InventoryRepository(db), audit_service=audit, notification_service=notification_svc)
+    inventory = InventoryService(
+        InventoryRepository(db), audit_service=audit, notification_service=notification_svc
+    )
     return ShelterService(
         repo,
         dog_repo,

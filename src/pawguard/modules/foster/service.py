@@ -438,7 +438,9 @@ class FosterService:
                 },
             )
         if used_vet_exception:
-            await self._notify_vet_exception(dog_name=dog.name, placement_id=res.id, notes=payload.exception_notes)
+            await self._notify_vet_exception(
+                dog_name=dog.name, placement_id=res.id, notes=payload.exception_notes
+            )
 
         try:
             from pawguard.modules.notifications.governance_service import (

@@ -294,7 +294,9 @@ class FosterPlacementCreate(BaseModel):
             "Only usable by a caller holding medical:clearance; requires exception_notes."
         ),
     )
-    exception_notes: str | None = Field(None, max_length=1000, description="Required when vet_exception is set.")
+    exception_notes: str | None = Field(
+        None, max_length=1000, description="Required when vet_exception is set."
+    )
 
     @model_validator(mode="after")
     def _require_exception_justification(self) -> "FosterPlacementCreate":
