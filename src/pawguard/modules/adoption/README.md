@@ -57,10 +57,16 @@ SUBMITTED ──> SCREENING ──> INTERVIEW ──> HOME_CHECK ──> APPROVE
 | POST | `/adoptions/{id}/follow-ups` | `adoption:process` | Create follow-up |
 | GET | `/adoptions/{id}/follow-ups` | Authenticated | View follow-ups |
 | POST | `/adoptions/{id}/follow-ups/{fid}/proof` | Owner or `adoption:process` | Submit proof |
-| DELETE | `/adoptions/{id}` | `adoption:process` | Soft delete |
+| DELETE | `/adoptions/{id}` | `adoption:delete` | Soft delete |
 | GET | `/adoptions/nearby-shelters` | Authenticated | Find nearby shelters |
 | POST | `/adoptions/bulk/status-update` | `adoption:process` | Bulk status |
-| POST | `/adoptions/bulk/delete` | `adoption:process` | Bulk soft delete |
+| POST | `/adoptions/bulk/delete` | `adoption:delete` | Bulk soft delete |
+
+`adoption:delete` is seeded only for `rescue_centre_admin` (`super_admin` bypasses all permission checks) —
+Adoption Coordinator's `adoption:process` covers routine pipeline work but not deletion, matching the
+workflow doc's RBAC matrix (`docs/workflow/08-adoption.md` §16). Previously both delete endpoints
+incorrectly accepted `adoption:process` too, so a Coordinator could delete applications; fixed to use
+the already-seeded-but-previously-unenforced `adoption:delete` permission.
 
 ## Exclusivity Lock Mechanism
 

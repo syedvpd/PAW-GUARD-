@@ -345,13 +345,13 @@ async def get_scores(
     "/{app_id}",
     response_model=ApiResponse[None],
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(require_permission("adoption:process"))],
+    dependencies=[Depends(require_permission("adoption:delete"))],
 )
 @router.delete(
     "/admin/adoptions/{app_id}",
     response_model=ApiResponse[None],
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(require_permission("adoption:process"))],
+    dependencies=[Depends(require_permission("adoption:delete"))],
 )
 async def soft_delete_application(
     app_id: uuid.UUID,
@@ -551,7 +551,7 @@ async def bulk_update_application_status(
 @router.post(
     "/bulk/delete",
     response_model=ApiResponse[BulkDeleteResponse],
-    dependencies=[Depends(require_permission("adoption:process"))],
+    dependencies=[Depends(require_permission("adoption:delete"))],
 )
 async def bulk_delete_applications(
     payload: BulkDeleteRequest,
