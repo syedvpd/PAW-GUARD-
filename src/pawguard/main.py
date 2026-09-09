@@ -262,18 +262,22 @@ def create_app() -> FastAPI:
     app.include_router(api_v1_router, prefix=settings.api_v1_prefix)
 
     @app.get("/", include_in_schema=False)
+    @app.head("/", include_in_schema=False)
     async def redirect_to_docs() -> RedirectResponse:
         return RedirectResponse(url="/docs")
 
     @app.get("/health", response_model=ApiResponse[dict[str, str]])
+    @app.head("/health", include_in_schema=False)
     async def health() -> ApiResponse[dict[str, str]]:
         return ApiResponse(data={"status": "ok"})
 
     @app.get("/live", response_model=ApiResponse[dict[str, str]])
+    @app.head("/live", include_in_schema=False)
     async def live() -> ApiResponse[dict[str, str]]:
         return ApiResponse(data={"status": "alive"})
 
     @app.get("/ready", response_model=ApiResponse[dict[str, str]])
+    @app.head("/ready", include_in_schema=False)
     async def ready(response: Response) -> ApiResponse[dict[str, str]]:
         db_ok = False
         try:
