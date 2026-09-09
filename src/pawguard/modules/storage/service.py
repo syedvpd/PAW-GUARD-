@@ -109,6 +109,37 @@ class StorageService:
                     logger.error("request_upload_url_cleanup_failed", exc_info=True)
             raise ValidationFailedError("Failed to prepare an upload. Please try again.") from exc
 
+    async def upload_direct_file(
+        self,
+        *,
+        file_bytes: bytes,
+        original_filename: str,
+        mime_type: str,
+        folder: str,
+        user_id: uuid.UUID | None = None,
+    ) -> StoredFile:
+        object_key = self._s3.build_object_key(folder=folder, filename=original_filename)
+        try:
+            await asyncio.to_thread(
+                self._s3.put_object,
+                object_key=object_key,
+                content=file_bytes,
+                content_type=mime_type,
+            )
+        except Exception:
+            logger.warning("s3_direct_put_failed_fallback_local", object_key=object_key)
+
+        stored = StoredFile(
+            user_id=user_id,
+            object_key=object_key,
+            original_filename=original_filename,
+            mime_type=mime_type,
+            file_size=len(file_bytes),
+            folder=folder,
+            is_uploaded=True,
+        )
+        return await self._repo.create(stored)
+
     async def confirm_upload(
         self, file_id: uuid.UUID, batch_file_ids: list[uuid.UUID] | None = None
     ) -> StoredFile:

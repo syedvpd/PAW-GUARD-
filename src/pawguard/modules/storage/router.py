@@ -5,7 +5,7 @@ import urllib.parse
 import urllib.request
 import uuid
 
-from fastapi import APIRouter, Depends, Query, Request, Response, status
+from fastapi import APIRouter, Depends, File, Query, Request, Response, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.bulk import BulkDeleteRequest, BulkDeleteResponse
@@ -54,6 +54,31 @@ async def request_upload_url(
         payload, user_id=current_user.id if current_user else None
     )
     return ApiResponse(data=result, message="Upload URL generated successfully.")
+
+
+@router.post(
+    "/upload-file",
+    response_model=ApiResponse[StoredFileResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_direct_file(
+    file: UploadFile = File(...),
+    folder: FileFolder = Query(FileFolder.DOGS),
+    current_user: CurrentUser | None = Depends(get_optional_current_user),
+    service: StorageService = Depends(get_storage_service),
+) -> ApiResponse[StoredFileResponse]:
+    content = await file.read()
+    stored = await service.upload_direct_file(
+        file_bytes=content,
+        original_filename=file.filename or "uploaded_image.jpg",
+        mime_type=file.content_type or "image/jpeg",
+        folder=folder.value if hasattr(folder, "value") else str(folder),
+        user_id=current_user.id if current_user else None,
+    )
+    return ApiResponse(
+        data=StoredFileResponse.model_validate(stored),
+        message="File uploaded successfully.",
+    )
 
 
 @router.put(
