@@ -393,24 +393,18 @@ class ReportService:
             stmt = stmt.where(AdoptionScore.scored_at <= end)
         return (await self._session.execute(stmt)).scalars().all()
 
-    async def _medical_report(
-        self, start: date | None, end: date | None, filters: dict[str, Any] | None
+    async def get_medical_analytics(
+        self,
+        start: date | None = None,
+        end: date | None = None,
+        filters: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        # Parallelise independent DB reads.
-        treatments_task = asyncio.ensure_future(self._fetch_medical_treatments(start, end))
-        vaccinations_task = asyncio.ensure_future(self._fetch_vaccinations(start, end))
-        prescriptions_task = asyncio.ensure_future(self._fetch_prescriptions(start, end))
-        total_dogs_task = asyncio.ensure_future(self._fetch_total_dogs())
-        vet_expenses_task = asyncio.ensure_future(self._fetch_veterinary_expenditures(start, end))
-        treatments, vaccinations, prescriptions, total_dogs, vet_expenses = await asyncio.gather(
-            treatments_task,
-            vaccinations_task,
-            prescriptions_task,
-            total_dogs_task,
-            vet_expenses_task,
-        )
-        total_dogs = int(total_dogs)
-        vet_expenses = float(vet_expenses)
+        """Compute authoritative structured medical analytics for JSON API consumers."""
+        treatments = await self._fetch_medical_treatments(start, end)
+        vaccinations = await self._fetch_vaccinations(start, end)
+        prescriptions = await self._fetch_prescriptions(start, end)
+        total_dogs = int(await self._fetch_total_dogs())
+        vet_expenses = float(await self._fetch_veterinary_expenditures(start, end))
 
         # Vaccination coverage (PRR 4.1 Medical Care & Immunization Compliance).
         vaccine_counts: dict[str, int] = {}
@@ -423,8 +417,18 @@ class ReportService:
             vaccinated_dog_ids.add(dog_key)
         coverage_pct = (len(vaccinated_dog_ids) / total_dogs * 100.0) if total_dogs else 0.0
 
+        vaccine_breakdown = [
+            {
+                "vaccine_name": name,
+                "doses_administered": count,
+                "dogs_vaccinated": len(vaccine_dogs.get(name, set())),
+            }
+            for name, count in sorted(
+                vaccine_counts.items(), key=lambda item: item[1], reverse=True
+            )
+        ]
+
         # Follow-up exam compliance (PRR 4.1 / REP-003):
-        # Vaccinations/treatments with scheduled follow-ups.
         overdue = 0
         on_track = 0
         no_followup = 0
@@ -439,8 +443,11 @@ class ReportService:
         total_followups = on_track + overdue
         followup_compliance_pct = (on_track / total_followups * 100.0) if total_followups else 100.0
 
-        # Total veterinary expenditure per dog (REP-003)
+        # Veterinary expenditure per dog (REP-003)
         cost_per_dog = (vet_expenses / total_dogs) if total_dogs else 0.0
+        treated_dog_ids = {str(t.dog_id) for t in treatments}
+        medical_dog_ids = treated_dog_ids | vaccinated_dog_ids
+        dogs_with_expenditures = len(medical_dog_ids)
 
         prescription_counts: dict[str, int] = {}
         active_prescriptions = 0
@@ -456,6 +463,102 @@ class ReportService:
             for t in treatments
             if t.treatment_type and "surg" in t.treatment_type.lower() and not t.post_op_notes
         ]
+
+        pending_surgery_items = [
+            {
+                "treatment_id": str(t.id),
+                "dog_id": str(t.dog_id),
+                "vet_id": str(t.vet_id) if t.vet_id else None,
+                "treatment_type": str(t.treatment_type or "Surgery"),
+                "treatment_date": (
+                    t.treatment_date.date().isoformat()
+                    if hasattr(t.treatment_date, "date")
+                    else str(t.treatment_date)
+                )
+                if t.treatment_date
+                else None,
+                "notes": t.description or None,
+            }
+            for t in pending_surgeries
+        ]
+
+        return {
+            "report_type": "medical",
+            "report": {
+                "title": "Medical Care & Immunization Compliance Report",
+                "generated_at": datetime.now(UTC).isoformat(),
+                "sections": {
+                    "vaccination_coverage_across_shelter_populations": {
+                        "total_shelter_animals": total_dogs,
+                        "vaccinated_animals": len(vaccinated_dog_ids),
+                        "vaccination_coverage_rate_pct": f"{coverage_pct:.1f}%",
+                        "vaccine_breakdown": vaccine_breakdown,
+                    },
+                    "pending_surgeries": {
+                        "total_pending_surgeries": len(pending_surgeries),
+                        "items": pending_surgery_items,
+                    },
+                    "follow_up_exam_compliance": {
+                        "total_follow_ups_due": total_followups,
+                        "completed_follow_ups": on_track,
+                        "on_track_follow_ups": on_track,
+                        "overdue_follow_ups": overdue,
+                        "no_follow_up_scheduled": no_followup,
+                        "compliance_rate_pct": f"{followup_compliance_pct:.1f}%",
+                    },
+                    "veterinary_expenditure_per_dog": {
+                        "total_veterinary_expenditure": f"₹{vet_expenses:.2f}",
+                        "dogs_with_veterinary_expenditure": dogs_with_expenditures,
+                        "total_shelter_dogs": total_dogs,
+                        "average_expenditure_per_dog": f"₹{cost_per_dog:.2f}",
+                    },
+                },
+            },
+            "_raw": {
+                "treatments": treatments,
+                "vaccinations": vaccinations,
+                "prescriptions": prescriptions,
+                "total_dogs": total_dogs,
+                "vet_expenses": vet_expenses,
+                "vaccine_counts": vaccine_counts,
+                "vaccine_dogs": vaccine_dogs,
+                "vaccinated_dog_ids": vaccinated_dog_ids,
+                "coverage_pct": coverage_pct,
+                "overdue": overdue,
+                "on_track": on_track,
+                "no_followup": no_followup,
+                "total_followups": total_followups,
+                "followup_compliance_pct": followup_compliance_pct,
+                "cost_per_dog": cost_per_dog,
+                "prescription_counts": prescription_counts,
+                "active_prescriptions": active_prescriptions,
+                "pending_surgeries": pending_surgeries,
+            },
+        }
+
+    async def _medical_report(
+        self, start: date | None, end: date | None, filters: dict[str, Any] | None
+    ) -> dict[str, Any]:
+        analytics = await self.get_medical_analytics(start=start, end=end, filters=filters)
+        raw = analytics["_raw"]
+        treatments = raw["treatments"]
+        vaccinations = raw["vaccinations"]
+        prescriptions = raw["prescriptions"]
+        total_dogs = raw["total_dogs"]
+        vet_expenses = raw["vet_expenses"]
+        vaccine_counts = raw["vaccine_counts"]
+        vaccine_dogs = raw["vaccine_dogs"]
+        vaccinated_dog_ids = raw["vaccinated_dog_ids"]
+        coverage_pct = raw["coverage_pct"]
+        overdue = raw["overdue"]
+        on_track = raw["on_track"]
+        no_followup = raw["no_followup"]
+        total_followups = raw["total_followups"]
+        followup_compliance_pct = raw["followup_compliance_pct"]
+        cost_per_dog = raw["cost_per_dog"]
+        prescription_counts = raw["prescription_counts"]
+        active_prescriptions = raw["active_prescriptions"]
+        pending_surgeries = raw["pending_surgeries"]
 
         sections = []
         if vaccinations:

@@ -161,6 +161,73 @@ class InventoryAnalyticsResponse(BaseModel):
     report: InventoryReportDetails
 
 
+class VaccineCoverageItem(BaseModel):
+    vaccine_name: str
+    doses_administered: int = 0
+    dogs_vaccinated: int = 0
+
+
+class VaccinationCoverageSummary(BaseModel):
+    total_shelter_animals: int = 0
+    vaccinated_animals: int = 0
+    vaccination_coverage_rate_pct: str = "0.0%"
+    vaccine_breakdown: list[VaccineCoverageItem] = Field(default_factory=list)
+
+
+class PendingSurgeryItem(BaseModel):
+    treatment_id: str
+    dog_id: str
+    vet_id: str | None = None
+    treatment_type: str = "Surgery"
+    treatment_date: str | None = None
+    notes: str | None = None
+
+
+class PendingSurgeriesSummary(BaseModel):
+    total_pending_surgeries: int = 0
+    items: list[PendingSurgeryItem] = Field(default_factory=list)
+
+
+class FollowUpExamCompliance(BaseModel):
+    total_follow_ups_due: int = 0
+    completed_follow_ups: int = 0
+    on_track_follow_ups: int = 0
+    overdue_follow_ups: int = 0
+    no_follow_up_scheduled: int = 0
+    compliance_rate_pct: str = "100.0%"
+
+
+class VeterinaryExpenditureSummary(BaseModel):
+    total_veterinary_expenditure: str = "₹0.00"
+    dogs_with_veterinary_expenditure: int = 0
+    total_shelter_dogs: int = 0
+    average_expenditure_per_dog: str = "₹0.00"
+
+
+class MedicalReportSections(BaseModel):
+    vaccination_coverage_across_shelter_populations: VaccinationCoverageSummary = Field(
+        default_factory=VaccinationCoverageSummary
+    )
+    pending_surgeries: PendingSurgeriesSummary = Field(default_factory=PendingSurgeriesSummary)
+    follow_up_exam_compliance: FollowUpExamCompliance = Field(
+        default_factory=FollowUpExamCompliance
+    )
+    veterinary_expenditure_per_dog: VeterinaryExpenditureSummary = Field(
+        default_factory=VeterinaryExpenditureSummary
+    )
+
+
+class MedicalReportDetails(BaseModel):
+    title: str = "Medical Care & Immunization Compliance Report"
+    generated_at: str | None = None
+    sections: MedicalReportSections
+
+
+class MedicalAnalyticsResponse(BaseModel):
+    report_type: str = "medical"
+    report: MedicalReportDetails
+
+
 class ReportAnalyticsRequest(BaseModel):
-    report_type: ReportType = Field(default=ReportType.INVENTORY, examples=["inventory"])
+    report_type: ReportType = Field(default=ReportType.INVENTORY, examples=["inventory", "medical"])
     filters: dict[str, str] | None = Field(None, examples=[{"category": "medical"}])

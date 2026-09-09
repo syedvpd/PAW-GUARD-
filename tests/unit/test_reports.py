@@ -1292,3 +1292,455 @@ class TestInventoryAnalyticsEndpointsAndService:
                 ]
                 == "₹15,000.00"
             )
+
+
+class TestMedicalAnalyticsEndpointsAndService:
+    @pytest.fixture
+    def mock_session(self):
+        session = AsyncMock()
+        session.execute = AsyncMock()
+        return session
+
+    @pytest.fixture
+    def service(self, mock_session):
+        return ReportService(mock_session)
+
+    @pytest.mark.asyncio
+    async def test_medical_analytics_populated_data(self, service, mock_session):
+        """1. Populated medical data across all 4 key sections."""
+        import uuid
+        from datetime import UTC, datetime, timedelta
+
+        from pawguard.modules.medical.models import (
+            MedicalTreatment,
+            Prescription,
+            VaccinationRecord,
+        )
+
+        dog1_id = uuid.uuid4()
+        dog2_id = uuid.uuid4()
+        now = datetime.now(UTC)
+
+        # 2 vaccinations for 2 dogs
+        v1 = VaccinationRecord(
+            id=uuid.uuid4(),
+            dog_id=dog1_id,
+            administered_by=uuid.uuid4(),
+            vaccine_name="Rabies",
+            administered_at=now - timedelta(days=20),
+            next_due_at=now + timedelta(days=340),
+            lot_number="LOT-1",
+        )
+        v2 = VaccinationRecord(
+            id=uuid.uuid4(),
+            dog_id=dog2_id,
+            administered_by=uuid.uuid4(),
+            vaccine_name="DHPP",
+            administered_at=now - timedelta(days=400),
+            next_due_at=now - timedelta(days=35),  # Overdue
+            lot_number="LOT-2",
+        )
+
+        # 2 treatments (1 surgery without post-op notes -> pending surgery, 1 routine therapy)
+        t1 = MedicalTreatment(
+            id=uuid.uuid4(),
+            dog_id=dog1_id,
+            vet_id=uuid.uuid4(),
+            treatment_date=now - timedelta(days=2),
+            treatment_type="Orthopedic Surgery",
+            description="Left hind leg fracture stabilization",
+            anesthesia_log="Isoflurane 2%",
+            post_op_notes=None,  # Pending
+        )
+        t2 = MedicalTreatment(
+            id=uuid.uuid4(),
+            dog_id=dog2_id,
+            vet_id=uuid.uuid4(),
+            treatment_date=now - timedelta(days=10),
+            treatment_type="Wound Dressing",
+            description="Superficial scratch cleaned",
+            anesthesia_log=None,
+            post_op_notes="Healed cleanly",
+        )
+
+        # 1 prescription
+        p1 = Prescription(
+            id=uuid.uuid4(),
+            dog_id=dog1_id,
+            vet_id=uuid.uuid4(),
+            drug_name="Amoxicillin",
+            dosage="250mg",
+            route="Oral",
+            start_at=now - timedelta(days=5),
+            end_at=now + timedelta(days=5),
+            is_active=True,
+        )
+
+        mock_session.execute.side_effect = [
+            MagicMock(
+                scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[t1, t2])))
+            ),
+            MagicMock(
+                scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[v1, v2])))
+            ),
+            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[p1])))),
+            MagicMock(scalar=MagicMock(return_value=10)),  # 10 shelter dogs
+            MagicMock(scalar=MagicMock(return_value=5000.0)),  # ₹5,000 vet expenses
+        ]
+
+        result = await service.get_medical_analytics()
+        assert result["report_type"] == "medical"
+        report = result["report"]
+        assert report["title"] == "Medical Care & Immunization Compliance Report"
+        sections = report["sections"]
+
+        # 1. Vaccination Coverage Across Shelter Populations
+        vax_sec = sections["vaccination_coverage_across_shelter_populations"]
+        assert vax_sec["total_shelter_animals"] == 10
+        assert vax_sec["vaccinated_animals"] == 2
+        assert vax_sec["vaccination_coverage_rate_pct"] == "20.0%"
+        assert len(vax_sec["vaccine_breakdown"]) == 2
+
+        # 2. Pending Surgeries
+        surg_sec = sections["pending_surgeries"]
+        assert surg_sec["total_pending_surgeries"] == 1
+        assert len(surg_sec["items"]) == 1
+        assert surg_sec["items"][0]["treatment_type"] == "Orthopedic Surgery"
+        assert surg_sec["items"][0]["treatment_id"] == str(t1.id)
+
+        # 3. Follow-Up Exam Compliance
+        followup_sec = sections["follow_up_exam_compliance"]
+        assert followup_sec["total_follow_ups_due"] == 2
+        assert followup_sec["on_track_follow_ups"] == 1
+        assert followup_sec["overdue_follow_ups"] == 1
+        assert followup_sec["compliance_rate_pct"] == "50.0%"
+
+        # 4. Veterinary Expenditure Per Dog
+        exp_sec = sections["veterinary_expenditure_per_dog"]
+        assert exp_sec["total_veterinary_expenditure"] == "₹5000.00"
+        assert exp_sec["total_shelter_dogs"] == 10
+        assert exp_sec["dogs_with_veterinary_expenditure"] == 2
+        assert exp_sec["average_expenditure_per_dog"] == "₹500.00"
+
+    @pytest.mark.asyncio
+    async def test_medical_analytics_empty_data(self, service, mock_session):
+        """2. Empty medical data handles gracefully with zero defaults and no division by zero."""
+        mock_session.execute.side_effect = [
+            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))),
+            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))),
+            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))),
+            MagicMock(scalar=MagicMock(return_value=0)),
+            MagicMock(scalar=MagicMock(return_value=0.0)),
+        ]
+
+        result = await service.get_medical_analytics()
+        assert result["report_type"] == "medical"
+        sections = result["report"]["sections"]
+
+        assert (
+            sections["vaccination_coverage_across_shelter_populations"]["total_shelter_animals"]
+            == 0
+        )
+        assert (
+            sections["vaccination_coverage_across_shelter_populations"][
+                "vaccination_coverage_rate_pct"
+            ]
+            == "0.0%"
+        )
+        assert sections["pending_surgeries"]["total_pending_surgeries"] == 0
+        assert sections["pending_surgeries"]["items"] == []
+        assert sections["follow_up_exam_compliance"]["total_follow_ups_due"] == 0
+        assert sections["follow_up_exam_compliance"]["compliance_rate_pct"] == "100.0%"
+        assert sections["veterinary_expenditure_per_dog"]["total_veterinary_expenditure"] == "₹0.00"
+        assert sections["veterinary_expenditure_per_dog"]["average_expenditure_per_dog"] == "₹0.00"
+
+    @pytest.mark.asyncio
+    async def test_medical_analytics_vaccination_coverage_calculation(self, service, mock_session):
+        """3. Vaccination coverage accurately counts distinct vaccinated dogs across multiple shots."""
+        import uuid
+        from datetime import UTC, datetime
+
+        from pawguard.modules.medical.models import VaccinationRecord
+
+        dog1_id = uuid.uuid4()
+        now = datetime.now(UTC)
+
+        # 2 vaccines given to the SAME dog
+        v1 = VaccinationRecord(
+            id=uuid.uuid4(),
+            dog_id=dog1_id,
+            administered_by=uuid.uuid4(),
+            vaccine_name="Rabies",
+            administered_at=now,
+            next_due_at=None,
+        )
+        v2 = VaccinationRecord(
+            id=uuid.uuid4(),
+            dog_id=dog1_id,
+            administered_by=uuid.uuid4(),
+            vaccine_name="DHPP",
+            administered_at=now,
+            next_due_at=None,
+        )
+
+        mock_session.execute.side_effect = [
+            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))),
+            MagicMock(
+                scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[v1, v2])))
+            ),
+            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))),
+            MagicMock(scalar=MagicMock(return_value=4)),  # 4 shelter dogs total
+            MagicMock(scalar=MagicMock(return_value=0.0)),
+        ]
+
+        result = await service.get_medical_analytics()
+        vax = result["report"]["sections"]["vaccination_coverage_across_shelter_populations"]
+        assert vax["vaccinated_animals"] == 1  # 1 distinct dog
+        assert vax["total_shelter_animals"] == 4
+        assert vax["vaccination_coverage_rate_pct"] == "25.0%"
+
+    @pytest.mark.asyncio
+    async def test_medical_analytics_pending_surgeries(self, service, mock_session):
+        """4. Pending surgeries identifies only surgery treatments lacking post-op notes."""
+        import uuid
+        from datetime import UTC, datetime
+
+        from pawguard.modules.medical.models import MedicalTreatment
+
+        now = datetime.now(UTC)
+        surg_pending = MedicalTreatment(
+            id=uuid.uuid4(),
+            dog_id=uuid.uuid4(),
+            vet_id=uuid.uuid4(),
+            treatment_date=now,
+            treatment_type="Spay Surgery",
+            description="Routine spay",
+            post_op_notes=None,
+        )
+        surg_completed = MedicalTreatment(
+            id=uuid.uuid4(),
+            dog_id=uuid.uuid4(),
+            vet_id=uuid.uuid4(),
+            treatment_date=now,
+            treatment_type="Neuter Surgery",
+            description="Routine neuter",
+            post_op_notes="Completed without complications",
+        )
+        consult = MedicalTreatment(
+            id=uuid.uuid4(),
+            dog_id=uuid.uuid4(),
+            vet_id=uuid.uuid4(),
+            treatment_date=now,
+            treatment_type="Consultation",
+            description="Ear inspection",
+            post_op_notes=None,
+        )
+
+        mock_session.execute.side_effect = [
+            MagicMock(
+                scalars=MagicMock(
+                    return_value=MagicMock(
+                        all=MagicMock(return_value=[surg_pending, surg_completed, consult])
+                    )
+                )
+            ),
+            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))),
+            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))),
+            MagicMock(scalar=MagicMock(return_value=5)),
+            MagicMock(scalar=MagicMock(return_value=0.0)),
+        ]
+
+        result = await service.get_medical_analytics()
+        pending = result["report"]["sections"]["pending_surgeries"]
+        assert pending["total_pending_surgeries"] == 1
+        assert pending["items"][0]["treatment_id"] == str(surg_pending.id)
+
+    @pytest.mark.asyncio
+    async def test_medical_analytics_veterinary_expenditure_per_dog(self, service, mock_session):
+        """6. Veterinary expenditure per dog calculates correctly."""
+        mock_session.execute.side_effect = [
+            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))),
+            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))),
+            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))),
+            MagicMock(scalar=MagicMock(return_value=8)),
+            MagicMock(scalar=MagicMock(return_value=12000.0)),
+        ]
+
+        result = await service.get_medical_analytics()
+        exp = result["report"]["sections"]["veterinary_expenditure_per_dog"]
+        assert exp["total_veterinary_expenditure"] == "₹12000.00"
+        assert exp["total_shelter_dogs"] == 8
+        assert exp["average_expenditure_per_dog"] == "₹1500.00"
+
+    @pytest.mark.asyncio
+    async def test_medical_analytics_api_endpoints_and_rbac(self):
+        """8. RBAC authorization & 9. Response schema validation for medical analytics."""
+        import json
+        import uuid
+        from datetime import UTC, datetime
+
+        from fastapi import FastAPI
+        from httpx import ASGITransport, AsyncClient
+
+        from pawguard.core.security import AccessTokenClaims
+        from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
+        from pawguard.modules.auth.models import Permission, Role, User
+        from pawguard.modules.reports.router import get_report_service
+        from pawguard.modules.reports.router import router as reports_router
+        from pawguard.modules.reports.schemas import MedicalAnalyticsResponse
+
+        test_app = FastAPI()
+        test_app.include_router(reports_router, prefix="/api/v1")
+
+        mock_medical_payload = {
+            "report_type": "medical",
+            "report": {
+                "title": "Medical Care & Immunization Compliance Report",
+                "generated_at": "2026-09-09T05:30:00Z",
+                "sections": {
+                    "vaccination_coverage_across_shelter_populations": {
+                        "total_shelter_animals": 20,
+                        "vaccinated_animals": 16,
+                        "vaccination_coverage_rate_pct": "80.0%",
+                        "vaccine_breakdown": [
+                            {
+                                "vaccine_name": "Rabies",
+                                "doses_administered": 16,
+                                "dogs_vaccinated": 16,
+                            }
+                        ],
+                    },
+                    "pending_surgeries": {
+                        "total_pending_surgeries": 2,
+                        "items": [
+                            {
+                                "treatment_id": "treat-1",
+                                "dog_id": "dog-1",
+                                "vet_id": "vet-1",
+                                "treatment_type": "Orthopedic Surgery",
+                                "treatment_date": "2026-09-08",
+                                "notes": "Awaiting surgeon",
+                            }
+                        ],
+                    },
+                    "follow_up_exam_compliance": {
+                        "total_follow_ups_due": 10,
+                        "completed_follow_ups": 8,
+                        "on_track_follow_ups": 8,
+                        "overdue_follow_ups": 2,
+                        "no_follow_up_scheduled": 0,
+                        "compliance_rate_pct": "80.0%",
+                    },
+                    "veterinary_expenditure_per_dog": {
+                        "total_veterinary_expenditure": "₹24,000.00",
+                        "dogs_with_veterinary_expenditure": 16,
+                        "total_shelter_dogs": 20,
+                        "average_expenditure_per_dog": "₹1,200.00",
+                    },
+                },
+            },
+        }
+
+        mock_svc = AsyncMock()
+        mock_svc.get_medical_analytics.return_value = mock_medical_payload
+
+        now = datetime.now(UTC)
+        role = Role(
+            id=uuid.uuid4(),
+            name="veterinarian",
+            description="Veterinarian",
+            is_system=True,
+            created_at=now,
+            updated_at=now,
+        )
+        perm = Permission(
+            id=uuid.uuid4(),
+            code="reports:read",
+            description="Read Reports",
+            created_at=now,
+            updated_at=now,
+        )
+        role.permissions = [perm]
+        user = User(
+            id=uuid.uuid4(),
+            email="vet@pawguard.com",
+            hashed_password="hash",
+            full_name="Staff Veterinarian",
+            phone="1234567890",
+            is_active=True,
+            is_verified=True,
+            mfa_enabled=False,
+            created_at=now,
+            updated_at=now,
+        )
+        user.roles = [role]
+
+        claims = AccessTokenClaims(
+            user_id=user.id,
+            session_id=uuid.uuid4(),
+            roles=["veterinarian"],
+            jti="jti",
+            expires_at=now,
+        )
+
+        mock_redis = AsyncMock()
+        mock_redis.get.return_value = json.dumps(["reports:read", "reports:create"])
+        mock_redis.set.return_value = True
+
+        mock_db = AsyncMock()
+        mock_db_result = MagicMock()
+        mock_db_result.scalars.return_value.all.return_value = ["reports:read", "reports:create"]
+        mock_db.execute.return_value = mock_db_result
+
+        mock_current_user = CurrentUser(
+            user=user,
+            claims=claims,
+            db=mock_db,
+            redis=mock_redis,
+        )
+
+        for route in test_app.routes:
+            if "/reports" in getattr(route, "path", ""):
+                for dep in getattr(route, "dependencies", []):
+                    test_app.dependency_overrides[dep.dependency] = lambda: mock_current_user
+
+        test_app.dependency_overrides[get_current_user] = lambda: mock_current_user
+        test_app.dependency_overrides[get_report_service] = lambda: mock_svc
+
+        transport = ASGITransport(app=test_app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            # Test GET /api/v1/reports/medical/analytics
+            res_get = await client.get("/api/v1/reports/medical/analytics")
+            assert res_get.status_code == 200
+            data_get = res_get.json()
+            assert data_get["success"] is True
+            parsed_get = MedicalAnalyticsResponse(**data_get["data"])
+            assert parsed_get.report_type == "medical"
+            assert parsed_get.report.title == "Medical Care & Immunization Compliance Report"
+            assert (
+                parsed_get.report.sections.vaccination_coverage_across_shelter_populations.vaccination_coverage_rate_pct
+                == "80.0%"
+            )
+
+            # Test GET alias /api/v1/reports/analytics/medical
+            res_alias = await client.get("/api/v1/reports/analytics/medical")
+            assert res_alias.status_code == 200
+
+            # Test POST /api/v1/reports/medical/analytics
+            res_post_med = await client.post("/api/v1/reports/medical/analytics", json={})
+            assert res_post_med.status_code == 200
+
+            # Test POST /api/v1/reports/analytics with report_type=medical
+            res_post = await client.post(
+                "/api/v1/reports/analytics",
+                json={"report_type": "medical"},
+            )
+            assert res_post.status_code == 200
+            data_post = res_post.json()
+            assert data_post["success"] is True
+            assert (
+                data_post["data"]["report"]["sections"]["pending_surgeries"][
+                    "total_pending_surgeries"
+                ]
+                == 2
+            )

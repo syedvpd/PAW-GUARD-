@@ -10,6 +10,7 @@ from pawguard.modules.auth.models import AuthAuditEventType
 from pawguard.modules.auth.rbac import require_permission
 from pawguard.modules.reports.schemas import (
     InventoryAnalyticsResponse,
+    MedicalAnalyticsResponse,
     ReportAnalyticsRequest,
     ReportFormat,
     ReportRequest,
@@ -82,16 +83,72 @@ async def generate_inventory_analytics_report_post(
     )
 
 
+@router.get(
+    "/medical/analytics",
+    response_model=ApiResponse[MedicalAnalyticsResponse],
+    dependencies=[Depends(require_permission("reports:read"))],
+)
+async def get_medical_analytics_report(
+    current_user: CurrentUser = Depends(get_current_user),
+    service: ReportService = Depends(get_report_service),
+) -> ApiResponse[MedicalAnalyticsResponse]:
+    result = await service.get_medical_analytics()
+    return ApiResponse(
+        data=MedicalAnalyticsResponse(**result),
+        message="Medical analytics retrieved successfully.",
+    )
+
+
+@router.get(
+    "/analytics/medical",
+    response_model=ApiResponse[MedicalAnalyticsResponse],
+    dependencies=[Depends(require_permission("reports:read"))],
+)
+async def get_medical_analytics_report_alias(
+    current_user: CurrentUser = Depends(get_current_user),
+    service: ReportService = Depends(get_report_service),
+) -> ApiResponse[MedicalAnalyticsResponse]:
+    result = await service.get_medical_analytics()
+    return ApiResponse(
+        data=MedicalAnalyticsResponse(**result),
+        message="Medical analytics retrieved successfully.",
+    )
+
+
+@router.post(
+    "/medical/analytics",
+    response_model=ApiResponse[MedicalAnalyticsResponse],
+    dependencies=[Depends(require_permission("reports:read"))],
+)
+async def generate_medical_analytics_report_post(
+    payload: ReportAnalyticsRequest | None = None,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: ReportService = Depends(get_report_service),
+) -> ApiResponse[MedicalAnalyticsResponse]:
+    filters = payload.filters if payload else None
+    result = await service.get_medical_analytics(filters=filters)
+    return ApiResponse(
+        data=MedicalAnalyticsResponse(**result),
+        message="Medical analytics retrieved successfully.",
+    )
+
+
 @router.post(
     "/analytics",
-    response_model=ApiResponse[InventoryAnalyticsResponse],
+    response_model=ApiResponse[InventoryAnalyticsResponse | MedicalAnalyticsResponse],
     dependencies=[Depends(require_permission("reports:read"))],
 )
 async def get_report_analytics_post(
     payload: ReportAnalyticsRequest,
     current_user: CurrentUser = Depends(get_current_user),
     service: ReportService = Depends(get_report_service),
-) -> ApiResponse[InventoryAnalyticsResponse]:
+) -> ApiResponse[InventoryAnalyticsResponse | MedicalAnalyticsResponse]:
+    if payload.report_type == ReportType.MEDICAL:
+        result = await service.get_medical_analytics(filters=payload.filters)
+        return ApiResponse(
+            data=MedicalAnalyticsResponse(**result),
+            message="Medical analytics retrieved successfully.",
+        )
     result = await service.get_inventory_analytics(filters=payload.filters)
     return ApiResponse(
         data=InventoryAnalyticsResponse(**result),
