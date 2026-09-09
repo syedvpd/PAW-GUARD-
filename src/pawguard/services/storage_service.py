@@ -192,12 +192,25 @@ class StorageService:
         """Extract object key from a full URL or relative path."""
         if not url_or_key:
             return ""
-        if not url_or_key.startswith("http://") and not url_or_key.startswith("https://"):
-            return url_or_key.lstrip("/")
         import urllib.parse
 
-        parsed = urllib.parse.urlparse(url_or_key)
-        path = urllib.parse.unquote(parsed.path)
+        path: str
+        is_known_host = False
+        if url_or_key.startswith("http://") or url_or_key.startswith("https://"):
+            parsed = urllib.parse.urlparse(url_or_key)
+            path = urllib.parse.unquote(parsed.path)
+            is_known_host = any(
+                h in parsed.netloc.lower()
+                for h in ["supabase.co", "s3.amazonaws.com", "pawguard", "127.0.0.1", "localhost"]
+            )
+            if self._endpoint:
+                endpoint_host = urllib.parse.urlparse(self._endpoint).netloc
+                if endpoint_host and endpoint_host in parsed.netloc:
+                    is_known_host = True
+        else:
+            path = urllib.parse.unquote(url_or_key)
+            is_known_host = True
+
         for prefix in [
             "/api/v1/storage/media/thumb/",
             "/api/v1/storage/media/card/",
@@ -210,9 +223,19 @@ class StorageService:
             "/pawguard-media/",
         ]:
             if path.startswith(prefix):
-                path = path[len(prefix) :]
-                break
-        return path.lstrip("/")
+                return path[len(prefix) :].lstrip("/")
+
+        if is_known_host and not (
+            url_or_key.startswith("http://") or url_or_key.startswith("https://")
+        ):
+            return path.lstrip("/")
+
+        if is_known_host and any(
+            path.startswith(p) for p in ["/dogs/", "/photos/", "/cms/", "/adoption images/"]
+        ):
+            return path.lstrip("/")
+
+        return ""
 
     def get_variant_url(self, url_or_key: str | None, variant: str = "card") -> str | None:
         """Construct a stable, CDN-cacheable responsive variant URL."""
@@ -232,7 +255,13 @@ class StorageService:
             return {}
         key = self.extract_object_key(url_or_key)
         if not key:
-            return {"original": url_or_key}
+            return {
+                "thumb": url_or_key,
+                "card": url_or_key,
+                "mobile": url_or_key,
+                "detail": url_or_key,
+                "original": url_or_key,
+            }
         import urllib.parse
 
         encoded = urllib.parse.quote(key, safe="/")

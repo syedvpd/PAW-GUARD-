@@ -147,8 +147,7 @@ class DogProfileCreate(BaseModel):
             urls = [str(u).strip() for u in raw_urls if u]
             if photo and str(photo).strip() not in urls:
                 urls.append(str(photo).strip())
-            valid_urls = [u for u in urls if "dog.ceo" not in u.lower()]
-            data["image_urls"] = valid_urls
+            data["image_urls"] = urls
 
             # 5. Age string normalization
             if data.get("estimated_age") is not None and not isinstance(
@@ -223,11 +222,9 @@ class DogProfileUpdate(BaseModel):
                 urls = [str(u).strip() for u in raw_urls if u]
                 if photo and str(photo).strip() not in urls:
                     urls.append(str(photo).strip())
-                data["image_urls"] = [u for u in urls if "dog.ceo" not in u.lower()]
+                data["image_urls"] = urls
             elif photo:
-                photo_str = str(photo).strip()
-                if "dog.ceo" not in photo_str.lower():
-                    data["image_urls"] = [photo_str]
+                data["image_urls"] = [str(photo).strip()]
         return data
 
 
