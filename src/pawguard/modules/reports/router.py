@@ -8,7 +8,14 @@ from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.models import AuthAuditEventType
 from pawguard.modules.auth.rbac import require_permission
-from pawguard.modules.reports.schemas import ReportFormat, ReportRequest, ReportResponse, ReportType
+from pawguard.modules.reports.schemas import (
+    InventoryAnalyticsResponse,
+    ReportAnalyticsRequest,
+    ReportFormat,
+    ReportRequest,
+    ReportResponse,
+    ReportType,
+)
 from pawguard.modules.reports.service import ReportService
 from pawguard.services.audit_service import AuditService
 
@@ -19,6 +26,77 @@ def get_report_service(
     db: AsyncSession = Depends(get_db),
 ) -> ReportService:
     return ReportService(db)
+
+
+@router.get(
+    "/inventory/analytics",
+    response_model=ApiResponse[InventoryAnalyticsResponse],
+    dependencies=[Depends(require_permission("reports:read"))],
+)
+async def get_inventory_analytics_report(
+    category: str | None = None,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: ReportService = Depends(get_report_service),
+) -> ApiResponse[InventoryAnalyticsResponse]:
+    filters = {"category": category} if category else None
+    result = await service.get_inventory_analytics(filters=filters)
+    return ApiResponse(
+        data=InventoryAnalyticsResponse(**result),
+        message="Inventory analytics retrieved successfully.",
+    )
+
+
+@router.get(
+    "/analytics/inventory",
+    response_model=ApiResponse[InventoryAnalyticsResponse],
+    dependencies=[Depends(require_permission("reports:read"))],
+)
+async def get_inventory_analytics_report_alias(
+    category: str | None = None,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: ReportService = Depends(get_report_service),
+) -> ApiResponse[InventoryAnalyticsResponse]:
+    filters = {"category": category} if category else None
+    result = await service.get_inventory_analytics(filters=filters)
+    return ApiResponse(
+        data=InventoryAnalyticsResponse(**result),
+        message="Inventory analytics retrieved successfully.",
+    )
+
+
+@router.post(
+    "/inventory/analytics",
+    response_model=ApiResponse[InventoryAnalyticsResponse],
+    dependencies=[Depends(require_permission("reports:read"))],
+)
+async def generate_inventory_analytics_report_post(
+    payload: ReportAnalyticsRequest | None = None,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: ReportService = Depends(get_report_service),
+) -> ApiResponse[InventoryAnalyticsResponse]:
+    filters = payload.filters if payload else None
+    result = await service.get_inventory_analytics(filters=filters)
+    return ApiResponse(
+        data=InventoryAnalyticsResponse(**result),
+        message="Inventory analytics retrieved successfully.",
+    )
+
+
+@router.post(
+    "/analytics",
+    response_model=ApiResponse[InventoryAnalyticsResponse],
+    dependencies=[Depends(require_permission("reports:read"))],
+)
+async def get_report_analytics_post(
+    payload: ReportAnalyticsRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: ReportService = Depends(get_report_service),
+) -> ApiResponse[InventoryAnalyticsResponse]:
+    result = await service.get_inventory_analytics(filters=payload.filters)
+    return ApiResponse(
+        data=InventoryAnalyticsResponse(**result),
+        message="Report analytics retrieved successfully.",
+    )
 
 
 @router.post(

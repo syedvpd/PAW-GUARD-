@@ -65,3 +65,102 @@ class ReportResponse(BaseModel):
     content_type: str
     size_bytes: int
     download_url: str = Field(default="", description="Path to download the generated report")
+
+
+class InventoryHealthAudit(BaseModel):
+    total_catalog_items: str | int = 0
+    total_inventory_value: str = "₹0.00"
+    expired_product_value: str = "₹0.00"
+    inventory_loss_write_off_value: str = "₹0.00"
+    inventory_loss_rate_pct: str = "0.0%"
+    stock_movement_speed: str = "N/A"
+    check_in_out_volume: str = "0.0"
+    upcoming_purchase_order_requirements_exposure: str = "₹0.00"
+
+
+class PurchaseOrderItemRequirement(BaseModel):
+    item_id: str
+    name: str
+    category: str | None = None
+    current_stock: float = 0.0
+    reorder_threshold: float = 0.0
+    suggested_order_qty: float = 0.0
+    unit: str = "units"
+    unit_cost: float = 0.0
+    estimated_cost: float = 0.0
+
+
+class UpcomingPurchaseOrderRequirements(BaseModel):
+    items: list[PurchaseOrderItemRequirement] = Field(default_factory=list)
+
+
+class ExpiredProductItem(BaseModel):
+    item_id: str
+    name: str
+    category: str | None = None
+    expired_qty: float = 0.0
+    expiry_date: str | None = None
+    unit_cost: float = 0.0
+    loss_value: float = 0.0
+    status: str = "EXPIRED"
+
+
+class ExpiredProductValuesAudit(BaseModel):
+    items: list[ExpiredProductItem] = Field(default_factory=list)
+
+
+class StockMovementRecord(BaseModel):
+    reference_type: str
+    check_in_qty: float = 0.0
+    check_out_qty: float = 0.0
+    adjustment_qty: float = 0.0
+    movement_count: int = 0
+
+
+class StockMovementSummary(BaseModel):
+    records: list[StockMovementRecord] = Field(default_factory=list)
+
+
+class RequisitionItemRecord(BaseModel):
+    requisition_id: str
+    item_id: str
+    quantity: float = 0.0
+    status: str
+
+
+class PendingPurchaseRequisitions(BaseModel):
+    requisitions: list[RequisitionItemRecord] = Field(default_factory=list)
+
+
+class InventoryReportSections(BaseModel):
+    inventory_health_and_loss_audit: InventoryHealthAudit = Field(
+        default_factory=InventoryHealthAudit
+    )
+    upcoming_purchase_order_requirements: UpcomingPurchaseOrderRequirements = Field(
+        default_factory=UpcomingPurchaseOrderRequirements
+    )
+    expired_product_values_audit: ExpiredProductValuesAudit = Field(
+        default_factory=ExpiredProductValuesAudit
+    )
+    stock_movement_and_usage_summary: StockMovementSummary = Field(
+        default_factory=StockMovementSummary
+    )
+    pending_purchase_requisition_orders: PendingPurchaseRequisitions = Field(
+        default_factory=PendingPurchaseRequisitions
+    )
+
+
+class InventoryReportDetails(BaseModel):
+    title: str = "Inventory Consumption & Expiry Audit"
+    generated_at: str | None = None
+    sections: InventoryReportSections
+
+
+class InventoryAnalyticsResponse(BaseModel):
+    report_type: str = "inventory"
+    report: InventoryReportDetails
+
+
+class ReportAnalyticsRequest(BaseModel):
+    report_type: ReportType = Field(default=ReportType.INVENTORY, examples=["inventory"])
+    filters: dict[str, str] | None = Field(None, examples=[{"category": "medical"}])

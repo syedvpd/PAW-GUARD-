@@ -628,7 +628,10 @@ class ReportService:
         )
         return (await self._session.execute(stmt)).scalar() or 0.0
 
-    async def _inventory_report(self, filters: dict[str, Any] | None) -> dict[str, Any]:
+    async def get_inventory_analytics(
+        self, filters: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """Compute authoritative structured inventory analytics for JSON API consumers."""
         stmt = select(InventoryItem)
         if filters and "category" in filters:
             stmt = stmt.where(InventoryItem.category == filters["category"])
@@ -681,7 +684,7 @@ class ReportService:
 
         # Upcoming purchase order requirements: items at or below reorder threshold
         reorder_items = [i for i in results if float(i.quantity) <= float(i.reorder_threshold)]
-        po_requirements_rows = []
+        po_requirements_items = []
         total_estimated_po_cost = 0.0
         for i in reorder_items:
             current_qty = float(i.quantity)
@@ -690,23 +693,139 @@ class ReportService:
             required_qty = max(1.0, (threshold * 2.0) - current_qty)
             est_cost = required_qty * unit_cost
             total_estimated_po_cost += est_cost
-            po_requirements_rows.append(
-                [
-                    str(i.id),
-                    i.name,
-                    i.category,
-                    f"{current_qty:.1f}",
-                    f"{threshold:.1f}",
-                    f"{required_qty:.1f} {i.unit}",
-                    f"₹{unit_cost:.2f}",
-                    f"₹{est_cost:.2f}",
-                ]
+            po_requirements_items.append(
+                {
+                    "item_id": str(i.id),
+                    "name": i.name,
+                    "category": i.category,
+                    "current_stock": current_qty,
+                    "reorder_threshold": threshold,
+                    "suggested_order_qty": required_qty,
+                    "unit": i.unit,
+                    "unit_cost": unit_cost,
+                    "estimated_cost": est_cost,
+                }
+            )
+
+        expired_product_items = [
+            {
+                "item_id": str(i.id),
+                "name": i.name,
+                "category": i.category,
+                "expired_qty": float(i.quantity),
+                "expiry_date": i.expiry_date.isoformat() if i.expiry_date else None,
+                "unit_cost": float(i.unit_cost),
+                "loss_value": float(i.quantity * i.unit_cost),
+                "status": "EXPIRED",
+            }
+            for i in expired_items
+        ]
+
+        stock_movement_records = []
+        for reference, type_buckets in sorted(movement_by_ref.items()):
+            in_qty = type_buckets.get(MovementType.CHECK_IN, {"quantity": 0.0})["quantity"]
+            out_qty = type_buckets.get(MovementType.CHECK_OUT, {"quantity": 0.0})["quantity"]
+            adj_qty = type_buckets.get(MovementType.ADJUSTMENT, {"quantity": 0.0})["quantity"]
+            stock_movement_records.append(
+                {
+                    "reference_type": reference,
+                    "check_in_qty": in_qty,
+                    "check_out_qty": out_qty,
+                    "adjustment_qty": adj_qty,
+                    "movement_count": sum(bucket["count"] for bucket in type_buckets.values()),
+                }
             )
 
         pending_requisitions = [r for r in requisitions if r.status == RequisitionStatus.PENDING]
+        pending_requisition_records = [
+            {
+                "requisition_id": str(r.id),
+                "item_id": str(r.item_id),
+                "quantity": float(r.quantity),
+                "status": str(r.status),
+            }
+            for r in pending_requisitions
+        ]
+
         requisition_status_counts: dict[str, int] = {}
         for r in requisitions:
             requisition_status_counts[r.status] = requisition_status_counts.get(r.status, 0) + 1
+
+        return {
+            "report_type": "inventory",
+            "report": {
+                "title": "Inventory Consumption & Expiry Audit",
+                "generated_at": datetime.now(UTC).isoformat(),
+                "sections": {
+                    "inventory_health_and_loss_audit": {
+                        "total_catalog_items": len(results),
+                        "total_inventory_value": f"₹{total_value:.2f}",
+                        "expired_product_value": f"₹{expired_value:.2f}",
+                        "inventory_loss_write_off_value": f"₹{write_off_value:.2f}",
+                        "inventory_loss_rate_pct": f"{loss_rate_pct:.1f}%",
+                        "stock_movement_speed": (
+                            f"{avg_movement_interval:.1f} days"
+                            if avg_movement_interval is not None
+                            else "N/A"
+                        ),
+                        "check_in_out_volume": f"In: {check_in_total:.1f}, Out: {check_out_total:.1f}",
+                        "upcoming_purchase_order_requirements_exposure": f"₹{total_estimated_po_cost:.2f}",
+                    },
+                    "upcoming_purchase_order_requirements": {
+                        "items": po_requirements_items,
+                    },
+                    "expired_product_values_audit": {
+                        "items": expired_product_items,
+                    },
+                    "stock_movement_and_usage_summary": {
+                        "records": stock_movement_records,
+                    },
+                    "pending_purchase_requisition_orders": {
+                        "requisitions": pending_requisition_records,
+                    },
+                },
+            },
+            "_raw": {
+                "results": results,
+                "total_value": total_value,
+                "expired_value": expired_value,
+                "write_off_value": write_off_value,
+                "loss_rate_pct": loss_rate_pct,
+                "avg_movement_interval": avg_movement_interval,
+                "check_in_total": check_in_total,
+                "check_out_total": check_out_total,
+                "adjustment_total": adjustment_total,
+                "total_estimated_po_cost": total_estimated_po_cost,
+                "po_requirements_items": po_requirements_items,
+                "expired_items": expired_items,
+                "movements": movements,
+                "movement_by_ref": movement_by_ref,
+                "pending_requisitions": pending_requisitions,
+                "requisitions": requisitions,
+                "requisition_status_counts": requisition_status_counts,
+            },
+        }
+
+    async def _inventory_report(self, filters: dict[str, Any] | None) -> dict[str, Any]:
+        analytics = await self.get_inventory_analytics(filters)
+        raw = analytics["_raw"]
+        results = raw["results"]
+        total_value = raw["total_value"]
+        expired_value = raw["expired_value"]
+        write_off_value = raw["write_off_value"]
+        loss_rate_pct = raw["loss_rate_pct"]
+        avg_movement_interval = raw["avg_movement_interval"]
+        check_in_total = raw["check_in_total"]
+        check_out_total = raw["check_out_total"]
+        adjustment_total = raw["adjustment_total"]
+        total_estimated_po_cost = raw["total_estimated_po_cost"]
+        po_requirements_items = raw["po_requirements_items"]
+        expired_items = raw["expired_items"]
+        movements = raw["movements"]
+        movement_by_ref = raw["movement_by_ref"]
+        pending_requisitions = raw["pending_requisitions"]
+        requisitions = raw["requisitions"]
+        requisition_status_counts = raw["requisition_status_counts"]
 
         headers = [
             "ID",
@@ -758,7 +877,7 @@ class ReportService:
                 ],
             }
         )
-        if po_requirements_rows:
+        if po_requirements_items:
             sections.append(
                 {
                     "title": "Upcoming Purchase Order Requirements (Items Below Reorder Threshold)",
@@ -772,7 +891,19 @@ class ReportService:
                         "Unit Cost",
                         "Estimated Cost",
                     ],
-                    "rows": po_requirements_rows,
+                    "rows": [
+                        [
+                            item["item_id"],
+                            item["name"],
+                            item["category"] or "",
+                            f"{item['current_stock']:.1f}",
+                            f"{item['reorder_threshold']:.1f}",
+                            f"{item['suggested_order_qty']:.1f} {item['unit']}",
+                            f"₹{item['unit_cost']:.2f}",
+                            f"₹{item['estimated_cost']:.2f}",
+                        ]
+                        for item in po_requirements_items
+                    ],
                 }
             )
         if expired_items:
@@ -843,7 +974,7 @@ class ReportService:
                     "title": "Pending Purchase Requisition Orders",
                     "headers": ["Requisition ID", "Item ID", "Quantity", "Status"],
                     "rows": [
-                        [str(r.id), str(r.item_id), float(r.quantity), r.status]
+                        [str(r.id), str(r.item_id), float(r.quantity), str(r.status)]
                         for r in pending_requisitions
                     ],
                 }

@@ -816,3 +816,479 @@ class TestInventoryReportRegression:
             assert data["data"]["report_type"] == "inventory"
             assert data["data"]["filename"] == "inventory_report.pdf"
             assert data["data"]["download_url"] == "/api/v1/reports/download/inventory_report.pdf"
+
+
+class TestInventoryAnalyticsEndpointsAndService:
+    @pytest.fixture
+    def mock_session(self):
+        session = AsyncMock()
+        session.execute = AsyncMock()
+        return session
+
+    @pytest.fixture
+    def service(self, mock_session):
+        return ReportService(mock_session)
+
+    @pytest.mark.asyncio
+    async def test_inventory_analytics_populated_data(self, service, mock_session):
+        """1. Populated inventory data with multiple items, movements, expired items, and requisitions."""
+        import uuid
+        from datetime import UTC, date, datetime, timedelta
+
+        from pawguard.modules.inventory.models import (
+            InventoryItem,
+            InventoryMovement,
+            MovementType,
+            RequisitionOrder,
+            RequisitionStatus,
+        )
+
+        item1 = InventoryItem(
+            id=uuid.uuid4(),
+            name="Rabies Vaccine",
+            category="medical",
+            quantity=5.0,
+            unit="vials",
+            reorder_threshold=20.0,
+            unit_cost=150.0,
+            expiry_date=date.today() - timedelta(days=10),
+        )
+        item2 = InventoryItem(
+            id=uuid.uuid4(),
+            name="Dog Food 15kg",
+            category="food",
+            quantity=50.0,
+            unit="bags",
+            reorder_threshold=10.0,
+            unit_cost=1200.0,
+            expiry_date=date.today() + timedelta(days=120),
+        )
+        movement1 = InventoryMovement(
+            id=uuid.uuid4(),
+            item_id=item1.id,
+            movement_type=MovementType.CHECK_IN,
+            quantity=10.0,
+            reference_type="purchase",
+            created_at=datetime.now(UTC) - timedelta(days=5),
+        )
+        movement2 = InventoryMovement(
+            id=uuid.uuid4(),
+            item_id=item1.id,
+            movement_type=MovementType.CHECK_OUT,
+            quantity=5.0,
+            reference_type="treatment",
+            created_at=datetime.now(UTC) - timedelta(days=2),
+        )
+        movement3 = InventoryMovement(
+            id=uuid.uuid4(),
+            item_id=item1.id,
+            movement_type=MovementType.ADJUSTMENT,
+            quantity=-2.0,
+            reference_type="damage",
+            created_at=datetime.now(UTC),
+        )
+        req = RequisitionOrder(
+            id=uuid.uuid4(),
+            item_id=item1.id,
+            quantity=25.0,
+            status=RequisitionStatus.PENDING,
+        )
+
+        mock_session.execute.side_effect = [
+            MagicMock(
+                scalars=MagicMock(
+                    return_value=MagicMock(all=MagicMock(return_value=[item1, item2]))
+                )
+            ),
+            MagicMock(
+                scalars=MagicMock(
+                    return_value=MagicMock(
+                        all=MagicMock(return_value=[movement1, movement2, movement3])
+                    )
+                )
+            ),
+            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[req])))),
+        ]
+
+        result = await service.get_inventory_analytics()
+        assert result["report_type"] == "inventory"
+        report = result["report"]
+        assert report["title"] == "Inventory Consumption & Expiry Audit"
+        sections = report["sections"]
+
+        # 1. Health & Loss Audit
+        health = sections["inventory_health_and_loss_audit"]
+        assert health["total_catalog_items"] == 2
+        assert "₹" in health["total_inventory_value"]
+        assert "₹750.00" in health["expired_product_value"]
+        assert "₹300.00" in health["inventory_loss_write_off_value"]
+        assert "days" in health["stock_movement_speed"]
+
+        # 2. Upcoming PO Requirements
+        po_reqs = sections["upcoming_purchase_order_requirements"]["items"]
+        assert len(po_reqs) == 1
+        assert po_reqs[0]["name"] == "Rabies Vaccine"
+        assert po_reqs[0]["suggested_order_qty"] == 35.0  # (20 * 2) - 5
+        assert po_reqs[0]["estimated_cost"] == 5250.0
+
+        # 3. Expired Product Values Audit
+        expired = sections["expired_product_values_audit"]["items"]
+        assert len(expired) == 1
+        assert expired[0]["name"] == "Rabies Vaccine"
+        assert expired[0]["loss_value"] == 750.0
+        assert expired[0]["status"] == "EXPIRED"
+
+        # 4. Stock Movement & Usage Summary
+        movements_list = sections["stock_movement_and_usage_summary"]["records"]
+        assert len(movements_list) == 3
+
+        # 5. Pending Purchase Requisitions
+        pending = sections["pending_purchase_requisition_orders"]["requisitions"]
+        assert len(pending) == 1
+        assert pending[0]["quantity"] == 25.0
+
+    @pytest.mark.asyncio
+    async def test_inventory_analytics_empty_data(self, service, mock_session):
+        """2. Empty inventory data handles gracefully without division by zero or errors."""
+        mock_session.execute.side_effect = [
+            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))),
+            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))),
+            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))),
+        ]
+
+        result = await service.get_inventory_analytics()
+        assert result["report_type"] == "inventory"
+        sections = result["report"]["sections"]
+        health = sections["inventory_health_and_loss_audit"]
+        assert health["total_catalog_items"] == 0
+        assert health["total_inventory_value"] == "₹0.00"
+        assert health["stock_movement_speed"] == "N/A"
+        assert sections["upcoming_purchase_order_requirements"]["items"] == []
+        assert sections["expired_product_values_audit"]["items"] == []
+        assert sections["stock_movement_and_usage_summary"]["records"] == []
+        assert sections["pending_purchase_requisition_orders"]["requisitions"] == []
+
+    @pytest.mark.asyncio
+    async def test_inventory_analytics_one_stock_movement(self, service, mock_session):
+        """3. One stock movement verifies zip(timestamps, timestamps[1:], strict=False) safety."""
+        import uuid
+        from datetime import UTC, datetime
+
+        from pawguard.modules.inventory.models import InventoryItem, InventoryMovement, MovementType
+
+        item = InventoryItem(
+            id=uuid.uuid4(),
+            name="Bandage",
+            category="medical",
+            quantity=10.0,
+            unit="rolls",
+            reorder_threshold=5.0,
+            unit_cost=20.0,
+            expiry_date=None,
+        )
+        movement = InventoryMovement(
+            id=uuid.uuid4(),
+            item_id=item.id,
+            movement_type=MovementType.CHECK_IN,
+            quantity=10.0,
+            reference_type="donation",
+            created_at=datetime.now(UTC),
+        )
+
+        mock_session.execute.side_effect = [
+            MagicMock(
+                scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[item])))
+            ),
+            MagicMock(
+                scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[movement])))
+            ),
+            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))),
+        ]
+
+        result = await service.get_inventory_analytics()
+        health = result["report"]["sections"]["inventory_health_and_loss_audit"]
+        assert health["stock_movement_speed"] == "N/A"
+        assert "In: 10.0" in health["check_in_out_volume"]
+
+    @pytest.mark.asyncio
+    async def test_inventory_analytics_multiple_stock_movements(self, service, mock_session):
+        """4. Multiple stock movements calculate interval speed correctly."""
+        import uuid
+        from datetime import UTC, datetime, timedelta
+
+        from pawguard.modules.inventory.models import InventoryItem, InventoryMovement, MovementType
+
+        item = InventoryItem(
+            id=uuid.uuid4(),
+            name="Syringes",
+            category="medical",
+            quantity=100.0,
+            unit="pcs",
+            reorder_threshold=50.0,
+            unit_cost=5.0,
+            expiry_date=None,
+        )
+        now = datetime.now(UTC)
+        m1 = InventoryMovement(
+            id=uuid.uuid4(),
+            item_id=item.id,
+            movement_type=MovementType.CHECK_IN,
+            quantity=100.0,
+            reference_type="po",
+            created_at=now - timedelta(days=6),
+        )
+        m2 = InventoryMovement(
+            id=uuid.uuid4(),
+            item_id=item.id,
+            movement_type=MovementType.CHECK_OUT,
+            quantity=30.0,
+            reference_type="treatment",
+            created_at=now - timedelta(days=4),
+        )
+        m3 = InventoryMovement(
+            id=uuid.uuid4(),
+            item_id=item.id,
+            movement_type=MovementType.CHECK_OUT,
+            quantity=20.0,
+            reference_type="treatment",
+            created_at=now,
+        )
+
+        mock_session.execute.side_effect = [
+            MagicMock(
+                scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[item])))
+            ),
+            MagicMock(
+                scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[m1, m2, m3])))
+            ),
+            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))),
+        ]
+
+        result = await service.get_inventory_analytics()
+        health = result["report"]["sections"]["inventory_health_and_loss_audit"]
+        assert "3.0 days" in health["stock_movement_speed"]
+
+    @pytest.mark.asyncio
+    async def test_inventory_analytics_zero_values(self, service, mock_session):
+        """8. Zero values for unit costs and quantities calculate without exception."""
+        import uuid
+
+        from pawguard.modules.inventory.models import InventoryItem
+
+        item = InventoryItem(
+            id=uuid.uuid4(),
+            name="Donated Blankets",
+            category="shelter",
+            quantity=0.0,
+            unit="pcs",
+            reorder_threshold=0.0,
+            unit_cost=0.0,
+            expiry_date=None,
+        )
+
+        mock_session.execute.side_effect = [
+            MagicMock(
+                scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[item])))
+            ),
+            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))),
+            MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))),
+        ]
+
+        result = await service.get_inventory_analytics()
+        health = result["report"]["sections"]["inventory_health_and_loss_audit"]
+        assert health["total_inventory_value"] == "₹0.00"
+        assert health["inventory_loss_rate_pct"] == "0.0%"
+
+    @pytest.mark.asyncio
+    async def test_inventory_analytics_api_endpoints_and_rbac(self):
+        """9. RBAC & 10. Response schema validation across GET and POST analytics endpoints."""
+        import json
+        import uuid
+        from datetime import UTC, datetime
+
+        from fastapi import FastAPI
+        from httpx import ASGITransport, AsyncClient
+
+        from pawguard.core.security import AccessTokenClaims
+        from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
+        from pawguard.modules.auth.models import Permission, Role, User
+        from pawguard.modules.reports.router import get_report_service
+        from pawguard.modules.reports.router import router as reports_router
+        from pawguard.modules.reports.schemas import InventoryAnalyticsResponse
+
+        test_app = FastAPI()
+        test_app.include_router(reports_router, prefix="/api/v1")
+
+        mock_analytics_payload = {
+            "report_type": "inventory",
+            "report": {
+                "title": "Inventory Consumption & Expiry Audit",
+                "generated_at": "2026-09-09T05:00:00Z",
+                "sections": {
+                    "inventory_health_and_loss_audit": {
+                        "total_catalog_items": 15,
+                        "total_inventory_value": "₹45,000.00",
+                        "expired_product_value": "₹1,200.00",
+                        "inventory_loss_write_off_value": "₹500.00",
+                        "inventory_loss_rate_pct": "1.1%",
+                        "stock_movement_speed": "2.5 days",
+                        "check_in_out_volume": "In: 100.0, Out: 40.0",
+                        "upcoming_purchase_order_requirements_exposure": "₹15,000.00",
+                    },
+                    "upcoming_purchase_order_requirements": {
+                        "items": [
+                            {
+                                "item_id": "item-1",
+                                "name": "Surgical Gloves",
+                                "category": "medical",
+                                "current_stock": 2.0,
+                                "reorder_threshold": 10.0,
+                                "suggested_order_qty": 18.0,
+                                "unit": "boxes",
+                                "unit_cost": 250.0,
+                                "estimated_cost": 4500.0,
+                            }
+                        ]
+                    },
+                    "expired_product_values_audit": {
+                        "items": [
+                            {
+                                "item_id": "item-2",
+                                "name": "Expired Saline",
+                                "category": "medical",
+                                "expired_qty": 4.0,
+                                "expiry_date": "2026-08-01",
+                                "unit_cost": 50.0,
+                                "loss_value": 200.0,
+                                "status": "EXPIRED",
+                            }
+                        ]
+                    },
+                    "stock_movement_and_usage_summary": {
+                        "records": [
+                            {
+                                "reference_type": "treatment",
+                                "check_in_qty": 0.0,
+                                "check_out_qty": 30.0,
+                                "adjustment_qty": 0.0,
+                                "movement_count": 5,
+                            }
+                        ]
+                    },
+                    "pending_purchase_requisition_orders": {
+                        "requisitions": [
+                            {
+                                "requisition_id": "req-1",
+                                "item_id": "item-1",
+                                "quantity": 20.0,
+                                "status": "pending",
+                            }
+                        ]
+                    },
+                },
+            },
+        }
+
+        mock_svc = AsyncMock()
+        mock_svc.get_inventory_analytics.return_value = mock_analytics_payload
+
+        now = datetime.now(UTC)
+        role = Role(
+            id=uuid.uuid4(),
+            name="inventory_manager",
+            description="Inventory Manager",
+            is_system=True,
+            created_at=now,
+            updated_at=now,
+        )
+        perm = Permission(
+            id=uuid.uuid4(),
+            code="reports:read",
+            description="Read Reports",
+            created_at=now,
+            updated_at=now,
+        )
+        role.permissions = [perm]
+        user = User(
+            id=uuid.uuid4(),
+            email="inventory.manager@pawguard.com",
+            hashed_password="hash",
+            full_name="Inventory Manager",
+            phone="1234567890",
+            is_active=True,
+            is_verified=True,
+            mfa_enabled=False,
+            created_at=now,
+            updated_at=now,
+        )
+        user.roles = [role]
+
+        claims = AccessTokenClaims(
+            user_id=user.id,
+            session_id=uuid.uuid4(),
+            roles=["inventory_manager"],
+            jti="jti",
+            expires_at=now,
+        )
+
+        mock_redis = AsyncMock()
+        mock_redis.get.return_value = json.dumps(["reports:read", "reports:create"])
+        mock_redis.set.return_value = True
+
+        mock_db = AsyncMock()
+        mock_db_result = MagicMock()
+        mock_db_result.scalars.return_value.all.return_value = ["reports:read", "reports:create"]
+        mock_db.execute.return_value = mock_db_result
+
+        mock_current_user = CurrentUser(
+            user=user,
+            claims=claims,
+            db=mock_db,
+            redis=mock_redis,
+        )
+
+        for route in test_app.routes:
+            if "/reports" in getattr(route, "path", ""):
+                for dep in getattr(route, "dependencies", []):
+                    test_app.dependency_overrides[dep.dependency] = lambda: mock_current_user
+
+        test_app.dependency_overrides[get_current_user] = lambda: mock_current_user
+        test_app.dependency_overrides[get_report_service] = lambda: mock_svc
+
+        transport = ASGITransport(app=test_app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            # Test GET /api/v1/reports/inventory/analytics
+            res_get = await client.get("/api/v1/reports/inventory/analytics")
+            assert res_get.status_code == 200
+            data_get = res_get.json()
+            assert data_get["success"] is True
+            parsed_get = InventoryAnalyticsResponse(**data_get["data"])
+            assert parsed_get.report_type == "inventory"
+            assert parsed_get.report.title == "Inventory Consumption & Expiry Audit"
+            assert (
+                parsed_get.report.sections.inventory_health_and_loss_audit.total_inventory_value
+                == "₹45,000.00"
+            )
+
+            # Test GET alias /api/v1/reports/analytics/inventory
+            res_alias = await client.get("/api/v1/reports/analytics/inventory")
+            assert res_alias.status_code == 200
+
+            # Test POST /api/v1/reports/inventory/analytics
+            res_post_inv = await client.post("/api/v1/reports/inventory/analytics", json={})
+            assert res_post_inv.status_code == 200
+
+            # Test POST /api/v1/reports/analytics
+            res_post = await client.post(
+                "/api/v1/reports/analytics",
+                json={"report_type": "inventory", "filters": {"category": "medical"}},
+            )
+            assert res_post.status_code == 200
+            data_post = res_post.json()
+            assert data_post["success"] is True
+            assert (
+                data_post["data"]["report"]["sections"]["inventory_health_and_loss_audit"][
+                    "upcoming_purchase_order_requirements_exposure"
+                ]
+                == "₹15,000.00"
+            )
