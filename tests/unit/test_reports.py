@@ -496,3 +496,35 @@ class TestStaffPerformanceReport:
         assert "Total Dogs in Care" in metric_names
         assert "Avg Length of Stay" in metric_names
         assert "Volunteer Hours" in metric_names
+
+
+class TestReportPermissionsInSeed:
+    def test_operational_staff_roles_hold_report_permissions(self):
+        from scripts.seed_roles_and_permissions import ROLE_DEFINITIONS
+
+        from pawguard.modules.auth import permission_codes as pc
+
+        role_map = {name: set(perms) for name, _, _, perms in ROLE_DEFINITIONS}
+        operational_roles = [
+            "super_admin",
+            "rescue_centre_admin",
+            "rescue_coordinator",
+            "veterinarian",
+            "shelter_manager",
+            "adoption_coordinator",
+            "foster_coordinator",
+            "volunteer_coordinator",
+            "inventory_manager",
+            "finance_user",
+        ]
+
+        for role_name in operational_roles:
+            assert role_name in role_map, f"Role {role_name} missing from ROLE_DEFINITIONS"
+            perms = role_map[role_name]
+            assert pc.REPORTS_READ in perms, f"{role_name} missing {pc.REPORTS_READ}"
+            assert pc.REPORTS_CREATE in perms, f"{role_name} missing {pc.REPORTS_CREATE}"
+            assert pc.REPORTS_EXPORT_PDF in perms, f"{role_name} missing {pc.REPORTS_EXPORT_PDF}"
+            assert pc.REPORTS_EXPORT_CSV in perms, f"{role_name} missing {pc.REPORTS_EXPORT_CSV}"
+            assert pc.REPORTS_EXPORT_EXCEL in perms, (
+                f"{role_name} missing {pc.REPORTS_EXPORT_EXCEL}"
+            )
