@@ -5,6 +5,7 @@ Repositories never contain business decisions (RULE-002).
 
 import uuid
 from collections.abc import Sequence
+from typing import Any
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +16,7 @@ from pawguard.core.search import SortParams, apply_sorting, build_search_filter
 from pawguard.modules.auth.models import User
 from pawguard.modules.foster.models import (
     FosterPlacement,
+    FosterPlacementStatus,
     FosterProfile,
     FosterProgressLog,
     FosterStatus,
@@ -121,29 +123,164 @@ class FosterRepository:
     async def get_placement_by_id(self, placement_id: uuid.UUID) -> FosterPlacement | None:
         stmt = (
             select(FosterPlacement)
-            .options(selectinload(FosterPlacement.foster))
+            .options(
+                selectinload(FosterPlacement.foster)
+                .selectinload(FosterProfile.user)
+                .selectinload(User.roles),
+                selectinload(FosterPlacement.dog),
+            )
             .where(FosterPlacement.id == placement_id)
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def get_active_placement_for_dog(self, dog_id: uuid.UUID) -> FosterPlacement | None:
-        stmt = select(FosterPlacement).where(
-            FosterPlacement.dog_id == dog_id, FosterPlacement.is_active.is_(True)
+        stmt = (
+            select(FosterPlacement)
+            .options(
+                selectinload(FosterPlacement.foster)
+                .selectinload(FosterProfile.user)
+                .selectinload(User.roles),
+                selectinload(FosterPlacement.dog),
+            )
+            .where(FosterPlacement.dog_id == dog_id, FosterPlacement.is_active.is_(True))
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def get_placements_by_foster_id(self, foster_id: uuid.UUID) -> Sequence[FosterPlacement]:
         stmt = (
             select(FosterPlacement)
-            .options(selectinload(FosterPlacement.dog))
+            .options(
+                selectinload(FosterPlacement.dog),
+                selectinload(FosterPlacement.foster)
+                .selectinload(FosterProfile.user)
+                .selectinload(User.roles),
+            )
             .where(FosterPlacement.foster_id == foster_id)
             .order_by(FosterPlacement.placed_at.desc())
         )
         return (await self._session.execute(stmt)).scalars().all()
 
+    async def paginate_placements(
+        self,
+        page: PageParams,
+        sort: SortParams,
+        is_active: bool | None = None,
+        status: FosterPlacementStatus | None = None,
+        foster_id: uuid.UUID | None = None,
+        dog_id: uuid.UUID | None = None,
+    ) -> tuple[Sequence[FosterPlacement], int]:
+        filters = []
+        if is_active is not None:
+            filters.append(FosterPlacement.is_active == is_active)
+        if status is not None:
+            filters.append(FosterPlacement.status == status)
+        if foster_id is not None:
+            filters.append(FosterPlacement.foster_id == foster_id)
+        if dog_id is not None:
+            filters.append(FosterPlacement.dog_id == dog_id)
+
+        stmt = select(FosterPlacement).options(
+            selectinload(FosterPlacement.dog),
+            selectinload(FosterPlacement.foster)
+            .selectinload(FosterProfile.user)
+            .selectinload(User.roles),
+        )
+        if filters:
+            stmt = stmt.where(*filters)
+        stmt = stmt.order_by(FosterPlacement.placed_at.desc())
+        stmt = stmt.offset(page.offset).limit(page.limit)
+        results = (await self._session.execute(stmt)).scalars().all()
+
+        if page.page == 1 and len(results) < page.limit:
+            total = len(results)
+        else:
+            count_stmt = select(func.count(FosterPlacement.id))
+            if filters:
+                count_stmt = count_stmt.where(*filters)
+            total = (await self._session.execute(count_stmt)).scalar_one()
+
+        return results, total
+
+    async def get_foster_stats(self) -> dict[str, Any]:
+        stmt = select(
+            func.count(FosterPlacement.id).label("total_placements"),
+            func.count(FosterPlacement.id)
+            .filter(FosterPlacement.is_active.is_(True))
+            .label("active_placements"),
+            func.count(FosterPlacement.id)
+            .filter(FosterPlacement.status == FosterPlacementStatus.RETURNED)
+            .label("returned_placements"),
+            func.count(FosterPlacement.id)
+            .filter(FosterPlacement.status == FosterPlacementStatus.CONVERTED_TO_ADOPT)
+            .label("converted_placements"),
+        )
+        placement_row = (await self._session.execute(stmt)).one()
+
+        p_stmt = select(
+            func.count(FosterProfile.id)
+            .filter(FosterProfile.deleted_at.is_(None))
+            .label("total_fosters"),
+            func.count(FosterProfile.id)
+            .filter(
+                FosterProfile.deleted_at.is_(None), FosterProfile.status == FosterStatus.APPROVED
+            )
+            .label("approved_fosters"),
+            func.count(FosterProfile.id)
+            .filter(
+                FosterProfile.deleted_at.is_(None),
+                FosterProfile.status == FosterStatus.APPROVED,
+                FosterProfile.is_available.is_(True),
+            )
+            .label("available_fosters"),
+            func.count(FosterProfile.id)
+            .filter(
+                FosterProfile.deleted_at.is_(None), FosterProfile.status == FosterStatus.APPLIED
+            )
+            .label("pending_applications"),
+            func.count(FosterProfile.id)
+            .filter(
+                FosterProfile.deleted_at.is_(None), FosterProfile.status == FosterStatus.REJECTED
+            )
+            .label("rejected_fosters"),
+            func.count(FosterProfile.id)
+            .filter(
+                FosterProfile.deleted_at.is_(None), FosterProfile.status == FosterStatus.INACTIVE
+            )
+            .label("inactive_fosters"),
+            func.coalesce(
+                func.sum(FosterProfile.max_capacity).filter(
+                    FosterProfile.deleted_at.is_(None),
+                    FosterProfile.status == FosterStatus.APPROVED,
+                ),
+                0,
+            ).label("total_capacity"),
+        )
+        profile_row = (await self._session.execute(p_stmt)).one()
+
+        return {
+            "total": placement_row.total_placements or 0,
+            "active": placement_row.active_placements or 0,
+            "total_placements": placement_row.total_placements or 0,
+            "active_placements": placement_row.active_placements or 0,
+            "returned_placements": placement_row.returned_placements or 0,
+            "converted_placements": placement_row.converted_placements or 0,
+            "total_fosters": profile_row.total_fosters or 0,
+            "total_profiles": profile_row.total_fosters or 0,
+            "approved_fosters": profile_row.approved_fosters or 0,
+            "available_fosters": profile_row.available_fosters or 0,
+            "available": profile_row.available_fosters or 0,
+            "pending_applications": profile_row.pending_applications or 0,
+            "pending_fosters": profile_row.pending_applications or 0,
+            "rejected_fosters": profile_row.rejected_fosters or 0,
+            "inactive_fosters": profile_row.inactive_fosters or 0,
+            "total_capacity": int(profile_row.total_capacity or 0),
+        }
+
     async def list_profiles_by_ids(self, ids: list[uuid.UUID]) -> Sequence[FosterProfile]:
-        stmt = select(FosterProfile).where(
-            FosterProfile.id.in_(ids), FosterProfile.deleted_at.is_(None)
+        stmt = (
+            select(FosterProfile)
+            .options(selectinload(FosterProfile.user).selectinload(User.roles))
+            .where(FosterProfile.id.in_(ids), FosterProfile.deleted_at.is_(None))
         )
         return (await self._session.execute(stmt)).scalars().all()
 

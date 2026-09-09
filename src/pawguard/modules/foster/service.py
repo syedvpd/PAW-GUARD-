@@ -35,6 +35,7 @@ from pawguard.modules.foster.schemas import (
     FosterMediaLogCreate,
     FosterMedicationLogCreate,
     FosterPlacementCreate,
+    FosterPlacementResponse,
     FosterProfileCreate,
     FosterProfileResponse,
     FosterProfileUpdate,
@@ -239,9 +240,30 @@ class FosterService:
         # role is granted here, not at application time, so an unvetted
         # applicant can't self-escalate before being cleared.
         if profile.status == FosterStatus.APPROVED and not was_approved:
-            role = await self._roles.get_by_name("foster_family")
-            if role is not None:
-                await self._user_roles.grant_role(profile.user_id, role.id)
+            try:
+                role = await self._roles.get_by_name("foster_family")
+                if role is not None:
+                    await self._user_roles.grant_role(profile.user_id, role.id)
+            except Exception as exc:
+                logger.warning("Failed to grant foster_family role: %s", exc)
+
+            try:
+                from pawguard.modules.notifications.governance_service import (
+                    dispatch_governed_notification,
+                )
+
+                await dispatch_governed_notification(
+                    self._repo._session,
+                    trigger_code="foster_application_approved",
+                    module_name="foster",
+                    title="Foster Application Approved",
+                    body="Congratulations! Your foster application has been approved. You can now foster dogs.",
+                    target_user_ids=[profile.user_id],
+                    action_url="/foster",
+                )
+            except Exception as exc:
+                logger.warning("failed_sending_foster_approval_governed_notification: %s", exc)
+
             await self._send_push(
                 [profile.user_id],
                 "Foster Application Approved",
@@ -278,7 +300,7 @@ class FosterService:
     async def get_my_placements(self, user_id: uuid.UUID) -> list[FosterPlacement]:
         profile = await self._repo.get_profile_by_user_id(user_id)
         if profile is None:
-            raise NotFoundError("Foster profile not found for this user.")
+            return []
         placements = await self._repo.get_placements_by_foster_id(profile.id)
         return list(placements)
 
@@ -294,6 +316,31 @@ class FosterService:
             raise NotFoundError("Foster profile not found.")
         placements = await self._repo.get_placements_by_foster_id(profile_id)
         return list(placements)
+
+    async def list_all_placements(
+        self,
+        page: PageParams,
+        sort: SortParams,
+        is_active: bool | None = None,
+        status: FosterPlacementStatus | None = None,
+        foster_id: uuid.UUID | None = None,
+        dog_id: uuid.UUID | None = None,
+    ) -> PaginatedResponse[FosterPlacementResponse]:
+        results, total = await self._repo.paginate_placements(
+            page=page,
+            sort=sort,
+            is_active=is_active,
+            status=status,
+            foster_id=foster_id,
+            dog_id=dog_id,
+        )
+        return PaginatedResponse(
+            data=[FosterPlacementResponse.model_validate(p) for p in results],
+            meta=build_pagination_meta(total=total, params=page),
+        )
+
+    async def get_foster_stats(self) -> dict[str, Any]:
+        return await self._repo.get_foster_stats()
 
     async def soft_delete_profile(
         self,

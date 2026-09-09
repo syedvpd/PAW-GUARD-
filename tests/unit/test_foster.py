@@ -927,3 +927,33 @@ class TestFosterReturnToShelter:
             notes=req.notes,
         )
         assert res.is_active is False
+
+    @pytest.mark.asyncio
+    async def test_get_my_placements_empty_when_no_profile(self, service, mock_repo):
+        user_id = uuid.uuid4()
+        mock_repo.get_profile_by_user_id.return_value = None
+        res = await service.get_my_placements(user_id)
+        assert res == []
+
+    @pytest.mark.asyncio
+    async def test_list_all_placements(self, service, mock_repo):
+        mock_repo.paginate_placements.return_value = ([], 0)
+        res = await service.list_all_placements(
+            page=PageParams(page=1, page_size=20),
+            sort=SortParams(),
+        )
+        assert res.data == []
+        assert res.meta.total == 0
+
+    @pytest.mark.asyncio
+    async def test_get_foster_stats(self, service, mock_repo):
+        mock_repo.get_foster_stats.return_value = {
+            "total_placements": 5,
+            "active_placements": 2,
+            "total_fosters": 10,
+            "available_fosters": 8,
+            "pending_applications": 3,
+        }
+        res = await service.get_foster_stats()
+        assert res["total_placements"] == 5
+        assert res["active_placements"] == 2

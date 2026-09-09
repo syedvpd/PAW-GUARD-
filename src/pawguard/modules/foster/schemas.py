@@ -310,15 +310,31 @@ class FosterPlacementResponse(BaseModel):
     foster_id: uuid.UUID
     dog_id: uuid.UUID
     placed_at: datetime
-    returned_at: datetime | None
-    is_active: bool
-    status: FosterPlacementStatus
-    adoption_application_id: uuid.UUID | None
-    notes: str | None
-    created_at: datetime
+    returned_at: datetime | None = None
+    is_active: bool = True
+    status: FosterPlacementStatus = FosterPlacementStatus.ACTIVE
+    adoption_application_id: uuid.UUID | None = None
+    notes: str | None = None
+    created_at: datetime | None = None
     dog: DogProfileResponse | None = None
+    foster: "FosterProfileResponse | None" = None
+    foster_name: str | None = None
+    dog_name: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def populate_names(self) -> "FosterPlacementResponse":
+        if self.dog and not self.dog_name and hasattr(self.dog, "name"):
+            self.dog_name = self.dog.name
+        if (
+            self.foster
+            and self.foster.user
+            and not self.foster_name
+            and hasattr(self.foster.user, "full_name")
+        ):
+            self.foster_name = self.foster.user.full_name
+        return self
 
 
 class FosterReturnRequest(BaseModel):

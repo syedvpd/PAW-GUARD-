@@ -25,7 +25,7 @@ from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.rbac import has_permission, require_permission
 from pawguard.modules.dog.repository import DogRepository
-from pawguard.modules.foster.models import FosterStatus
+from pawguard.modules.foster.models import FosterPlacementStatus, FosterStatus
 from pawguard.modules.foster.repository import FosterRepository
 from pawguard.modules.foster.schemas import (
     FosterBackgroundCheckInitiate,
@@ -113,6 +113,111 @@ async def get_my_foster_placements(
 ) -> ApiResponse[list[FosterPlacementResponse]]:
     placements = await service.get_my_placements(current_user.user.id)
     return ApiResponse(data=[FosterPlacementResponse.model_validate(p) for p in placements])
+
+
+@router.get(
+    "/stats",
+    response_model=ApiResponse[dict[str, Any]],
+    dependencies=[Depends(require_permission("foster:read", "dashboard:foster", "system:admin"))],
+)
+@router.get(
+    "/summary",
+    response_model=ApiResponse[dict[str, Any]],
+    dependencies=[Depends(require_permission("foster:read", "dashboard:foster", "system:admin"))],
+)
+@router.get(
+    "/dashboard",
+    response_model=ApiResponse[dict[str, Any]],
+    dependencies=[Depends(require_permission("foster:read", "dashboard:foster", "system:admin"))],
+)
+@router.get(
+    "/coordinator/summary",
+    response_model=ApiResponse[dict[str, Any]],
+    dependencies=[Depends(require_permission("foster:read", "dashboard:foster", "system:admin"))],
+)
+@router.get(
+    "/coordinator/dashboard",
+    response_model=ApiResponse[dict[str, Any]],
+    dependencies=[Depends(require_permission("foster:read", "dashboard:foster", "system:admin"))],
+)
+@cache_response(ttl_seconds=60, namespace="foster")
+async def get_foster_stats(
+    service: FosterService = Depends(get_foster_service),
+) -> ApiResponse[dict[str, Any]]:
+    data = await service.get_foster_stats()
+    return ApiResponse(data=data)
+
+
+@router.get(
+    "/placements",
+    response_model=PaginatedResponse[FosterPlacementResponse],
+    dependencies=[Depends(require_permission("foster:read", "foster:approve", "system:admin"))],
+)
+async def list_all_placements(
+    page: PageParams = Depends(page_params),
+    sort: SortParams = Depends(sort_params),
+    is_active: bool | None = Query(None, description="Filter by active status"),
+    status: FosterPlacementStatus | None = Query(None, description="Filter by placement status"),
+    foster_id: uuid.UUID | None = Query(None, description="Filter by foster profile ID"),
+    dog_id: uuid.UUID | None = Query(None, description="Filter by dog ID"),
+    service: FosterService = Depends(get_foster_service),
+) -> PaginatedResponse[FosterPlacementResponse]:
+    return await service.list_all_placements(
+        page=page,
+        sort=sort,
+        is_active=is_active,
+        status=status,
+        foster_id=foster_id,
+        dog_id=dog_id,
+    )
+
+
+@router.get(
+    "/placements/{placement_id}",
+    response_model=ApiResponse[FosterPlacementResponse],
+)
+async def get_placement_detail(
+    placement_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FosterService = Depends(get_foster_service),
+) -> ApiResponse[FosterPlacementResponse]:
+    placement = await service.get_placement(placement_id)
+    is_owner = (
+        placement.foster.user_id == current_user.user.id
+        if (placement.foster and hasattr(placement.foster, "user_id"))
+        else False
+    )
+    if (
+        not is_owner
+        and not has_permission(current_user.user, "foster:approve")
+        and not has_permission(current_user.user, "foster:update")
+        and not has_permission(current_user.user, "foster:read")
+        and not has_permission(current_user.user, "system:admin")
+    ):
+        raise ForbiddenError("You do not have permission to view this placement.")
+    return ApiResponse(data=FosterPlacementResponse.model_validate(placement))
+
+
+@router.get(
+    "/{profile_id}",
+    response_model=ApiResponse[FosterProfileResponse],
+)
+async def get_foster_profile_by_id(
+    profile_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FosterService = Depends(get_foster_service),
+) -> ApiResponse[FosterProfileResponse]:
+    profile = await service.get_profile(profile_id)
+    is_owner = profile.user_id == current_user.user.id
+    if (
+        not is_owner
+        and not has_permission(current_user.user, "foster:approve")
+        and not has_permission(current_user.user, "foster:update")
+        and not has_permission(current_user.user, "foster:read")
+        and not has_permission(current_user.user, "system:admin")
+    ):
+        raise ForbiddenError("You do not have permission to view this foster profile.")
+    return ApiResponse(data=FosterProfileResponse.model_validate(profile))
 
 
 @router.put(

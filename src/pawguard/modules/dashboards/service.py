@@ -379,13 +379,48 @@ async def foster_dashboard(session: AsyncSession, redis: Any | None = None) -> d
     stmt = text("""
         SELECT
             (SELECT COUNT(*) FROM foster_placements) AS total,
-            (SELECT COUNT(*) FROM foster_placements WHERE is_active = true) AS active
+            (SELECT COUNT(*) FROM foster_placements WHERE is_active = true) AS active,
+            (SELECT COUNT(*) FROM foster_placements WHERE status = 'returned') AS returned,
+            (SELECT COUNT(*) FROM foster_placements WHERE status = 'converted_to_adopt') AS converted,
+            (SELECT COUNT(*) FROM foster_profiles WHERE deleted_at IS NULL) AS total_fosters,
+            (SELECT COUNT(*) FROM foster_profiles WHERE status = 'approved' AND deleted_at IS NULL) AS approved_fosters,
+            (SELECT COUNT(*) FROM foster_profiles WHERE status = 'approved' AND is_available = true AND deleted_at IS NULL) AS available_fosters,
+            (SELECT COUNT(*) FROM foster_profiles WHERE status = 'applied' AND deleted_at IS NULL) AS pending_applications,
+            (SELECT COUNT(*) FROM foster_profiles WHERE status = 'rejected' AND deleted_at IS NULL) AS rejected_fosters,
+            (SELECT COUNT(*) FROM foster_profiles WHERE status = 'inactive' AND deleted_at IS NULL) AS inactive_fosters,
+            (SELECT COALESCE(SUM(max_capacity), 0) FROM foster_profiles WHERE status = 'approved' AND deleted_at IS NULL) AS total_capacity
     """)
     row = (await session.execute(stmt)).one()
 
+    total_placements = getattr(row, "total", 0) or 0
+    active_placements = getattr(row, "active", 0) or 0
+    returned_placements = getattr(row, "returned", 0) or 0
+    converted_placements = getattr(row, "converted", 0) or 0
+    total_fosters = getattr(row, "total_fosters", 0) or 0
+    approved_fosters = getattr(row, "approved_fosters", 0) or 0
+    available_fosters = getattr(row, "available_fosters", 0) or 0
+    pending_applications = getattr(row, "pending_applications", 0) or 0
+    rejected_fosters = getattr(row, "rejected_fosters", 0) or 0
+    inactive_fosters = getattr(row, "inactive_fosters", 0) or 0
+    total_capacity = int(getattr(row, "total_capacity", 0) or 0)
+
     result = {
-        "total_placements": row.total,
-        "active_placements": row.active,
+        "total": total_placements,
+        "active": active_placements,
+        "total_placements": total_placements,
+        "active_placements": active_placements,
+        "returned_placements": returned_placements,
+        "converted_placements": converted_placements,
+        "total_fosters": total_fosters,
+        "total_profiles": total_fosters,
+        "approved_fosters": approved_fosters,
+        "available_fosters": available_fosters,
+        "available": available_fosters,
+        "pending_applications": pending_applications,
+        "pending_fosters": pending_applications,
+        "rejected_fosters": rejected_fosters,
+        "inactive_fosters": inactive_fosters,
+        "total_capacity": total_capacity,
     }
     await _set_cache(redis, cache_key, result)
     return result
