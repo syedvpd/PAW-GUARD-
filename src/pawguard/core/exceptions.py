@@ -242,6 +242,16 @@ def clean_error_message(msg: str) -> str:
     return " | ".join(cleaned_lines) if cleaned_lines else lines[0]
 
 
+def _error_headers(request_id: str) -> dict[str, str]:
+    """Ensure error responses are never cached by browsers, CDN, or proxy caches."""
+    return {
+        "X-Request-ID": request_id,
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+    }
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppException)
     async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
@@ -268,7 +278,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                 method=request.method,
                 request_id=request_id,
             ),
-            headers={"X-Request-ID": request_id},
+            headers=_error_headers(request_id),
         )
 
     @app.exception_handler(RequestValidationError)
@@ -306,7 +316,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                 method=request.method,
                 request_id=request_id,
             ),
-            headers={"X-Request-ID": request_id},
+            headers=_error_headers(request_id),
         )
 
     @app.exception_handler(ResponseValidationError)
@@ -333,7 +343,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                 method=request.method,
                 request_id=request_id,
             ),
-            headers={"X-Request-ID": request_id},
+            headers=_error_headers(request_id),
         )
 
     @app.exception_handler(ValueError)
@@ -357,7 +367,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                 method=request.method,
                 request_id=request_id,
             ),
-            headers={"X-Request-ID": request_id},
+            headers=_error_headers(request_id),
         )
 
     @app.exception_handler(StarletteHTTPException)
@@ -427,7 +437,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                 method=request.method,
                 request_id=request_id,
             ),
-            headers={"X-Request-ID": request_id},
+            headers=_error_headers(request_id),
         )
 
     @app.exception_handler(SQLAlchemyError)
@@ -473,7 +483,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                     method=request.method,
                     request_id=request_id,
                 ),
-                headers={"X-Request-ID": request_id},
+                headers=_error_headers(request_id),
             )
 
         # 2. Schema / Migration / Undefined relation / column failures
@@ -504,7 +514,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                         method=request.method,
                         request_id=request_id,
                     ),
-                    headers={"X-Request-ID": request_id},
+                    headers=_error_headers(request_id),
                 )
 
         # 3. Integrity Violations (Unique, FK, Check, Not Null)
@@ -528,7 +538,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                         method=request.method,
                         request_id=request_id,
                     ),
-                    headers={"X-Request-ID": request_id},
+                    headers=_error_headers(request_id),
                 )
             if "foreign key" in err_msg or "foreignkey" in err_msg or "foreign key" in orig_lower:
                 return JSONResponse(
@@ -543,7 +553,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                         method=request.method,
                         request_id=request_id,
                     ),
-                    headers={"X-Request-ID": request_id},
+                    headers=_error_headers(request_id),
                 )
             if "check" in err_msg or "check constraint" in orig_lower:
                 return JSONResponse(
@@ -558,7 +568,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                         method=request.method,
                         request_id=request_id,
                     ),
-                    headers={"X-Request-ID": request_id},
+                    headers=_error_headers(request_id),
                 )
             if "not-null" in err_msg or "null value in column" in orig_lower:
                 return JSONResponse(
@@ -573,7 +583,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                         method=request.method,
                         request_id=request_id,
                     ),
-                    headers={"X-Request-ID": request_id},
+                    headers=_error_headers(request_id),
                 )
             return JSONResponse(
                 status_code=status.HTTP_409_CONFLICT,
@@ -586,7 +596,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                     method=request.method,
                     request_id=request_id,
                 ),
-                headers={"X-Request-ID": request_id},
+                headers=_error_headers(request_id),
             )
 
         # 4. Data format / length errors
@@ -602,7 +612,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                     method=request.method,
                     request_id=request_id,
                 ),
-                headers={"X-Request-ID": request_id},
+                headers=_error_headers(request_id),
             )
 
         # 5. General Database Query Failure
@@ -618,7 +628,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                 method=request.method,
                 request_id=request_id,
             ),
-            headers={"X-Request-ID": request_id},
+            headers=_error_headers(request_id),
         )
 
     @app.exception_handler(Exception)
@@ -645,5 +655,5 @@ def register_exception_handlers(app: FastAPI) -> None:
                 method=request.method,
                 request_id=request_id,
             ),
-            headers={"X-Request-ID": request_id},
+            headers=_error_headers(request_id),
         )
