@@ -1,5 +1,6 @@
 """PortalService: owns CMS content and public portal business behaviour (RULE-003)."""
 
+import contextlib
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -251,13 +252,17 @@ class PortalService:
         status: ContentStatus | None = None,
         search: str | None = None,
         sort: SortParams | None = None,
+        is_featured: bool | None = None,
     ) -> tuple[list[SuccessStory], PaginationMeta]:
-        total = await self._repo.count_stories(status=status, search=search)
+        total = await self._repo.count_stories(
+            status=status, search=search, is_featured=is_featured
+        )
         stories = await self._repo.list_stories(
             page_params=page_params,
             status=status,
             search=search,
             sort=sort,
+            is_featured=is_featured,
         )
         meta = build_pagination_meta(total=total, params=page_params or PageParams())
         return list(stories), meta
@@ -1425,60 +1430,87 @@ class PortalService:
 
     # ── Dynamic CMS Pages ───────────────────────────────────────────────────
 
-    async def _ensure_default_cms_pages_seeded(self) -> None:
-        """Seed default manageable public pages if cms_pages is empty."""
-        existing = await self._repo.list_cms_pages()
-        if existing:
-            return
-
-        now = datetime.now(UTC)
-        for seed in DEFAULT_CMS_PAGES_SEED:
-            page = CmsPage(
+    def _build_cms_page_from_seed(self, seed: dict[str, Any], now: datetime) -> CmsPage:
+        page = CmsPage(
+            id=uuid.uuid4(),
+            slug=seed["slug"],
+            name=seed["name"],
+            description=seed.get("description"),
+            seo_title=seed.get("seo_title"),
+            seo_description=seed.get("seo_description"),
+            seo_keywords=seed.get("seo_keywords"),
+            status=ContentStatus.PUBLISHED,
+            published_at=now,
+            created_at=now,
+            updated_at=now,
+        )
+        page.sections = []
+        page.versions = []
+        for s_data in seed.get("sections", []):
+            sec = CmsSection(
                 id=uuid.uuid4(),
-                slug=seed["slug"],
-                name=seed["name"],
-                description=seed.get("description"),
-                seo_title=seed.get("seo_title"),
-                seo_description=seed.get("seo_description"),
-                seo_keywords=seed.get("seo_keywords"),
-                status=ContentStatus.PUBLISHED,
-                published_at=now,
+                page_id=page.id,
+                section_key=s_data["key"],
+                section_name=s_data["name"],
+                display_order=s_data.get("display_order", 0),
+                is_active=True,
                 created_at=now,
                 updated_at=now,
             )
-            page.sections = []
-            page.versions = []
-            for s_data in seed.get("sections", []):
-                sec = CmsSection(
+            sec.fields = []
+            for f_data in s_data.get("fields", []):
+                field = CmsContentField(
                     id=uuid.uuid4(),
-                    page_id=page.id,
-                    section_key=s_data["key"],
-                    section_name=s_data["name"],
-                    display_order=s_data.get("display_order", 0),
-                    is_active=True,
+                    section_id=sec.id,
+                    field_key=f_data["key"],
+                    field_type=f_data.get("type", "text"),
+                    published_value=f_data.get("value"),
+                    draft_value=f_data.get("value"),
                     created_at=now,
                     updated_at=now,
                 )
-                sec.fields = []
-                for f_data in s_data.get("fields", []):
-                    field = CmsContentField(
-                        id=uuid.uuid4(),
-                        section_id=sec.id,
-                        field_key=f_data["key"],
-                        field_type=f_data.get("type", "text"),
-                        published_value=f_data.get("value"),
-                        draft_value=f_data.get("value"),
-                        created_at=now,
-                        updated_at=now,
-                    )
-                    sec.fields.append(field)
-                page.sections.append(sec)
+                sec.fields.append(field)
+            page.sections.append(sec)
+        return page
+
+    async def _ensure_default_cms_pages_seeded(self) -> None:
+        """Seed default manageable public pages if any are missing."""
+        existing = await self._repo.list_cms_pages()
+        existing_slugs = {p.slug for p in existing}
+        now = datetime.now(UTC)
+        seeded_any = False
+        for seed in DEFAULT_CMS_PAGES_SEED:
+            if seed["slug"] in existing_slugs:
+                continue
+            page = self._build_cms_page_from_seed(seed, now)
             await self._repo.create_cms_page(page)
+            existing_slugs.add(seed["slug"])
+            seeded_any = True
+
+        if seeded_any and hasattr(self._session, "commit"):
+            with contextlib.suppress(Exception):
+                await self._session.commit()
+
+    async def _get_or_create_default_cms_page(self, slug: str) -> CmsPage | None:
+        """Get existing page or lazily create from seed if slug matches default definitions."""
+        page = await self._repo.get_cms_page_by_slug(slug)
+        if page is not None:
+            return page
+        seed = next((s for s in DEFAULT_CMS_PAGES_SEED if s["slug"] == slug), None)
+        if seed is not None:
+            now = datetime.now(UTC)
+            page = self._build_cms_page_from_seed(seed, now)
+            await self._repo.create_cms_page(page)
+            if hasattr(self._session, "commit"):
+                with contextlib.suppress(Exception):
+                    await self._session.commit()
+            return page
+        return None
 
     async def get_public_cms_page(self, slug: str) -> PublicCmsPageResponse:
         """Get live published content for a public CMS page."""
         await self._ensure_default_cms_pages_seeded()
-        page = await self._repo.get_cms_page_by_slug(slug)
+        page = await self._get_or_create_default_cms_page(slug)
         if page is None:
             raise NotFoundError(f"CMS page '{slug}' not found.")
 
@@ -1522,7 +1554,7 @@ class PortalService:
     async def get_admin_cms_page(self, slug: str) -> CmsPageResponse:
         """Get detailed CMS page editor content for admin."""
         await self._ensure_default_cms_pages_seeded()
-        page = await self._repo.get_cms_page_by_slug(slug)
+        page = await self._get_or_create_default_cms_page(slug)
         if page is None:
             raise NotFoundError(f"CMS page '{slug}' not found.")
         return CmsPageResponse.model_validate(page)
@@ -1536,7 +1568,7 @@ class PortalService:
     ) -> CmsPageResponse:
         """Save draft changes for a CMS page and its section fields."""
         await self._ensure_default_cms_pages_seeded()
-        page = await self._repo.get_cms_page_by_slug(slug)
+        page = await self._get_or_create_default_cms_page(slug)
         if page is None:
             raise NotFoundError(f"CMS page '{slug}' not found.")
 
@@ -1611,7 +1643,7 @@ class PortalService:
     ) -> CmsPageResponse:
         """Publish draft content to public live state and record a version snapshot."""
         await self._ensure_default_cms_pages_seeded()
-        page = await self._repo.get_cms_page_by_slug(slug)
+        page = await self._get_or_create_default_cms_page(slug)
         if page is None:
             raise NotFoundError(f"CMS page '{slug}' not found.")
 
@@ -1665,7 +1697,7 @@ class PortalService:
     ) -> CmsPageResponse:
         """Discard draft changes and revert draft values back to published values."""
         await self._ensure_default_cms_pages_seeded()
-        page = await self._repo.get_cms_page_by_slug(slug)
+        page = await self._get_or_create_default_cms_page(slug)
         if page is None:
             raise NotFoundError(f"CMS page '{slug}' not found.")
 
