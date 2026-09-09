@@ -73,3 +73,8 @@ class InvalidTokenError(AppException):
 class InsufficientPermissionsError(AppException):
     status_code = status.HTTP_403_FORBIDDEN
     code = "INSUFFICIENT_PERMISSIONS"
+
+
+class StaffLoginRestrictedOnPublicWebError(AppException):
+    status_code = status.HTTP_403_FORBIDDEN
+    code = "STAFF_LOGIN_RESTRICTED_ON_PUBLIC_WEB"

@@ -668,11 +668,14 @@ async def oauth_login(
     client_type: str | None = Header(default=None, alias=CLIENT_TYPE_HEADER),
     auth_service: AuthService = Depends(get_auth_service),
 ) -> ApiResponse[LoginResponse]:
+    origin = request.headers.get("origin") or request.headers.get("referer")
     tokens = await auth_service.oauth_login(
         provider=payload.provider,
         provider_token=payload.provider_token,
         device=payload.device,
         ctx=_build_request_context(request),
+        client_type=client_type,
+        origin=origin,
     )
     is_web = _is_web_client(client_type)
     if is_web:

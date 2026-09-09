@@ -11,9 +11,11 @@ class Environment(StrEnum):
 
 
 class ClientType(StrEnum):
-    """Identifies which client is calling the API, used to select token transport."""
+    """Identifies which client is calling the API, used to select token transport and role scope."""
 
     WEB = "web"
+    PUBLIC_WEB = "public_web"
+    ADMIN = "admin"
     MOBILE = "mobile"
 
 

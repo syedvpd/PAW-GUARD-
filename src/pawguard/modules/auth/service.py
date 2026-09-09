@@ -13,7 +13,7 @@ from typing import Any
 import pyotp
 
 from pawguard.core.config import get_settings
-from pawguard.core.constants import DeviceType
+from pawguard.core.constants import ClientType, DeviceType
 from pawguard.core.exceptions import NotFoundError
 from pawguard.core.logging import get_logger
 from pawguard.core.security import (
@@ -45,6 +45,7 @@ from pawguard.modules.auth.exceptions import (
     MFADisableNotAllowedError,
     MFARequiredError,
     RefreshTokenReuseDetectedError,
+    StaffLoginRestrictedOnPublicWebError,
 )
 from pawguard.modules.auth.models import (
     AuthAuditEventType,
@@ -75,6 +76,25 @@ from pawguard.modules.auth.schemas import DeviceContext, MFADisableRequest
 from pawguard.redis.client import RedisClient
 from pawguard.services.audit_service import AuditService
 from pawguard.services.cache_service import CacheService
+
+NON_PUBLIC_WEB_ROLES: frozenset[str] = frozenset(
+    {
+        "super_admin",
+        "rescue_centre_admin",
+        "rescue_coordinator",
+        "rescue_agent",
+        "veterinarian",
+        "shelter_manager",
+        "adoption_coordinator",
+        "foster_coordinator",
+        "volunteer_coordinator",
+        "inventory_manager",
+        "finance_user",
+        "volunteer",
+        "foster_family",
+        "donor",
+    }
+)
 
 logger = get_logger(__name__)
 
@@ -202,6 +222,23 @@ class AuthService:
 
         if not user.is_active:
             raise AccountInactiveError("This account has been deactivated.")
+
+        if self._is_public_web_client(client_type=client_type, origin=origin):
+            user_roles = {r.name for r in user.roles}
+            if user_roles & NON_PUBLIC_WEB_ROLES:
+                await self._audit.record(
+                    event_type=AuthAuditEventType.LOGIN_FAILED,
+                    actor_id=user.id,
+                    ip_address=ctx.ip_address,
+                    user_agent=ctx.user_agent,
+                    metadata={
+                        "reason": "staff_role_login_blocked_on_public_web",
+                        "roles": sorted(user_roles),
+                    },
+                )
+                raise StaffLoginRestrictedOnPublicWebError(
+                    "Access restricted: Staff, operational, and administrative accounts cannot sign in on the public website. Please sign in via the PawGuard Admin Portal."
+                )
 
         user.failed_login_count = 0
         user.locked_until = None
@@ -696,6 +733,45 @@ class AuthService:
                     return True
         return False
 
+    def _is_public_web_client(
+        self,
+        client_type: str | None = None,
+        origin: str | None = None,
+    ) -> bool:
+        """True when the request originates from the public website."""
+        if client_type:
+            norm_type = client_type.strip().lower()
+            if norm_type in (
+                ClientType.PUBLIC_WEB.value,
+                "public",
+                "public_web",
+                "public-web",
+                "public_client",
+            ):
+                return True
+            if norm_type in (
+                ClientType.ADMIN.value,
+                "admin",
+                "admin_portal",
+                "admin-portal",
+                ClientType.MOBILE.value,
+            ):
+                return False
+
+        if origin:
+            norm_origin = origin.strip().lower().rstrip("/")
+            for pub in self._settings.public_web_origins_list:
+                if norm_origin == pub.lower().rstrip("/"):
+                    return True
+            if "public-web" in norm_origin or "pawguard-public" in norm_origin:
+                return True
+            if "pawguard-web" in norm_origin and "admin" not in norm_origin:
+                return True
+            if "localhost:3000" in norm_origin or "127.0.0.1:3000" in norm_origin:
+                return True
+
+        return False
+
     # --- MFA disable ---
 
     async def disable_mfa(
@@ -759,6 +835,8 @@ class AuthService:
         provider_token: str,
         device: DeviceContext,
         ctx: RequestContext,
+        client_type: str | None = None,
+        origin: str | None = None,
     ) -> AuthenticatedTokens:
         provider = provider.lower()
         provider_data = await self._verify_oauth_token(provider, provider_token)
@@ -816,6 +894,23 @@ class AuthService:
 
         if not user or not user.is_active:
             raise AccountInactiveError("This account has been deactivated.")
+
+        if self._is_public_web_client(client_type=client_type, origin=origin):
+            user_roles = {r.name for r in user.roles}
+            if user_roles & NON_PUBLIC_WEB_ROLES:
+                await self._audit.record(
+                    event_type=AuthAuditEventType.LOGIN_FAILED,
+                    actor_id=user.id,
+                    ip_address=ctx.ip_address,
+                    user_agent=ctx.user_agent,
+                    metadata={
+                        "reason": "staff_role_oauth_login_blocked_on_public_web",
+                        "roles": sorted(user_roles),
+                    },
+                )
+                raise StaffLoginRestrictedOnPublicWebError(
+                    "Access restricted: Staff, operational, and administrative accounts cannot sign in on the public website. Please sign in via the PawGuard Admin Portal."
+                )
 
         session = await self._create_session(user_id=user.id, device=device, ctx=ctx)
         tokens = await self._issue_tokens(user=user, session=session)

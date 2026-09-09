@@ -176,6 +176,16 @@ class Settings(BaseSettings):
     # --- Frontend URLs ---
     web_app_url: str = "http://localhost:3000"
     admin_app_url: str = "http://localhost:5173"
+    public_web_urls: str = (
+        "https://pawguard-public-web.vercel.app,"
+        "https://pawguard-web.vercel.app,"
+        "https://pawguard-web-gamma.vercel.app,"
+        "https://pawguard-web-v2.vercel.app,"
+        "http://localhost:3000"
+    )
+    admin_web_urls: str = (
+        "https://pawguard-admin.vercel.app,http://localhost:5173,http://localhost:4173"
+    )
     frontend_base_url: str = ""
     # Mobile deep link base used for email verification links sent to the
     # mobile app. The Flutter app registers the ``pawguard://`` scheme and
@@ -218,6 +228,26 @@ class Settings(BaseSettings):
 
     @computed_field  # type: ignore[prop-decorator]
     @property
+    def public_web_origins_list(self) -> list[str]:
+        origins = [o.strip().rstrip("/") for o in self.public_web_urls.split(",") if o.strip()]
+        if self.web_app_url:
+            clean_web = self.web_app_url.strip().rstrip("/")
+            if clean_web and clean_web not in origins:
+                origins.append(clean_web)
+        return origins
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def admin_web_origins_list(self) -> list[str]:
+        origins = [o.strip().rstrip("/") for o in self.admin_web_urls.split(",") if o.strip()]
+        if self.admin_app_url:
+            clean_admin = self.admin_app_url.strip().rstrip("/")
+            if clean_admin and clean_admin not in origins:
+                origins.append(clean_admin)
+        return origins
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
     def cors_origins_list(self) -> list[str]:
         origins = [o.strip().rstrip("/") for o in self.cors_origins.split(",") if o.strip()]
         if self.web_app_url:
@@ -228,6 +258,12 @@ class Settings(BaseSettings):
             clean_admin = self.admin_app_url.strip().rstrip("/")
             if clean_admin and clean_admin not in origins:
                 origins.append(clean_admin)
+        for pub in self.public_web_origins_list:
+            if pub not in origins:
+                origins.append(pub)
+        for adm in self.admin_web_origins_list:
+            if adm not in origins:
+                origins.append(adm)
         return origins
 
     @computed_field  # type: ignore[prop-decorator]
