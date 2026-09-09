@@ -65,6 +65,9 @@ class TestVolunteerRosterRouterPermissions:
             "volunteer:update",
         )
 
+    def test_admin_intake_requires_volunteer_update(self):
+        assert _required_codes("/volunteers/admin/intake", "POST") == ("volunteer:update",)
+
 
 class TestVolunteerShiftAssignRouterPermissions:
     def test_assign_volunteer_requires_volunteer_schedule_or_update(self):

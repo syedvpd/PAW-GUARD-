@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 from pawguard.modules.auth.schemas import UserProfile
 from pawguard.modules.volunteer.models import ApplicationStatus, AttendanceStatus, VolunteerStatus
@@ -234,3 +234,39 @@ class VolunteerLifecycleStatus(BaseModel):
         ...,
         description="Whether the user can reapply after rejection",
     )
+
+
+class VolunteerAdminIntakeRequest(BaseModel):
+    """Payload for Volunteer Coordinator administrative intake of a new applicant."""
+
+    full_name: str = Field(..., min_length=1, max_length=255, examples=["Prasad"])
+    email: EmailStr = Field(..., examples=["prasad@gmail.com"])
+    phone: str = Field(..., min_length=1, max_length=32, examples=["6303001088"])
+    preferred_role: str | None = Field(None, max_length=255, examples=["Shelter Support"])
+    applied_role: str | None = Field(None, max_length=255, examples=["Shelter Support"])
+    availability: str | None = Field(None, max_length=255, examples=["Weekends & Mornings"])
+    emergency_contact_name: str | None = Field(None, max_length=255, examples=["Jane Doe"])
+    emergency_contact_phone: str | None = Field(None, max_length=32, examples=["+1-555-0100"])
+    skills: str | None = Field(None, examples=["Grooming, Transport"])
+    notes: str | None = Field(
+        None, examples=["yeah have some experience with taking care of the pets"]
+    )
+    medical_conditions: str | None = Field(None, examples=["None"])
+    animal_handling: str | None = Field(None, examples=["3 years volunteering at a local shelter"])
+    animal_handling_experience: str | None = Field(
+        None, examples=["3 years volunteering at a local shelter"]
+    )
+
+    @model_validator(mode="after")
+    def _normalize_fields(self) -> "VolunteerAdminIntakeRequest":
+        if not self.applied_role and self.preferred_role:
+            self.applied_role = self.preferred_role
+        elif not self.preferred_role and self.applied_role:
+            self.preferred_role = self.applied_role
+
+        if not self.animal_handling_experience and self.animal_handling:
+            self.animal_handling_experience = self.animal_handling
+        elif not self.animal_handling and self.animal_handling_experience:
+            self.animal_handling = self.animal_handling_experience
+
+        return self

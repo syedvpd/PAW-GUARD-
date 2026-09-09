@@ -35,6 +35,7 @@ from pawguard.modules.volunteer.models import (
 )
 from pawguard.modules.volunteer.repository import VolunteerRepository
 from pawguard.modules.volunteer.schemas import (
+    VolunteerAdminIntakeRequest,
     VolunteerApplicationResponse,
     VolunteerLifecycleStatus,
     VolunteerProfileCreate,
@@ -232,6 +233,172 @@ class VolunteerService:
             notification_type="volunteer_applied",
             action_url="/volunteers/my-profile",
         )
+        return res
+
+    async def admin_volunteer_intake(
+        self,
+        payload: VolunteerAdminIntakeRequest,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> VolunteerApplication:
+        """Administrative intake workflow: Volunteer Coordinator submits a new applicant.
+
+        The coordinator (`actor_id`) creates an application for the applicant
+        identifying details entered in the form (`payload.full_name`, `payload.email`, `payload.phone`).
+        """
+        from sqlalchemy.exc import IntegrityError
+
+        from pawguard.core.security import generate_opaque_token, hash_password
+        from pawguard.modules.auth.repository import UserRepository
+
+        user_repo = UserRepository(self._repo._session)
+        normalized_email = payload.email.lower().strip()
+        normalized_phone = payload.phone.strip() if payload.phone else None
+
+        # 1. Lookup applicant User by email and by phone
+        existing_user_by_email = await user_repo.get_by_email(normalized_email)
+        existing_user_by_phone = (
+            await user_repo.get_by_phone(normalized_phone) if normalized_phone else None
+        )
+
+        if (
+            existing_user_by_email is not None
+            and existing_user_by_phone is not None
+            and existing_user_by_email.id != existing_user_by_phone.id
+        ):
+            raise ConflictError(
+                "An application or volunteer already exists for this email or phone number."
+            )
+
+        applicant_user = existing_user_by_email or existing_user_by_phone
+
+        if applicant_user is not None:
+            # Check if target applicant already has an application or profile
+            existing_app = await self._repo.get_application_by_user_id(applicant_user.id)
+            existing_profile = await self._repo.get_profile_by_user_id(applicant_user.id)
+
+            if existing_profile is not None:
+                raise ConflictError(
+                    "An application or volunteer already exists for this email or phone number."
+                )
+
+            if existing_app is not None:
+                if existing_app.status == ApplicationStatus.REJECTED:
+                    # Reapplication after rejection
+                    existing_app.status = ApplicationStatus.SUBMITTED
+                    existing_app.emergency_contact_name = (
+                        payload.emergency_contact_name or payload.full_name
+                    )
+                    existing_app.emergency_contact_phone = (
+                        payload.emergency_contact_phone or payload.phone
+                    )
+                    existing_app.applied_role = payload.applied_role or payload.preferred_role
+                    existing_app.skills = payload.skills
+                    existing_app.availability = payload.availability
+                    existing_app.notes = payload.notes
+                    existing_app.medical_conditions = payload.medical_conditions
+                    existing_app.animal_handling_experience = (
+                        payload.animal_handling_experience or payload.animal_handling
+                    )
+                    existing_app.reviewed_by = None
+                    existing_app.reviewed_at = None
+                    existing_app.rejection_reason = None
+                    await self._repo._session.flush()
+                    res = await self._repo.get_application_by_id(existing_app.id)
+                    if res is None:
+                        raise NotFoundError("Failed to fetch re-submitted volunteer application.")
+
+                    if self._audit:
+                        await self._audit.record(
+                            event_type=AuthAuditEventType.VOLUNTEER_APPLICATION_SUBMITTED,
+                            actor_id=actor_id,
+                            ip_address=ip_address or "",
+                            user_agent="",
+                            metadata={
+                                "application_id": str(res.id),
+                                "user_id": str(applicant_user.id),
+                                "action": "admin_intake_reapplication",
+                            },
+                        )
+                    return res
+                else:
+                    raise ConflictError(
+                        "An application or volunteer already exists for this email or phone number."
+                    )
+        else:
+            # Create new applicant User record
+            default_role = await user_repo.get_default_role()
+            random_pw = generate_opaque_token()
+            hashed_pw = await asyncio.to_thread(hash_password, random_pw)
+
+            try:
+                new_user = User(
+                    id=uuid.uuid4(),
+                    email=normalized_email,
+                    full_name=payload.full_name,
+                    phone=normalized_phone,
+                    hashed_password=hashed_pw,
+                    is_active=True,
+                    is_verified=False,
+                )
+                if default_role is not None:
+                    new_user.roles.append(default_role)
+
+                applicant_user = await user_repo.create(new_user)
+            except IntegrityError as err:
+                await self._repo._session.rollback()
+                raise ConflictError(
+                    "An application or volunteer already exists for this email or phone number."
+                ) from err
+            except Exception:
+                await self._repo._session.rollback()
+                raise
+
+        contact_name = payload.emergency_contact_name or payload.full_name
+        contact_phone = payload.emergency_contact_phone or payload.phone
+
+        try:
+            application = VolunteerApplication(
+                user_id=applicant_user.id,
+                emergency_contact_name=contact_name,
+                emergency_contact_phone=contact_phone,
+                applied_role=payload.applied_role or payload.preferred_role,
+                skills=payload.skills,
+                availability=payload.availability,
+                notes=payload.notes,
+                medical_conditions=payload.medical_conditions,
+                animal_handling_experience=(
+                    payload.animal_handling_experience or payload.animal_handling
+                ),
+                status=ApplicationStatus.SUBMITTED,
+            )
+            await self._repo.create_application(application)
+            res = await self._repo.get_application_by_id(application.id)
+            if res is None:
+                raise NotFoundError("Failed to fetch newly created volunteer application.")
+        except IntegrityError as err:
+            await self._repo._session.rollback()
+            raise ConflictError(
+                "An application or volunteer already exists for this email or phone number."
+            ) from err
+        except Exception:
+            await self._repo._session.rollback()
+            raise
+
+        if self._audit:
+            await self._audit.record(
+                event_type=AuthAuditEventType.VOLUNTEER_APPLICATION_SUBMITTED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "application_id": str(res.id),
+                    "user_id": str(applicant_user.id),
+                    "intake_by_admin": True,
+                },
+            )
+
         return res
 
     async def get_application_by_user(self, user_id: uuid.UUID) -> VolunteerApplication | None:

@@ -34,6 +34,7 @@ from pawguard.modules.volunteer.schemas import (
     ShiftAttendanceNoShow,
     ShiftAttendanceResponse,
     ShiftAttendanceWithShiftResponse,
+    VolunteerAdminIntakeRequest,
     VolunteerApplicationReject,
     VolunteerApplicationResponse,
     VolunteerCheckInRequest,
@@ -88,6 +89,32 @@ async def apply_to_volunteer(
     return ApiResponse(
         data=VolunteerApplicationResponse.model_validate(application),
         message="Volunteer application submitted successfully.",
+    )
+
+
+@router.post(
+    "/admin/intake",
+    response_model=ApiResponse[VolunteerApplicationResponse],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("volunteer:update"))],
+    summary="Volunteer Coordinator administrative intake for a new applicant",
+)
+async def admin_volunteer_intake(
+    payload: VolunteerAdminIntakeRequest,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: VolunteerService = Depends(get_volunteer_service),
+) -> ApiResponse[VolunteerApplicationResponse]:
+    """Administrative intake endpoint for Volunteer Coordinators to register a new applicant."""
+    ip = request.client.host if request.client else None
+    application = await service.admin_volunteer_intake(
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=VolunteerApplicationResponse.model_validate(application),
+        message="Volunteer application registered successfully.",
     )
 
 

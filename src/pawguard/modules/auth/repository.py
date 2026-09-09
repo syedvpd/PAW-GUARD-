@@ -56,6 +56,14 @@ class UserRepository:
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    async def get_by_phone(self, phone: str) -> User | None:
+        stmt = (
+            select(User)
+            .options(selectinload(User.roles).selectinload(Role.permissions))
+            .where(User.phone == phone, User.deleted_at.is_(None))
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
     async def create(self, user: User) -> User:
         self._session.add(user)
         await self._session.flush()

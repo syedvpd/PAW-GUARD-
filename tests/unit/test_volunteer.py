@@ -24,6 +24,7 @@ from pawguard.modules.volunteer.models import (
 )
 from pawguard.modules.volunteer.repository import VolunteerRepository
 from pawguard.modules.volunteer.schemas import (
+    VolunteerAdminIntakeRequest,
     VolunteerProfileCreate,
     VolunteerProfileUpdate,
     VolunteerShiftCreate,
@@ -120,6 +121,312 @@ class TestVolunteerService:
                     emergency_contact_phone="+123",
                 ),
             )
+
+    @pytest.mark.asyncio
+    async def test_admin_volunteer_intake_new_applicant(self, mock_repo):
+        coordinator_id = uuid.uuid4()
+        applicant_user_id = uuid.uuid4()
+        app_id = uuid.uuid4()
+
+        mock_audit = AsyncMock(spec=AuditService)
+        svc = VolunteerService(mock_repo, audit_service=mock_audit)
+
+        # Mock UserRepository calls inside admin_volunteer_intake
+        mock_user = User(
+            id=applicant_user_id,
+            email="prasad@gmail.com",
+            phone="6303001088",
+            full_name="Prasad",
+        )
+        mock_app = VolunteerApplication(
+            id=app_id,
+            user_id=applicant_user_id,
+            status=ApplicationStatus.SUBMITTED,
+            emergency_contact_name="Prasad",
+            emergency_contact_phone="6303001088",
+            applied_role="Shelter Support",
+            availability="Weekends & Mornings",
+            notes="yeah have some experience with taking care of the pets",
+        )
+
+        with (
+            patch(
+                "pawguard.modules.auth.repository.UserRepository.get_by_email",
+                AsyncMock(return_value=None),
+            ),
+            patch(
+                "pawguard.modules.auth.repository.UserRepository.get_by_phone",
+                AsyncMock(return_value=None),
+            ),
+            patch(
+                "pawguard.modules.auth.repository.UserRepository.get_default_role",
+                AsyncMock(return_value=None),
+            ),
+            patch(
+                "pawguard.modules.auth.repository.UserRepository.create",
+                AsyncMock(return_value=mock_user),
+            ),
+        ):
+            mock_repo.create_application.return_value = None
+            mock_repo.get_application_by_id.return_value = mock_app
+
+            payload = VolunteerAdminIntakeRequest(
+                full_name="Prasad",
+                email="prasad@gmail.com",
+                phone="6303001088",
+                preferred_role="Shelter Support",
+                availability="Weekends & Mornings",
+                notes="yeah have some experience with taking care of the pets",
+            )
+
+            res = await svc.admin_volunteer_intake(
+                payload,
+                actor_id=coordinator_id,
+                ip_address="127.0.0.1",
+            )
+
+            assert res.id == app_id
+            assert res.user_id == applicant_user_id
+            assert res.user_id != coordinator_id
+            mock_audit.record.assert_awaited_once()
+            audit_kwargs = mock_audit.record.call_args.kwargs
+            assert audit_kwargs["actor_id"] == coordinator_id
+            assert audit_kwargs["metadata"]["user_id"] == str(applicant_user_id)
+
+    @pytest.mark.asyncio
+    async def test_admin_volunteer_intake_second_new_applicant(self, mock_repo):
+        coordinator_id = uuid.uuid4()
+        bruce_id = uuid.uuid4()
+
+        svc = VolunteerService(mock_repo)
+        mock_user = User(
+            id=bruce_id,
+            email="unique-bruce@example.com",
+            phone="unique phone",
+            full_name="Bruce",
+        )
+        mock_app = VolunteerApplication(
+            id=uuid.uuid4(),
+            user_id=bruce_id,
+            status=ApplicationStatus.SUBMITTED,
+            emergency_contact_name="Bruce",
+            emergency_contact_phone="unique phone",
+        )
+
+        with (
+            patch(
+                "pawguard.modules.auth.repository.UserRepository.get_by_email",
+                AsyncMock(return_value=None),
+            ),
+            patch(
+                "pawguard.modules.auth.repository.UserRepository.get_by_phone",
+                AsyncMock(return_value=None),
+            ),
+            patch(
+                "pawguard.modules.auth.repository.UserRepository.get_default_role",
+                AsyncMock(return_value=None),
+            ),
+            patch(
+                "pawguard.modules.auth.repository.UserRepository.create",
+                AsyncMock(return_value=mock_user),
+            ),
+        ):
+            mock_repo.create_application.return_value = None
+            mock_repo.get_application_by_id.return_value = mock_app
+
+            payload = VolunteerAdminIntakeRequest(
+                full_name="Bruce",
+                email="unique-bruce@example.com",
+                phone="unique phone",
+            )
+
+            res = await svc.admin_volunteer_intake(
+                payload,
+                actor_id=coordinator_id,
+            )
+            assert res.user_id == bruce_id
+            assert res.user_id != coordinator_id
+
+    @pytest.mark.asyncio
+    async def test_admin_volunteer_intake_duplicate_email(self, mock_repo):
+        coordinator_id = uuid.uuid4()
+        existing_applicant_id = uuid.uuid4()
+        svc = VolunteerService(mock_repo)
+
+        existing_user = User(
+            id=existing_applicant_id,
+            email="prasad@gmail.com",
+            phone="6303001088",
+            full_name="Prasad",
+        )
+        existing_app = VolunteerApplication(
+            id=uuid.uuid4(),
+            user_id=existing_applicant_id,
+            status=ApplicationStatus.SUBMITTED,
+            emergency_contact_name="Prasad",
+            emergency_contact_phone="6303001088",
+        )
+
+        mock_repo.get_application_by_user_id.return_value = existing_app
+        mock_repo.get_profile_by_user_id.return_value = None
+
+        with (
+            patch(
+                "pawguard.modules.auth.repository.UserRepository.get_by_email",
+                AsyncMock(return_value=existing_user),
+            ),
+            patch(
+                "pawguard.modules.auth.repository.UserRepository.get_by_phone",
+                AsyncMock(return_value=None),
+            ),
+        ):
+            payload = VolunteerAdminIntakeRequest(
+                full_name="Prasad",
+                email="prasad@gmail.com",
+                phone="6303001088",
+            )
+            with pytest.raises(ConflictError, match="already exists"):
+                await svc.admin_volunteer_intake(payload, actor_id=coordinator_id)
+
+    @pytest.mark.asyncio
+    async def test_admin_volunteer_intake_duplicate_phone(self, mock_repo):
+        coordinator_id = uuid.uuid4()
+        existing_applicant_id = uuid.uuid4()
+        svc = VolunteerService(mock_repo)
+
+        existing_user = User(
+            id=existing_applicant_id,
+            email="other@gmail.com",
+            phone="6303001088",
+            full_name="Other",
+        )
+        existing_app = VolunteerApplication(
+            id=uuid.uuid4(),
+            user_id=existing_applicant_id,
+            status=ApplicationStatus.SUBMITTED,
+            emergency_contact_name="Other",
+            emergency_contact_phone="6303001088",
+        )
+
+        mock_repo.get_application_by_user_id.return_value = existing_app
+        mock_repo.get_profile_by_user_id.return_value = None
+
+        with (
+            patch(
+                "pawguard.modules.auth.repository.UserRepository.get_by_email",
+                AsyncMock(return_value=None),
+            ),
+            patch(
+                "pawguard.modules.auth.repository.UserRepository.get_by_phone",
+                AsyncMock(return_value=existing_user),
+            ),
+        ):
+            payload = VolunteerAdminIntakeRequest(
+                full_name="Different Name",
+                email="newemail@gmail.com",
+                phone="6303001088",
+            )
+            with pytest.raises(ConflictError, match="already exists"):
+                await svc.admin_volunteer_intake(payload, actor_id=coordinator_id)
+
+    @pytest.mark.asyncio
+    async def test_admin_volunteer_intake_coordinator_profile_does_not_prevent_intake(
+        self, mock_repo
+    ):
+        """Regression test: Coordinator having an active volunteer application or profile
+        must NOT block intake for new applicants."""
+        coordinator_id = uuid.uuid4()
+        applicant_id = uuid.uuid4()
+        svc = VolunteerService(mock_repo)
+
+        # Coordinator has their own profile/application
+        coordinator_app = VolunteerApplication(
+            id=uuid.uuid4(),
+            user_id=coordinator_id,
+            status=ApplicationStatus.APPROVED,
+            emergency_contact_name="Coord",
+            emergency_contact_phone="999",
+        )
+        mock_repo.get_application_by_user_id.side_effect = lambda uid: (
+            coordinator_app if uid == coordinator_id else None
+        )
+        mock_repo.get_profile_by_user_id.return_value = None
+
+        mock_user = User(
+            id=applicant_id,
+            email="newapplicant@example.com",
+            phone="1112223333",
+            full_name="New Applicant",
+        )
+        mock_app = VolunteerApplication(
+            id=uuid.uuid4(),
+            user_id=applicant_id,
+            status=ApplicationStatus.SUBMITTED,
+            emergency_contact_name="New Applicant",
+            emergency_contact_phone="1112223333",
+        )
+
+        with (
+            patch(
+                "pawguard.modules.auth.repository.UserRepository.get_by_email",
+                AsyncMock(return_value=None),
+            ),
+            patch(
+                "pawguard.modules.auth.repository.UserRepository.get_by_phone",
+                AsyncMock(return_value=None),
+            ),
+            patch(
+                "pawguard.modules.auth.repository.UserRepository.get_default_role",
+                AsyncMock(return_value=None),
+            ),
+            patch(
+                "pawguard.modules.auth.repository.UserRepository.create",
+                AsyncMock(return_value=mock_user),
+            ),
+        ):
+            mock_repo.create_application.return_value = None
+            mock_repo.get_application_by_id.return_value = mock_app
+
+            payload = VolunteerAdminIntakeRequest(
+                full_name="New Applicant",
+                email="newapplicant@example.com",
+                phone="1112223333",
+            )
+            res = await svc.admin_volunteer_intake(payload, actor_id=coordinator_id)
+            assert res.user_id == applicant_id
+            assert res.user_id != coordinator_id
+
+    @pytest.mark.asyncio
+    async def test_admin_volunteer_intake_transaction_rollback_on_failure(self, mock_repo):
+        coordinator_id = uuid.uuid4()
+        svc = VolunteerService(mock_repo)
+
+        mock_repo.create_application.side_effect = Exception("DB error during application insert")
+
+        with (
+            patch(
+                "pawguard.modules.auth.repository.UserRepository.get_by_email",
+                AsyncMock(return_value=None),
+            ),
+            patch(
+                "pawguard.modules.auth.repository.UserRepository.get_by_phone",
+                AsyncMock(return_value=None),
+            ),
+            patch(
+                "pawguard.modules.auth.repository.UserRepository.get_default_role",
+                AsyncMock(return_value=None),
+            ),
+            patch("pawguard.modules.auth.repository.UserRepository.create", AsyncMock()),
+        ):
+            payload = VolunteerAdminIntakeRequest(
+                full_name="Test Fail",
+                email="fail@example.com",
+                phone="0000000000",
+            )
+            with pytest.raises(Exception, match="DB error"):
+                await svc.admin_volunteer_intake(payload, actor_id=coordinator_id)
+
+            mock_repo._session.rollback.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_update_profile(self, service, mock_repo):
