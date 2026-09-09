@@ -223,9 +223,6 @@ class ShelterRepository:
         if facility_type is not None:
             filters.append(ShelterFacility.facility_type == facility_type)
 
-        count_stmt = select(func.count(ShelterFacility.id)).where(*filters)
-        total = (await self._session.execute(count_stmt)).scalar_one()
-
         stmt = select(ShelterFacility).where(*filters)
         valid_fields = {
             "name",
@@ -238,6 +235,12 @@ class ShelterRepository:
         stmt = apply_sorting(stmt, sort, valid_fields)
         stmt = stmt.offset(page_params.offset).limit(page_params.limit)
         results = (await self._session.execute(stmt)).scalars().all()
+
+        if page_params.page == 1 and len(results) < page_params.limit:
+            total = len(results)
+        else:
+            count_stmt = select(func.count(ShelterFacility.id)).where(*filters)
+            total = (await self._session.execute(count_stmt)).scalar_one()
 
         return results, total
 

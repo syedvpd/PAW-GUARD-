@@ -166,12 +166,6 @@ class DonationRepository:
         if date_to is not None:
             filters.append(Donation.created_at < date_to + timedelta(days=1))
 
-        count_stmt = select(func.count(Donation.id))
-        if filters:
-            count_stmt = count_stmt.where(*filters)
-
-        total = (await self._session.execute(count_stmt)).scalar_one()
-
         stmt = select(Donation).options(selectinload(Donation.donor), selectinload(Donation.dog))
         if filters:
             stmt = stmt.where(*filters)
@@ -179,6 +173,14 @@ class DonationRepository:
         stmt = apply_sorting(stmt, sort, self.DONATION_SORTABLE_FIELDS)
         stmt = stmt.offset(page.offset).limit(page.limit)
         results = (await self._session.execute(stmt)).scalars().all()
+
+        if page.page == 1 and len(results) < page.limit:
+            total = len(results)
+        else:
+            count_stmt = select(func.count(Donation.id))
+            if filters:
+                count_stmt = count_stmt.where(*filters)
+            total = (await self._session.execute(count_stmt)).scalar_one()
 
         return results, total
 
@@ -198,12 +200,15 @@ class DonationRepository:
         if search_filter is not None:
             stmt = stmt.where(search_filter)
 
-        count_stmt = select(func.count()).select_from(stmt.subquery())
-        total = (await self._session.execute(count_stmt)).scalar_one()
+        page_stmt = apply_sorting(stmt, sort, self.DONOR_SORTABLE_FIELDS)
+        page_stmt = page_stmt.offset(page.offset).limit(page.limit)
+        results = (await self._session.execute(page_stmt)).scalars().all()
 
-        stmt = apply_sorting(stmt, sort, self.DONOR_SORTABLE_FIELDS)
-        stmt = stmt.offset(page.offset).limit(page.limit)
-        results = (await self._session.execute(stmt)).scalars().all()
+        if page.page == 1 and len(results) < page.limit:
+            total = len(results)
+        else:
+            count_stmt = select(func.count()).select_from(stmt.subquery())
+            total = (await self._session.execute(count_stmt)).scalar_one()
 
         return results, total
 

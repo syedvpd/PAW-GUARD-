@@ -748,14 +748,18 @@ class VolunteerService:
         search: str | None = None,
         sort: SortParams | None = None,
     ) -> tuple[list[VolunteerProfile], PaginationMeta]:
-        total = await self._repo.count_profiles(status=status, search=search)
+        page = page_params or PageParams()
         profiles = await self._repo.list_profiles(
-            page_params=page_params,
+            page_params=page,
             status=status,
             search=search,
             sort=sort,
         )
-        meta = build_pagination_meta(total=total, params=page_params or PageParams())
+        if page.page == 1 and len(profiles) < page.limit:
+            total = len(profiles)
+        else:
+            total = await self._repo.count_profiles(status=status, search=search)
+        meta = build_pagination_meta(total=total, params=page)
         return list(profiles), meta
 
     async def create_shift(self, payload: VolunteerShiftCreate) -> VolunteerShift:

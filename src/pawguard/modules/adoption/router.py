@@ -16,6 +16,7 @@ from pawguard.core.bulk import (
     BulkStatusUpdateRequest,
     BulkStatusUpdateResponse,
 )
+from pawguard.core.cache_decorator import cache_response
 from pawguard.core.exceptions import ForbiddenError, ValidationFailedError, parse_enum
 from pawguard.core.pagination import PageParams, page_params
 from pawguard.core.responses import ApiResponse, PaginatedResponse
@@ -174,6 +175,7 @@ async def get_adoption_dashboard_alias(
     "/applications",
     response_model=PaginatedResponse[AdoptionApplicationResponse],
 )
+@cache_response(ttl_seconds=60, namespace="adoptions")
 async def list_applications(
     page: PageParams = Depends(page_params),
     sort: SortParams = Depends(sort_params),

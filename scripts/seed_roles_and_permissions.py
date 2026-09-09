@@ -669,7 +669,7 @@ async def reconcile_standard_accounts(
     from pawguard.modules.auth.models import Role, User, UserRole
 
     now = datetime.now(UTC)
-    pw_hash = hash_password("PawGuard@2026")
+    pw_hash: str | None = None
 
     roles = (await session.execute(select(Role))).scalars().all()
     roles_cache = {r.name: r for r in roles}
@@ -688,6 +688,8 @@ async def reconcile_standard_accounts(
         target_role = roles_cache.get(role_name)
 
         if user is None:
+            if pw_hash is None:
+                pw_hash = hash_password("PawGuard@2026")
             user = User(
                 email=normalized_email,
                 full_name=full_name,
@@ -706,22 +708,41 @@ async def reconcile_standard_accounts(
             if verbose:
                 print(f"  [CREATED] {full_name} ({normalized_email}) with role '{role_name}'")
         else:
-            user.deleted_at = None
-            user.hashed_password = pw_hash
-            user.is_active = True
-            user.is_verified = True
-            user.failed_login_count = 0
-            user.locked_until = None
+            changed = False
+            if user.deleted_at is not None:
+                user.deleted_at = None
+                changed = True
+            if not user.is_active:
+                user.is_active = True
+                changed = True
+            if not user.is_verified:
+                user.is_verified = True
+                changed = True
+            if user.failed_login_count != 0:
+                user.failed_login_count = 0
+                changed = True
+            if user.locked_until is not None:
+                user.locked_until = None
+                changed = True
             if not user.email_verified_at:
                 user.email_verified_at = now
+                changed = True
+
+            if not user.hashed_password:
+                if pw_hash is None:
+                    pw_hash = hash_password("PawGuard@2026")
+                user.hashed_password = pw_hash
+                changed = True
 
             if target_role:
                 existing_role_ids = {r.id for r in user.roles}
                 if target_role.id not in existing_role_ids:
                     user.roles.append(target_role)
-            updated_count += 1
-            if verbose:
-                print(f"  [SYNCED] {full_name} ({normalized_email})")
+                    changed = True
+            if changed:
+                updated_count += 1
+                if verbose:
+                    print(f"  [SYNCED] {full_name} ({normalized_email})")
 
     await session.flush()
     return {"count": updated_count, "accounts": [e[0] for e in STANDARD_OPERATIONAL_ACCOUNTS]}

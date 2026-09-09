@@ -16,6 +16,8 @@ from pawguard.modules.dog.models import (
     DogTemperament,
 )
 
+_shared_storage_service: Any = None
+
 
 class DogProfileCreate(BaseModel):
     rescue_case_id: uuid.UUID | None = None
@@ -300,7 +302,10 @@ class DogProfileResponse(BaseModel):
         if self.image_urls:
             from pawguard.services.storage_service import StorageService
 
-            s3 = StorageService()
+            global _shared_storage_service
+            if "_shared_storage_service" not in globals() or _shared_storage_service is None:
+                _shared_storage_service = StorageService()
+            s3 = _shared_storage_service
             for u in self.image_urls:
                 try:
                     fresh = s3.sign_media_url(u, prefer_public=True)

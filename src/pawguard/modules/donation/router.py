@@ -331,6 +331,7 @@ async def get_donation_history(
     response_model=PaginatedResponse[DonationResponse],
     dependencies=[Depends(require_permission("donation:read"))],
 )
+@cache_response(ttl_seconds=60, namespace="donation")
 async def list_all_donations(
     page: PageParams = Depends(page_params),
     sort: SortParams = Depends(sort_params),

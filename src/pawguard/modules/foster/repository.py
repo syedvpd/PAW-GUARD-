@@ -85,9 +85,6 @@ class FosterRepository:
         if is_available is not None:
             filters.append(FosterProfile.is_available == is_available)
 
-        count_stmt = select(func.count(FosterProfile.id)).where(*filters)
-        total = (await self._session.execute(count_stmt)).scalar_one()
-
         stmt = (
             select(FosterProfile)
             .options(selectinload(FosterProfile.user).selectinload(User.roles))
@@ -96,6 +93,12 @@ class FosterRepository:
         stmt = apply_sorting(stmt, sort, self.PROFILE_SORTABLE_FIELDS)
         stmt = stmt.offset(page.offset).limit(page.limit)
         results = (await self._session.execute(stmt)).scalars().all()
+
+        if page.page == 1 and len(results) < page.limit:
+            total = len(results)
+        else:
+            count_stmt = select(func.count(FosterProfile.id)).where(*filters)
+            total = (await self._session.execute(count_stmt)).scalar_one()
 
         return results, total
 

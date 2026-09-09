@@ -15,6 +15,7 @@ from pawguard.core.bulk import (
     BulkStatusUpdateRequest,
     BulkStatusUpdateResponse,
 )
+from pawguard.core.cache_decorator import cache_response
 from pawguard.core.exceptions import ForbiddenError, ValidationFailedError, parse_enum
 from pawguard.core.pagination import PageParams, page_params
 from pawguard.core.rate_limiter import rate_limit
@@ -489,6 +490,7 @@ async def list_shift_attendance(
     response_model=PaginatedResponse[VolunteerProfileResponse],
     dependencies=[Depends(require_permission("volunteer:update"))],
 )
+@cache_response(ttl_seconds=60, namespace="volunteer")
 async def list_profiles(
     params: PageParams = Depends(page_params),
     status: str | None = Query(

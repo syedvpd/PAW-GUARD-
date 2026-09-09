@@ -13,6 +13,7 @@ from pawguard.core.bulk import (
     BulkDeleteRequest,
     BulkDeleteResponse,
 )
+from pawguard.core.cache_decorator import cache_response
 from pawguard.core.exceptions import ForbiddenError
 from pawguard.core.pagination import PageParams, page_params
 from pawguard.core.rate_limiter import rate_limit
@@ -349,6 +350,7 @@ async def request_vet_check(
     response_model=PaginatedResponse[FosterProfileResponse],
     dependencies=[Depends(require_permission("foster:read"))],
 )
+@cache_response(ttl_seconds=60, namespace="foster")
 async def list_profiles(
     page: PageParams = Depends(page_params),
     sort: SortParams = Depends(sort_params),

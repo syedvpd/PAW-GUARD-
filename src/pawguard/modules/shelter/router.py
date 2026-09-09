@@ -15,6 +15,7 @@ from pawguard.core.bulk import (
     BulkStatusUpdateRequest,
     BulkStatusUpdateResponse,
 )
+from pawguard.core.cache_decorator import cache_response
 from pawguard.core.exceptions import parse_enum
 from pawguard.core.pagination import PageParams, page_params
 from pawguard.core.responses import ApiResponse, PaginatedResponse
@@ -107,6 +108,7 @@ async def create_facility(
     response_model=PaginatedResponse[ShelterFacilityResponse],
     dependencies=[Depends(require_permission("shelter:read"))],
 )
+@cache_response(ttl_seconds=60, namespace="shelter")
 async def list_facilities(
     page: PageParams = Depends(page_params),
     sort: SortParams = Depends(sort_params),

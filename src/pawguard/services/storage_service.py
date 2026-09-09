@@ -282,24 +282,9 @@ class StorageService:
             return self.generate_public_url(object_key)
 
         try:
-            settings = get_settings()
-            aws_secret = (
-                settings.aws_secret_access_key
-                or "905038743ca95bdc0d78e92d94693a7c2214e613242f8cc5a571f899614ebb18"  # noqa: S106
-            )
-            aws_key = settings.aws_access_key_id or "c4c02c308590632cee3571c440ae82a7"
-            supabase_s3 = boto3.client(
-                "s3",
-                endpoint_url=settings.s3_endpoint_url
-                or "https://xzxsdgobndbkufyszzul.storage.supabase.co/storage/v1/s3",
-                aws_access_key_id=aws_key,
-                aws_secret_access_key=aws_secret,
-                region_name=settings.s3_region or "ap-southeast-1",
-                config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
-            )
-            return supabase_s3.generate_presigned_url(
+            return self._client.generate_presigned_url(
                 "get_object",
-                Params={"Bucket": "pawguard-media", "Key": object_key},
+                Params={"Bucket": self._bucket or "pawguard-media", "Key": object_key},
                 ExpiresIn=expires_in,
             )
         except Exception:
