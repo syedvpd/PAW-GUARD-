@@ -113,12 +113,19 @@ class DonationService:
             object_key = self._storage.build_object_key(
                 folder="documents", filename=f"receipt_{donation.id}.pdf"
             )
-            await asyncio.to_thread(
-                self._storage.put_object,
-                object_key=object_key,
-                content=pdf_bytes,
-                content_type="application/pdf",
-            )
+            try:
+                await asyncio.to_thread(
+                    self._storage.put_object,
+                    object_key=object_key,
+                    content=pdf_bytes,
+                    content_type="application/pdf",
+                )
+            except Exception as storage_err:
+                logger.warning(
+                    "Storage put_object failed for receipt on donation %s: %s",
+                    donation.id,
+                    storage_err,
+                )
             stored = StoredFile(
                 object_key=object_key,
                 original_filename=f"tax_receipt_{donation.id}.pdf",

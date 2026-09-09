@@ -3,12 +3,14 @@
 Routers only validate and call services (RULE-004).
 """
 
+import asyncio
 import contextlib
 import uuid
 from datetime import date
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.bulk import (
@@ -18,14 +20,17 @@ from pawguard.core.bulk import (
     BulkStatusUpdateResponse,
 )
 from pawguard.core.cache_decorator import cache_response
+from pawguard.core.config import get_settings
 from pawguard.core.exceptions import (
     ForbiddenError,
     NotFoundError,
     ValidationFailedError,
     parse_enum,
 )
+from pawguard.core.logging import get_logger
 from pawguard.core.pagination import PageParams, page_params
 from pawguard.core.payments import PaymentGatewayError, get_payment_gateway
+from pawguard.core.pdf_generation import generate_tax_receipt
 from pawguard.core.pii import mask_email, mask_full_name, mask_phone
 from pawguard.core.rate_limiter import rate_limit
 from pawguard.core.responses import ApiResponse, PaginatedResponse
@@ -76,6 +81,7 @@ from pawguard.services.storage_service import StorageService
 from pawguard.workers.pool import get_arq_pool
 
 router = APIRouter(prefix="/donations", tags=["donations"])
+logger = get_logger(__name__)
 
 # Roles allowed to see unmasked donor PII (PRR §6.1).
 _UNMASKED_DONOR_PII_PERMISSIONS = {
@@ -367,43 +373,136 @@ async def list_donors(
     return PaginatedResponse(data=data, meta=result.meta)
 
 
+async def _get_or_generate_receipt_pdf(donation: Any, storage: StorageService) -> bytes:
+    pdf_bytes: bytes | None = None
+    if donation.receipt_file_key:
+        try:
+            pdf_bytes = await asyncio.to_thread(
+                storage.get_object, object_key=donation.receipt_file_key
+            )
+        except Exception:
+            pdf_bytes = None
+    if not pdf_bytes:
+        donor_name = (
+            donation.donor.user.full_name if donation.donor and donation.donor.user else "Donor"
+        )
+        settings = get_settings()
+        pdf_bytes = await asyncio.to_thread(
+            generate_tax_receipt,
+            donor_name=donor_name,
+            amount=float(donation.amount),
+            currency=donation.currency,
+            transaction_id=donation.transaction_id or str(donation.id),
+            donation_date=donation.created_at,
+            org_name=settings.org_name,
+            org_address=settings.org_address,
+        )
+    return pdf_bytes
+
+
 @router.get(
     "/{donation_id}/receipt",
     response_model=ApiResponse[DownloadUrlResponse],
 )
 async def get_donation_receipt(
     donation_id: uuid.UUID,
+    request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: DonationService = Depends(get_donation_service),
     db: AsyncSession = Depends(get_db),
     audit: AuditService = Depends(get_audit_service),
-) -> ApiResponse[DownloadUrlResponse]:
+) -> Any:
     donation = await service.get_donation(donation_id)
     is_owner = donation.donor is not None and donation.donor.user_id == current_user.user.id
     if not is_owner and not has_permission(current_user.user, "donation:read"):
         raise ForbiddenError("You do not have permission to view this receipt.")
-    if donation.status.value != "success":
+    status_str = (
+        donation.status.value if hasattr(donation.status, "value") else str(donation.status)
+    ).lower()
+    if status_str != "success":
         raise NotFoundError("Receipt is only available for successful donations.")
+
+    storage = StorageService()
+
     if not donation.receipt_file_key:
+        from pawguard.db.session import AsyncSessionLocal
         from pawguard.modules.finance.repository import FinanceRepository
         from pawguard.modules.finance.service import FinanceService
 
-        finance = FinanceService(FinanceRepository(db), audit_service=audit)
         try:
-            await finance.ensure_donation_receipt(donation_id, actor_id=current_user.id)
+            async with AsyncSessionLocal() as write_db:
+                finance = FinanceService(FinanceRepository(write_db), audit_service=audit)
+                await finance.ensure_donation_receipt(donation_id, actor_id=current_user.id)
+                await write_db.commit()
+            donation = await service.get_donation(donation_id)
         except Exception as exc:
-            raise NotFoundError("Failed to generate receipt for this donation.") from exc
-        donation = await service.get_donation(donation_id)
-    if not donation.receipt_file_key:
-        raise NotFoundError("Receipt not yet generated for this donation.")
-    storage = StorageService()
-    download_url = storage.generate_presigned_download_url(object_key=donation.receipt_file_key)
+            logger.warning(
+                "ensure_donation_receipt_failed",
+                donation_id=str(donation_id),
+                error=str(exc),
+            )
+
+    accept = request.headers.get("accept", "").lower()
+    format_param = (request.query_params.get("format") or "").lower()
+    download_param = (request.query_params.get("download") or "").lower()
+    if "application/pdf" in accept or format_param == "pdf" or download_param in ("true", "1"):
+        pdf_bytes = await _get_or_generate_receipt_pdf(donation, storage)
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="tax_receipt_{donation.id}.pdf"',
+                "Content-Type": "application/pdf",
+            },
+        )
+
+    download_url = (
+        storage.generate_presigned_download_url(object_key=donation.receipt_file_key)
+        if donation.receipt_file_key
+        else None
+    )
+    if not download_url or "token=" in download_url:
+        download_url = f"/api/v1/donations/{donation.id}/receipt?format=pdf"
+
     return ApiResponse(
         data=DownloadUrlResponse(
             download_url=download_url,
-            object_key=donation.receipt_file_key,
+            object_key=donation.receipt_file_key or f"documents/receipt_{donation.id}.pdf",
             file_id=donation.id,
         ),
+    )
+
+
+@router.get(
+    "/{donation_id}/receipt/download",
+)
+async def download_donation_receipt_file(
+    donation_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: DonationService = Depends(get_donation_service),
+    db: AsyncSession = Depends(get_db),
+    audit: AuditService = Depends(get_audit_service),
+) -> Response:
+    donation = await service.get_donation(donation_id)
+    is_owner = donation.donor is not None and donation.donor.user_id == current_user.user.id
+    if not is_owner and not has_permission(current_user.user, "donation:read"):
+        raise ForbiddenError("You do not have permission to view this receipt.")
+    status_str = (
+        donation.status.value if hasattr(donation.status, "value") else str(donation.status)
+    ).lower()
+    if status_str != "success":
+        raise NotFoundError("Receipt is only available for successful donations.")
+
+    storage = StorageService()
+    pdf_bytes = await _get_or_generate_receipt_pdf(donation, storage)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="tax_receipt_{donation.id}.pdf"',
+            "Content-Type": "application/pdf",
+        },
     )
 
 

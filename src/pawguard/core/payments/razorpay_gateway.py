@@ -117,12 +117,17 @@ class RazorpayGateway(PaymentGateway):
 
         body = json.loads(payload)
         event_type = body.get("event", "")
-        payment_entity = body.get("payload", {}).get("payment", {}).get("entity", {})
+        payload_data = body.get("payload", {})
+        payment_entity = payload_data.get("payment", {}).get("entity", {})
+        order_entity = payload_data.get("order", {}).get("entity", {})
+
+        order_id = payment_entity.get("order_id") or order_entity.get("id")
+        payment_id = payment_entity.get("id") or order_entity.get("payment_id")
 
         return WebhookEvent(
             event_type=event_type,
-            order_id=payment_entity.get("order_id"),
-            payment_id=payment_entity.get("id"),
-            is_success=event_type == "payment.captured",
+            order_id=order_id,
+            payment_id=payment_id,
+            is_success=event_type in ("payment.captured", "order.paid"),
             raw_payload=body,
         )

@@ -53,7 +53,7 @@ STORIES = [
             "recovered, happy family dog who loves weekend trips to Cubbon "
             "Park and is famously afraid of the neighbor's vacuum cleaner."
         ),
-        "hero_image_url": "https://images.dog.ceo/breeds/retriever-indian/n02110185_10369.jpg",
+        "hero_image_url": "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/blog%20success%20stories/pexels-anny-patterson-2163004403-38626454.jpg",
         "dog_registration": "DOG-2026-0001",
     },
     {
@@ -73,7 +73,7 @@ STORIES = [
             "a gentle companion. Bella now enjoys long morning walks and has "
             "become the beloved matriarch of the Patel's small farm."
         ),
-        "hero_image_url": "https://images.dog.ceo/breeds/labrador/n02099712_4497.jpg",
+        "hero_image_url": "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/adoption%20images/pexels-kyoz-27732479.jpg",
         "dog_registration": "DOG-2026-0002",
     },
     {
@@ -92,7 +92,7 @@ STORIES = [
             "the pediatric oncology ward every weekend, bringing smiles to "
             "children undergoing treatment."
         ),
-        "hero_image_url": "https://images.dog.ceo/breeds/germanshepherd/n02106625_22496.jpg",
+        "hero_image_url": "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/blog%20success%20stories/pexels-evlivanburak-10996406.jpg",
         "dog_registration": "DOG-2026-0003",
     },
     {
@@ -111,26 +111,16 @@ STORIES = [
             "She sleeps on my bed and I read her stories. She is my best "
             "friend.' That letter is now framed in our shelter lobby."
         ),
-        "hero_image_url": "https://images.dog.ceo/breeds/beagle/n02088364_12628.jpg",
+        "hero_image_url": "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/blog%20success%20stories/pexels-humanistagram-12732006.jpg",
         "dog_registration": "DOG-2026-0004",
     },
     {
         "title": "Max the Marathon Runner",
         "summary": (
             "Once a stray who flinched at raised hands, Max now runs 10Ks "
-            "with his adopter every weekend."
-        ),
-        "body": (
-            "Max came to us with clear signs of past abuse - he flinched at "
-            "any sudden movement and cowered at raised hands. Our "
-            "behavioral team worked with him for months, gradually building "
-            "his confidence.\n\n"
-            "Rohan, a marathon runner, met Max at an adoption drive. He was "
-            "drawn to Max's quiet dignity. Today, Max completes 10K runs "
-            "alongside Rohan every Sunday morning and has become a local "
             "celebrity in their running club."
         ),
-        "hero_image_url": "https://images.dog.ceo/breeds/retriever-golden/n02099601_3787.jpg",
+        "hero_image_url": "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/blog%20success%20stories/pexels-gustavodenuncio-26607813.jpg",
         "dog_registration": "DOG-2026-0005",
     },
     {
@@ -150,7 +140,7 @@ STORIES = [
             "festive treats, and her first family photo. She has since "
             "become the official greeter at the Kapoor residence."
         ),
-        "hero_image_url": "https://images.dog.ceo/breeds/cavalier-king-charles-spaniel/n02085711_3676.jpg",
+        "hero_image_url": "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/blog%20success%20stories/pexels-mohit-chanderh-129199578-18109070.jpg",
         "dog_registration": "DOG-2026-0006",
     },
 ]

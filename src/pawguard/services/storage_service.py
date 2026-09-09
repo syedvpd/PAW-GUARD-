@@ -188,39 +188,98 @@ class StorageService:
             endpoint = (self._endpoint or "https://pawguard-media.s3.amazonaws.com").rstrip("/")
             return f"{endpoint}/{bucket}/{object_key}?token={uuid.uuid4()}"
 
-    def sign_media_url(self, url_or_key: str | None, expires_in: int = 604800) -> str | None:
+    def extract_object_key(self, url_or_key: str | None) -> str:
+        """Extract object key from a full URL or relative path."""
+        if not url_or_key:
+            return ""
+        if not url_or_key.startswith("http://") and not url_or_key.startswith("https://"):
+            return url_or_key.lstrip("/")
+        import urllib.parse
+
+        parsed = urllib.parse.urlparse(url_or_key)
+        path = urllib.parse.unquote(parsed.path)
+        for prefix in [
+            "/api/v1/storage/media/thumb/",
+            "/api/v1/storage/media/card/",
+            "/api/v1/storage/media/mobile/",
+            "/api/v1/storage/media/detail/",
+            "/api/v1/storage/media/original/",
+            "/storage/v1/s3/pawguard-media/",
+            "/storage/v1/object/public/pawguard-media/",
+            "/storage/v1/object/sign/pawguard-media/",
+            "/pawguard-media/",
+        ]:
+            if path.startswith(prefix):
+                path = path[len(prefix) :]
+                break
+        return path.lstrip("/")
+
+    def get_variant_url(self, url_or_key: str | None, variant: str = "card") -> str | None:
+        """Construct a stable, CDN-cacheable responsive variant URL."""
+        if not url_or_key:
+            return None
+        key = self.extract_object_key(url_or_key)
+        if not key:
+            return url_or_key
+        import urllib.parse
+
+        encoded = urllib.parse.quote(key, safe="/")
+        return f"/api/v1/storage/media/{variant}/{encoded}"
+
+    def get_responsive_variants(self, url_or_key: str | None) -> dict[str, str]:
+        """Return full responsive variants map for an image."""
+        if not url_or_key:
+            return {}
+        key = self.extract_object_key(url_or_key)
+        if not key:
+            return {"original": url_or_key}
+        import urllib.parse
+
+        encoded = urllib.parse.quote(key, safe="/")
+        return {
+            "thumb": f"/api/v1/storage/media/thumb/{encoded}",
+            "card": f"/api/v1/storage/media/card/{encoded}",
+            "mobile": f"/api/v1/storage/media/card/{encoded}",
+            "detail": f"/api/v1/storage/media/detail/{encoded}",
+            "original": self.generate_public_url(key),
+        }
+
+    def sign_media_url(
+        self, url_or_key: str | None, expires_in: int = 604800, prefer_public: bool = False
+    ) -> str | None:
         """Dynamically refresh or generate a fresh signed Supabase / S3 download URL.
 
         Ensures that media URLs returned to mobile and web clients are ALWAYS freshly
         signed and valid, preventing expired 400 ExpiredToken errors.
+        For public assets or when prefer_public is True, returns stable public URLs
+        to maximize edge CDN caching and avoid query string cache-busting.
         """
         if not url_or_key:
             return None
-        import urllib.parse
 
         # If it is a third-party non-presigned external URL (e.g. Unsplash), return as-is
         if url_or_key.startswith("http://") or url_or_key.startswith("https://"):
             if "X-Amz-Algorithm" not in url_or_key and "storage.supabase.co" not in url_or_key:
                 return url_or_key
 
-            # Extract the raw object key from the Supabase / S3 URL path
-            parsed = urllib.parse.urlparse(url_or_key)
-            path = urllib.parse.unquote(parsed.path)
-            for prefix in [
-                "/storage/v1/s3/pawguard-media/",
-                "/storage/v1/object/public/pawguard-media/",
-                "/storage/v1/object/sign/pawguard-media/",
-                "/pawguard-media/",
-            ]:
-                if path.startswith(prefix):
-                    path = path[len(prefix) :]
-                    break
-            object_key = path.lstrip("/")
-        else:
-            object_key = url_or_key.lstrip("/")
-
+        object_key = self.extract_object_key(url_or_key)
         if not object_key:
             return url_or_key
+
+        # Public assets (adoption images, dog photos, CMS, blog success stories)
+        is_public_folder = any(
+            object_key.lower().startswith(p)
+            for p in [
+                "adoption images/",
+                "blog success stories/",
+                "cms/",
+                "photos/",
+                "dogs/",
+                "public/",
+            ]
+        )
+        if prefer_public or is_public_folder:
+            return self.generate_public_url(object_key)
 
         try:
             settings = get_settings()

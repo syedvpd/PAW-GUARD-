@@ -53,9 +53,7 @@ TEST_DOGS = [
         "is_spayed_neutered": True,
         "is_quarantine_passed": True,
         "image_urls": [
-            "https://images.dog.ceo/breeds/retriever-indian/n02110185_10369.jpg",
-            "https://images.dog.ceo/breeds/retriever-indian/n02110185_11716.jpg",
-            "https://images.dog.ceo/breeds/retriever-indian/n02110185_13978.jpg",
+            "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/blog%20success%20stories/pexels-anny-patterson-2163004403-38626454.jpg",
         ],
     },
     {
@@ -74,8 +72,7 @@ TEST_DOGS = [
         "is_spayed_neutered": True,
         "is_quarantine_passed": True,
         "image_urls": [
-            "https://images.dog.ceo/breeds/labrador/n02099712_4497.jpg",
-            "https://images.dog.ceo/breeds/labrador/n02099712_5633.jpg",
+            "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/adoption%20images/pexels-kyoz-27732479.jpg",
         ],
     },
     {
@@ -94,8 +91,7 @@ TEST_DOGS = [
         "is_spayed_neutered": True,
         "is_quarantine_passed": True,
         "image_urls": [
-            "https://images.dog.ceo/breeds/germanshepherd/n02106625_22496.jpg",
-            "https://images.dog.ceo/breeds/germanshepherd/n02106625_25931.jpg",
+            "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/blog%20success%20stories/pexels-evlivanburak-10996406.jpg",
         ],
     },
     {
@@ -114,8 +110,7 @@ TEST_DOGS = [
         "is_spayed_neutered": True,
         "is_quarantine_passed": True,
         "image_urls": [
-            "https://images.dog.ceo/breeds/beagle/n02088364_12628.jpg",
-            "https://images.dog.ceo/breeds/beagle/n02088364_15940.jpg",
+            "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/blog%20success%20stories/pexels-humanistagram-12732006.jpg",
         ],
     },
     {
@@ -134,8 +129,7 @@ TEST_DOGS = [
         "is_spayed_neutered": True,
         "is_quarantine_passed": True,
         "image_urls": [
-            "https://images.dog.ceo/breeds/retriever-golden/n02099601_3787.jpg",
-            "https://images.dog.ceo/breeds/retriever-golden/n02099601_4922.jpg",
+            "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/blog%20success%20stories/pexels-gustavodenuncio-26607813.jpg",
         ],
     },
     {
@@ -154,8 +148,7 @@ TEST_DOGS = [
         "is_spayed_neutered": False,
         "is_quarantine_passed": True,
         "image_urls": [
-            "https://images.dog.ceo/breeds/cavalier-king-charles-spaniel/n02085711_3676.jpg",
-            "https://images.dog.ceo/breeds/cavalier-king-charles-spaniel/n02085711_4051.jpg",
+            "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/blog%20success%20stories/pexels-mohit-chanderh-129199578-18109070.jpg",
         ],
     },
     {
@@ -174,8 +167,7 @@ TEST_DOGS = [
         "is_spayed_neutered": True,
         "is_quarantine_passed": True,
         "image_urls": [
-            "https://images.dog.ceo/breeds/labrador/n02099712_7229.jpg",
-            "https://images.dog.ceo/breeds/labrador/n02099712_7414.jpg",
+            "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/blog%20success%20stories/pexels-gustavodenuncio-26607813.jpg",
         ],
     },
     {
@@ -194,8 +186,7 @@ TEST_DOGS = [
         "is_spayed_neutered": True,
         "is_quarantine_passed": True,
         "image_urls": [
-            "https://images.dog.ceo/breeds/poodle-standard/n02113799_4693.jpg",
-            "https://images.dog.ceo/breeds/poodle-standard/n02113799_4854.jpg",
+            "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/adoption%20images/pexels-kyoz-27732479.jpg",
         ],
     },
     {
@@ -214,8 +205,7 @@ TEST_DOGS = [
         "is_spayed_neutered": True,
         "is_quarantine_passed": True,
         "image_urls": [
-            "https://images.dog.ceo/breeds/boxer/n02108089_6165.jpg",
-            "https://images.dog.ceo/breeds/boxer/n02108089_6724.jpg",
+            "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/blog%20success%20stories/pexels-evlivanburak-10996406.jpg",
         ],
     },
     {
@@ -234,8 +224,7 @@ TEST_DOGS = [
         "is_spayed_neutered": True,
         "is_quarantine_passed": True,
         "image_urls": [
-            "https://images.dog.ceo/breeds/pomeranian/n02112018_6584.jpg",
-            "https://images.dog.ceo/breeds/pomeranian/n02112018_7113.jpg",
+            "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/blog%20success%20stories/pexels-mohit-chanderh-129199578-18109070.jpg",
         ],
     },
 ]
@@ -257,7 +246,7 @@ ADOPTED_SEED_DOGS = [
         "is_spayed_neutered": True,
         "is_quarantine_passed": True,
         "image_urls": [
-            "https://images.dog.ceo/breeds/retriever-golden/n02099601_1028.jpg",
+            "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/blog%20success%20stories/pexels-gustavodenuncio-26607813.jpg",
         ],
     },
 ]

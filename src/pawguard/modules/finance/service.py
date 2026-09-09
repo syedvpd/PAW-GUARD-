@@ -1105,7 +1105,9 @@ class FinanceService:
             original_amount=original_amount,
             refund_amount=actual_refund,
             currency=donation.currency or "USD",
-            status=donation.status.value,
+            status=(
+                donation.status.value if hasattr(donation.status, "value") else str(donation.status)
+            ),
             transaction_number=tx_number,
             refunded_at=datetime.now(UTC),
             reason=reason,
@@ -1122,7 +1124,10 @@ class FinanceService:
         donation = await self._repo.get_donation_by_id(donation_id)
         if not donation:
             raise NotFoundError("Donation not found.")
-        if donation.status != DonationStatus.SUCCESS:
+        status_val = (
+            donation.status.value if hasattr(donation.status, "value") else str(donation.status)
+        ).lower()
+        if status_val != "success":
             raise ValidationFailedError(
                 "80G certificates can only be generated for successful donations."
             )
@@ -1231,7 +1236,10 @@ class FinanceService:
         donation = await self._repo.get_donation_by_id(donation_id)
         if not donation:
             raise NotFoundError("Donation not found.")
-        if donation.status != DonationStatus.SUCCESS:
+        status_val = (
+            donation.status.value if hasattr(donation.status, "value") else str(donation.status)
+        ).lower()
+        if status_val != "success":
             raise ValidationFailedError("Receipts can only be generated for successful donations.")
         if donation.receipt_file_key:
             return donation.receipt_file_key

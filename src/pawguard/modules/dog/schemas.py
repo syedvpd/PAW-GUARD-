@@ -145,7 +145,8 @@ class DogProfileCreate(BaseModel):
             urls = [str(u).strip() for u in raw_urls if u]
             if photo and str(photo).strip() not in urls:
                 urls.append(str(photo).strip())
-            data["image_urls"] = urls
+            valid_urls = [u for u in urls if "dog.ceo" not in u.lower()]
+            data["image_urls"] = valid_urls
 
             # 5. Age string normalization
             if data.get("estimated_age") is not None and not isinstance(
@@ -203,6 +204,29 @@ class DogProfileUpdate(BaseModel):
     foster_home_id: uuid.UUID | None = None
     is_adoptable: bool | None = Field(None, examples=[False])
     is_quarantine_passed: bool | None = Field(None, examples=[True])
+    image_urls: list[str] | None = None
+    photo_url: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _sanitize_update_images(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            photo = data.get("photo_url") or data.get("image_url")
+            raw_urls = data.get("image_urls") or data.get("photo_gallery_urls")
+            if raw_urls is not None:
+                if isinstance(raw_urls, str):
+                    raw_urls = [raw_urls]
+                elif not isinstance(raw_urls, list):
+                    raw_urls = []
+                urls = [str(u).strip() for u in raw_urls if u]
+                if photo and str(photo).strip() not in urls:
+                    urls.append(str(photo).strip())
+                data["image_urls"] = [u for u in urls if "dog.ceo" not in u.lower()]
+            elif photo:
+                photo_str = str(photo).strip()
+                if "dog.ceo" not in photo_str.lower():
+                    data["image_urls"] = [photo_str]
+        return data
 
 
 class DogStatusUpdate(BaseModel):
@@ -252,6 +276,7 @@ class DogProfileResponse(BaseModel):
     photo_gallery_urls: list[str] = Field(default_factory=list)
     photo_url: str | None = None
     image_url: str | None = None
+    photo_variants: dict[str, str] = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
 
@@ -271,21 +296,28 @@ class DogProfileResponse(BaseModel):
         so all field names are available for different web and mobile consumers,
         and dynamically convert raw S3 keys to fresh presigned download URLs."""
         resolved = []
+        variants_map: dict[str, str] = {}
         if self.image_urls:
             from pawguard.services.storage_service import StorageService
 
             s3 = StorageService()
             for u in self.image_urls:
                 try:
-                    fresh = s3.sign_media_url(u)
+                    fresh = s3.sign_media_url(u, prefer_public=True)
                     resolved.append(fresh or u)
                 except Exception:
                     resolved.append(u)
+            if self.image_urls:
+                variants_map = s3.get_responsive_variants(self.image_urls[0])
+
         self.image_urls = resolved
         self.photo_gallery_urls = resolved
-        primary = resolved[0] if resolved else None
-        self.photo_url = primary
-        self.image_url = primary
+        self.photo_variants = variants_map
+        first = resolved[0] if resolved else None
+        if not self.photo_url:
+            self.photo_url = first
+        if not self.image_url:
+            self.image_url = first
         return self
 
     model_config = ConfigDict(from_attributes=True)
