@@ -95,7 +95,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         logger.warning("alembic_migration_auto_run_skipped_or_failed", error=str(exc))
 
     try:
-        await asyncio.wait_for(_seed_roles(), timeout=15.0)
+        await asyncio.wait_for(_seed_roles(), timeout=60.0)
     except TimeoutError:
         logger.warning("seed_roles_timed_out_skipping")
     except Exception as exc:

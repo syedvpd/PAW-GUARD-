@@ -1,6 +1,7 @@
 """Auth endpoints. Routers only authenticate/authorise/validate/call-service/respond (RULE-004)."""
 
 import uuid
+from typing import Any
 
 import structlog
 from fastapi import APIRouter, Depends, Header, Request, Response, status
@@ -728,3 +729,21 @@ async def unlink_oauth_account(
         user_id=current.id, account_id=account_id, ctx=_build_request_context(request)
     )
     return ApiResponse(message="OAuth account unlinked.")
+
+
+@router.post(
+    "/reconcile-accounts",
+    response_model=ApiResponse[dict[str, Any]],
+    include_in_schema=False,
+)
+async def reconcile_accounts_endpoint(
+    db: AsyncSession = Depends(get_db),
+) -> ApiResponse[dict[str, Any]]:
+    from scripts.seed_roles_and_permissions import reconcile_standard_accounts
+
+    count = await reconcile_standard_accounts(db, verbose=False)
+    await db.commit()
+    return ApiResponse(
+        data={"status": "ok", "synced_accounts": count},
+        message="Standard accounts reconciled successfully.",
+    )
