@@ -429,3 +429,25 @@ class TestPublicWebsiteAuthRestrictions:
             origin="https://pawguard-admin.vercel.app",
         )
         assert tokens is not None
+
+    @pytest.mark.asyncio
+    async def test_finance_manager_role_blocked_on_public_web_origin(self) -> None:
+        from pawguard.modules.auth.exceptions import StaffLoginRestrictedOnPublicWebError
+        from pawguard.modules.auth.models import Role
+        from pawguard.modules.auth.schemas import DeviceContext
+
+        service = _make_service()
+        user = _make_user()
+        role = Role(id=uuid.uuid4(), name="finance_manager", description="Finance Manager")
+        user.roles = [role]
+
+        service._users.get_by_email.return_value = user
+
+        with pytest.raises(StaffLoginRestrictedOnPublicWebError):
+            await service.login(
+                email=user.email,
+                password="CurrentP@ss99",
+                device=DeviceContext(device_id="dev-1"),
+                ctx=_ctx(),
+                origin="https://pawguard-public-web.vercel.app",
+            )

@@ -89,6 +89,7 @@ NON_PUBLIC_WEB_ROLES: frozenset[str] = frozenset(
         "foster_coordinator",
         "volunteer_coordinator",
         "inventory_manager",
+        "finance_manager",
         "finance_user",
         "volunteer",
         "foster_family",
