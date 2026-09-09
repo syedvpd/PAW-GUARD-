@@ -35,7 +35,7 @@ def _get_engine_kwargs(url: str) -> dict[str, Any]:
                 "max_overflow": _settings.database_max_overflow,
                 "pool_pre_ping": True,
                 "pool_recycle": 1800,
-                "pool_timeout": 15,
+                "pool_timeout": 30,
                 "connect_args": {"statement_cache_size": 0},
             }
         )
@@ -56,17 +56,20 @@ AsyncSessionLocal = async_sessionmaker(
 
 replica_url = _settings.database_replica_url or _settings.database_url
 
-replica_engine: AsyncEngine = create_async_engine(
-    replica_url,
-    **_get_engine_kwargs(replica_url),
-)
-
-AsyncReplicaSessionLocal = async_sessionmaker(
-    bind=replica_engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autoflush=False,
-)
+if _settings.database_replica_url and _settings.database_replica_url != _settings.database_url:
+    replica_engine: AsyncEngine = create_async_engine(
+        replica_url,
+        **_get_engine_kwargs(replica_url),
+    )
+    AsyncReplicaSessionLocal = async_sessionmaker(
+        bind=replica_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autoflush=False,
+    )
+else:
+    replica_engine = engine
+    AsyncReplicaSessionLocal = AsyncSessionLocal
 
 
 @event.listens_for(Engine, "before_cursor_execute")
