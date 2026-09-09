@@ -99,7 +99,7 @@ def create_thumbnail(content: bytes, max_size: int = 400) -> bytes | None:
         return None
 
     # Expose the correct pixel orientation and drop the EXIF block.
-    thumb = ImageOps.exif_transpose(img)
+    thumb = ImageOps.exif_transpose(img) or img
     if thumb.mode == "P":
         thumb = thumb.convert("RGBA")
     thumb.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
@@ -129,7 +129,7 @@ def optimize_image(
     except (OSError, ValueError, TypeError):
         return None
 
-    opt = ImageOps.exif_transpose(img)
+    opt = ImageOps.exif_transpose(img) or img
     if opt.mode == "P":
         opt = opt.convert("RGBA")
 
