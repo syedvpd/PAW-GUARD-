@@ -670,7 +670,7 @@ class ReportService:
         timestamps.sort()
         gaps = [
             (later - earlier).total_seconds() / 86400.0
-            for earlier, later in zip(timestamps, timestamps[1:], strict=True)
+            for earlier, later in zip(timestamps, timestamps[1:], strict=False)
         ]
         avg_movement_interval = sum(gaps) / len(gaps) if gaps else None
         loss_rate_pct = (write_off_value / total_value * 100.0) if total_value else 0.0

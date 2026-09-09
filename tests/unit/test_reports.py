@@ -528,3 +528,234 @@ class TestReportPermissionsInSeed:
             assert pc.REPORTS_EXPORT_EXCEL in perms, (
                 f"{role_name} missing {pc.REPORTS_EXPORT_EXCEL}"
             )
+
+
+class TestInventoryReportRegression:
+    @pytest.fixture
+    def mock_session(self):
+        session = AsyncMock()
+        session.execute = AsyncMock()
+        return session
+
+    @pytest.fixture
+    def service(self, mock_session):
+        return ReportService(mock_session)
+
+    @pytest.mark.asyncio
+    async def test_inventory_report_single_movement_does_not_raise_zip_error(
+        self, service, mock_session
+    ):
+        """Regression test: zip(timestamps, timestamps[1:]) with 1 movement must not raise
+
+        ValueError: zip() argument 2 is shorter than argument 1.
+        """
+        import uuid
+        from datetime import UTC, datetime
+
+        from pawguard.modules.inventory.models import InventoryItem, InventoryMovement, MovementType
+
+        item = InventoryItem(
+            id=uuid.uuid4(),
+            name="Bandages",
+            category="medical",
+            quantity=10.0,
+            unit="box",
+            reorder_threshold=5.0,
+            unit_cost=15.0,
+            expiry_date=None,
+        )
+        movement = InventoryMovement(
+            id=uuid.uuid4(),
+            item_id=item.id,
+            movement_type=MovementType.CHECK_IN,
+            quantity=10.0,
+            reference_type="purchase",
+            created_at=datetime.now(UTC),
+        )
+
+        mock_session.execute = AsyncMock(
+            side_effect=[
+                MagicMock(
+                    scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[item])))
+                ),
+                MagicMock(
+                    scalars=MagicMock(
+                        return_value=MagicMock(all=MagicMock(return_value=[movement]))
+                    )
+                ),
+                MagicMock(
+                    scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))
+                ),
+            ]
+        )
+
+        result = await service._inventory_report(None)
+        assert result["title"] == "Inventory Consumption & Expiry Audit Report"
+        assert len(result["sections"]) >= 2
+        section_titles = [s["title"] for s in result["sections"]]
+        assert "Inventory Health & Loss Audit" in section_titles
+        assert "Stock Movement & Usage Summary" in section_titles
+
+    @pytest.mark.asyncio
+    async def test_inventory_report_empty_dataset(self, service, mock_session):
+        """Empty dataset must return clean valid report with zero/empty sections without error."""
+        mock_session.execute = AsyncMock(
+            side_effect=[
+                MagicMock(
+                    scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))
+                ),
+                MagicMock(
+                    scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))
+                ),
+                MagicMock(
+                    scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))
+                ),
+            ]
+        )
+
+        result = await service._inventory_report(None)
+        assert result["title"] == "Inventory Consumption & Expiry Audit Report"
+        assert len(result["sections"]) >= 1
+        assert result["sections"][0]["title"] == "Inventory Health & Loss Audit"
+
+    @pytest.mark.asyncio
+    async def test_inventory_report_with_expired_and_reorder_items(self, service, mock_session):
+        import uuid
+        from datetime import UTC, date, datetime, timedelta
+
+        from pawguard.modules.inventory.models import (
+            InventoryItem,
+            InventoryMovement,
+            MovementType,
+            RequisitionOrder,
+            RequisitionStatus,
+        )
+
+        expired_item = InventoryItem(
+            id=uuid.uuid4(),
+            name="Old Vaccine",
+            category="medical",
+            quantity=5.0,
+            unit="vial",
+            reorder_threshold=10.0,  # Below threshold
+            unit_cost=50.0,
+            expiry_date=date.today() - timedelta(days=5),
+        )
+        movement1 = InventoryMovement(
+            id=uuid.uuid4(),
+            item_id=expired_item.id,
+            movement_type=MovementType.CHECK_IN,
+            quantity=10.0,
+            reference_type="purchase",
+            created_at=datetime.now(UTC) - timedelta(days=2),
+        )
+        movement2 = InventoryMovement(
+            id=uuid.uuid4(),
+            item_id=expired_item.id,
+            movement_type=MovementType.ADJUSTMENT,
+            quantity=-5.0,
+            reference_type="waste",
+            created_at=datetime.now(UTC),
+        )
+        req = RequisitionOrder(
+            id=uuid.uuid4(),
+            item_id=expired_item.id,
+            quantity=15.0,
+            status=RequisitionStatus.PENDING,
+        )
+
+        mock_session.execute = AsyncMock(
+            side_effect=[
+                MagicMock(
+                    scalars=MagicMock(
+                        return_value=MagicMock(all=MagicMock(return_value=[expired_item]))
+                    )
+                ),
+                MagicMock(
+                    scalars=MagicMock(
+                        return_value=MagicMock(all=MagicMock(return_value=[movement1, movement2]))
+                    )
+                ),
+                MagicMock(
+                    scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[req])))
+                ),
+            ]
+        )
+
+        result = await service._inventory_report(None)
+        section_titles = [s["title"] for s in result["sections"]]
+        assert "Inventory Health & Loss Audit" in section_titles
+        assert (
+            "Upcoming Purchase Order Requirements (Items Below Reorder Threshold)" in section_titles
+        )
+        assert "Expired Product Values Audit" in section_titles
+        assert "Stock Movement & Usage Summary" in section_titles
+        assert "Pending Purchase Requisition Orders" in section_titles
+
+    @pytest.mark.asyncio
+    async def test_generate_inventory_report_endpoint_success(self):
+        import uuid
+
+        from httpx import ASGITransport, AsyncClient
+
+        from pawguard.main import app
+        from pawguard.modules.auth.dependencies import get_current_user
+        from pawguard.modules.auth.rbac import require_permission
+        from pawguard.modules.reports.router import get_report_service
+
+        mock_svc = AsyncMock()
+        mock_svc.generate_report.return_value = {
+            "title": "Inventory Consumption & Expiry Audit Report",
+            "report_type": "inventory",
+            "format": "json",
+            "content_type": "application/json",
+            "size_bytes": 1024,
+            "filename": "inventory_report.json",
+            "download_url": "/api/v1/reports/download/inventory_report.json",
+            "generated_at": "2026-09-09T04:00:00Z",
+            "sections": [
+                {
+                    "title": "Inventory Health & Loss Audit",
+                    "headers": ["Metric", "Value"],
+                    "rows": [["Total Items", "10"]],
+                },
+                {
+                    "title": "Upcoming Purchase Order Requirements",
+                    "headers": ["Item ID", "Name", "Required Qty"],
+                    "rows": [["1", "Vaccines", "5"]],
+                },
+                {
+                    "title": "Expired Product Values Audit",
+                    "headers": ["Name", "Loss Value"],
+                    "rows": [["Old Serum", "₹500"]],
+                },
+            ],
+            "headers": ["ID", "Name"],
+            "rows": [["1", "Vaccine"]],
+        }
+
+        mock_user = MagicMock()
+        mock_user.id = uuid.uuid4()
+
+        app.dependency_overrides[require_permission("reports:create")] = lambda: None
+        app.dependency_overrides[get_current_user] = lambda: mock_user
+        app.dependency_overrides[get_report_service] = lambda: mock_svc
+
+        try:
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                res = await client.post(
+                    "/api/v1/reports/generate",
+                    json={"report_type": "inventory"},
+                )
+                assert res.status_code == 200
+                data = res.json()
+                assert data["success"] is True
+                assert data["data"]["report_type"] == "inventory"
+                assert data["data"]["title"] == "Inventory Consumption & Expiry Audit Report"
+                section_titles = [s["title"] for s in data["data"]["sections"]]
+                assert "Inventory Health & Loss Audit" in section_titles
+                assert "Upcoming Purchase Order Requirements" in section_titles
+                assert "Expired Product Values Audit" in section_titles
+        finally:
+            app.dependency_overrides.clear()
