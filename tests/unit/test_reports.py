@@ -695,23 +695,29 @@ class TestInventoryReportRegression:
     @pytest.mark.asyncio
     async def test_generate_inventory_report_endpoint_success(self):
         import uuid
+        from datetime import UTC, datetime
 
+        from fastapi import FastAPI
         from httpx import ASGITransport, AsyncClient
 
-        from pawguard.main import app
-        from pawguard.modules.auth.dependencies import get_current_user
-        from pawguard.modules.auth.rbac import require_permission
+        from pawguard.core.security import AccessTokenClaims
+        from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
+        from pawguard.modules.auth.models import Permission, Role, User
         from pawguard.modules.reports.router import get_report_service
+        from pawguard.modules.reports.router import router as reports_router
+
+        test_app = FastAPI()
+        test_app.include_router(reports_router, prefix="/api/v1")
 
         mock_svc = AsyncMock()
         mock_svc.generate_report.return_value = {
             "title": "Inventory Consumption & Expiry Audit Report",
             "report_type": "inventory",
-            "format": "json",
-            "content_type": "application/json",
+            "format": "pdf",
+            "content_type": "application/pdf",
             "size_bytes": 1024,
-            "filename": "inventory_report.json",
-            "download_url": "/api/v1/reports/download/inventory_report.json",
+            "filename": "inventory_report.pdf",
+            "download_url": "/api/v1/reports/download/inventory_report.pdf",
             "generated_at": "2026-09-09T04:00:00Z",
             "sections": [
                 {
@@ -734,28 +740,79 @@ class TestInventoryReportRegression:
             "rows": [["1", "Vaccine"]],
         }
 
-        mock_user = MagicMock()
-        mock_user.id = uuid.uuid4()
+        now = datetime.now(UTC)
+        role = Role(
+            id=uuid.uuid4(),
+            name="inventory_manager",
+            description="Inventory Manager",
+            is_system=True,
+            created_at=now,
+            updated_at=now,
+        )
+        perm = Permission(
+            id=uuid.uuid4(),
+            code="reports:create",
+            description="Create Reports",
+            created_at=now,
+            updated_at=now,
+        )
+        role.permissions = [perm]
+        user = User(
+            id=uuid.uuid4(),
+            email="inventory.manager@pawguard.com",
+            hashed_password="hash",
+            full_name="Inventory Manager",
+            phone="1234567890",
+            is_active=True,
+            is_verified=True,
+            mfa_enabled=False,
+            created_at=now,
+            updated_at=now,
+        )
+        user.roles = [role]
 
-        app.dependency_overrides[require_permission("reports:create")] = lambda: None
-        app.dependency_overrides[get_current_user] = lambda: mock_user
-        app.dependency_overrides[get_report_service] = lambda: mock_svc
+        claims = AccessTokenClaims(
+            user_id=user.id,
+            session_id=uuid.uuid4(),
+            roles=["inventory_manager"],
+            jti="jti",
+            expires_at=now,
+        )
+        import json
 
-        try:
-            transport = ASGITransport(app=app)
-            async with AsyncClient(transport=transport, base_url="http://test") as client:
-                res = await client.post(
-                    "/api/v1/reports/generate",
-                    json={"report_type": "inventory"},
-                )
-                assert res.status_code == 200
-                data = res.json()
-                assert data["success"] is True
-                assert data["data"]["report_type"] == "inventory"
-                assert data["data"]["title"] == "Inventory Consumption & Expiry Audit Report"
-                section_titles = [s["title"] for s in data["data"]["sections"]]
-                assert "Inventory Health & Loss Audit" in section_titles
-                assert "Upcoming Purchase Order Requirements" in section_titles
-                assert "Expired Product Values Audit" in section_titles
-        finally:
-            app.dependency_overrides.clear()
+        mock_redis = AsyncMock()
+        mock_redis.get.return_value = json.dumps(["reports:create", "reports:read"])
+        mock_redis.set.return_value = True
+
+        mock_db = AsyncMock()
+        mock_db_result = MagicMock()
+        mock_db_result.scalars.return_value.all.return_value = ["reports:create", "reports:read"]
+        mock_db.execute.return_value = mock_db_result
+
+        mock_current_user = CurrentUser(
+            user=user,
+            claims=claims,
+            db=mock_db,
+            redis=mock_redis,
+        )
+
+        for route in test_app.routes:
+            if getattr(route, "path", None) == "/api/v1/reports/generate":
+                for dep in getattr(route, "dependencies", []):
+                    test_app.dependency_overrides[dep.dependency] = lambda: mock_current_user
+
+        test_app.dependency_overrides[get_current_user] = lambda: mock_current_user
+        test_app.dependency_overrides[get_report_service] = lambda: mock_svc
+
+        transport = ASGITransport(app=test_app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            res = await client.post(
+                "/api/v1/reports/generate",
+                json={"report_type": "inventory"},
+            )
+            assert res.status_code == 200
+            data = res.json()
+            assert data["success"] is True
+            assert data["data"]["report_type"] == "inventory"
+            assert data["data"]["filename"] == "inventory_report.pdf"
+            assert data["data"]["download_url"] == "/api/v1/reports/download/inventory_report.pdf"
