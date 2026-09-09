@@ -635,6 +635,95 @@ async def backfill_default_role(
     return granted
 
 
+STANDARD_OPERATIONAL_ACCOUNTS = [
+    ("super.admin@pawguard.com", "Super Administrator", "super_admin"),
+    ("rescue.admin@pawguard.com", "Rescue Centre Admin", "rescue_centre_admin"),
+    ("rescue.coordinator@pawguard.com", "Rescue Coordinator", "rescue_coordinator"),
+    ("rescue.agent@pawguard.com", "Rescue Agent", "rescue_agent"),
+    ("vet@pawguard.com", "Veterinarian", "veterinarian"),
+    ("shelter.manager@pawguard.com", "Shelter Manager", "shelter_manager"),
+    ("adoption.coordinator@pawguard.com", "Adoption Coordinator", "adoption_coordinator"),
+    ("foster.coordinator@pawguard.com", "Foster Coordinator", "foster_coordinator"),
+    ("volunteer.coordinator@pawguard.com", "Volunteer Coordinator", "volunteer_coordinator"),
+    ("inventory.manager@pawguard.com", "Inventory Manager", "inventory_manager"),
+    ("finance.user@pawguard.com", "Finance User", "finance_manager"),
+    ("volunteer@pawguard.com", "Volunteer", "volunteer"),
+    ("foster.family@pawguard.com", "Foster Family", "foster_family"),
+    ("donor@pawguard.com", "Donor", "donor"),
+    ("public.user@pawguard.com", "General Public", "general_public"),
+]
+
+
+async def reconcile_standard_accounts(
+    session: AsyncSession,
+    *,
+    verbose: bool = True,
+) -> int:
+    """Ensure all 15 standard PawGuard operational and public accounts exist,
+    are active and verified, have the shared password 'PawGuard@2026', and have their role assigned.
+    """
+    from datetime import UTC, datetime
+    from sqlalchemy.orm import selectinload
+    from pawguard.core.security import hash_password
+    from pawguard.modules.auth.models import Role, User, UserRole
+
+    now = datetime.now(UTC)
+    pw_hash = hash_password("PawGuard@2026")
+
+    roles = (await session.execute(select(Role))).scalars().all()
+    roles_cache = {r.name: r for r in roles}
+
+    updated_count = 0
+    for email, full_name, role_name in STANDARD_OPERATIONAL_ACCOUNTS:
+        normalized_email = email.lower().strip()
+        user = (
+            await session.execute(
+                select(User)
+                .options(selectinload(User.roles))
+                .where(User.email == normalized_email)
+            )
+        ).scalar_one_or_none()
+
+        target_role = roles_cache.get(role_name)
+
+        if user is None:
+            user = User(
+                email=normalized_email,
+                full_name=full_name,
+                hashed_password=pw_hash,
+                is_active=True,
+                is_verified=True,
+                email_verified_at=now,
+                phone="+919876543210",
+            )
+            session.add(user)
+            await session.flush()
+            if target_role:
+                session.add(UserRole(user_id=user.id, role_id=target_role.id))
+            updated_count += 1
+            if verbose:
+                print(f"  [CREATED] {full_name} ({normalized_email}) with role '{role_name}'")
+        else:
+            user.hashed_password = pw_hash
+            user.is_active = True
+            user.is_verified = True
+            user.failed_login_count = 0
+            user.locked_until = None
+            if not user.email_verified_at:
+                user.email_verified_at = now
+
+            if target_role:
+                existing_role_ids = {r.id for r in user.roles}
+                if target_role.id not in existing_role_ids:
+                    session.add(UserRole(user_id=user.id, role_id=target_role.id))
+            updated_count += 1
+            if verbose:
+                print(f"  [SYNCED] {full_name} ({normalized_email})")
+
+    await session.flush()
+    return updated_count
+
+
 async def seed_db(label: str, database_url: str) -> None:
     if not database_url:
         print(f"SKIP [{label}]: No database URL configured.")

@@ -404,6 +404,39 @@ class TestDonationService:
         assert call_kwargs["content_type"] == "application/pdf"
         assert len(call_kwargs["content"]) > 0
 
+    @pytest.mark.asyncio
+    async def test_get_tax_receipt_status_check_handles_plain_string(self, service, mock_repo):
+        """Verify donation status is safely checked with string or enum and pending raises NotFoundError, NOT 500."""
+        from unittest.mock import MagicMock
+
+        from pawguard.modules.donation.router import get_donation_receipt
+
+        donation_id = uuid.uuid4()
+        user_id = uuid.uuid4()
+        donor = DonorProfile(id=uuid.uuid4(), user_id=user_id)
+        pending_donation = Donation(
+            id=donation_id,
+            donor=donor,
+            amount=100.0,
+            currency="INR",
+            donation_type=DonationType.ONE_TIME,
+            status="pending",
+        )
+        mock_repo.get_donation_by_id.return_value = pending_donation
+
+        curr_user = MagicMock()
+        curr_user.user = User(id=user_id, email="donor@example.com")
+
+        with pytest.raises(NotFoundError, match="only available for successful"):
+            await get_donation_receipt(
+                donation_id=donation_id,
+                request=MagicMock(),
+                current_user=curr_user,
+                service=service,
+                db=AsyncMock(),
+                audit=AsyncMock(),
+            )
+
 
 class TestSponsorshipService:
     @pytest.fixture

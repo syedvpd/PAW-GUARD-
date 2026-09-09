@@ -126,7 +126,11 @@ async def _seed_roles() -> None:
     Reconciliation only creates missing roles/permissions and grants missing
     grants (never revokes), so it is cheap enough to run on every startup.
     """
-    from scripts.seed_roles_and_permissions import backfill_default_role, reconcile_roles
+    from scripts.seed_roles_and_permissions import (
+        backfill_default_role,
+        reconcile_roles,
+        reconcile_standard_accounts,
+    )
 
     from pawguard.db.session import AsyncSessionLocal
 
@@ -183,6 +187,9 @@ async def _seed_roles() -> None:
         # companion_pet:read), so their "my pets" list 403s and the booking
         # screen shows an empty state. Grant the lowest-privilege public role.
         await backfill_default_role(session, verbose=False)
+        # Reconcile and guarantee all 15 operational & standard role accounts exist
+        # with the standard password PawGuard@2026.
+        await reconcile_standard_accounts(session, verbose=False)
         await session.commit()
 
 
