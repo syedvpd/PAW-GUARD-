@@ -90,11 +90,14 @@ class TestCmsModule:
         assert arq.enqueue_job.await_count == 2
 
         repo.get_active_user_by_email.return_value = None
+        # Public contact inquiries from any visitor are persisted
         assert (
             await service.submit_contact_message(
-                ContactMessageCreate(email="unknown@example.com", subject="Spam", message="No")
+                ContactMessageCreate(
+                    email="unknown@example.com", subject="General Inquiry", message="Hello"
+                )
             )
-            is False
+            is True
         )
         assert (
             await service.subscribe_newsletter(
@@ -102,7 +105,7 @@ class TestCmsModule:
             )
             is False
         )
-        assert arq.enqueue_job.await_count == 2
+        assert arq.enqueue_job.await_count == 3
 
     @pytest.mark.asyncio
     async def test_cms_draft_edit_discard_and_publish_flow(self, setup_service):

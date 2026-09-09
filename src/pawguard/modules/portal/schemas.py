@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from pawguard.modules.portal.models import (
     AlertSeverity,
+    ContactInquiryStatus,
     ContentStatus,
     LegalDocumentType,
 )
@@ -29,10 +30,39 @@ class SuccessStoryCreate(BaseModel):
         None, max_length=512, examples=["https://example.com/barnaby-hero.jpg"]
     )
     dog_id: uuid.UUID | None = None
+    adopter_id: uuid.UUID | None = None
+    has_consent: bool = True
     status: ContentStatus = ContentStatus.DRAFT
     slug: str | None = Field(None, pattern=r"^[a-z0-9-]+$", examples=["from-stray-to-star-barnaby"])
     is_featured: bool = False
     sort_order: int = 0
+
+
+class SuccessStoryUserSubmit(BaseModel):
+    title: str = Field(..., min_length=1, max_length=255, examples=["Max's New Forever Home"])
+    summary: str = Field(
+        ...,
+        min_length=1,
+        max_length=1000,
+        examples=["From shelter pup to loving family member."],
+    )
+    body: str = Field(
+        ...,
+        min_length=1,
+        examples=["We adopted Max 6 months ago and he has brought so much joy..."],
+    )
+    hero_image_url: str | None = Field(None, max_length=512, examples=["dogs/hero_max.jpg"])
+    dog_id: uuid.UUID | None = None
+    has_consent: bool = Field(True, description="Explicit consent to publish story and images")
+
+
+class SuccessStoryRejectRequest(BaseModel):
+    rejection_reason: str = Field(
+        ...,
+        min_length=1,
+        max_length=2000,
+        examples=["Image quality is too low; please upload a clearer photo."],
+    )
 
 
 class SuccessStoryUpdate(BaseModel):
@@ -43,6 +73,7 @@ class SuccessStoryUpdate(BaseModel):
         None, max_length=512, examples=["https://example.com/updated.jpg"]
     )
     dog_id: uuid.UUID | None = None
+    has_consent: bool | None = None
     status: ContentStatus | None = Field(None, examples=["published"])
     slug: str | None = Field(None, pattern=r"^[a-z0-9-]+$", examples=["updated-slug"])
     is_featured: bool | None = None
@@ -71,9 +102,12 @@ class SuccessStoryResponse(BaseModel):
     photo_gallery_urls: list[str] = Field(default_factory=list)
     photos: list[str] = Field(default_factory=list)
     images: list[str] = Field(default_factory=list)
-    dog_id: uuid.UUID | None
+    dog_id: uuid.UUID | None = None
+    adopter_id: uuid.UUID | None = None
+    has_consent: bool = True
+    rejection_reason: str | None = None
     status: ContentStatus
-    published_at: datetime | None
+    published_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
     slug: str | None = None
@@ -153,9 +187,12 @@ class SuccessStorySummaryResponse(BaseModel):
     photo_gallery_urls: list[str] = Field(default_factory=list)
     photos: list[str] = Field(default_factory=list)
     images: list[str] = Field(default_factory=list)
-    dog_id: uuid.UUID | None
+    dog_id: uuid.UUID | None = None
+    adopter_id: uuid.UUID | None = None
+    has_consent: bool = True
+    rejection_reason: str | None = None
     status: ContentStatus
-    published_at: datetime | None
+    published_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
     slug: str | None = None
@@ -505,9 +542,59 @@ class ContactLocationResponse(BaseModel):
 
 
 class ContactMessageCreate(BaseModel):
-    email: str = Field(..., min_length=3, max_length=255)
-    subject: str = Field(..., min_length=1, max_length=255)
-    message: str = Field(..., min_length=1, max_length=10000)
+    name: str | None = Field(None, max_length=255, examples=["Jane Doe"])
+    email: str = Field(..., min_length=3, max_length=255, examples=["jane.doe@example.com"])
+    phone: str | None = Field(None, max_length=32, examples=["+1-555-0199"])
+    subject: str = Field(
+        ..., min_length=1, max_length=255, examples=["Inquiry about adoption process"]
+    )
+    category: str = Field("general", max_length=128, examples=["adoption"])
+    message: str = Field(
+        ..., min_length=1, max_length=10000, examples=["I would like to know more about..."]
+    )
+    has_consent: bool = Field(True, description="Consent to process contact details")
+
+
+class ContactInquiryResponse(BaseModel):
+    id: uuid.UUID
+    user_id: uuid.UUID | None = None
+    name: str | None = None
+    email: str
+    phone: str | None = None
+    category: str
+    subject: str
+    message: str
+    status: ContactInquiryStatus
+    assigned_to_user_id: uuid.UUID | None = None
+    staff_response: str | None = None
+    internal_notes: str | None = None
+    responded_at: datetime | None = None
+    responded_by_user_id: uuid.UUID | None = None
+    has_consent: bool = True
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ContactInquiryStatusUpdate(BaseModel):
+    status: ContactInquiryStatus
+
+
+class ContactInquiryAssignRequest(BaseModel):
+    assigned_to_user_id: uuid.UUID | None
+
+
+class ContactInquiryRespondRequest(BaseModel):
+    staff_response: str | None = Field(
+        None, max_length=10000, description="User-facing response sent via email/notification"
+    )
+    internal_notes: str | None = Field(
+        None, max_length=10000, description="Internal staff notes (never sent to user)"
+    )
+    new_status: ContactInquiryStatus | None = Field(
+        None, description="Optional new status (e.g. resolved or waiting_for_user)"
+    )
 
 
 class NewsletterSubscribeRequest(BaseModel):

@@ -16,7 +16,17 @@ from pawguard.modules.auth.models import User
 
 class ContentStatus(StrEnum):
     DRAFT = "draft"
+    PENDING_REVIEW = "pending_review"
     PUBLISHED = "published"
+    REJECTED = "rejected"
+
+
+class ContactInquiryStatus(StrEnum):
+    NEW = "new"
+    IN_PROGRESS = "in_progress"
+    WAITING_FOR_USER = "waiting_for_user"
+    RESOLVED = "resolved"
+    CLOSED = "closed"
 
 
 class LegalDocumentType(StrEnum):
@@ -49,6 +59,14 @@ class SuccessStory(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Bas
         nullable=True,
         index=True,
     )
+    adopter_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    has_consent: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[ContentStatus] = mapped_column(
         String(32), default=ContentStatus.DRAFT, nullable=False, index=True
     )
@@ -56,6 +74,8 @@ class SuccessStory(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Bas
     slug: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True, index=True)
     is_featured: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    adopter: Mapped["User | None"] = relationship("User", foreign_keys=[adopter_id], lazy="joined")
 
 
 class BlogPost(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
@@ -104,21 +124,50 @@ class ContactLocation(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, 
 
 
 class ContactMessage(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
-    """A contact/support message submitted by an existing PawGuard user."""
+    """A contact/support message submitted by an existing user or public visitor."""
 
     __tablename__ = "contact_messages"
 
-    user_id: Mapped[uuid.UUID] = mapped_column(
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
+    )
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    email: Mapped[str] = mapped_column(String(255), nullable=False, default="", index=True)
+    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    category: Mapped[str] = mapped_column(
+        String(128), default="general", nullable=False, index=True
     )
     subject: Mapped[str] = mapped_column(String(255), nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
-    status: Mapped[str] = mapped_column(String(32), default="open", nullable=False, index=True)
+    status: Mapped[ContactInquiryStatus] = mapped_column(
+        String(32), default=ContactInquiryStatus.NEW, nullable=False, index=True
+    )
+    assigned_to_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    staff_response: Mapped[str | None] = mapped_column(Text, nullable=True)
+    internal_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    responded_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    has_consent: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    user: Mapped["User"] = relationship("User", foreign_keys=[user_id], lazy="joined")
+    user: Mapped["User | None"] = relationship("User", foreign_keys=[user_id], lazy="joined")
+    assigned_to_user: Mapped["User | None"] = relationship(
+        "User", foreign_keys=[assigned_to_user_id], lazy="joined"
+    )
+    responded_by_user: Mapped["User | None"] = relationship(
+        "User", foreign_keys=[responded_by_user_id], lazy="joined"
+    )
 
 
 class NewsletterSubscription(UUIDPkMixin, TimestampMixin, AuditMixin, Base):

@@ -18,6 +18,7 @@ from pawguard.modules.portal.models import (
     CmsPage,
     CmsPageVersion,
     CmsSection,
+    ContactInquiryStatus,
     ContactLocation,
     ContactMessage,
     ContentStatus,
@@ -48,6 +49,67 @@ class PortalRepository:
         await self._session.flush()
         return message
 
+    async def list_contact_inquiries_paginated(
+        self,
+        page_params: PageParams,
+        *,
+        status: ContactInquiryStatus | None = None,
+        category: str | None = None,
+        assigned_to_user_id: uuid.UUID | None = None,
+        search: str | None = None,
+        sort: SortParams | None = None,
+    ) -> tuple[Sequence[ContactMessage], int]:
+        stmt = select(ContactMessage).options(
+            selectinload(ContactMessage.user),
+            selectinload(ContactMessage.assigned_to_user),
+            selectinload(ContactMessage.responded_by_user),
+        )
+        if status is not None:
+            stmt = stmt.where(ContactMessage.status == status)
+        if category:
+            stmt = stmt.where(func.lower(ContactMessage.category) == category.strip().lower())
+        if assigned_to_user_id is not None:
+            stmt = stmt.where(ContactMessage.assigned_to_user_id == assigned_to_user_id)
+        if search:
+            like = f"%{search.strip().lower()}%"
+            stmt = stmt.where(
+                or_(
+                    func.lower(ContactMessage.subject).ilike(like),
+                    func.lower(ContactMessage.name).ilike(like),
+                    func.lower(ContactMessage.email).ilike(like),
+                    func.lower(ContactMessage.message).ilike(like),
+                )
+            )
+
+        valid_sort_fields = {"created_at", "updated_at", "status", "category", "subject"}
+        if sort:
+            stmt = apply_sorting(stmt, sort, valid_sort_fields, default_field="created_at")
+        else:
+            stmt = stmt.order_by(ContactMessage.created_at.desc())
+
+        page_stmt = stmt.offset(page_params.offset).limit(page_params.limit)
+        results = (await self._session.execute(page_stmt)).scalars().all()
+
+        if page_params.page == 1 and len(results) < page_params.limit:
+            total = len(results)
+        else:
+            count_stmt = select(func.count()).select_from(stmt.subquery())
+            total = (await self._session.execute(count_stmt)).scalar_one()
+
+        return results, total
+
+    async def get_contact_inquiry(self, inquiry_id: uuid.UUID) -> ContactMessage | None:
+        stmt = (
+            select(ContactMessage)
+            .options(
+                selectinload(ContactMessage.user),
+                selectinload(ContactMessage.assigned_to_user),
+                selectinload(ContactMessage.responded_by_user),
+            )
+            .where(ContactMessage.id == inquiry_id)
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
     async def get_newsletter_subscription(
         self, user_id: uuid.UUID
     ) -> NewsletterSubscription | None:
@@ -60,6 +122,37 @@ class PortalRepository:
         self._session.add(subscription)
         await self._session.flush()
         return subscription
+
+    async def list_user_stories_paginated(
+        self,
+        user_id: uuid.UUID,
+        page_params: PageParams,
+        *,
+        status: ContentStatus | None = None,
+        sort: SortParams | None = None,
+    ) -> tuple[Sequence[SuccessStory], int]:
+        stmt = select(SuccessStory).where(
+            SuccessStory.adopter_id == user_id,
+            SuccessStory.deleted_at.is_(None),
+        )
+        if status:
+            stmt = stmt.where(SuccessStory.status == status)
+        valid_sort = {"created_at", "updated_at", "published_at", "title", "status"}
+        if sort:
+            stmt = apply_sorting(stmt, sort, valid_sort, default_field="created_at")
+        else:
+            stmt = stmt.order_by(SuccessStory.created_at.desc())
+
+        page_stmt = stmt.offset(page_params.offset).limit(page_params.limit)
+        results = (await self._session.execute(page_stmt)).scalars().all()
+
+        if page_params.page == 1 and len(results) < page_params.limit:
+            total = len(results)
+        else:
+            count_stmt = select(func.count()).select_from(stmt.subquery())
+            total = (await self._session.execute(count_stmt)).scalar_one()
+
+        return results, total
 
     # ── Success stories ─────────────────────────────────────────────────────
 

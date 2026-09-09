@@ -24,10 +24,11 @@ from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import (
     CurrentUser,
     get_current_user,
+    get_optional_current_user,
 )
 from pawguard.modules.auth.rbac import require_permission
 from pawguard.modules.auth.router import _build_request_context
-from pawguard.modules.portal.models import ContentStatus, LegalDocumentType
+from pawguard.modules.portal.models import ContactInquiryStatus, ContentStatus, LegalDocumentType
 from pawguard.modules.portal.repository import PortalRepository
 from pawguard.modules.portal.schemas import (
     BlogPostCreate,
@@ -36,6 +37,10 @@ from pawguard.modules.portal.schemas import (
     BlogPostUpdate,
     CmsPageResponse,
     CmsPageUpdate,
+    ContactInquiryAssignRequest,
+    ContactInquiryRespondRequest,
+    ContactInquiryResponse,
+    ContactInquiryStatusUpdate,
     ContactLocationCreate,
     ContactLocationResponse,
     ContactLocationUpdate,
@@ -51,9 +56,11 @@ from pawguard.modules.portal.schemas import (
     PublicCmsPageResponse,
     PublicHeroStats,
     SuccessStoryCreate,
+    SuccessStoryRejectRequest,
     SuccessStoryResponse,
     SuccessStorySummaryResponse,
     SuccessStoryUpdate,
+    SuccessStoryUserSubmit,
     SystemSettingResponse,
     SystemSettingUpsert,
     TransparencyStats,
@@ -168,6 +175,64 @@ async def get_published_story_by_slug(
     return etag_cache_response(request, res_data)
 
 
+# ── User Success Story Submissions (Authenticated Adopters) ──────────────────
+
+
+@router.post(
+    "/stories",
+    response_model=ApiResponse[SuccessStoryResponse],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(rate_limit("portal_story_submit", max_requests=10, window_seconds=3600))],
+)
+async def submit_user_story(
+    payload: SuccessStoryUserSubmit,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[SuccessStoryResponse]:
+    """Submit a success story as an authenticated adopter.
+
+    Derives adopter_id strictly from the authenticated current_user.
+    Validates mandatory consent and dog association if dog_id is supplied.
+    Initial state is set to pending_review.
+    """
+    ip = request.client.host if request.client else None
+    story = await service.submit_user_story(
+        user_id=current_user.id,
+        payload=payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=SuccessStoryResponse.model_validate(story),
+        message="Your success story has been submitted for review.",
+    )
+
+
+@router.get(
+    "/stories/me",
+    response_model=PaginatedResponse[SuccessStoryResponse],
+)
+async def list_my_stories(
+    page: PageParams = Depends(page_params),
+    status_filter: ContentStatus | None = Query(default=None, alias="status"),
+    sort: SortParams = Depends(sort_params),
+    current_user: CurrentUser = Depends(get_current_user),
+    service: PortalService = Depends(get_portal_service),
+) -> PaginatedResponse[SuccessStoryResponse]:
+    """List success stories submitted by the currently authenticated user."""
+    stories, meta = await service.list_user_stories_paginated(
+        user_id=current_user.id,
+        page_params=page,
+        status=status_filter,
+        sort=sort,
+    )
+    return PaginatedResponse(
+        data=[SuccessStoryResponse.model_validate(s) for s in stories],
+        meta=meta,
+    )
+
+
 @router.get("/blog", response_model=PaginatedResponse[BlogPostSummaryResponse])
 @cache_response(ttl_seconds=300, namespace="portal")
 async def list_published_blog(
@@ -261,10 +326,17 @@ async def list_contact_locations(
 )
 async def submit_contact_message(
     payload: ContactMessageCreate,
+    request: Request,
+    current_user: CurrentUser | None = Depends(get_optional_current_user),
     service: PortalService = Depends(get_portal_service),
 ) -> ApiResponse[None]:
-    accepted = await service.submit_contact_message(payload)
-    # Deliberately do not reveal whether an email belongs to an account.
+    ip = request.client.host if request.client else None
+    user_id = current_user.id if current_user else None
+    accepted = await service.submit_contact_message(
+        payload,
+        user_id=user_id,
+        ip_address=ip,
+    )
     return ApiResponse(
         message=(
             "Your message was received."
@@ -1335,6 +1407,133 @@ async def get_admin_contact(
     return ApiResponse(data=ContactLocationResponse.model_validate(loc))
 
 
+# ── Admin Contact Inquiries Management ────────────────────────────────────────
+
+
+@router.get(
+    "/admin/contact-inquiries",
+    response_model=PaginatedResponse[ContactInquiryResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def list_admin_contact_inquiries(
+    page: PageParams = Depends(page_params),
+    status_filter: ContactInquiryStatus | None = Query(default=None, alias="status"),
+    category: str | None = Query(default=None),
+    assigned_to_user_id: uuid.UUID | None = Query(default=None),
+    search: str | None = Query(default=None),
+    sort: SortParams = Depends(sort_params),
+    service: PortalService = Depends(get_portal_service),
+) -> PaginatedResponse[ContactInquiryResponse]:
+    """List contact form inquiries with filtering, pagination, and sorting."""
+    inquiries, meta = await service.list_contact_inquiries_paginated(
+        page_params=page,
+        status=status_filter,
+        category=category,
+        assigned_to_user_id=assigned_to_user_id,
+        search=search,
+        sort=sort,
+    )
+    return PaginatedResponse(
+        data=[ContactInquiryResponse.model_validate(i) for i in inquiries],
+        meta=meta,
+    )
+
+
+@router.get(
+    "/admin/contact-inquiries/{inquiry_id}",
+    response_model=ApiResponse[ContactInquiryResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def get_admin_contact_inquiry(
+    inquiry_id: uuid.UUID,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[ContactInquiryResponse]:
+    """Retrieve details for a single contact inquiry."""
+    inquiry = await service.get_contact_inquiry(inquiry_id)
+    return ApiResponse(data=ContactInquiryResponse.model_validate(inquiry))
+
+
+@router.put(
+    "/admin/contact-inquiries/{inquiry_id}/status",
+    response_model=ApiResponse[ContactInquiryResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def update_admin_contact_inquiry_status(
+    inquiry_id: uuid.UUID,
+    payload: ContactInquiryStatusUpdate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[ContactInquiryResponse]:
+    """Update contact inquiry status adhering to the state machine."""
+    ip = request.client.host if request.client else None
+    inquiry = await service.update_inquiry_status(
+        inquiry_id=inquiry_id,
+        new_status=payload.status,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=ContactInquiryResponse.model_validate(inquiry),
+        message="Inquiry status updated successfully.",
+    )
+
+
+@router.put(
+    "/admin/contact-inquiries/{inquiry_id}/assign",
+    response_model=ApiResponse[ContactInquiryResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def assign_admin_contact_inquiry(
+    inquiry_id: uuid.UUID,
+    payload: ContactInquiryAssignRequest,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[ContactInquiryResponse]:
+    """Assign or reassign a contact inquiry to a staff member."""
+    ip = request.client.host if request.client else None
+    inquiry = await service.assign_inquiry(
+        inquiry_id=inquiry_id,
+        assigned_to_user_id=payload.assigned_to_user_id,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=ContactInquiryResponse.model_validate(inquiry),
+        message="Inquiry assigned successfully.",
+    )
+
+
+@router.post(
+    "/admin/contact-inquiries/{inquiry_id}/respond",
+    response_model=ApiResponse[ContactInquiryResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def respond_admin_contact_inquiry(
+    inquiry_id: uuid.UUID,
+    payload: ContactInquiryRespondRequest,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[ContactInquiryResponse]:
+    """Add user-facing response and/or internal staff notes to a contact inquiry."""
+    ip = request.client.host if request.client else None
+    inquiry = await service.respond_to_inquiry(
+        inquiry_id=inquiry_id,
+        payload=payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=ContactInquiryResponse.model_validate(inquiry),
+        message="Inquiry response recorded successfully.",
+    )
+
+
 @router.get(
     "/admin/veterinary-network/{partner_id}",
     response_model=ApiResponse[VeterinaryPartnerResponse],
@@ -1443,6 +1642,33 @@ async def discard_admin_story(
     return ApiResponse(
         data=SuccessStoryResponse.model_validate(story),
         message="Success story draft discarded/unpublished successfully.",
+    )
+
+
+@router.post(
+    "/admin/success-stories/{story_id}/reject",
+    response_model=ApiResponse[SuccessStoryResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def reject_admin_story(
+    story_id: uuid.UUID,
+    payload: SuccessStoryRejectRequest,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    _: Annotated[None, Depends(_ADMIN_WRITE_RATE_LIMIT)] = None,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[SuccessStoryResponse]:
+    """Reject a user-submitted success story with a reason."""
+    ip = request.client.host if request.client else None
+    story = await service.reject_story(
+        story_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=SuccessStoryResponse.model_validate(story),
+        message="Success story rejected.",
     )
 
 

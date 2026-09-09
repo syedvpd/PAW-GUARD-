@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from pawguard.core.exceptions import ConflictError, NotFoundError
+from pawguard.core.exceptions import ConflictError, NotFoundError, ValidationFailedError
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginationMeta
 from pawguard.core.search import SortParams
@@ -24,6 +24,7 @@ from pawguard.modules.portal.models import (
     CmsPage,
     CmsPageVersion,
     CmsSection,
+    ContactInquiryStatus,
     ContactLocation,
     ContactMessage,
     ContentStatus,
@@ -40,6 +41,7 @@ from pawguard.modules.portal.schemas import (
     BlogPostUpdate,
     CmsPageResponse,
     CmsPageUpdate,
+    ContactInquiryRespondRequest,
     ContactLocationCreate,
     ContactLocationUpdate,
     ContactMessageCreate,
@@ -51,7 +53,9 @@ from pawguard.modules.portal.schemas import (
     PublicCmsPageResponse,
     PublicHeroStats,
     SuccessStoryCreate,
+    SuccessStoryRejectRequest,
     SuccessStoryUpdate,
+    SuccessStoryUserSubmit,
     TransparencyStats,
     UrgentAlertCreate,
     UrgentAlertUpdate,
@@ -100,25 +104,238 @@ class PortalService:
         self._cache = cache_service
         self._arq = arq_pool
 
-    async def submit_contact_message(self, payload: ContactMessageCreate) -> bool:
-        """Store and acknowledge a contact message only for an active account."""
-        user = await self._repo.get_active_user_by_email(payload.email)
-        if user is None:
-            return False
-        message = await self._repo.create_contact_message(
-            ContactMessage(user_id=user.id, subject=payload.subject, message=payload.message)
+    async def submit_contact_message(
+        self,
+        payload: ContactMessageCreate,
+        *,
+        user_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> bool:
+        """Store and acknowledge a contact inquiry from any visitor or user."""
+        matched_user_id = user_id
+        if matched_user_id is None:
+            matched_user = await self._repo.get_active_user_by_email(payload.email)
+            matched_user_id = matched_user.id if matched_user else None
+
+        message = ContactMessage(
+            user_id=matched_user_id,
+            name=payload.name,
+            email=payload.email.strip().lower(),
+            phone=payload.phone,
+            category=payload.category,
+            subject=payload.subject,
+            message=payload.message,
+            status=ContactInquiryStatus.NEW,
+            has_consent=payload.has_consent,
         )
+        saved = await self._repo.create_contact_message(message)
+
+        if self._audit and matched_user_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.PORTAL_INQUIRY_CREATED,
+                actor_id=matched_user_id,
+                ip_address=ip_address,
+                after_state={
+                    "email": payload.email,
+                    "subject": payload.subject,
+                    "category": payload.category,
+                },
+                metadata={"inquiry_id": str(saved.id)},
+            )
+
         if self._arq is not None:
             await self._arq.enqueue_job(
                 "send_notification_email_job",
-                to=user.email,
-                subject="We received your PawGuard message",
+                to=payload.email,
+                subject=f"We received your message: {payload.subject}",
                 body=(
-                    f'We received your message about "{message.subject}". '
-                    "Our support team will review it and get back to you."
+                    f"Hi {payload.name or 'there'},\n\n"
+                    f'We received your inquiry regarding "{payload.subject}". '
+                    "Our support team has logged your message and will get back to you shortly.\n\n"
+                    "Best regards,\nPawGuard Support Team"
                 ),
             )
         return True
+
+    async def list_contact_inquiries_paginated(
+        self,
+        page_params: PageParams,
+        *,
+        status: ContactInquiryStatus | None = None,
+        category: str | None = None,
+        assigned_to_user_id: uuid.UUID | None = None,
+        search: str | None = None,
+        sort: SortParams | None = None,
+    ) -> tuple[list[ContactMessage], PaginationMeta]:
+        inquiries, total = await self._repo.list_contact_inquiries_paginated(
+            page_params,
+            status=status,
+            category=category,
+            assigned_to_user_id=assigned_to_user_id,
+            search=search,
+            sort=sort,
+        )
+        meta = build_pagination_meta(total=total, params=page_params)
+        return list(inquiries), meta
+
+    async def get_contact_inquiry(self, inquiry_id: uuid.UUID) -> ContactMessage:
+        inquiry = await self._repo.get_contact_inquiry(inquiry_id)
+        if inquiry is None:
+            raise NotFoundError("Contact inquiry not found.")
+        return inquiry
+
+    _VALID_INQUIRY_TRANSITIONS: dict[ContactInquiryStatus, set[ContactInquiryStatus]] = {
+        ContactInquiryStatus.NEW: {
+            ContactInquiryStatus.IN_PROGRESS,
+            ContactInquiryStatus.WAITING_FOR_USER,
+            ContactInquiryStatus.RESOLVED,
+            ContactInquiryStatus.CLOSED,
+        },
+        ContactInquiryStatus.IN_PROGRESS: {
+            ContactInquiryStatus.WAITING_FOR_USER,
+            ContactInquiryStatus.RESOLVED,
+            ContactInquiryStatus.CLOSED,
+        },
+        ContactInquiryStatus.WAITING_FOR_USER: {
+            ContactInquiryStatus.IN_PROGRESS,
+            ContactInquiryStatus.RESOLVED,
+            ContactInquiryStatus.CLOSED,
+        },
+        ContactInquiryStatus.RESOLVED: {
+            ContactInquiryStatus.IN_PROGRESS,
+            ContactInquiryStatus.CLOSED,
+        },
+        ContactInquiryStatus.CLOSED: set(),
+    }
+
+    async def update_inquiry_status(
+        self,
+        inquiry_id: uuid.UUID,
+        new_status: ContactInquiryStatus | None = None,
+        *,
+        status: ContactInquiryStatus | None = None,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> ContactMessage:
+        target_status = new_status or status
+        if target_status is None:
+            raise ValidationFailedError("Status is required.")
+        inquiry = await self.get_contact_inquiry(inquiry_id)
+        before_status = inquiry.status
+        if target_status != before_status:
+            allowed = self._VALID_INQUIRY_TRANSITIONS.get(before_status, set())
+            if target_status not in allowed:
+                raise ValidationFailedError(
+                    f"Cannot transition inquiry from {before_status} to {target_status}."
+                )
+        inquiry.status = target_status
+        await self._session.flush()
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.PORTAL_INQUIRY_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address,
+                before_state={"status": str(before_status)},
+                after_state={"status": str(target_status)},
+                metadata={"inquiry_id": str(inquiry.id)},
+            )
+        return inquiry
+
+    async def assign_inquiry(
+        self,
+        inquiry_id: uuid.UUID,
+        assigned_to_user_id: uuid.UUID | None,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> ContactMessage:
+        inquiry = await self.get_contact_inquiry(inquiry_id)
+        if assigned_to_user_id is not None:
+            from pawguard.modules.auth.models import User
+
+            user_stmt = select(User).where(User.id == assigned_to_user_id, User.is_active.is_(True))
+            user = (await self._session.execute(user_stmt)).scalar_one_or_none()
+            if user is None:
+                raise NotFoundError("Assigned staff user not found or inactive.")
+
+        before_assignee = str(inquiry.assigned_to_user_id) if inquiry.assigned_to_user_id else None
+        inquiry.assigned_to_user_id = assigned_to_user_id
+        if inquiry.status == ContactInquiryStatus.NEW and assigned_to_user_id is not None:
+            inquiry.status = ContactInquiryStatus.IN_PROGRESS
+        await self._session.flush()
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.PORTAL_INQUIRY_ASSIGNED,
+                actor_id=actor_id,
+                ip_address=ip_address,
+                before_state={"assigned_to_user_id": before_assignee},
+                after_state={
+                    "assigned_to_user_id": str(assigned_to_user_id) if assigned_to_user_id else None
+                },
+                metadata={"inquiry_id": str(inquiry.id)},
+            )
+        return inquiry
+
+    async def respond_to_inquiry(
+        self,
+        inquiry_id: uuid.UUID,
+        payload: ContactInquiryRespondRequest,
+        *,
+        actor_id: uuid.UUID,
+        ip_address: str | None = None,
+    ) -> ContactMessage:
+        inquiry = await self.get_contact_inquiry(inquiry_id)
+        if payload.internal_notes:
+            existing = inquiry.internal_notes or ""
+            timestamp_str = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
+            inquiry.internal_notes = (
+                f"{existing}\n[{timestamp_str}] {payload.internal_notes}".strip()
+            )
+
+        if payload.staff_response:
+            inquiry.staff_response = payload.staff_response
+            inquiry.responded_at = datetime.now(UTC)
+            inquiry.responded_by_user_id = actor_id
+
+            if self._arq is not None:
+                await self._arq.enqueue_job(
+                    "send_notification_email_job",
+                    to=inquiry.email,
+                    subject=f"Update regarding: {inquiry.subject}",
+                    body=(
+                        f"Hi {inquiry.name or 'there'},\n\n"
+                        f"{payload.staff_response}\n\n"
+                        "Best regards,\nPawGuard Support Team"
+                    ),
+                )
+
+        if payload.new_status:
+            inquiry.status = payload.new_status
+        elif payload.staff_response and inquiry.status in (
+            ContactInquiryStatus.NEW,
+            ContactInquiryStatus.IN_PROGRESS,
+        ):
+            inquiry.status = ContactInquiryStatus.RESOLVED
+
+        await self._session.flush()
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.PORTAL_INQUIRY_RESPONDED,
+                actor_id=actor_id,
+                ip_address=ip_address,
+                after_state={
+                    "staff_response": inquiry.staff_response,
+                    "responded_at": inquiry.responded_at.isoformat()
+                    if inquiry.responded_at
+                    else None,
+                    "status": str(inquiry.status),
+                },
+                metadata={"inquiry_id": str(inquiry.id)},
+            )
+        return inquiry
 
     async def subscribe_newsletter(self, payload: NewsletterSubscribeRequest) -> bool:
         """Subscribe an existing active account and send one welcome email."""
@@ -207,6 +424,15 @@ class PortalService:
             existing = await self._repo.get_story_by_slug(payload.slug)
             if existing is not None:
                 raise ConflictError(f"Success story slug '{payload.slug}' already exists.")
+
+        # If attempting to publish, enforce that consent was granted
+        target_status = payload.status if payload.status is not None else story.status
+        target_consent = (
+            payload.has_consent if payload.has_consent is not None else story.has_consent
+        )
+        if target_status == ContentStatus.PUBLISHED and target_consent is False:
+            raise ValidationFailedError("Cannot publish success story without adopter consent.")
+
         for field, value in payload.model_dump(exclude_unset=True).items():
             setattr(story, field, value)
         if payload.status is not None:
@@ -214,6 +440,116 @@ class PortalService:
         await self._session.flush()
         await self._session.refresh(story)
         return story
+
+    async def submit_user_story(
+        self,
+        user_id: uuid.UUID,
+        payload: SuccessStoryUserSubmit,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> SuccessStory:
+        if not payload.has_consent:
+            raise ValidationFailedError("Consent to publish the success story is mandatory.")
+
+        # If dog_id is supplied, validate existence and user association
+        if payload.dog_id is not None:
+            dog_stmt = select(DogProfile).where(
+                DogProfile.id == payload.dog_id,
+                DogProfile.deleted_at.is_(None),
+            )
+            dog = (await self._session.execute(dog_stmt)).scalar_one_or_none()
+            if dog is None:
+                raise NotFoundError("Associated dog not found.")
+
+            # Validate adopter association via adoption application
+            adopt_stmt = select(AdoptionApplication).where(
+                AdoptionApplication.dog_id == payload.dog_id,
+                AdoptionApplication.adopter_id == user_id,
+                AdoptionApplication.deleted_at.is_(None),
+            )
+            adoption = (await self._session.execute(adopt_stmt)).scalars().first()
+            if adoption is None:
+                raise ValidationFailedError(
+                    "You can only submit a success story for a dog you have adopted or applied for."
+                )
+
+        import re
+
+        slug = re.sub(r"[^a-z0-9]+", "-", payload.title.lower()).strip("-")
+        if not slug:
+            slug = "story"
+        existing = await self._repo.get_story_by_slug(slug)
+        if existing is not None:
+            slug = f"{slug}-{str(uuid.uuid4())[:8]}"
+
+        story = SuccessStory(
+            title=payload.title,
+            summary=payload.summary,
+            body=payload.body,
+            dog_id=payload.dog_id,
+            hero_image_url=payload.hero_image_url,
+            adopter_id=user_id,
+            has_consent=payload.has_consent,
+            status=ContentStatus.PENDING_REVIEW,
+            slug=slug,
+        )
+        created = await self._repo.create_story(story)
+
+        if self._audit and (actor_id or user_id):
+            await self._audit.record(
+                event_type=AuthAuditEventType.PORTAL_STORY_SUBMITTED,
+                actor_id=actor_id or user_id,
+                ip_address=ip_address,
+                metadata={
+                    "title": created.title,
+                    "adopter_id": str(user_id),
+                    "story_id": str(created.id),
+                },
+                after_state={"status": str(created.status)},
+            )
+        return created
+
+    async def reject_story(
+        self,
+        story_id: uuid.UUID,
+        payload: SuccessStoryRejectRequest,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> SuccessStory:
+        story = await self._repo.get_story(story_id)
+        if story is None:
+            raise NotFoundError("Success story not found.")
+        story.status = ContentStatus.REJECTED
+        story.rejection_reason = payload.rejection_reason
+        await self._session.flush()
+        await self._session.refresh(story)
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.PORTAL_STORY_REJECTED,
+                actor_id=actor_id,
+                ip_address=ip_address,
+                metadata={"rejection_reason": payload.rejection_reason, "story_id": str(story.id)},
+                after_state={"status": str(story.status)},
+            )
+        return story
+
+    async def list_user_stories_paginated(
+        self,
+        user_id: uuid.UUID,
+        page_params: PageParams | None = None,
+        status: ContentStatus | None = None,
+        sort: SortParams | None = None,
+    ) -> tuple[list[SuccessStory], PaginationMeta]:
+        params = page_params or PageParams()
+        stories, total = await self._repo.list_user_stories_paginated(
+            user_id=user_id,
+            page_params=params,
+            status=status,
+            sort=sort,
+        )
+        meta = build_pagination_meta(total=total, params=params)
+        return list(stories), meta
 
     async def get_story(
         self,
