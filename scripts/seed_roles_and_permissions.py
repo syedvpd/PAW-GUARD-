@@ -18,6 +18,7 @@ strip an out-of-band manual grant.
 import asyncio
 import sys
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
@@ -658,7 +659,7 @@ async def reconcile_standard_accounts(
     session: AsyncSession,
     *,
     verbose: bool = True,
-) -> int:
+) -> dict[str, Any]:
     """Ensure all 15 standard PawGuard operational and public accounts exist,
     are active and verified, have the shared password 'PawGuard@2026', and have their role assigned.
     """
@@ -693,17 +694,19 @@ async def reconcile_standard_accounts(
                 hashed_password=pw_hash,
                 is_active=True,
                 is_verified=True,
+                deleted_at=None,
                 email_verified_at=now,
                 phone="+919876543210",
             )
+            if target_role:
+                user.roles.append(target_role)
             session.add(user)
             await session.flush()
-            if target_role:
-                session.add(UserRole(user_id=user.id, role_id=target_role.id))
             updated_count += 1
             if verbose:
                 print(f"  [CREATED] {full_name} ({normalized_email}) with role '{role_name}'")
         else:
+            user.deleted_at = None
             user.hashed_password = pw_hash
             user.is_active = True
             user.is_verified = True
@@ -715,13 +718,13 @@ async def reconcile_standard_accounts(
             if target_role:
                 existing_role_ids = {r.id for r in user.roles}
                 if target_role.id not in existing_role_ids:
-                    session.add(UserRole(user_id=user.id, role_id=target_role.id))
+                    user.roles.append(target_role)
             updated_count += 1
             if verbose:
                 print(f"  [SYNCED] {full_name} ({normalized_email})")
 
     await session.flush()
-    return updated_count
+    return {"count": updated_count, "accounts": [e[0] for e in STANDARD_OPERATIONAL_ACCOUNTS]}
 
 
 async def seed_db(label: str, database_url: str) -> None:

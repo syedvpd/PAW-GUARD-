@@ -741,9 +741,9 @@ async def reconcile_accounts_endpoint(
 ) -> ApiResponse[dict[str, Any]]:
     from scripts.seed_roles_and_permissions import reconcile_standard_accounts
 
-    count = await reconcile_standard_accounts(db, verbose=False)
+    res = await reconcile_standard_accounts(db, verbose=False)
     await db.commit()
     return ApiResponse(
-        data={"status": "ok", "synced_accounts": count},
+        data=res,
         message="Standard accounts reconciled successfully.",
     )
