@@ -44,15 +44,19 @@ def upgrade() -> None:
     )
     op.create_foreign_key(
         "fk_grievance_tickets_escalated_to_admin_id_users",
-        "grievance_tickets", "users",
-        ["escalated_to_admin_id"], ["id"], ondelete="SET NULL",
+        "grievance_tickets",
+        "users",
+        ["escalated_to_admin_id"],
+        ["id"],
+        ondelete="SET NULL",
     )
 
 
 def downgrade() -> None:
     op.drop_constraint(
         "fk_grievance_tickets_escalated_to_admin_id_users",
-        "grievance_tickets", type_="foreignkey",
+        "grievance_tickets",
+        type_="foreignkey",
     )
     op.drop_column("grievance_tickets", "escalated_to_admin_id")
     op.drop_column("grievance_tickets", "escalated_at")

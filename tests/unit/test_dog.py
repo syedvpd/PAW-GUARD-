@@ -113,12 +113,14 @@ class TestDogService:
         settings = MagicMock(frontend_base_url="https://customer.example.test")
         image = MagicMock()
         image.save.side_effect = lambda output, format: output.write(b"PNG")
+        mock_qrcode = MagicMock()
+        mock_qrcode.make.return_value = image
         with (
             patch("pawguard.modules.dog.service.get_settings", return_value=settings),
-            patch("qrcode.make", return_value=image) as make_qr,
+            patch.dict("sys.modules", {"qrcode": mock_qrcode}),
         ):
             assert service.qr_image(dog) == b"PNG"
-        make_qr.assert_called_once_with("https://customer.example.test/dogs/DOG-2026-0043")
+        mock_qrcode.make.assert_called_once_with("https://customer.example.test/dogs/DOG-2026-0043")
 
     @pytest.mark.asyncio
     async def test_update_dog(self, service, mock_repo):

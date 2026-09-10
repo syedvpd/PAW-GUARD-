@@ -5,11 +5,12 @@ Revises: e1f2a3b4c5d6
 Create Date: 2026-08-12 10:30:00.000000
 
 """
+
 from collections.abc import Sequence
 from alembic import op
 
-revision: str = 'a2b3c4d5e6f7'
-down_revision: str | None = 'e1f2a3b4c5d6'
+revision: str = "a2b3c4d5e6f7"
+down_revision: str | None = "e1f2a3b4c5d6"
 branch_labels: Sequence[str] | None = None
 depends_on: Sequence[str] | None = None
 

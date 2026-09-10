@@ -149,7 +149,11 @@ class AdoptionRepository:
 
     # Statuses that exclusively lock a dog against other applications (PRR 7.2 /
     # module README "Exclusivity Lock Mechanism": lock activates at HOME_CHECK).
-    LOCKING_STATUSES = (AdoptionStatus.HOME_CHECK, AdoptionStatus.APPROVED, AdoptionStatus.COMPLETED)
+    LOCKING_STATUSES = (
+        AdoptionStatus.HOME_CHECK,
+        AdoptionStatus.APPROVED,
+        AdoptionStatus.COMPLETED,
+    )
 
     # Terminal-ish statuses that no longer compete for the dog.
     INACTIVE_STATUSES = (AdoptionStatus.REJECTED, AdoptionStatus.WITHDRAWN)

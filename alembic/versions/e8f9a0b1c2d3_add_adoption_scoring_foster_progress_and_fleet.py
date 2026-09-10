@@ -10,6 +10,7 @@ Revises: 783f541d2d75
 Create Date: 2026-07-30 23:00:00.000000
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -37,13 +38,38 @@ def upgrade() -> None:
         sa.Column("notes", sa.Text(), nullable=True),
         sa.Column("scored_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.ForeignKeyConstraint(["application_id"], ["adoption_applications.id"], name=op.f("fk_adoption_scores_application_id_adoption_applications"), ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["scored_by_id"], ["users.id"], name=op.f("fk_adoption_scores_scored_by_id_users"), ondelete="CASCADE"),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(
+            ["application_id"],
+            ["adoption_applications.id"],
+            name=op.f("fk_adoption_scores_application_id_adoption_applications"),
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["scored_by_id"],
+            ["users.id"],
+            name=op.f("fk_adoption_scores_scored_by_id_users"),
+            ondelete="CASCADE",
+        ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_adoption_scores")),
     )
-    op.create_index(op.f("ix_adoption_scores_application_id"), "adoption_scores", ["application_id"], unique=False)
+    op.create_index(
+        op.f("ix_adoption_scores_application_id"),
+        "adoption_scores",
+        ["application_id"],
+        unique=False,
+    )
 
     # foster_progress_logs
     op.create_table(
@@ -60,19 +86,48 @@ def upgrade() -> None:
         sa.Column("notes", sa.Text(), nullable=True),
         sa.Column("logged_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.ForeignKeyConstraint(["placement_id"], ["foster_placements.id"], name=op.f("fk_foster_progress_logs_placement_id_foster_placements"), ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["tracked_by_id"], ["users.id"], name=op.f("fk_foster_progress_logs_tracked_by_id_users"), ondelete="SET NULL"),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(
+            ["placement_id"],
+            ["foster_placements.id"],
+            name=op.f("fk_foster_progress_logs_placement_id_foster_placements"),
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["tracked_by_id"],
+            ["users.id"],
+            name=op.f("fk_foster_progress_logs_tracked_by_id_users"),
+            ondelete="SET NULL",
+        ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_foster_progress_logs")),
     )
-    op.create_index(op.f("ix_foster_progress_logs_placement_id"), "foster_progress_logs", ["placement_id"], unique=False)
+    op.create_index(
+        op.f("ix_foster_progress_logs_placement_id"),
+        "foster_progress_logs",
+        ["placement_id"],
+        unique=False,
+    )
 
     # fleet insurance columns
     op.add_column("vehicles", sa.Column("insurance_provider", sa.String(length=255), nullable=True))
-    op.add_column("vehicles", sa.Column("insurance_policy_number", sa.String(length=128), nullable=True))
+    op.add_column(
+        "vehicles", sa.Column("insurance_policy_number", sa.String(length=128), nullable=True)
+    )
     op.add_column("vehicles", sa.Column("insurance_expiry_date", sa.Date(), nullable=True))
-    op.add_column("vehicles", sa.Column("insurance_contact_phone", sa.String(length=32), nullable=True))
+    op.add_column(
+        "vehicles", sa.Column("insurance_contact_phone", sa.String(length=32), nullable=True)
+    )
 
     # fuel_logs
     op.create_table(
@@ -88,10 +143,30 @@ def upgrade() -> None:
         sa.Column("notes", sa.Text(), nullable=True),
         sa.Column("filled_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.ForeignKeyConstraint(["vehicle_id"], ["vehicles.id"], name=op.f("fk_fuel_logs_vehicle_id_vehicles"), ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["filled_by_id"], ["users.id"], name=op.f("fk_fuel_logs_filled_by_id_users"), ondelete="SET NULL"),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(
+            ["vehicle_id"],
+            ["vehicles.id"],
+            name=op.f("fk_fuel_logs_vehicle_id_vehicles"),
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["filled_by_id"],
+            ["users.id"],
+            name=op.f("fk_fuel_logs_filled_by_id_users"),
+            ondelete="SET NULL",
+        ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_fuel_logs")),
     )
 

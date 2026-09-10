@@ -5,6 +5,7 @@ Revises: d4e5f6a7b8c9
 Create Date: 2026-08-19 12:00:00.000000
 
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -20,7 +21,12 @@ depends_on: Sequence[str] | None = None
 def upgrade() -> None:
     op.create_table(
         "finance_expenses",
-        sa.Column("id", PG_UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column(
+            "id",
+            PG_UUID(as_uuid=True),
+            primary_key=True,
+            server_default=sa.text("gen_random_uuid()"),
+        ),
         sa.Column("expense_number", sa.String(64), nullable=False, unique=True, index=True),
         sa.Column("title", sa.String(255), nullable=False),
         sa.Column("description", sa.Text, nullable=True),
@@ -35,17 +41,53 @@ def upgrade() -> None:
         sa.Column("payment_reference", sa.String(255), nullable=True),
         sa.Column("invoice_number", sa.String(128), nullable=True),
         sa.Column("status", sa.String(32), nullable=False, server_default="draft", index=True),
-        sa.Column("approved_by", PG_UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+        sa.Column(
+            "approved_by",
+            PG_UUID(as_uuid=True),
+            sa.ForeignKey("users.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
         sa.Column("approved_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("rejection_reason", sa.Text, nullable=True),
-        sa.Column("account_id", PG_UUID(as_uuid=True), sa.ForeignKey("chart_of_accounts.id", ondelete="SET NULL"), nullable=True, index=True),
-        sa.Column("transaction_id", PG_UUID(as_uuid=True), sa.ForeignKey("financial_transactions.id", ondelete="SET NULL"), nullable=True),
+        sa.Column(
+            "account_id",
+            PG_UUID(as_uuid=True),
+            sa.ForeignKey("chart_of_accounts.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
+        sa.Column(
+            "transaction_id",
+            PG_UUID(as_uuid=True),
+            sa.ForeignKey("financial_transactions.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
         sa.Column("notes", sa.Text, nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_by", PG_UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
-        sa.Column("updated_by", PG_UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+        sa.Column(
+            "created_by",
+            PG_UUID(as_uuid=True),
+            sa.ForeignKey("users.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+        sa.Column(
+            "updated_by",
+            PG_UUID(as_uuid=True),
+            sa.ForeignKey("users.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
         sa.CheckConstraint("amount > 0", name="ck_finance_expenses_amount_positive"),
     )
 

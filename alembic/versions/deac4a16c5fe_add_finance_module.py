@@ -31,11 +31,22 @@ def upgrade() -> None:
         sa.Column("opening_balance", sa.Numeric(precision=14, scale=2), nullable=False),
         sa.Column("current_balance", sa.Numeric(precision=14, scale=2), nullable=False),
         sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(
-            ["parent_account_id"], ["chart_of_accounts.id"],
+            ["parent_account_id"],
+            ["chart_of_accounts.id"],
             name=op.f("fk_chart_of_accounts_parent_account_id_chart_of_accounts"),
             ondelete="SET NULL",
         ),
@@ -43,15 +54,21 @@ def upgrade() -> None:
     )
     op.create_index(
         op.f("ix_chart_of_accounts_account_code"),
-        "chart_of_accounts", ["account_code"], unique=True,
+        "chart_of_accounts",
+        ["account_code"],
+        unique=True,
     )
     op.create_index(
         op.f("ix_chart_of_accounts_account_type"),
-        "chart_of_accounts", ["account_type"], unique=False,
+        "chart_of_accounts",
+        ["account_type"],
+        unique=False,
     )
     op.create_index(
         op.f("ix_chart_of_accounts_category"),
-        "chart_of_accounts", ["category"], unique=False,
+        "chart_of_accounts",
+        ["category"],
+        unique=False,
     )
 
     op.create_table(
@@ -69,16 +86,28 @@ def upgrade() -> None:
         sa.Column("reconciled_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("reconciled_by", sa.UUID(), nullable=True),
         sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(
-            ["donation_id"], ["donations.id"],
+            ["donation_id"],
+            ["donations.id"],
             name=op.f("fk_financial_transactions_donation_id_donations"),
             ondelete="SET NULL",
         ),
         sa.ForeignKeyConstraint(
-            ["reconciled_by"], ["users.id"],
+            ["reconciled_by"],
+            ["users.id"],
             name=op.f("fk_financial_transactions_reconciled_by_users"),
             ondelete="SET NULL",
         ),
@@ -86,19 +115,27 @@ def upgrade() -> None:
     )
     op.create_index(
         op.f("ix_financial_transactions_transaction_number"),
-        "financial_transactions", ["transaction_number"], unique=True,
+        "financial_transactions",
+        ["transaction_number"],
+        unique=True,
     )
     op.create_index(
         op.f("ix_financial_transactions_transaction_type"),
-        "financial_transactions", ["transaction_type"], unique=False,
+        "financial_transactions",
+        ["transaction_type"],
+        unique=False,
     )
     op.create_index(
         op.f("ix_financial_transactions_status"),
-        "financial_transactions", ["status"], unique=False,
+        "financial_transactions",
+        ["status"],
+        unique=False,
     )
     op.create_index(
         op.f("ix_financial_transactions_transaction_date"),
-        "financial_transactions", ["transaction_date"], unique=False,
+        "financial_transactions",
+        ["transaction_date"],
+        unique=False,
     )
 
     op.create_table(
@@ -110,15 +147,27 @@ def upgrade() -> None:
         sa.Column("entry_date", sa.Date(), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(
-            ["account_id"], ["chart_of_accounts.id"],
+            ["account_id"],
+            ["chart_of_accounts.id"],
             name=op.f("fk_general_ledger_entries_account_id_chart_of_accounts"),
             ondelete="RESTRICT",
         ),
         sa.ForeignKeyConstraint(
-            ["transaction_id"], ["financial_transactions.id"],
+            ["transaction_id"],
+            ["financial_transactions.id"],
             name=op.f("fk_general_ledger_entries_transaction_id_financial_transactions"),
             ondelete="RESTRICT",
         ),
@@ -126,15 +175,21 @@ def upgrade() -> None:
     )
     op.create_index(
         op.f("ix_general_ledger_entries_account_id"),
-        "general_ledger_entries", ["account_id"], unique=False,
+        "general_ledger_entries",
+        ["account_id"],
+        unique=False,
     )
     op.create_index(
         op.f("ix_general_ledger_entries_transaction_id"),
-        "general_ledger_entries", ["transaction_id"], unique=False,
+        "general_ledger_entries",
+        ["transaction_id"],
+        unique=False,
     )
     op.create_index(
         op.f("ix_general_ledger_entries_entry_date"),
-        "general_ledger_entries", ["entry_date"], unique=False,
+        "general_ledger_entries",
+        ["entry_date"],
+        unique=False,
     )
 
     op.create_table(
@@ -154,16 +209,28 @@ def upgrade() -> None:
         sa.Column("is_active", sa.Boolean(), nullable=False),
         sa.Column("last_generated", sa.Date(), nullable=True),
         sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(
-            ["debit_account_id"], ["chart_of_accounts.id"],
+            ["debit_account_id"],
+            ["chart_of_accounts.id"],
             name=op.f("fk_recurring_transactions_debit_account_id_chart_of_accounts"),
             ondelete="RESTRICT",
         ),
         sa.ForeignKeyConstraint(
-            ["credit_account_id"], ["chart_of_accounts.id"],
+            ["credit_account_id"],
+            ["chart_of_accounts.id"],
             name=op.f("fk_recurring_transactions_credit_account_id_chart_of_accounts"),
             ondelete="RESTRICT",
         ),
@@ -181,14 +248,26 @@ def upgrade() -> None:
         sa.Column("notes", sa.Text(), nullable=True),
         sa.Column("is_active", sa.Boolean(), nullable=False),
         sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_budgets")),
     )
     op.create_index(
         op.f("ix_budgets_fiscal_year"),
-        "budgets", ["fiscal_year"], unique=False,
+        "budgets",
+        ["fiscal_year"],
+        unique=False,
     )
 
     op.create_table(
@@ -198,15 +277,27 @@ def upgrade() -> None:
         sa.Column("allocated_amount", sa.Numeric(precision=14, scale=2), nullable=False),
         sa.Column("spent_amount", sa.Numeric(precision=14, scale=2), nullable=False),
         sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(
-            ["budget_id"], ["budgets.id"],
+            ["budget_id"],
+            ["budgets.id"],
             name=op.f("fk_budget_items_budget_id_budgets"),
             ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
-            ["account_id"], ["chart_of_accounts.id"],
+            ["account_id"],
+            ["chart_of_accounts.id"],
             name=op.f("fk_budget_items_account_id_chart_of_accounts"),
             ondelete="RESTRICT",
         ),
@@ -214,7 +305,9 @@ def upgrade() -> None:
     )
     op.create_index(
         op.f("ix_budget_items_budget_id"),
-        "budget_items", ["budget_id"], unique=False,
+        "budget_items",
+        ["budget_id"],
+        unique=False,
     )
 
 

@@ -24,6 +24,7 @@ from scripts.seed_success_stories import seed_success_stories
 from scripts.seed_veterinarians import main as seed_vets
 from scripts.seed_veterinary_partners import main as seed_partners
 from scripts.seed_volunteer_data import main as seed_volunteers
+from scripts.seed_cms_pages import seed_cms_pages
 
 
 async def run_all() -> None:
@@ -56,8 +57,11 @@ async def run_all() -> None:
         print("\n--> Seeding 8/9: Found-Animal Reports...")
         await seed_found_reports()
 
-        print("\n--> Seeding 9/9: Pet Appointments & Companion Pets...")
+        print("\n--> Seeding 9/10: Pet Appointments & Companion Pets...")
         await seed_appointments()
+
+        print("\n--> Seeding 10/10: Default CMS Pages...")
+        await seed_cms_pages()
 
         print("\n=========================================================")
         print(" SUCCESS: Master Seeding Completed for all tables!")

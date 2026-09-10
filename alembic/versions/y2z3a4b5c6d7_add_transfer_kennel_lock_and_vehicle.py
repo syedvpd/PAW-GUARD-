@@ -67,9 +67,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint(
-        "fk_facility_transfers_vehicle_id", "facility_transfers", type_="foreignkey"
-    )
+    op.drop_constraint("fk_facility_transfers_vehicle_id", "facility_transfers", type_="foreignkey")
     op.drop_constraint(
         "fk_facility_transfers_destination_kennel_id", "facility_transfers", type_="foreignkey"
     )

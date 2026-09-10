@@ -5,6 +5,7 @@ Revises: 4f3c25a44f2e
 Create Date: 2026-08-11 12:00:00.000000
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op

@@ -294,7 +294,9 @@ class AdoptionService:
             # application as conflicting with itself.
             if existing_locked is not None and existing_locked.id != app.id:
                 if existing_locked.status == AdoptionStatus.COMPLETED:
-                    raise ConflictError("Another application has already completed adoption for this dog.")
+                    raise ConflictError(
+                        "Another application has already completed adoption for this dog."
+                    )
                 raise ConflictError(
                     f"Another application has already reached '{existing_locked.status}' for this dog."
                 )
@@ -311,7 +313,9 @@ class AdoptionService:
                 for sibling in siblings:
                     sibling_old_status = AdoptionStatus(sibling.status)
                     sibling.status = AdoptionStatus.REJECTED
-                    reason = "Dog no longer available - another application reached Home Inspection."
+                    reason = (
+                        "Dog no longer available - another application reached Home Inspection."
+                    )
                     sibling.vetting_officer_notes = (
                         f"{sibling.vetting_officer_notes}\nRejection Reason: {reason}".strip()
                         if sibling.vetting_officer_notes
@@ -472,7 +476,9 @@ class AdoptionService:
 
         if "status" in update_data:
             new_status = update_data["status"]
-            self._check_transition(app.status, new_status, is_foster_to_adopt=app.is_foster_to_adopt)
+            self._check_transition(
+                app.status, new_status, is_foster_to_adopt=app.is_foster_to_adopt
+            )
 
             if app.status == AdoptionStatus.INTERVIEW and new_status == AdoptionStatus.HOME_CHECK:
                 effective_interview_completed_at = update_data.get(
@@ -803,7 +809,10 @@ class AdoptionService:
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
-                metadata={"adoption_id": str(app_id), "signature_name": app.agreement_signature_name},
+                metadata={
+                    "adoption_id": str(app_id),
+                    "signature_name": app.agreement_signature_name,
+                },
             )
 
         return res
@@ -825,9 +834,7 @@ class AdoptionService:
         hatch), but is audited with explicit before/after state.
         """
         if not (actor_roles & ADOPTION_OVERRIDE_ROLES):
-            raise ForbiddenError(
-                "Only a Rescue Centre Admin can reverse a completed adoption."
-            )
+            raise ForbiddenError("Only a Rescue Centre Admin can reverse a completed adoption.")
         if not reason or not reason.strip():
             raise ValidationFailedError("A reason is required to reverse a completed adoption.")
 
@@ -862,7 +869,11 @@ class AdoptionService:
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
-                metadata={"adoption_id": str(app_id), "dog_id": str(app.dog_id), "reason": reason.strip()},
+                metadata={
+                    "adoption_id": str(app_id),
+                    "dog_id": str(app.dog_id),
+                    "reason": reason.strip(),
+                },
                 before_state={"status": old_status.value, "dog_is_adoptable": False},
                 after_state={"status": AdoptionStatus.REJECTED.value, "dog_is_adoptable": True},
             )

@@ -13,6 +13,7 @@ Revises: d6e7f8a9b0c1
 Create Date: 2026-08-03 08:00:00.000000
 
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -39,9 +40,24 @@ def upgrade() -> None:
         sa.Column("goal_reached_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.ForeignKeyConstraint(["created_by_id"], ["users.id"], name=op.f("fk_donation_campaigns_created_by_id_users"), ondelete="SET NULL"),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(
+            ["created_by_id"],
+            ["users.id"],
+            name=op.f("fk_donation_campaigns_created_by_id_users"),
+            ondelete="SET NULL",
+        ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_donation_campaigns")),
     )
     op.create_index(
@@ -52,12 +68,13 @@ def upgrade() -> None:
         "donations",
         sa.Column("campaign_id", sa.UUID(), nullable=True),
     )
-    op.create_index(
-        op.f("ix_donations_campaign_id"), "donations", ["campaign_id"], unique=False
-    )
+    op.create_index(op.f("ix_donations_campaign_id"), "donations", ["campaign_id"], unique=False)
     op.create_foreign_key(
         op.f("fk_donations_campaign_id_donation_campaigns"),
-        "donations", "donation_campaigns", ["campaign_id"], ["id"],
+        "donations",
+        "donation_campaigns",
+        ["campaign_id"],
+        ["id"],
         ondelete="SET NULL",
     )
 
@@ -65,7 +82,8 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_constraint(
         op.f("fk_donations_campaign_id_donation_campaigns"),
-        "donations", type_="foreignkey",
+        "donations",
+        type_="foreignkey",
     )
     op.drop_index(op.f("ix_donations_campaign_id"), table_name="donations")
     op.drop_column("donations", "campaign_id")

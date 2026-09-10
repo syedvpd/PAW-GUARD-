@@ -9,6 +9,7 @@ directory listing can render gallery images directly from external URLs
 without requiring a StoredFile row in the storage module. Seed scripts
 populate this column with CDN image URLs for adoptable dogs.
 """
+
 from collections.abc import Sequence
 from typing import Union
 
@@ -17,8 +18,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
 
 
-revision: str = 'b9c0d1e2f3a4'
-down_revision: Union[str, None] = '84a0660c2de3'
+revision: str = "b9c0d1e2f3a4"
+down_revision: Union[str, None] = "84a0660c2de3"
 branch_labels: Union[str, Sequence[str, None], None] = None
 depends_on: Union[str, Sequence[str, None], None] = None
 

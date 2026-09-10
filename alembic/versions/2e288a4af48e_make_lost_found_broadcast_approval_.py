@@ -5,14 +5,15 @@ Revises: f00182391f58
 Create Date: 2026-08-24 11:17:02.535705
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = '2e288a4af48e'
-down_revision: Union[str, None] = 'f00182391f58'
+revision: str = "2e288a4af48e"
+down_revision: Union[str, None] = "f00182391f58"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

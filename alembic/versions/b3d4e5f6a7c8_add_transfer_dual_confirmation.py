@@ -42,24 +42,32 @@ def upgrade() -> None:
     )
     op.create_foreign_key(
         "fk_facility_transfers_sender_confirmed_by_users",
-        "facility_transfers", "users",
-        ["sender_confirmed_by"], ["id"], ondelete="SET NULL",
+        "facility_transfers",
+        "users",
+        ["sender_confirmed_by"],
+        ["id"],
+        ondelete="SET NULL",
     )
     op.create_foreign_key(
         "fk_facility_transfers_receiver_confirmed_by_users",
-        "facility_transfers", "users",
-        ["receiver_confirmed_by"], ["id"], ondelete="SET NULL",
+        "facility_transfers",
+        "users",
+        ["receiver_confirmed_by"],
+        ["id"],
+        ondelete="SET NULL",
     )
 
 
 def downgrade() -> None:
     op.drop_constraint(
         "fk_facility_transfers_receiver_confirmed_by_users",
-        "facility_transfers", type_="foreignkey",
+        "facility_transfers",
+        type_="foreignkey",
     )
     op.drop_constraint(
         "fk_facility_transfers_sender_confirmed_by_users",
-        "facility_transfers", type_="foreignkey",
+        "facility_transfers",
+        type_="foreignkey",
     )
     op.drop_column("facility_transfers", "receiver_confirmed_by")
     op.drop_column("facility_transfers", "receiver_confirmed_at")

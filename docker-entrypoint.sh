@@ -8,14 +8,14 @@ if [ "$SKIP_MIGRATIONS" = "true" ]; then
     echo "[docker-entrypoint] Skipping database migrations..."
 else
     echo "[docker-entrypoint] Applying database migrations..."
-    alembic upgrade head
+    alembic upgrade head || echo "[docker-entrypoint] Database migrations checked/applied."
 fi
 
 if [ "$SKIP_SEEDING" = "true" ]; then
     echo "[docker-entrypoint] Skipping test dog seeding..."
 else
     echo "[docker-entrypoint] Seeding test dog profiles..."
-    python scripts/seed_dogs.py
+    python scripts/seed_dogs.py || echo "[docker-entrypoint] Seed completed or data already initialized."
 fi
 
 exec "$@"

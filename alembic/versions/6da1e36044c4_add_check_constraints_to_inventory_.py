@@ -5,14 +5,15 @@ Revises: b34424e4e94c
 Create Date: 2026-08-01 22:56:44.735991
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = '6da1e36044c4'
-down_revision: Union[str, None] = 'b34424e4e94c'
+revision: str = "6da1e36044c4"
+down_revision: Union[str, None] = "b34424e4e94c"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -34,7 +35,9 @@ def _assert_no_violations() -> None:
     """
     bind = op.get_bind()
     for table, name, expression in _CONSTRAINTS:
-        rows = bind.execute(sa.text(f"SELECT COUNT(*) FROM {table} WHERE NOT ({expression})")).scalar()
+        rows = bind.execute(
+            sa.text(f"SELECT COUNT(*) FROM {table} WHERE NOT ({expression})")
+        ).scalar()
         if rows:
             raise RuntimeError(
                 f"Refusing to add {name}: {rows} row(s) in {table} violate ({expression}). "

@@ -4,6 +4,7 @@ Revision ID: e39162ae1bfc
 Revises: 2e288a4af48e
 Create Date: 2026-08-24 00:00:00.000000
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -24,7 +25,8 @@ def upgrade() -> None:
     op.add_column("shift_attendances", sa.Column("no_show_reason", sa.Text(), nullable=True))
     op.add_column("shift_attendances", sa.Column("no_show_marked_by", sa.UUID(), nullable=True))
     op.add_column(
-        "shift_attendances", sa.Column("no_show_marked_at", sa.DateTime(timezone=True), nullable=True)
+        "shift_attendances",
+        sa.Column("no_show_marked_at", sa.DateTime(timezone=True), nullable=True),
     )
     op.add_column("shift_attendances", sa.Column("cancelled_reason", sa.Text(), nullable=True))
     op.add_column("shift_attendances", sa.Column("cancelled_by", sa.UUID(), nullable=True))
@@ -32,7 +34,8 @@ def upgrade() -> None:
         "shift_attendances", sa.Column("cancelled_at", sa.DateTime(timezone=True), nullable=True)
     )
     op.add_column(
-        "shift_attendances", sa.Column("reminder_sent_at", sa.DateTime(timezone=True), nullable=True)
+        "shift_attendances",
+        sa.Column("reminder_sent_at", sa.DateTime(timezone=True), nullable=True),
     )
     op.create_index("ix_shift_attendances_status", "shift_attendances", ["status"])
     op.create_foreign_key(
@@ -54,9 +57,7 @@ def upgrade() -> None:
     # Backfill: any attendance already checked out/in under the old
     # timestamp-only model must carry a status consistent with those
     # timestamps, not the "claimed" default just applied.
-    op.execute(
-        "UPDATE shift_attendances SET status = 'checked_out' WHERE check_out_at IS NOT NULL"
-    )
+    op.execute("UPDATE shift_attendances SET status = 'checked_out' WHERE check_out_at IS NOT NULL")
     op.execute(
         "UPDATE shift_attendances SET status = 'checked_in' "
         "WHERE check_in_at IS NOT NULL AND check_out_at IS NULL"
@@ -65,7 +66,9 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_constraint("fk_shift_attendances_cancelled_by", "shift_attendances", type_="foreignkey")
-    op.drop_constraint("fk_shift_attendances_no_show_marked_by", "shift_attendances", type_="foreignkey")
+    op.drop_constraint(
+        "fk_shift_attendances_no_show_marked_by", "shift_attendances", type_="foreignkey"
+    )
     op.drop_index("ix_shift_attendances_status", table_name="shift_attendances")
     op.drop_column("shift_attendances", "reminder_sent_at")
     op.drop_column("shift_attendances", "cancelled_at")

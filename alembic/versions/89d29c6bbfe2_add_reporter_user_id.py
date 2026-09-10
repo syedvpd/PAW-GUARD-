@@ -27,9 +27,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(
-        "DROP INDEX IF EXISTS ix_rescue_requests_reporter_user_id"
-    )
-    op.execute(
-        "ALTER TABLE rescue_requests DROP COLUMN IF EXISTS reporter_user_id"
-    )
+    op.execute("DROP INDEX IF EXISTS ix_rescue_requests_reporter_user_id")
+    op.execute("ALTER TABLE rescue_requests DROP COLUMN IF EXISTS reporter_user_id")

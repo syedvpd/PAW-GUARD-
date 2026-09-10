@@ -39,21 +39,32 @@ def upgrade() -> None:
         sa.Column("entity_id", sa.UUID(), nullable=True),
         sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
         sa.Column(
-            "created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
         ),
         sa.Column(
-            "updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
         ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(
-            ["user_id"], ["users.id"], name=op.f("fk_stored_files_user_id_users"), ondelete="SET NULL"
+            ["user_id"],
+            ["users.id"],
+            name=op.f("fk_stored_files_user_id_users"),
+            ondelete="SET NULL",
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_stored_files")),
     )
     op.create_index(op.f("ix_stored_files_user_id"), "stored_files", ["user_id"], unique=False)
     op.create_index(op.f("ix_stored_files_object_key"), "stored_files", ["object_key"], unique=True)
     op.create_index(op.f("ix_stored_files_folder"), "stored_files", ["folder"], unique=False)
-    op.create_index(op.f("ix_stored_files_entity_type"), "stored_files", ["entity_type"], unique=False)
+    op.create_index(
+        op.f("ix_stored_files_entity_type"), "stored_files", ["entity_type"], unique=False
+    )
     op.create_index(op.f("ix_stored_files_entity_id"), "stored_files", ["entity_id"], unique=False)
     op.create_index(
         "ix_stored_files_entity", "stored_files", ["entity_type", "entity_id"], unique=False

@@ -10,6 +10,7 @@ Revises: d8e9f0a1b2c2
 Create Date: 2026-08-03 09:00:00.000000
 
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -28,11 +29,16 @@ def upgrade() -> None:
     )
     op.create_index(
         op.f("ix_equipment_checkouts_rescue_dispatch_id"),
-        "equipment_checkouts", ["rescue_dispatch_id"], unique=False,
+        "equipment_checkouts",
+        ["rescue_dispatch_id"],
+        unique=False,
     )
     op.create_foreign_key(
         op.f("fk_equipment_checkouts_rescue_dispatch_id_rescue_dispatches"),
-        "equipment_checkouts", "rescue_dispatches", ["rescue_dispatch_id"], ["id"],
+        "equipment_checkouts",
+        "rescue_dispatches",
+        ["rescue_dispatch_id"],
+        ["id"],
         ondelete="SET NULL",
     )
 
@@ -40,7 +46,8 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_constraint(
         op.f("fk_equipment_checkouts_rescue_dispatch_id_rescue_dispatches"),
-        "equipment_checkouts", type_="foreignkey",
+        "equipment_checkouts",
+        type_="foreignkey",
     )
     op.drop_index(
         op.f("ix_equipment_checkouts_rescue_dispatch_id"),

@@ -5,6 +5,7 @@ Revises: f2g3h4i5j6k7
 Create Date: 2026-08-19 16:00:00.000000
 
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -21,22 +22,26 @@ def upgrade() -> None:
     op.create_table(
         "user_permissions",
         sa.Column(
-            "user_id", PG_UUID(as_uuid=True),
+            "user_id",
+            PG_UUID(as_uuid=True),
             sa.ForeignKey("users.id", ondelete="CASCADE"),
             primary_key=True,
         ),
         sa.Column(
-            "permission_id", PG_UUID(as_uuid=True),
+            "permission_id",
+            PG_UUID(as_uuid=True),
             sa.ForeignKey("permissions.id", ondelete="CASCADE"),
             primary_key=True,
         ),
         sa.Column(
-            "granted_by", PG_UUID(as_uuid=True),
+            "granted_by",
+            PG_UUID(as_uuid=True),
             sa.ForeignKey("users.id", ondelete="SET NULL"),
             nullable=True,
         ),
         sa.Column(
-            "granted_at", sa.DateTime(timezone=True),
+            "granted_at",
+            sa.DateTime(timezone=True),
             nullable=False,
             server_default=sa.text("now()"),
         ),

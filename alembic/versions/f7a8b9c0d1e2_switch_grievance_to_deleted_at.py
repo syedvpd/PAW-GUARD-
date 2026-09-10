@@ -30,12 +30,8 @@ def upgrade() -> None:
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
     )
 
-    op.execute(
-        "UPDATE grievance_tickets SET deleted_at = now() WHERE is_deleted = true"
-    )
-    op.execute(
-        "UPDATE service_feedbacks SET deleted_at = now() WHERE is_deleted = true"
-    )
+    op.execute("UPDATE grievance_tickets SET deleted_at = now() WHERE is_deleted = true")
+    op.execute("UPDATE service_feedbacks SET deleted_at = now() WHERE is_deleted = true")
 
     op.drop_column("grievance_tickets", "is_deleted")
     op.drop_column("service_feedbacks", "is_deleted")
@@ -61,12 +57,8 @@ def downgrade() -> None:
         ),
     )
 
-    op.execute(
-        "UPDATE grievance_tickets SET is_deleted = true WHERE deleted_at IS NOT NULL"
-    )
-    op.execute(
-        "UPDATE service_feedbacks SET is_deleted = true WHERE deleted_at IS NOT NULL"
-    )
+    op.execute("UPDATE grievance_tickets SET is_deleted = true WHERE deleted_at IS NOT NULL")
+    op.execute("UPDATE service_feedbacks SET is_deleted = true WHERE deleted_at IS NOT NULL")
 
     op.drop_column("grievance_tickets", "deleted_at")
     op.drop_column("service_feedbacks", "deleted_at")

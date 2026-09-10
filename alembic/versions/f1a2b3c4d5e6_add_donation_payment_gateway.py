@@ -20,11 +20,11 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     op.add_column("donations", sa.Column("payment_provider", sa.String(length=32), nullable=True))
     op.add_column("donations", sa.Column("gateway_order_id", sa.String(length=128), nullable=True))
-    op.add_column("donations", sa.Column("gateway_payment_id", sa.String(length=128), nullable=True))
-    op.add_column("donations", sa.Column("gateway_signature", sa.String(length=512), nullable=True))
-    op.create_unique_constraint(
-        "uq_donations_gateway_order_id", "donations", ["gateway_order_id"]
+    op.add_column(
+        "donations", sa.Column("gateway_payment_id", sa.String(length=128), nullable=True)
     )
+    op.add_column("donations", sa.Column("gateway_signature", sa.String(length=512), nullable=True))
+    op.create_unique_constraint("uq_donations_gateway_order_id", "donations", ["gateway_order_id"])
 
 
 def downgrade() -> None:

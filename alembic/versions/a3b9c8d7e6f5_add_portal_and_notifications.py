@@ -31,10 +31,25 @@ def upgrade() -> None:
         sa.Column("status", sa.String(32), nullable=False, server_default="draft"),
         sa.Column("published_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-        sa.ForeignKeyConstraint(["dog_id"], ["dog_profiles.id"], name=op.f("fk_success_stories_dog_id_dog_profiles"), ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(
+            ["dog_id"],
+            ["dog_profiles.id"],
+            name=op.f("fk_success_stories_dog_id_dog_profiles"),
+            ondelete="SET NULL",
+        ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_success_stories")),
     )
     op.create_index(op.f("ix_success_stories_status"), "success_stories", ["status"], unique=False)
@@ -50,8 +65,18 @@ def upgrade() -> None:
         sa.Column("status", sa.String(32), nullable=False, server_default="draft"),
         sa.Column("published_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_blog_posts")),
         sa.UniqueConstraint("slug", name=op.f("uq_blog_posts_slug")),
@@ -72,12 +97,24 @@ def upgrade() -> None:
         sa.Column("services", sa.Text(), nullable=True),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_veterinary_partners")),
     )
-    op.create_index(op.f("ix_veterinary_partners_is_active"), "veterinary_partners", ["is_active"], unique=False)
+    op.create_index(
+        op.f("ix_veterinary_partners_is_active"), "veterinary_partners", ["is_active"], unique=False
+    )
 
     op.create_table(
         "contact_locations",
@@ -86,11 +123,23 @@ def upgrade() -> None:
         sa.Column("phone", sa.String(32), nullable=False),
         sa.Column("email", sa.String(255), nullable=True),
         sa.Column("operating_hours", sa.String(255), nullable=True),
-        sa.Column("is_emergency_hotline", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column(
+            "is_emergency_hotline", sa.Boolean(), nullable=False, server_default=sa.text("false")
+        ),
         sa.Column("sort_order", sa.Integer(), nullable=False, server_default=sa.text("0")),
         sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_contact_locations")),
     )
@@ -103,13 +152,25 @@ def upgrade() -> None:
         sa.Column("sort_order", sa.Integer(), nullable=False, server_default=sa.text("0")),
         sa.Column("is_published", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_faq_entries")),
     )
     op.create_index(op.f("ix_faq_entries_category"), "faq_entries", ["category"], unique=False)
-    op.create_index(op.f("ix_faq_entries_is_published"), "faq_entries", ["is_published"], unique=False)
+    op.create_index(
+        op.f("ix_faq_entries_is_published"), "faq_entries", ["is_published"], unique=False
+    )
 
     op.create_table(
         "system_settings",
@@ -117,8 +178,18 @@ def upgrade() -> None:
         sa.Column("value", sa.Text(), nullable=False),
         sa.Column("description", sa.String(255), nullable=True),
         sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_system_settings")),
     )
     op.create_index(op.f("ix_system_settings_key"), "system_settings", ["key"], unique=True)
@@ -133,9 +204,24 @@ def upgrade() -> None:
         sa.Column("is_read", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("read_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.ForeignKeyConstraint(["user_id"], ["users.id"], name=op.f("fk_notifications_user_id_users"), ondelete="CASCADE"),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(
+            ["user_id"],
+            ["users.id"],
+            name=op.f("fk_notifications_user_id_users"),
+            ondelete="CASCADE",
+        ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_notifications")),
     )
     op.create_index(op.f("ix_notifications_user_id"), "notifications", ["user_id"], unique=False)

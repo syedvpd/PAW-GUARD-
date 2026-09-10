@@ -204,7 +204,10 @@ class FosterService:
             if profile.inspected_at is None and payload.inspected_at is None:
                 profile.inspected_at = datetime.now(UTC)
 
-        if payload.status == FosterStatus.REJECTED and profile.status != FosterStatus.APPLIED:
+        if payload.status == FosterStatus.REJECTED and profile.status not in (
+            FosterStatus.APPLIED,
+            FosterStatus.REJECTED,
+        ):
             raise ConflictError("Only an applied foster profile can be rejected.")
         if payload.status == FosterStatus.INACTIVE and profile.active_count > 0:
             raise ConflictError("A foster home with active placements cannot be marked inactive.")
@@ -284,6 +287,36 @@ class FosterService:
                 metadata={"profile_id": str(profile_id)},
             )
         return res
+
+    async def reject_profile(
+        self,
+        profile_id: uuid.UUID,
+        notes: str | None = None,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> FosterProfile:
+        profile = await self._repo.get_profile_by_id(profile_id)
+        if profile is None:
+            raise NotFoundError("Foster profile not found.")
+        profile.status = FosterStatus.REJECTED
+        if notes:
+            profile.vetting_notes = notes.strip()
+            profile.background_check_notes = f"[REJECTED] {notes}".strip()
+        await self._repo._session.flush()
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.FOSTER_APPLICATION_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "profile_id": str(profile_id),
+                    "action": "foster_rejected",
+                    "notes": notes,
+                },
+            )
+        return profile
 
     async def get_profile(self, profile_id: uuid.UUID) -> FosterProfile:
         profile = await self._repo.get_profile_by_id(profile_id)

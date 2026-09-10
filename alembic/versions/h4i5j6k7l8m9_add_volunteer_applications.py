@@ -5,6 +5,7 @@ Revises: g3h4i5j6k7l8
 Create Date: 2026-08-19 18:00:00.000000
 
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -21,8 +22,20 @@ def upgrade() -> None:
     # Create volunteer_applications table
     op.create_table(
         "volunteer_applications",
-        sa.Column("id", PG_UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
-        sa.Column("user_id", PG_UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True, index=True),
+        sa.Column(
+            "id",
+            PG_UUID(as_uuid=True),
+            primary_key=True,
+            server_default=sa.text("gen_random_uuid()"),
+        ),
+        sa.Column(
+            "user_id",
+            PG_UUID(as_uuid=True),
+            sa.ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+            unique=True,
+            index=True,
+        ),
         sa.Column("status", sa.String(32), nullable=False, server_default="submitted", index=True),
         sa.Column("emergency_contact_name", sa.String(255), nullable=False),
         sa.Column("emergency_contact_phone", sa.String(32), nullable=False),
@@ -31,20 +44,51 @@ def upgrade() -> None:
         sa.Column("notes", sa.Text, nullable=True),
         sa.Column("medical_conditions", sa.Text, nullable=True),
         sa.Column("animal_handling_experience", sa.Text, nullable=True),
-        sa.Column("reviewed_by", PG_UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+        sa.Column(
+            "reviewed_by",
+            PG_UUID(as_uuid=True),
+            sa.ForeignKey("users.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
         sa.Column("reviewed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("rejection_reason", sa.Text, nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_by", PG_UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
-        sa.Column("updated_by", PG_UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+        sa.Column(
+            "created_by",
+            PG_UUID(as_uuid=True),
+            sa.ForeignKey("users.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+        sa.Column(
+            "updated_by",
+            PG_UUID(as_uuid=True),
+            sa.ForeignKey("users.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
     )
 
     # Add application_id column to volunteer_profiles
     op.add_column(
         "volunteer_profiles",
-        sa.Column("application_id", PG_UUID(as_uuid=True), sa.ForeignKey("volunteer_applications.id", ondelete="SET NULL"), nullable=True, index=True),
+        sa.Column(
+            "application_id",
+            PG_UUID(as_uuid=True),
+            sa.ForeignKey("volunteer_applications.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
     )
 
     # Migrate existing volunteer profiles with status 'applied' to have applications

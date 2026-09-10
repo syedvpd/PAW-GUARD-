@@ -4,6 +4,7 @@ Revision ID: n9o0p1q2r3s4
 Revises: m8n9p0q1r2s3
 Create Date: 2026-08-21 00:00:00.000000
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -50,8 +51,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint("fk_foster_placements_adoption_application_id", "foster_placements", type_="foreignkey")
-    op.drop_constraint("uq_foster_placements_adoption_application_id", "foster_placements", type_="unique")
+    op.drop_constraint(
+        "fk_foster_placements_adoption_application_id", "foster_placements", type_="foreignkey"
+    )
+    op.drop_constraint(
+        "uq_foster_placements_adoption_application_id", "foster_placements", type_="unique"
+    )
     op.drop_index("ix_foster_placements_status", table_name="foster_placements")
     op.drop_column("foster_placements", "adoption_application_id")
     op.drop_column("foster_placements", "status")

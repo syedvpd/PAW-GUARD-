@@ -96,7 +96,9 @@ class RouteNotFoundError(AppException):
 
 
 class ValidationFailedError(AppException):
-    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+    status_code = getattr(
+        status, "HTTP_422_UNPROCESSABLE_CONTENT", status.HTTP_422_UNPROCESSABLE_ENTITY
+    )
     code = "VALIDATION_FAILED"
     category = ErrorCategory.VALIDATION
     layer = ErrorLayer.VALIDATION
@@ -305,7 +307,9 @@ def register_exception_handlers(app: FastAPI) -> None:
             request_id=request_id,
         )
         return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            status_code=getattr(
+                status, "HTTP_422_UNPROCESSABLE_CONTENT", status.HTTP_422_UNPROCESSABLE_ENTITY
+            ),
             content=error_envelope(
                 code="VALIDATION_ERROR",
                 category=ErrorCategory.VALIDATION,
@@ -357,7 +361,9 @@ def register_exception_handlers(app: FastAPI) -> None:
             request_id=request_id,
         )
         return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            status_code=getattr(
+                status, "HTTP_422_UNPROCESSABLE_CONTENT", status.HTTP_422_UNPROCESSABLE_ENTITY
+            ),
             content=error_envelope(
                 code="VALIDATION_ERROR",
                 category=ErrorCategory.VALIDATION,
@@ -557,7 +563,11 @@ def register_exception_handlers(app: FastAPI) -> None:
                 )
             if "check" in err_msg or "check constraint" in orig_lower:
                 return JSONResponse(
-                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    status_code=getattr(
+                        status,
+                        "HTTP_422_UNPROCESSABLE_CONTENT",
+                        status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    ),
                     content=error_envelope(
                         code="VALIDATION_ERROR",
                         category=ErrorCategory.VALIDATION,
@@ -572,7 +582,11 @@ def register_exception_handlers(app: FastAPI) -> None:
                 )
             if "not-null" in err_msg or "null value in column" in orig_lower:
                 return JSONResponse(
-                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    status_code=getattr(
+                        status,
+                        "HTTP_422_UNPROCESSABLE_CONTENT",
+                        status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    ),
                     content=error_envelope(
                         code="VALIDATION_ERROR",
                         category=ErrorCategory.VALIDATION,
@@ -602,7 +616,9 @@ def register_exception_handlers(app: FastAPI) -> None:
         # 4. Data format / length errors
         if isinstance(exc, DataError) or "dataerror" in err_msg:
             return JSONResponse(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                status_code=getattr(
+                    status, "HTTP_422_UNPROCESSABLE_CONTENT", status.HTTP_422_UNPROCESSABLE_ENTITY
+                ),
                 content=error_envelope(
                     code="VALIDATION_ERROR",
                     category=ErrorCategory.VALIDATION,

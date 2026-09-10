@@ -1,4 +1,4 @@
-﻿"""add_version_id_optimistic_locking
+"""add_version_id_optimistic_locking
 
 Revision ID: d9e0f1a2b3c4
 Revises: c8d9e0f1a2b3

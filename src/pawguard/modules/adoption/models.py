@@ -90,7 +90,9 @@ class AdoptionApplication(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMix
         DateTime(timezone=True), nullable=True
     )
     adoption_agreement_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    agreement_signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    agreement_signed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     agreement_signature_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     fee_amount: Mapped[Decimal | None] = mapped_column(
