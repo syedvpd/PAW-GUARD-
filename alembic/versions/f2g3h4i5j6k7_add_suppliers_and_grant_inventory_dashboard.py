@@ -5,6 +5,7 @@ Revises: e1f2g3h4i5j6
 Create Date: 2026-08-19 14:00:00.000000
 
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -21,7 +22,12 @@ def upgrade() -> None:
     # ── Suppliers table ───────────────────────────────────────────────
     op.create_table(
         "suppliers",
-        sa.Column("id", PG_UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column(
+            "id",
+            PG_UUID(as_uuid=True),
+            primary_key=True,
+            server_default=sa.text("gen_random_uuid()"),
+        ),
         sa.Column("name", sa.String(255), nullable=False, unique=True, index=True),
         sa.Column("contact_person", sa.String(255), nullable=True),
         sa.Column("email", sa.String(255), nullable=True),
@@ -33,24 +39,71 @@ def upgrade() -> None:
         sa.Column("payment_terms", sa.String(255), nullable=True),
         sa.Column("is_active", sa.Boolean, nullable=False, server_default=sa.true()),
         sa.Column("notes", sa.Text, nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_by", PG_UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
-        sa.Column("updated_by", PG_UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+        sa.Column(
+            "created_by",
+            PG_UUID(as_uuid=True),
+            sa.ForeignKey("users.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+        sa.Column(
+            "updated_by",
+            PG_UUID(as_uuid=True),
+            sa.ForeignKey("users.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
     )
 
     # ── Inventory item ↔ Supplier link table ──────────────────────────
     op.create_table(
         "inventory_item_suppliers",
-        sa.Column("id", PG_UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
-        sa.Column("item_id", PG_UUID(as_uuid=True), sa.ForeignKey("inventory_items.id", ondelete="CASCADE"), nullable=False, index=True),
-        sa.Column("supplier_id", PG_UUID(as_uuid=True), sa.ForeignKey("suppliers.id", ondelete="CASCADE"), nullable=False, index=True),
+        sa.Column(
+            "id",
+            PG_UUID(as_uuid=True),
+            primary_key=True,
+            server_default=sa.text("gen_random_uuid()"),
+        ),
+        sa.Column(
+            "item_id",
+            PG_UUID(as_uuid=True),
+            sa.ForeignKey("inventory_items.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        ),
+        sa.Column(
+            "supplier_id",
+            PG_UUID(as_uuid=True),
+            sa.ForeignKey("suppliers.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        ),
         sa.Column("unit_cost", sa.Numeric(10, 2), nullable=False),
         sa.Column("lead_time_days", sa.Integer, nullable=True),
         sa.Column("is_preferred", sa.Boolean, nullable=False, server_default=sa.false()),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
     )
 
     # ── Grant dashboard:inventory to inventory_manager role ───────────
@@ -83,8 +136,6 @@ def downgrade() -> None:
             ")"
         )
     )
-    op.execute(
-        sa.text("DELETE FROM permissions WHERE code = 'dashboard:inventory'")
-    )
+    op.execute(sa.text("DELETE FROM permissions WHERE code = 'dashboard:inventory'"))
     op.drop_table("inventory_item_suppliers")
     op.drop_table("suppliers")

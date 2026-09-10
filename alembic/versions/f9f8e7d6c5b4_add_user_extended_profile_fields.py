@@ -9,6 +9,7 @@ Revises: 4e1fa2c99247
 Create Date: 2026-08-06 11:15:00.000000
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op

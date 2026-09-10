@@ -174,9 +174,7 @@ class AdoptionWithdrawRequest(BaseModel):
 class AdoptionAgreementSignRequest(BaseModel):
     """Adopter self-serve e-signature attestation for the generated agreement PDF."""
 
-    signature_name: str = Field(
-        ..., min_length=2, max_length=255, examples=["Jordan A. Rivera"]
-    )
+    signature_name: str = Field(..., min_length=2, max_length=255, examples=["Jordan A. Rivera"])
 
 
 class AdoptionOverrideRequest(BaseModel):

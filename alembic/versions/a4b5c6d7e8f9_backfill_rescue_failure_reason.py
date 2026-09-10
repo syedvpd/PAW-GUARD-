@@ -54,8 +54,7 @@ def upgrade() -> None:
     conn = op.get_bind()
     rows = conn.execute(
         sa.text(
-            "SELECT DISTINCT failure_reason FROM rescue_dispatches "
-            "WHERE failure_reason IS NOT NULL"
+            "SELECT DISTINCT failure_reason FROM rescue_dispatches WHERE failure_reason IS NOT NULL"
         )
     ).fetchall()
     for (value,) in rows:

@@ -20,9 +20,7 @@ def upgrade() -> None:
         "lost_reports",
         sa.Column("broadcasted_at", sa.DateTime(timezone=True), nullable=True),
     )
-    op.create_index(
-        "ix_lost_reports_broadcasted_at", "lost_reports", ["broadcasted_at"]
-    )
+    op.create_index("ix_lost_reports_broadcasted_at", "lost_reports", ["broadcasted_at"])
 
 
 def downgrade() -> None:

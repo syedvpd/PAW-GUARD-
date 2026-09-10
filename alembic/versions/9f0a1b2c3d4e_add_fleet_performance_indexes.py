@@ -5,13 +5,14 @@ Revises: 2b8b178e259c
 Create Date: 2026-08-07 09:00:00.000000
 
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = '9f0a1b2c3d4e'
-down_revision: str | None = '2b8b178e259c'
+revision: str = "9f0a1b2c3d4e"
+down_revision: str | None = "2b8b178e259c"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

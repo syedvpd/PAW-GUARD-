@@ -10,6 +10,7 @@ Revises: f9f8e7d6c5b6
 Create Date: 2026-08-10 16:30:00.000000
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -33,9 +34,7 @@ def upgrade() -> None:
         "dog_profiles",
         ["kennel_id"],
         unique=True,
-        postgresql_where=sa.text(
-            "kennel_id IS NOT NULL AND deleted_at IS NULL"
-        ),
+        postgresql_where=sa.text("kennel_id IS NOT NULL AND deleted_at IS NULL"),
     )
 
     # PRR 3.8: a dog can only have one active foster placement at a time.
@@ -61,9 +60,7 @@ def upgrade() -> None:
         "adoption_applications",
         ["dog_id"],
         unique=True,
-        postgresql_where=sa.text(
-            "status IN ('home_check', 'approved') AND deleted_at IS NULL"
-        ),
+        postgresql_where=sa.text("status IN ('home_check', 'approved') AND deleted_at IS NULL"),
     )
 
 

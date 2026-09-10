@@ -5,6 +5,7 @@ Revises: b3c4d5e6f7g8, c6d7e8f9a0b1
 Create Date: 2026-08-15 14:35:00.000000
 
 """
+
 from collections.abc import Sequence
 
 revision: str = "e9f8d7c6b5a4"

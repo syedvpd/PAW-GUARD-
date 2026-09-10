@@ -5,6 +5,7 @@ Revises: b1c2d3e4f5a6
 Create Date: 2026-09-03 12:55:00.000000
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -23,9 +24,7 @@ def upgrade() -> None:
     op.execute(
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS can_drive BOOLEAN NOT NULL DEFAULT FALSE"
     )
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_users_can_drive ON users (can_drive)"
-    )
+    op.execute("CREATE INDEX IF NOT EXISTS ix_users_can_drive ON users (can_drive)")
 
 
 def downgrade() -> None:

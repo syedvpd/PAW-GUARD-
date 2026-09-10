@@ -179,10 +179,13 @@ class PortalRepository:
         *,
         status: ContentStatus | None = None,
         search: str | None = None,
+        is_featured: bool | None = None,
     ) -> int:
         stmt = select(func.count(SuccessStory.id)).where(SuccessStory.deleted_at.is_(None))
         if status:
             stmt = stmt.where(SuccessStory.status == status)
+        if is_featured is not None:
+            stmt = stmt.where(SuccessStory.is_featured.is_(is_featured))
         if search:
             like = f"%{search.strip().lower()}%"
             stmt = stmt.where(
@@ -203,12 +206,15 @@ class PortalRepository:
         status: ContentStatus | None = None,
         search: str | None = None,
         sort: SortParams | None = None,
+        is_featured: bool | None = None,
     ) -> Sequence[SuccessStory]:
         stmt = select(SuccessStory).where(SuccessStory.deleted_at.is_(None))
         if published_only:
             stmt = stmt.where(SuccessStory.status == ContentStatus.PUBLISHED)
         if status:
             stmt = stmt.where(SuccessStory.status == status)
+        if is_featured is not None:
+            stmt = stmt.where(SuccessStory.is_featured.is_(is_featured))
         if search:
             like = f"%{search.strip().lower()}%"
             stmt = stmt.where(

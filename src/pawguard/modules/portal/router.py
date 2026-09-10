@@ -712,6 +712,7 @@ async def admin_list_stories(
     params: PageParams = Depends(page_params),
     status: ContentStatus | None = Query(None, description="Filter by status"),
     search: str | None = Query(None, description="Search by title, body, or summary"),
+    is_featured: bool | None = Query(None, description="Filter by featured status"),
     sort: SortParams = Depends(sort_params),
     service: PortalService = Depends(get_portal_service),
 ) -> PaginatedResponse[SuccessStoryResponse]:
@@ -720,6 +721,7 @@ async def admin_list_stories(
         status=status,
         search=search,
         sort=sort,
+        is_featured=is_featured,
     )
     return PaginatedResponse(
         data=[SuccessStoryResponse.model_validate(s) for s in stories],

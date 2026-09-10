@@ -24,9 +24,7 @@ def upgrade() -> None:
         sa.Column("author_id", sa.UUID(), nullable=True),
         sa.Column("body", sa.Text(), nullable=False),
         sa.Column("is_internal", sa.Boolean(), nullable=False),
-        sa.Column(
-            "id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False
-        ),
+        sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -88,7 +86,5 @@ def downgrade() -> None:
     op.drop_column("service_feedbacks", "is_deleted")
     op.drop_column("grievance_tickets", "is_deleted")
     op.drop_column("grievance_tickets", "reporter_email")
-    op.drop_index(
-        op.f("ix_grievance_comments_ticket_id"), table_name="grievance_comments"
-    )
+    op.drop_index(op.f("ix_grievance_comments_ticket_id"), table_name="grievance_comments")
     op.drop_table("grievance_comments")

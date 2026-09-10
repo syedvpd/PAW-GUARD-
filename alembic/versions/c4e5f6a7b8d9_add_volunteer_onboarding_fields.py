@@ -25,7 +25,9 @@ def upgrade() -> None:
     op.add_column(
         "volunteer_profiles",
         sa.Column(
-            "background_check_completed", sa.Boolean(), nullable=False,
+            "background_check_completed",
+            sa.Boolean(),
+            nullable=False,
             server_default=sa.false(),
         ),
     )

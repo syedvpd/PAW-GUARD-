@@ -60,15 +60,9 @@ def upgrade() -> None:
             nullable=False,
         ),
     )
-    op.create_index(
-        "ix_dog_activity_logs_dog_id", "dog_activity_logs", ["dog_id"]
-    )
-    op.create_index(
-        "ix_dog_activity_logs_event_type", "dog_activity_logs", ["event_type"]
-    )
-    op.create_index(
-        "ix_dog_activity_logs_actor_id", "dog_activity_logs", ["actor_id"]
-    )
+    op.create_index("ix_dog_activity_logs_dog_id", "dog_activity_logs", ["dog_id"])
+    op.create_index("ix_dog_activity_logs_event_type", "dog_activity_logs", ["event_type"])
+    op.create_index("ix_dog_activity_logs_actor_id", "dog_activity_logs", ["actor_id"])
 
 
 def downgrade() -> None:

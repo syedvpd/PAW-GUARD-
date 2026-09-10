@@ -111,8 +111,7 @@ def upgrade() -> None:
 
     # ── M-1: backfill gender onto the controlled set ────────────────────────
     op.execute(
-        "UPDATE dog_profiles SET gender = LOWER(gender) "
-        "WHERE gender IS DISTINCT FROM LOWER(gender)"
+        "UPDATE dog_profiles SET gender = LOWER(gender) WHERE gender IS DISTINCT FROM LOWER(gender)"
     )
     op.execute(
         "UPDATE dog_profiles SET gender = 'unknown' "

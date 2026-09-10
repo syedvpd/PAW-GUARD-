@@ -5,6 +5,7 @@ Revises: a8b9c0d1e2f3
 Create Date: 2026-09-01 11:06:00.000000
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -28,9 +29,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(
-        "DROP INDEX IF EXISTS ix_rescue_requests_reporter_user_id"
-    )
-    op.execute(
-        "ALTER TABLE rescue_requests DROP COLUMN IF EXISTS reporter_user_id"
-    )
+    op.execute("DROP INDEX IF EXISTS ix_rescue_requests_reporter_user_id")
+    op.execute("ALTER TABLE rescue_requests DROP COLUMN IF EXISTS reporter_user_id")

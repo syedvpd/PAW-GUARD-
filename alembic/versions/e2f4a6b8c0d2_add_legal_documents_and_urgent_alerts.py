@@ -66,9 +66,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id", name=op.f("pk_legal_documents")),
         sa.UniqueConstraint("slug", name=op.f("uq_legal_documents_slug")),
     )
-    op.create_index(
-        op.f("ix_legal_documents_slug"), "legal_documents", ["slug"], unique=True
-    )
+    op.create_index(op.f("ix_legal_documents_slug"), "legal_documents", ["slug"], unique=True)
     op.create_index(
         op.f("ix_legal_documents_document_type"),
         "legal_documents",
