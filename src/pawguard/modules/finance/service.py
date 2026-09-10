@@ -1260,7 +1260,7 @@ class FinanceService:
         refreshed = await donation_repo.get_donation_by_id(donation_id)
         if not refreshed:
             raise NotFoundError("Donation not found.")
-        await temp_service._generate_receipt(refreshed)
+        await temp_service._generate_receipt(refreshed, raise_on_failure=True)
         await self._repo._session.flush()
         await self._repo._session.refresh(donation)
         if not donation.receipt_file_key:

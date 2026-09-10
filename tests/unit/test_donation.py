@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -54,6 +54,14 @@ def _make_donation(**kw):
     )
     vals.update(kw)
     return Donation(**vals)
+
+
+def _async_session_mock():
+    """AsyncSession proxy: async I/O methods + synchronous ``add`` (matches
+    ``sqlalchemy.ext.asyncio.AsyncSession`` where ``add`` is not awaitable)."""
+    session = AsyncMock()
+    session.add = MagicMock()
+    return session
 
 
 def _make_campaign(**kw):
@@ -385,10 +393,13 @@ class TestDonationService:
         )
         mock_repo.create_donation.return_value = None
         mock_repo.get_donation_by_id.return_value = donation
-        mock_repo._session = AsyncMock()
+        mock_repo._session = _async_session_mock()
 
-        mock_storage = AsyncMock(spec=StorageService)
+        mock_storage = MagicMock(spec=StorageService)
         mock_storage.build_object_key.return_value = "documents/receipt_test.pdf"
+        mock_storage.get_object_size.side_effect = lambda **kw: len(
+            mock_storage.put_object.call_args.kwargs["content"]
+        )
 
         svc = DonationService(
             mock_repo,
@@ -1220,3 +1231,316 @@ class TestSponsorshipValidation:
         # Also for initiate_online_donation
         with pytest.raises(ValidationFailedError, match="between ₹1 and ₹500,000"):
             await service.initiate_online_donation(user_id, oversized_payload)
+
+
+class TestDonationReceiptGeneration:
+    """Receipt generation guarantees: PDF validity, storage verification, error
+    propagation, duplicate protection, and JIT fallback (Flutter 404 fix)."""
+
+    @staticmethod
+    def _configure_storage(mock_storage):
+        mock_storage.build_object_key.return_value = "documents/receipt_test.pdf"
+        mock_storage.get_object_size.side_effect = lambda **kw: len(
+            mock_storage.put_object.call_args.kwargs["content"]
+        )
+        return mock_storage
+
+    @staticmethod
+    def _build_donation(with_receipt: bool = False):
+        donor = DonorProfile(
+            id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            user=User(id=uuid.uuid4(), email="jane@example.com", full_name="Jane Donor"),
+        )
+        donation = Donation(
+            id=uuid.uuid4(),
+            donor_id=donor.id,
+            donor=donor,
+            amount=250.0,
+            currency="USD",
+            donation_type=DonationType.ONE_TIME,
+            status=DonationStatus.SUCCESS,
+            transaction_id="TXN-TEST123",
+            created_at=datetime.now(UTC),
+        )
+        if with_receipt:
+            donation.receipt_file_key = "documents/receipt_already.pdf"
+        return donation
+
+    @pytest.fixture
+    def mock_repo(self):
+        return AsyncMock(spec=DonationRepository)
+
+    @pytest.fixture
+    def mock_dog_repo(self):
+        return AsyncMock(spec=DogRepository)
+
+    @pytest.fixture
+    def mock_audit(self):
+        return AsyncMock(spec=AuditService)
+
+    @pytest.mark.asyncio
+    async def test_generate_receipt_uploads_valid_pdf_and_persists_key(
+        self, mock_repo, mock_dog_repo, mock_audit
+    ):
+        donation = self._build_donation()
+        mock_storage = self._configure_storage(MagicMock(spec=StorageService))
+        mock_repo._session = _async_session_mock()
+        svc = DonationService(
+            mock_repo,
+            mock_dog_repo,
+            audit_service=mock_audit,
+            storage_service=mock_storage,
+        )
+
+        key = await svc._generate_receipt(donation)
+
+        assert key == "documents/receipt_test.pdf"
+        assert donation.receipt_file_key == key
+        mock_storage.put_object.assert_called_once()
+        call_kwargs = mock_storage.put_object.call_args.kwargs
+        assert call_kwargs["content_type"] == "application/pdf"
+        assert call_kwargs["content"][:5] == b"%PDF-"
+        mock_repo._session.add.assert_called_once()
+        mock_audit.record.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_generate_receipt_skips_when_key_already_set(
+        self, mock_repo, mock_dog_repo, mock_audit
+    ):
+        """Duplicate protection: an existing receipt_file_key short-circuits."""
+        donation = self._build_donation(with_receipt=True)
+        mock_storage = MagicMock(spec=StorageService)
+        mock_repo._session = _async_session_mock()
+        svc = DonationService(
+            mock_repo,
+            mock_dog_repo,
+            audit_service=mock_audit,
+            storage_service=mock_storage,
+        )
+
+        key = await svc._generate_receipt(donation)
+
+        assert key == "documents/receipt_already.pdf"
+        mock_storage.put_object.assert_not_called()
+        mock_storage.get_object_size.assert_not_called()
+        mock_repo._session.add.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_generate_receipt_skips_when_storage_unconfigured(self, mock_repo, mock_dog_repo):
+        """A deployment without object storage must still accept donations;
+        receipts are simply skipped (no error)."""
+        svc = DonationService(mock_repo, mock_dog_repo, storage_service=None)
+        result = await svc._generate_receipt(self._build_donation())
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_verify_requires_receipt_when_storage_unconfigured(
+        self, mock_repo, mock_dog_repo, mock_audit
+    ):
+        """verify() must not confirm a donation without a stored receipt, even
+        when storage is unconfigured - otherwise the client receives a 404."""
+        from pawguard.core.payments import PaymentGateway as _PG
+        from pawguard.core.payments import PaymentVerificationResult
+
+        donation_id = uuid.uuid4()
+        donation = Donation(
+            id=donation_id,
+            donor_id=uuid.uuid4(),
+            amount=250.0,
+            currency="INR",
+            donation_type=DonationType.ONE_TIME,
+            status=DonationStatus.PENDING,
+            gateway_order_id="order_xyz",
+            created_at=datetime.now(UTC),
+        )
+        mock_repo.get_donation_by_id.return_value = donation
+        mock_repo._session = _async_session_mock()
+
+        def _update_gateway(donation_id, **kwargs):
+            for k, v in kwargs.items():
+                setattr(donation, k, v)
+            return donation
+
+        mock_repo.update_gateway_fields.side_effect = _update_gateway
+
+        mock_gateway = MagicMock(spec=_PG)
+        mock_gateway.verify_payment_signature.return_value = PaymentVerificationResult(
+            verified=True, payment_id="pay_abc", order_id="order_xyz"
+        )
+        svc = DonationService(
+            mock_repo,
+            mock_dog_repo,
+            mock_gateway,
+            audit_service=mock_audit,
+            storage_service=None,
+        )
+
+        with pytest.raises(ValidationFailedError, match="Receipt generation is required"):
+            await svc.verify_donation_payment(
+                donation_id=donation_id,
+                gateway_order_id="order_xyz",
+                gateway_payment_id="pay_abc",
+                gateway_signature="sig_123",
+            )
+
+    @pytest.mark.asyncio
+    async def test_generate_receipt_returns_none_when_storage_unconfigured_and_swallow(
+        self, mock_repo, mock_dog_repo
+    ):
+        svc = DonationService(mock_repo, mock_dog_repo, storage_service=None)
+        result = await svc._generate_receipt(self._build_donation(), raise_on_failure=False)
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_generate_receipt_raises_on_storage_size_mismatch(
+        self, mock_repo, mock_dog_repo, mock_audit
+    ):
+        donation = self._build_donation()
+        mock_storage = MagicMock(spec=StorageService)
+        mock_storage.build_object_key.return_value = "documents/receipt_test.pdf"
+        mock_storage.get_object_size.return_value = 0
+        mock_repo._session = _async_session_mock()
+        svc = DonationService(
+            mock_repo,
+            mock_dog_repo,
+            audit_service=mock_audit,
+            storage_service=mock_storage,
+        )
+
+        with pytest.raises(ValidationFailedError, match="size mismatch"):
+            await svc._generate_receipt(donation)
+
+    @pytest.mark.asyncio
+    async def test_verify_donation_payment_generates_receipt_before_return(
+        self, mock_repo, mock_dog_repo, mock_audit
+    ):
+        """Regression: the receipt must exist (key set) when verify returns,
+        otherwise Flutter hits a 404/500 for receipt_file_key == NULL."""
+        from pawguard.core.payments import PaymentGateway as _PG
+        from pawguard.core.payments import PaymentVerificationResult
+
+        donation_id = uuid.uuid4()
+        donor = DonorProfile(
+            id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            user=User(id=uuid.uuid4(), email="jane@example.com", full_name="Jane Donor"),
+        )
+        donation = Donation(
+            id=donation_id,
+            donor_id=donor.id,
+            donor=donor,
+            amount=250.0,
+            currency="INR",
+            donation_type=DonationType.ONE_TIME,
+            status=DonationStatus.PENDING,
+            gateway_order_id="order_xyz",
+            created_at=datetime.now(UTC),
+        )
+        mock_repo.get_donation_by_id.return_value = donation
+        mock_repo._session = _async_session_mock()
+
+        def _update_gateway(donation_id, **kwargs):
+            for k, v in kwargs.items():
+                setattr(donation, k, v)
+            return donation
+
+        mock_repo.update_gateway_fields.side_effect = _update_gateway
+
+        mock_gateway = MagicMock(spec=_PG)
+        mock_gateway.verify_payment_signature.return_value = PaymentVerificationResult(
+            verified=True, payment_id="pay_abc", order_id="order_xyz"
+        )
+
+        mock_storage = self._configure_storage(MagicMock(spec=StorageService))
+        svc = DonationService(
+            mock_repo,
+            mock_dog_repo,
+            mock_gateway,
+            audit_service=mock_audit,
+            storage_service=mock_storage,
+        )
+
+        result = await svc.verify_donation_payment(
+            donation_id=donation_id,
+            gateway_order_id="order_xyz",
+            gateway_payment_id="pay_abc",
+            gateway_signature="sig_123",
+            actor_id=donor.user_id,
+        )
+
+        assert result.status == DonationStatus.SUCCESS
+        assert result.receipt_file_key == "documents/receipt_test.pdf"
+        assert mock_repo.update_gateway_fields.await_args.kwargs["status"] == DonationStatus.SUCCESS
+        mock_storage.put_object.assert_called_once()
+        mock_audit.record.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_verify_donation_payment_raises_when_receipt_fails(
+        self, mock_repo, mock_dog_repo, mock_audit
+    ):
+        """If the receipt cannot be produced/stored, verify must not report
+        success to the client (Option 1: generate BEFORE returning 200)."""
+        from pawguard.core.payments import PaymentGateway as _PG
+        from pawguard.core.payments import PaymentVerificationResult
+
+        donation_id = uuid.uuid4()
+        donation = Donation(
+            id=donation_id,
+            donor_id=uuid.uuid4(),
+            amount=250.0,
+            currency="INR",
+            donation_type=DonationType.ONE_TIME,
+            status=DonationStatus.PENDING,
+            gateway_order_id="order_xyz",
+            created_at=datetime.now(UTC),
+        )
+        mock_repo.get_donation_by_id.return_value = donation
+        mock_repo.update_gateway_fields.return_value = donation
+        mock_repo._session = _async_session_mock()
+
+        mock_gateway = MagicMock(spec=_PG)
+        mock_gateway.verify_payment_signature.return_value = PaymentVerificationResult(
+            verified=True, payment_id="pay_abc", order_id="order_xyz"
+        )
+
+        mock_storage = MagicMock(spec=StorageService)
+        mock_storage.build_object_key.return_value = "documents/receipt_test.pdf"
+        mock_storage.get_object_size.return_value = 0
+        svc = DonationService(
+            mock_repo,
+            mock_dog_repo,
+            mock_gateway,
+            audit_service=mock_audit,
+            storage_service=mock_storage,
+        )
+
+        with pytest.raises(ValidationFailedError, match="size mismatch"):
+            await svc.verify_donation_payment(
+                donation_id=donation_id,
+                gateway_order_id="order_xyz",
+                gateway_payment_id="pay_abc",
+                gateway_signature="sig_123",
+            )
+
+    @pytest.mark.asyncio
+    async def test_jit_receipt_pdf_persists_missing_key(self, mock_repo, mock_dog_repo, mock_audit):
+        """JIT fallback: a success donation with a NULL receipt_file_key still
+        returns valid PDF bytes and the key is persisted back to the DB so the
+        next request finds it."""
+        from sqlalchemy.ext.asyncio import AsyncSession as _AS
+
+        from pawguard.modules.donation.router import _get_or_generate_receipt_pdf
+
+        donation = self._build_donation()
+        mock_storage = self._configure_storage(MagicMock(spec=StorageService))
+        writer = AsyncMock(spec=_AS)
+
+        pdf_bytes = await _get_or_generate_receipt_pdf(
+            donation, mock_storage, persist_key=True, db=writer
+        )
+
+        assert pdf_bytes[:5] == b"%PDF-"
+        mock_storage.put_object.assert_called_once()
+        writer.execute.assert_awaited_once()
+        writer.flush.assert_awaited_once()
