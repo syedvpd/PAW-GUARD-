@@ -408,12 +408,12 @@ async def dispatch_team(
 @router.patch(
     "/dispatches/{dispatch_id}",
     response_model=ApiResponse[RescueDispatchResponse],
-    dependencies=[Depends(require_permission("rescue:dispatch"))],
+    dependencies=[Depends(require_permission("rescue:dispatch", "rescue:execute"))],
 )
 @router.patch(
     "/dispatch/{dispatch_id}",
     response_model=ApiResponse[RescueDispatchResponse],
-    dependencies=[Depends(require_permission("rescue:dispatch"))],
+    dependencies=[Depends(require_permission("rescue:dispatch", "rescue:execute"))],
 )
 async def update_dispatch(
     dispatch_id: uuid.UUID,
@@ -431,6 +431,60 @@ async def update_dispatch(
     return ApiResponse(
         data=RescueDispatchResponse.model_validate(dispatch),
         message="Rescue dispatch updated successfully.",
+    )
+
+
+@router.post(
+    "/dispatches/{dispatch_id}/en-route",
+    response_model=ApiResponse[RescueDispatchResponse],
+    dependencies=[Depends(require_permission("rescue:dispatch", "rescue:execute"))],
+)
+@router.post(
+    "/dispatch/{dispatch_id}/en-route",
+    response_model=ApiResponse[RescueDispatchResponse],
+    dependencies=[Depends(require_permission("rescue:dispatch", "rescue:execute"))],
+)
+async def mark_dispatch_en_route(
+    dispatch_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: RescueService = Depends(get_rescue_service),
+) -> ApiResponse[RescueDispatchResponse]:
+    dispatch = await service.mark_en_route(
+        dispatch_id,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(
+        data=RescueDispatchResponse.model_validate(dispatch),
+        message="Rescue dispatch updated to en route.",
+    )
+
+
+@router.post(
+    "/{request_id}/en-route",
+    response_model=ApiResponse[RescueRequestResponse],
+    dependencies=[Depends(require_permission("rescue:dispatch", "rescue:execute"))],
+)
+async def mark_request_en_route(
+    request_id: str,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: RescueService = Depends(get_rescue_service),
+) -> ApiResponse[RescueRequestResponse]:
+    rescue_req = await service.get_request(request_id)
+    _enforce_agent_assignment(rescue_req, current_user)
+    rescue = await service.update_dispatch_status(
+        request_id,
+        status=RescueStatus.EN_ROUTE,
+        agent_id=current_user.id,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return _masked_rescue_response(
+        rescue,
+        current_user,
+        message="Rescue team is en route.",
     )
 
 
