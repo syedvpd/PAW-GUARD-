@@ -57,6 +57,7 @@ from pawguard.modules.shelter.schemas import (
     ShelterVetCheckRequest,
     ShelterVetCheckResponse,
     ShelterVetRequestListResponse,
+    SuggestedQuarantineKennelResponse,
 )
 from pawguard.modules.shelter.service import ShelterService
 from pawguard.services.audit_service import AuditService
@@ -267,10 +268,11 @@ async def list_kennels(
         sort,
         section_id=section_id,
     )
-    # Enrich with occupancy data
+    # Enrich with occupancy + transfer-reservation data
     from sqlalchemy import select
 
     from pawguard.modules.dog.models import DogProfile
+    from pawguard.modules.shelter.models import FacilityTransfer, TransferStatus
 
     kennel_ids = [k.id for k in result.data]
     if kennel_ids:
@@ -280,8 +282,15 @@ async def list_kennels(
         )
         rows = (await db.execute(occ_stmt)).all()
         occ_map: dict[uuid.UUID, uuid.UUID] = {row[0]: row[1] for row in rows}
+
+        reserved_stmt = select(FacilityTransfer.destination_kennel_id).where(
+            FacilityTransfer.destination_kennel_id.in_(kennel_ids),
+            FacilityTransfer.status.in_([TransferStatus.PENDING, TransferStatus.IN_TRANSIT]),
+        )
+        reserved_ids = {row[0] for row in (await db.execute(reserved_stmt)).all()}
     else:
         occ_map = {}
+        reserved_ids = set()
 
     enriched = []
     for k in result.data:
@@ -295,12 +304,38 @@ async def list_kennels(
                 sanitation_state=k.sanitation_state,
                 is_occupied=dog_id is not None,
                 occupied_by_dog_id=dog_id,
+                is_reserved_for_transfer=k.id in reserved_ids,
                 created_at=k.created_at,
                 updated_at=k.updated_at,
             )
         )
 
     return PaginatedResponse(data=enriched, meta=result.meta)
+
+
+@router.get(
+    "/kennels/suggest-quarantine",
+    response_model=ApiResponse[SuggestedQuarantineKennelResponse | None],
+    dependencies=[Depends(require_permission("shelter:read"))],
+)
+async def suggest_quarantine_kennel(
+    service: ShelterService = Depends(get_shelter_service),
+) -> ApiResponse[SuggestedQuarantineKennelResponse | None]:
+    """A suggestion only, for the intake screen to pre-fill — staff still
+    confirm placement via the normal assign endpoint (PRR: no silent
+    auto-commit on ADMITTED)."""
+    result = await service.suggest_quarantine_kennel()
+    if result is None:
+        return ApiResponse(data=None)
+    kennel, section = result
+    return ApiResponse(
+        data=SuggestedQuarantineKennelResponse(
+            kennel_id=kennel.id,
+            kennel_identifier=kennel.identifier,
+            section_id=section.id,
+            facility_id=section.facility_id,
+        )
+    )
 
 
 @router.post(

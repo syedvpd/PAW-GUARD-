@@ -198,11 +198,11 @@ class ShelterService:
         ip_address: str | None = None,
         emergency_override: bool = False,
         override_notes: str | None = None,
-        system_assignment: bool = False,
     ) -> bool:
         dog = await self._dog_repo.get_by_id(dog_id)
         if dog is None:
             raise NotFoundError("Dog profile not found.")
+        prior_kennel_id = dog.kennel_id
 
         # Row-lock the kennel (SELECT ... FOR UPDATE) before the capacity and
         # sanitation check-then-act: two concurrent assignments to the same
@@ -249,12 +249,9 @@ class ShelterService:
         # requires a veterinarian. A Shelter Manager may force it through in
         # a genuine emergency via emergency_override — a documented exception
         # path (mandatory justification, flagged for vet review), not a
-        # silent bypass of the sign-off requirement. system_assignment skips
-        # this check for the automated rescue-ADMITTED intake pipeline, which
-        # places a dog into quarantine pending vet clearance rather than
-        # having staff sign off on the placement itself.
+        # silent bypass of the sign-off requirement.
         used_override = False
-        if section.section_type in CLINICAL_SECTION_TYPES and not system_assignment:
+        if section.section_type in CLINICAL_SECTION_TYPES:
             actor_roles = await self._actor_role_names(actor_id)
             is_privileged = bool(
                 actor_roles & {"veterinarian", "super_admin", "rescue_centre_admin"}
@@ -285,6 +282,8 @@ class ShelterService:
                     "kennel_id": str(kennel_id),
                     "emergency_override": used_override,
                 },
+                before_state={"kennel_id": str(prior_kennel_id) if prior_kennel_id else None},
+                after_state={"kennel_id": str(kennel_id)},
             )
         if used_override:
             await self._notify_clinical_override(dog, section, kennel, override_notes, actor_id)
@@ -362,6 +361,7 @@ class ShelterService:
         kennel = await self._repo.get_kennel(kennel_id)
         if kennel is None:
             raise NotFoundError("Kennel not found.")
+        prior_status = kennel.sanitation_state
 
         kennel.sanitation_state = status
         await self._repo._session.flush()
@@ -376,6 +376,8 @@ class ShelterService:
                     "kennel_id": str(kennel_id),
                     "new_status": status.value,
                 },
+                before_state={"sanitation_state": prior_status.value},
+                after_state={"sanitation_state": status.value},
             )
         return kennel
 
@@ -396,6 +398,7 @@ class ShelterService:
         kennel = await self._repo.get_kennel_for_update(kennel_id)
         if kennel is None:
             raise NotFoundError("Kennel not found.")
+        prior_status = kennel.sanitation_state
 
         log = KennelCleaningLog(
             kennel_id=kennel_id,
@@ -421,6 +424,8 @@ class ShelterService:
                     "new_status": KennelSanitationState.CLEAN.value,
                     "cleaning_log_id": str(log.id),
                 },
+                before_state={"sanitation_state": prior_status.value},
+                after_state={"sanitation_state": KennelSanitationState.CLEAN.value},
             )
         return log
 
@@ -471,6 +476,7 @@ class ShelterService:
             status=TransferStatus.PENDING,
             notes=payload.notes,
             destination_kennel_id=payload.destination_kennel_id,
+            origin_kennel_id=dog.kennel_id,
             vehicle_id=payload.vehicle_id,
         )
         transfer = await self._repo.create_transfer(transfer)
@@ -639,9 +645,24 @@ class ShelterService:
         return transfer
 
     async def find_available_quarantine_kennel(self) -> Kennel | None:
-        """First Open + Clean Quarantine kennel at any active facility — used
-        by the rescue ADMITTED flow to auto-reserve shelter capacity."""
+        """First Open + Clean Quarantine kennel at any active facility."""
         return await self._repo.find_available_kennel_by_section_type(SectionType.QUARANTINE)
+
+    async def suggest_quarantine_kennel(self) -> tuple[Kennel, ShelterSection] | None:
+        """Suggests a Quarantine kennel for the intake screen to pre-fill.
+
+        A suggestion only — the rescue ADMITTED flow no longer auto-assigns
+        it (PRR: staff must confirm placement, not have it silently
+        committed). Returns the kennel with its section so the caller can
+        resolve facility_id without a second round trip.
+        """
+        kennel = await self.find_available_quarantine_kennel()
+        if kennel is None:
+            return None
+        section = await self._repo.get_section(kennel.section_id)
+        if section is None:
+            return None
+        return kennel, section
 
     async def get_transfer(self, transfer_id: uuid.UUID) -> FacilityTransfer:
         transfer = await self._repo.get_transfer(transfer_id)

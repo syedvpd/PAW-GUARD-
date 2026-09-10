@@ -144,6 +144,14 @@ class FacilityTransfer(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
         nullable=True,
         index=True,
     )
+    # The dog's kennel at the sending facility when the transfer was
+    # requested — audit symmetry with destination_kennel_id, not enforced.
+    origin_kennel_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("kennels.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     # Optional link to the Fleet module's vehicle used for the handoff.
     vehicle_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),

@@ -234,30 +234,18 @@ class RescueService:
         actor_id: uuid.UUID | None,
         ip_address: str | None,
     ) -> None:
-        """PRR: an ADMITTED rescue must be supplied an available Quarantine
-        kennel and atomically assigned to it, rather than leaving placement
-        as a manual follow-up step. Escalates to Rescue Centre Admin / Super
-        Admin when no facility has capacity."""
+        """PRR: an ADMITTED rescue must have an available Quarantine kennel
+        surfaced for staff to confirm — not silently auto-assigned, since an
+        incorrect automatic placement is a real-world mistake a human should
+        catch first. The frontend intake screen fetches the same suggestion
+        via GET /shelter/kennels/suggest-quarantine and pre-fills it for
+        confirmation. This only escalates to Rescue Centre Admin / Super
+        Admin when no facility has any capacity at all."""
         try:
             shelter_svc = self._shelter_service()
             kennel = await shelter_svc.find_available_quarantine_kennel()
             if kennel is not None:
-                try:
-                    await shelter_svc.assign_dog_to_kennel(
-                        dog.id,
-                        kennel.id,
-                        actor_id=actor_id,
-                        ip_address=ip_address,
-                        system_assignment=True,
-                    )
-                    return
-                except Exception as exc:
-                    logger.warning(
-                        "Auto-assignment to kennel %s failed for admitted dog %s: %s",
-                        kennel.id,
-                        dog.id,
-                        exc,
-                    )
+                return
 
             from pawguard.modules.auth.repository import UserRepository
             from pawguard.modules.notifications.repository import NotificationRepository

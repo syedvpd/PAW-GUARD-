@@ -109,10 +109,21 @@ class KennelResponse(BaseModel):
     sanitation_state: KennelSanitationState
     is_occupied: bool = False
     occupied_by_dog_id: uuid.UUID | None = None
+    is_reserved_for_transfer: bool = False
     created_at: datetime
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class SuggestedQuarantineKennelResponse(BaseModel):
+    """A suggested (not assigned) Quarantine kennel for the intake screen to
+    pre-fill; staff must still confirm via the normal assign endpoint."""
+
+    kennel_id: uuid.UUID
+    kennel_identifier: str
+    section_id: uuid.UUID
+    facility_id: uuid.UUID
 
 
 class FacilityTransferCreate(BaseModel):
@@ -144,6 +155,7 @@ class FacilityTransferResponse(BaseModel):
     notes: str | None
     cancel_reason: str | None
     destination_kennel_id: uuid.UUID | None
+    origin_kennel_id: uuid.UUID | None
     vehicle_id: uuid.UUID | None
     sender_confirmed_at: datetime | None
     sender_confirmed_by: uuid.UUID | None
