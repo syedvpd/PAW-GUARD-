@@ -1,4 +1,5 @@
 import json
+import logging
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -19,6 +20,8 @@ from pawguard.modules.rescue.models import (
 )
 
 DASHBOARD_CACHE_TTL = 30  # seconds
+
+logger = logging.getLogger(__name__)
 
 
 async def _get_cached(redis: Any | None, key: str) -> dict[str, Any] | None:
@@ -44,6 +47,16 @@ async def _set_cache(
 
 def _ts_range(days: int) -> datetime:
     return datetime.now(UTC) - timedelta(days=days)
+
+
+async def invalidate_adoption_dashboard_cache(redis: Any | None) -> None:
+    """Bust the 30s adoption KPI cache immediately on any write, instead of
+    making coordinators wait out the TTL to see a just-submitted application
+    reflected in the dashboard counts."""
+    if redis is None:
+        return
+    with suppress(Exception):
+        await redis.delete("cache:dashboard:adoption")
 
 
 async def rescue_dashboard(session: AsyncSession, redis: Any | None = None) -> dict[str, Any]:
@@ -335,17 +348,24 @@ async def adoption_dashboard(session: AsyncSession, redis: Any | None = None) ->
     if cached is not None:
         return cached
 
+    # Every adoption_applications count below must filter deleted_at IS NULL -
+    # AdoptionApplication uses SoftDeleteMixin, so a staff-deleted application
+    # (soft_delete_application/bulk_soft_delete) stays in the table forever
+    # and, without this filter, keeps inflating whichever status bucket it
+    # was in when deleted (bug: KPI cards showing counts higher than the
+    # true number of live records).
     stmt = text("""
         SELECT
-            (SELECT COUNT(*) FROM adoption_applications) AS total,
-            (SELECT COUNT(*) FROM adoption_applications WHERE status = 'submitted') AS pending,
-            (SELECT COUNT(*) FROM adoption_applications WHERE status = 'approved') AS approved,
-            (SELECT COUNT(*) FROM adoption_applications WHERE status = 'completed') AS completed,
-            (SELECT COUNT(*) FROM adoption_applications WHERE status = 'screening') AS screening,
-            (SELECT COUNT(*) FROM adoption_applications WHERE status = 'interview') AS interview,
-            (SELECT COUNT(*) FROM adoption_applications WHERE status = 'home_check') AS home_check,
-            (SELECT COUNT(*) FROM adoption_applications WHERE status = 'rejected') AS rejected,
-            (SELECT COUNT(*) FROM adoption_applications WHERE home_inspection_scheduled_at IS NOT NULL AND status = 'home_check') AS scheduled_home_visits,
+            (SELECT COUNT(*) FROM adoption_applications WHERE deleted_at IS NULL) AS total,
+            (SELECT COUNT(*) FROM adoption_applications WHERE status = 'submitted' AND deleted_at IS NULL) AS pending,
+            (SELECT COUNT(*) FROM adoption_applications WHERE status = 'approved' AND deleted_at IS NULL) AS approved,
+            (SELECT COUNT(*) FROM adoption_applications WHERE status = 'completed' AND deleted_at IS NULL) AS completed,
+            (SELECT COUNT(*) FROM adoption_applications WHERE status = 'screening' AND deleted_at IS NULL) AS screening,
+            (SELECT COUNT(*) FROM adoption_applications WHERE status = 'interview' AND deleted_at IS NULL) AS interview,
+            (SELECT COUNT(*) FROM adoption_applications WHERE status = 'home_check' AND deleted_at IS NULL) AS home_check,
+            (SELECT COUNT(*) FROM adoption_applications WHERE status = 'rejected' AND deleted_at IS NULL) AS rejected,
+            (SELECT COUNT(*) FROM adoption_applications WHERE status = 'withdrawn' AND deleted_at IS NULL) AS withdrawn,
+            (SELECT COUNT(*) FROM adoption_applications WHERE home_inspection_scheduled_at IS NOT NULL AND status = 'home_check' AND deleted_at IS NULL) AS scheduled_home_visits,
             (SELECT COUNT(*) FROM dog_profiles WHERE is_adoptable = true AND deleted_at IS NULL) AS adoptable_dogs,
             (SELECT COUNT(*) FROM adoption_follow_ups WHERE status = 'overdue') AS overdue_follow_ups
     """)
@@ -362,10 +382,31 @@ async def adoption_dashboard(session: AsyncSession, redis: Any | None = None) ->
         "interview": row.interview,
         "home_check": row.home_check,
         "rejected": row.rejected,
+        "withdrawn": row.withdrawn,
         "scheduled_home_visits": row.scheduled_home_visits,
         "adoptable_dogs": row.adoptable_dogs,
         "overdue_follow_ups": row.overdue_follow_ups,
     }
+
+    bucketed = (
+        row.pending
+        + row.approved
+        + row.completed
+        + row.screening
+        + row.interview
+        + row.home_check
+        + row.rejected
+        + row.withdrawn
+    )
+    if bucketed != row.total:
+        logger.warning(
+            "adoption_dashboard_count_mismatch: status buckets sum to %s but total live "
+            "applications is %s (legacy 'vetting' status rows are excluded from every "
+            "bucket above and would explain a gap)",
+            bucketed,
+            row.total,
+        )
+
     await _set_cache(redis, cache_key, result)
     return result
 
@@ -388,7 +429,8 @@ async def foster_dashboard(session: AsyncSession, redis: Any | None = None) -> d
             (SELECT COUNT(*) FROM foster_profiles WHERE status = 'applied' AND deleted_at IS NULL) AS pending_applications,
             (SELECT COUNT(*) FROM foster_profiles WHERE status = 'rejected' AND deleted_at IS NULL) AS rejected_fosters,
             (SELECT COUNT(*) FROM foster_profiles WHERE status = 'inactive' AND deleted_at IS NULL) AS inactive_fosters,
-            (SELECT COALESCE(SUM(max_capacity), 0) FROM foster_profiles WHERE status = 'approved' AND deleted_at IS NULL) AS total_capacity
+            (SELECT COALESCE(SUM(max_capacity), 0) FROM foster_profiles WHERE status = 'approved' AND deleted_at IS NULL) AS total_capacity,
+            (SELECT COUNT(*) FROM foster_profiles WHERE deleted_at IS NULL) AS total_homes
     """)
     row = (await session.execute(stmt)).one()
 
@@ -403,8 +445,14 @@ async def foster_dashboard(session: AsyncSession, redis: Any | None = None) -> d
     rejected_fosters = getattr(row, "rejected_fosters", 0) or 0
     inactive_fosters = getattr(row, "inactive_fosters", 0) or 0
     total_capacity = int(getattr(row, "total_capacity", 0) or 0)
+    total_homes = getattr(row, "total_homes", 0) or 0
 
     result = {
+        # "Total Placements"/"Active Placements" here mean actual
+        # dog-to-foster-home assignments (foster_placements), which is a
+        # different table/concept from the foster *homes* (foster_profiles)
+        # list the dashboard's Foster Homes card links to — keep the two
+        # counts distinct rather than conflating them.
         "total": total_placements,
         "active": active_placements,
         "total_placements": total_placements,
@@ -413,6 +461,7 @@ async def foster_dashboard(session: AsyncSession, redis: Any | None = None) -> d
         "converted_placements": converted_placements,
         "total_fosters": total_fosters,
         "total_profiles": total_fosters,
+        "total_foster_homes": total_homes,
         "approved_fosters": approved_fosters,
         "available_fosters": available_fosters,
         "available": available_fosters,

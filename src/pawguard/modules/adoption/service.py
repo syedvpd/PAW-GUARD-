@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from logging import getLogger
 
+from pawguard.core.cache_decorator import invalidate_route_cache
 from pawguard.core.config import get_settings
 from pawguard.core.exceptions import (
     ConflictError,
@@ -232,6 +233,15 @@ class AdoptionService:
                 f"to '{new_status.value}'."
             )
 
+    async def _invalidate_adoption_list_caches(self) -> None:
+        """Bust the cached GET /adoptions list/dashboard responses on any
+        write, so a just-submitted or just-transitioned application shows up
+        for coordinators immediately instead of waiting out the 30-60s TTL."""
+        await invalidate_route_cache("adoptions")
+        from pawguard.modules.dashboards.service import invalidate_adoption_dashboard_cache
+
+        await invalidate_adoption_dashboard_cache(self._redis)
+
     async def _invalidate_dog_cache(self) -> None:
         if self._redis is not None and not is_null_redis(self._redis):
             try:
@@ -430,6 +440,7 @@ class AdoptionService:
                 action_url="/adoptions/my-applications",
             )
 
+            await self._invalidate_adoption_list_caches()
             return res
         finally:
             if lock_acquired and cache_svc is not None:
@@ -519,6 +530,8 @@ class AdoptionService:
             if res is None:
                 raise NotFoundError("Adoption application not found after update.")
 
+        if "status" in update_data:
+            await self._invalidate_adoption_list_caches()
         return res
 
     async def update_application_status(
@@ -651,6 +664,7 @@ class AdoptionService:
                 action_url="/adoptions/my-applications",
             )
 
+        await self._invalidate_adoption_list_caches()
         return res
 
     async def update_adoption_fee(
@@ -747,6 +761,7 @@ class AdoptionService:
                 after_state={"status": AdoptionStatus.WITHDRAWN.value},
             )
 
+        await self._invalidate_adoption_list_caches()
         return res
 
     async def sign_agreement(
@@ -863,6 +878,7 @@ class AdoptionService:
             action_url="/adoptions/my-applications",
         )
 
+        await self._invalidate_adoption_list_caches()
         return res
 
     async def get_follow_ups(self, app_id: uuid.UUID) -> list[AdoptionFollowUp]:
@@ -1092,6 +1108,8 @@ class AdoptionService:
                 metadata={"adoption_id": str(app_id)},
             )
 
+        await self._invalidate_adoption_list_caches()
+
     async def bulk_update_status(
         self,
         ids: list[uuid.UUID],
@@ -1133,6 +1151,7 @@ class AdoptionService:
                 },
             )
 
+        await self._invalidate_adoption_list_caches()
         return updated
 
     async def bulk_soft_delete(
@@ -1155,4 +1174,5 @@ class AdoptionService:
                 metadata={"adoption_ids": [str(i) for i in ids], "count": count},
             )
 
+        await self._invalidate_adoption_list_caches()
         return count

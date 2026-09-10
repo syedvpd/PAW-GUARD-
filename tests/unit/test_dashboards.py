@@ -1,9 +1,13 @@
 """Unit tests for dashboard aggregation functions."""
 
+import uuid
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from pawguard.modules.adoption.models import AdoptionApplication
 from pawguard.modules.dashboards.router import stream_rescue_dashboard
 from pawguard.modules.dashboards.service import (
     adoption_dashboard,
@@ -20,6 +24,8 @@ from pawguard.modules.dashboards.service import (
     staff_dashboard,
     volunteer_dashboard,
 )
+from pawguard.modules.auth.models import User
+from pawguard.modules.dog.models import DogProfile
 
 
 def _fake_result(
@@ -139,6 +145,10 @@ class TestDashboards:
                 screening=8,
                 interview=5,
                 home_check=3,
+                rejected=0,
+                withdrawn=0,
+                scheduled_home_visits=0,
+                adoptable_dogs=0,
                 overdue_follow_ups=4,
             ),
         ]
@@ -150,7 +160,32 @@ class TestDashboards:
         assert result["screening"] == 8
         assert result["interview"] == 5
         assert result["home_check"] == 3
+        assert result["withdrawn"] == 0
         assert result["overdue_follow_ups"] == 4
+
+    async def test_adoption_dashboard_logs_mismatch(self, session, caplog):
+        """total=100 but the status buckets only sum to 96 (4 rows sitting in
+        the deprecated legacy 'vetting' status, excluded from every bucket) -
+        should be logged, not silently swallowed."""
+        session.execute.side_effect = [
+            _fake_result(
+                total=100,
+                pending=20,
+                approved=15,
+                completed=60,
+                screening=0,
+                interview=0,
+                home_check=1,
+                rejected=0,
+                withdrawn=0,
+                scheduled_home_visits=0,
+                adoptable_dogs=0,
+                overdue_follow_ups=0,
+            ),
+        ]
+        with caplog.at_level("WARNING"):
+            await adoption_dashboard(session)
+        assert "adoption_dashboard_count_mismatch" in caplog.text
 
     async def test_foster_dashboard(self, session):
         session.execute.side_effect = [
@@ -348,3 +383,57 @@ class TestDashboards:
         assert len(outputs) == 2
         assert "event: snapshot" in outputs[0]
         assert "event: snapshot" in outputs[1]
+
+
+@pytest.mark.asyncio
+class TestAdoptionDashboardSoftDelete:
+    """Regression test: adoption_dashboard()'s raw-SQL counts previously
+    omitted `deleted_at IS NULL` on every adoption_applications subquery, so
+    a staff-deleted application kept inflating whichever status bucket it
+    was in when deleted (e.g. 7 live SUBMITTED applications + 3 soft-deleted
+    SUBMITTED ones showed as 10 on the "Submitted Applications" KPI card)."""
+
+    async def _make_application(self, db_session: AsyncSession, status: str, deleted: bool) -> None:
+        user = User(
+            email=f"{uuid.uuid4().hex}@example.com",
+            full_name="Test Adopter",
+            hashed_password="x",
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        dog = DogProfile(
+            registration_number=f"KPI-{uuid.uuid4().hex[:8].upper()}",
+            name="KPI Test Pup",
+            breed="indie_mix",
+            gender="male",
+        )
+        db_session.add(dog)
+        await db_session.flush()
+
+        app = AdoptionApplication(
+            dog_id=dog.id,
+            adopter_id=user.id,
+            status=status,
+            residential_status="owned",
+            has_landlord_approval=True,
+            has_yard_fence=True,
+            household_members_count=2,
+            deleted_at=datetime.now(UTC) if deleted else None,
+        )
+        db_session.add(app)
+        await db_session.flush()
+
+    async def test_soft_deleted_applications_excluded_from_kpi_counts(
+        self, db_session: AsyncSession
+    ) -> None:
+        for _ in range(7):
+            await self._make_application(db_session, "submitted", deleted=False)
+        for _ in range(3):
+            await self._make_application(db_session, "submitted", deleted=True)
+        await db_session.commit()
+
+        result = await adoption_dashboard(db_session)
+
+        assert result["pending"] == 7
+        assert result["total_applications"] == 7
