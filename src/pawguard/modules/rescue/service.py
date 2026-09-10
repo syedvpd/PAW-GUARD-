@@ -1326,7 +1326,33 @@ class RescueService:
         old_status = request.status
         now = datetime.now(UTC)
 
-        if status == RescueStatus.EN_ROUTE:
+        if status == RescueStatus.DISPATCHED:
+            request.status = RescueStatus.DISPATCHED
+            if dispatch:
+                dispatch.dispatched_at = dispatch.dispatched_at or now
+
+        elif status == RescueStatus.VERIFIED:
+            request.status = RescueStatus.VERIFIED
+
+        elif status == RescueStatus.REJECTED:
+            request.status = RescueStatus.REJECTED
+            if dispatch:
+                dispatch.failed_at = now
+                reason = failure_reason or RescueFailureReason.OTHER
+                if isinstance(reason, str):
+                    clean_reason = reason.lower().replace(" ", "_")
+                    try:
+                        reason = RescueFailureReason(clean_reason)
+                    except ValueError:
+                        reason = RescueFailureReason.OTHER
+                dispatch.failure_reason = reason.value if hasattr(reason, "value") else str(reason)
+                await self._fleet_service().release_equipment_for_dispatch(
+                    rescue_dispatch_id=dispatch.id,
+                    actor_id=agent_id,
+                    ip_address=ip_address,
+                )
+
+        elif status == RescueStatus.EN_ROUTE:
             if request.status not in (RescueStatus.DISPATCHED, RescueStatus.EN_ROUTE):
                 raise ValidationFailedError("Animal must be in DISPATCHED status to mark EN_ROUTE.")
             dispatch.en_route_at = now

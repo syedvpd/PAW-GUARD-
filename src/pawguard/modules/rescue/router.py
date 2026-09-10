@@ -7,6 +7,7 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.bulk import (
@@ -485,6 +486,57 @@ async def mark_request_en_route(
         rescue,
         current_user,
         message="Rescue team is en route.",
+    )
+
+
+class RescueStatusUpdatePayload(BaseModel):
+    status: str
+    failure_reason: str | None = None
+    notes: str | None = None
+
+
+@router.post(
+    "/{request_id}/status",
+    response_model=ApiResponse[RescueRequestResponse],
+    dependencies=[
+        Depends(require_permission("rescue:dispatch", "rescue:verify", "rescue:execute"))
+    ],
+)
+@router.put(
+    "/{request_id}/status",
+    response_model=ApiResponse[RescueRequestResponse],
+    dependencies=[
+        Depends(require_permission("rescue:dispatch", "rescue:verify", "rescue:execute"))
+    ],
+)
+@router.patch(
+    "/{request_id}/status",
+    response_model=ApiResponse[RescueRequestResponse],
+    dependencies=[
+        Depends(require_permission("rescue:dispatch", "rescue:verify", "rescue:execute"))
+    ],
+)
+async def update_rescue_status(
+    request_id: str,
+    payload: RescueStatusUpdatePayload,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: RescueService = Depends(get_rescue_service),
+) -> ApiResponse[RescueRequestResponse]:
+    target_status = parse_enum(RescueStatus, payload.status)
+    rescue = await service.update_dispatch_status(
+        request_id,
+        status=target_status,
+        agent_id=current_user.id,
+        notes=payload.notes,
+        failure_reason=payload.failure_reason,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return _masked_rescue_response(
+        rescue,
+        current_user,
+        message=f"Rescue status updated to {target_status.value}.",
     )
 
 

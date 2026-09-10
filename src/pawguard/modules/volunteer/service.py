@@ -520,7 +520,7 @@ class VolunteerService:
             notes=application.notes,
             medical_conditions=application.medical_conditions,
             animal_handling_experience=application.animal_handling_experience,
-            status=VolunteerStatus.APPROVED,
+            status=VolunteerStatus.ACTIVE,
         )
         await self._repo.create_profile(profile)
         await self._repo._session.flush()
@@ -795,8 +795,10 @@ class VolunteerService:
     async def join_shift(self, shift_id: uuid.UUID, volunteer_id: uuid.UUID) -> ShiftAttendance:
         volunteer = await self._repo.get_profile_by_id(volunteer_id)
         if volunteer is None:
+            volunteer = await self._repo.get_profile_by_user_id(volunteer_id)
+        if volunteer is None:
             raise NotFoundError("Volunteer profile not found.")
-        if volunteer.status != VolunteerStatus.ACTIVE:
+        if volunteer.status not in (VolunteerStatus.ACTIVE, VolunteerStatus.APPROVED):
             raise ForbiddenError(
                 "Your volunteer application must be approved by a coordinator "
                 "before you can join shifts."
@@ -809,7 +811,7 @@ class VolunteerService:
         if shift is None:
             raise NotFoundError("Volunteer shift not found.")
 
-        existing = await self._repo.get_attendance_by_shift_and_volunteer(shift_id, volunteer_id)
+        existing = await self._repo.get_attendance_by_shift_and_volunteer(shift_id, volunteer.id)
         if existing is not None:
             raise ConflictError("You have already joined this shift.")
 
@@ -823,7 +825,7 @@ class VolunteerService:
 
         attendance = ShiftAttendance(
             shift_id=shift_id,
-            volunteer_id=volunteer_id,
+            volunteer_id=volunteer.id,
         )
         return await self._repo.create_attendance(attendance)
 
@@ -852,7 +854,7 @@ class VolunteerService:
             raise NotFoundError("Volunteer profile not found.")
 
         # 2. Validate volunteer is approved / active
-        if volunteer.status != VolunteerStatus.ACTIVE:
+        if volunteer.status not in (VolunteerStatus.ACTIVE, VolunteerStatus.APPROVED):
             raise ValidationFailedError(
                 "Only approved/active volunteers can be assigned to shifts."
             )

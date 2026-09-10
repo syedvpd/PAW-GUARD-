@@ -138,6 +138,16 @@ class NotificationService:
             meta=build_pagination_meta(total=total, params=page),
         )
 
+    async def get_notification(
+        self, notification_id: uuid.UUID, user_id: uuid.UUID | None = None
+    ) -> Notification:
+        notification = await self._repo.get(notification_id)
+        if notification is None:
+            raise NotFoundError("Notification not found.")
+        if user_id is not None and notification.user_id != user_id:
+            raise NotFoundError("Notification not found.")
+        return notification
+
     async def mark_read(self, notification_id: uuid.UUID, user_id: uuid.UUID) -> Notification:
         notification = await self._repo.mark_read(notification_id, user_id)
         if notification is None:

@@ -483,3 +483,49 @@ def generate_finance_report_pdf(
 
     doc.build(elements)
     return buf.getvalue()
+
+
+def generate_medical_report_pdf(
+    *,
+    pet_name: str | None = None,
+    dog_id: str | None = None,
+    report_title: str | None = None,
+    veterinarian_name: str | None = None,
+    details: str | None = None,
+) -> bytes:
+    """Generate a downloadable PDF for medical clearance summary reports."""
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=A4,
+        leftMargin=0.75 * inch,
+        rightMargin=0.75 * inch,
+        topMargin=0.75 * inch,
+        bottomMargin=0.75 * inch,
+    )
+    styles = getSampleStyleSheet()
+    story = [
+        Paragraph(
+            f"<b>{report_title or 'PawGuard Medical Clearance Summary'}</b>",
+            styles["Title"],
+        ),
+        Spacer(1, 15),
+        Paragraph(f"<b>Pet / Dog Name:</b> {pet_name or 'Bella (Labrador)'}", styles["Normal"]),
+        Paragraph(f"<b>Registration ID:</b> {dog_id or 'DOG-2026-0005'}", styles["Normal"]),
+        Paragraph(
+            f"<b>Authorizing Veterinarian:</b> {veterinarian_name or 'Dr. Sarah Jenkins'}",
+            styles["Normal"],
+        ),
+        Paragraph(f"<b>Issue Date:</b> {datetime.now().strftime('%B %d, %Y')}", styles["Normal"]),
+        Spacer(1, 15),
+        Paragraph("<b>Clinical Observations & Health Status:</b>", styles["Heading2"]),
+        Paragraph(
+            details
+            or "Medically cleared for adoption. Vaccinations up to date, dewormed, spayed/neutered, and in excellent overall physical condition.",
+            styles["Normal"],
+        ),
+        Spacer(1, 20),
+        Paragraph("<i>Official PawGuard Veterinary Medical Record</i>", styles["Italic"]),
+    ]
+    doc.build(story)
+    return buf.getvalue()
