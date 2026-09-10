@@ -79,6 +79,19 @@ async def unread_count(
     return ApiResponse(data=UnreadCountResponse(count=count))
 
 
+@router.get("/{notification_id}", response_model=ApiResponse[NotificationResponse])
+async def get_notification_detail(
+    notification_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: NotificationService = Depends(get_notification_service),
+) -> ApiResponse[NotificationResponse]:
+    from pawguard.modules.auth.rbac import is_admin_role
+
+    user_id = None if is_admin_role(current_user.claims) else current_user.id
+    notification = await service.get_notification(notification_id, user_id=user_id)
+    return ApiResponse(data=NotificationResponse.model_validate(notification))
+
+
 @router.put("/{notification_id}/read", response_model=ApiResponse[NotificationResponse])
 async def mark_read(
     notification_id: uuid.UUID,

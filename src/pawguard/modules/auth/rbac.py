@@ -21,7 +21,13 @@ PERMISSIONS_CACHE_TTL_SECONDS = 300
 # script grants, which violates PRR 2.1.
 ADMIN_ROLES = {
     "super_admin",
+    "super_administrator",
+    "superadmin",
     "system:admin",
+    "super administrator",
+    "super admin",
+    "admin",
+    "administrator",
 }
 
 
@@ -32,7 +38,14 @@ def is_admin_role(claims) -> bool:
     roles = getattr(claims, "roles", None)
     if roles is None and isinstance(claims, dict):
         roles = claims.get("roles", [])
-    return any(r in ADMIN_ROLES for r in (roles or []))
+    if isinstance(roles, str):
+        roles = [roles]
+    for r in roles or []:
+        r_str = str(r).strip()
+        r_clean = r_str.lower().replace("-", "_")
+        if r_clean in ADMIN_ROLES or r_str.lower() in ADMIN_ROLES or r_str in ADMIN_ROLES:
+            return True
+    return False
 
 
 def has_permission(user: User, permission_code: str) -> bool:

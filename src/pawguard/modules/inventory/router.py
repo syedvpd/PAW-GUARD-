@@ -91,6 +91,21 @@ async def create_item(
     response_model=PaginatedResponse[InventoryItemResponse],
     dependencies=[Depends(require_permission("inventory:read"))],
 )
+@router.get(
+    "/stock",
+    response_model=PaginatedResponse[InventoryItemResponse],
+    dependencies=[Depends(require_permission("inventory:read"))],
+)
+@router.get(
+    "/catalog",
+    response_model=PaginatedResponse[InventoryItemResponse],
+    dependencies=[Depends(require_permission("inventory:read"))],
+)
+@router.get(
+    "/stock-catalog",
+    response_model=PaginatedResponse[InventoryItemResponse],
+    dependencies=[Depends(require_permission("inventory:read"))],
+)
 async def list_items(
     page: PageParams = Depends(page_params),
     sort: SortParams = Depends(sort_params),

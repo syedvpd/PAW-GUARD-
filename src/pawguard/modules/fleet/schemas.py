@@ -2,14 +2,17 @@
 
 import uuid
 from datetime import date, datetime
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from pawguard.modules.fleet.models import VehicleStatus, VehicleType
 
 
 class VehicleCreate(BaseModel):
-    make_model: str = Field(..., min_length=1, max_length=255, examples=["Ford Transit 2022"])
+    make_model: str = Field(
+        "Rescue Vehicle", min_length=1, max_length=255, examples=["Ford Transit 2022"]
+    )
     license_plate: str = Field(..., min_length=1, max_length=64, examples=["RESCUE-01"])
     vehicle_type: VehicleType = VehicleType.RESCUE_VAN
     status: VehicleStatus = VehicleStatus.ACTIVE
@@ -19,6 +22,52 @@ class VehicleCreate(BaseModel):
         description="Optional UUID of the primary driver (user.id). Omit or set to null if no driver assigned.",
         examples=[None],
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def flex_fields(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        d = dict(data)
+        # License plate alias
+        lp = (
+            d.get("license_plate")
+            or d.get("registration_number")
+            or d.get("registration_no")
+            or d.get("plate_number")
+            or d.get("plate")
+        )
+        if lp:
+            d["license_plate"] = str(lp).strip()
+        else:
+            import secrets
+
+            d["license_plate"] = f"VEH-{secrets.token_hex(3).upper()}"
+
+        # Make model alias
+        mm = (
+            d.get("make_model")
+            or d.get("vehicle_model")
+            or d.get("model")
+            or d.get("vehicle_type")
+            or d.get("name")
+        )
+        if mm:
+            d["make_model"] = str(mm).strip()
+        else:
+            d["make_model"] = "Rescue Fleet Unit"
+
+        # Primary driver alias
+        drv = d.get("primary_driver_id") or d.get("driver_id") or d.get("agent_id")
+        if drv and isinstance(drv, str) and drv.strip():
+            try:
+                d["primary_driver_id"] = str(uuid.UUID(drv.strip()))
+            except ValueError:
+                d["primary_driver_id"] = None
+        elif not drv:
+            d["primary_driver_id"] = None
+
+        return d
 
 
 class VehicleUpdate(BaseModel):
