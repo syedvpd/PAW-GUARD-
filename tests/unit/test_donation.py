@@ -1335,11 +1335,13 @@ class TestDonationReceiptGeneration:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_verify_requires_receipt_when_storage_unconfigured(
+    async def test_verify_succeeds_when_storage_unconfigured(
         self, mock_repo, mock_dog_repo, mock_audit
     ):
-        """verify() must not confirm a donation without a stored receipt, even
-        when storage is unconfigured - otherwise the client receives a 404."""
+        """verify() must confirm the donation even when storage is
+        unconfigured: the payment is already captured and persisted as
+        SUCCESS, so a missing receipt PDF is best-effort, not a reason to
+        report failure back to a client that already paid."""
         from pawguard.core.payments import PaymentGateway as _PG
         from pawguard.core.payments import PaymentVerificationResult
 
@@ -1376,13 +1378,14 @@ class TestDonationReceiptGeneration:
             storage_service=None,
         )
 
-        with pytest.raises(ValidationFailedError, match="Receipt generation is required"):
-            await svc.verify_donation_payment(
-                donation_id=donation_id,
-                gateway_order_id="order_xyz",
-                gateway_payment_id="pay_abc",
-                gateway_signature="sig_123",
-            )
+        result = await svc.verify_donation_payment(
+            donation_id=donation_id,
+            gateway_order_id="order_xyz",
+            gateway_payment_id="pay_abc",
+            gateway_signature="sig_123",
+        )
+        assert result.status == DonationStatus.SUCCESS
+        assert result.receipt_file_key is None
 
     @pytest.mark.asyncio
     async def test_generate_receipt_returns_none_when_storage_unconfigured_and_swallow(
@@ -1476,11 +1479,13 @@ class TestDonationReceiptGeneration:
         mock_audit.record.assert_awaited()
 
     @pytest.mark.asyncio
-    async def test_verify_donation_payment_raises_when_receipt_fails(
+    async def test_verify_donation_payment_succeeds_when_receipt_fails(
         self, mock_repo, mock_dog_repo, mock_audit
     ):
-        """If the receipt cannot be produced/stored, verify must not report
-        success to the client (Option 1: generate BEFORE returning 200)."""
+        """A storage/receipt failure is logged and swallowed: verify() still
+        reports success (money was already captured) and leaves
+        receipt_file_key unset so the GET /receipt(/download) endpoints'
+        JIT fallback can retry it later."""
         from pawguard.core.payments import PaymentGateway as _PG
         from pawguard.core.payments import PaymentVerificationResult
 
@@ -1496,8 +1501,14 @@ class TestDonationReceiptGeneration:
             created_at=datetime.now(UTC),
         )
         mock_repo.get_donation_by_id.return_value = donation
-        mock_repo.update_gateway_fields.return_value = donation
         mock_repo._session = _async_session_mock()
+
+        def _update_gateway(donation_id, **kwargs):
+            for k, v in kwargs.items():
+                setattr(donation, k, v)
+            return donation
+
+        mock_repo.update_gateway_fields.side_effect = _update_gateway
 
         mock_gateway = MagicMock(spec=_PG)
         mock_gateway.verify_payment_signature.return_value = PaymentVerificationResult(
@@ -1515,13 +1526,14 @@ class TestDonationReceiptGeneration:
             storage_service=mock_storage,
         )
 
-        with pytest.raises(ValidationFailedError, match="size mismatch"):
-            await svc.verify_donation_payment(
-                donation_id=donation_id,
-                gateway_order_id="order_xyz",
-                gateway_payment_id="pay_abc",
-                gateway_signature="sig_123",
-            )
+        result = await svc.verify_donation_payment(
+            donation_id=donation_id,
+            gateway_order_id="order_xyz",
+            gateway_payment_id="pay_abc",
+            gateway_signature="sig_123",
+        )
+        assert result.status == DonationStatus.SUCCESS
+        assert result.receipt_file_key is None
 
     @pytest.mark.asyncio
     async def test_jit_receipt_pdf_persists_missing_key(self, mock_repo, mock_dog_repo, mock_audit):

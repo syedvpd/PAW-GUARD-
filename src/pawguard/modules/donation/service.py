@@ -520,12 +520,12 @@ class DonationService:
                     "verified_online": True,
                 },
             )
-        await self._generate_receipt(res, raise_on_failure=True)
-        if res.receipt_file_key is None:
-            raise ValidationFailedError(
-                "Receipt generation is required before confirming this donation; "
-                "receipt could not be stored. The donation will be confirmed via webhook."
-            )
+        # The payment is already verified and persisted as SUCCESS above — a
+        # receipt PDF/storage failure must not fail this call and strand the
+        # client on an error after money was captured. Best-effort here,
+        # same as the webhook path; the GET /receipt(/download) endpoints
+        # already regenerate the PDF on demand if receipt_file_key is None.
+        await self._generate_receipt(res, raise_on_failure=False)
         await self._refresh_campaign_progress(res.campaign_id)
         await self._post_donation_to_ledger(res)
 
