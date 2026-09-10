@@ -43,6 +43,7 @@ from pawguard.modules.foster.schemas import (
     FosterProfileUpdate,
     FosterProgressLogCreate,
     FosterProgressLogResponse,
+    FosterRejectPayload,
     FosterReturnRequest,
     FosterSupplyDispatchCreate,
     FosterSupplyDispatchResponse,
@@ -250,6 +251,21 @@ async def update_profile(
     response_model=ApiResponse[FosterProfileResponse],
     dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
 )
+@router.put(
+    "/{profile_id}/approve",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+@router.post(
+    "/admin/fosters/{profile_id}/approve",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+@router.put(
+    "/admin/fosters/{profile_id}/approve",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
 async def approve_profile(
     profile_id: uuid.UUID,
     request: Request,
@@ -266,6 +282,103 @@ async def approve_profile(
     return ApiResponse(
         data=FosterProfileResponse.model_validate(profile),
         message="Foster profile approved successfully.",
+    )
+
+
+@router.post(
+    "/{profile_id}/reject",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+@router.put(
+    "/{profile_id}/reject",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+@router.post(
+    "/admin/fosters/{profile_id}/reject",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+@router.put(
+    "/admin/fosters/{profile_id}/reject",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+async def reject_profile(
+    profile_id: uuid.UUID,
+    request: Request,
+    payload: FosterRejectPayload = FosterRejectPayload(),
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FosterService = Depends(get_foster_service),
+) -> ApiResponse[FosterProfileResponse]:
+    ip = request.client.host if request.client else None
+    rejection_notes = (
+        payload.notes or payload.reason or payload.rejection_reason or payload.vetting_notes
+    )
+    profile = await service.reject_profile(
+        profile_id,
+        notes=rejection_notes,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=FosterProfileResponse.model_validate(profile),
+        message="Foster application rejected.",
+    )
+
+
+@router.post(
+    "/{profile_id}/status",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+@router.put(
+    "/{profile_id}/status",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+@router.post(
+    "/admin/fosters/{profile_id}/status",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+@router.put(
+    "/admin/fosters/{profile_id}/status",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+async def update_foster_status(
+    profile_id: uuid.UUID,
+    request: Request,
+    payload: FosterRejectPayload = FosterRejectPayload(),
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FosterService = Depends(get_foster_service),
+) -> ApiResponse[FosterProfileResponse]:
+    ip = request.client.host if request.client else None
+    status_str = (payload.status or "").strip().lower()
+    if status_str in ("rejected", "reject", "declined"):
+        rejection_notes = (
+            payload.notes or payload.reason or payload.rejection_reason or payload.vetting_notes
+        )
+        profile = await service.reject_profile(
+            profile_id,
+            notes=rejection_notes,
+            actor_id=current_user.id,
+            ip_address=ip,
+        )
+        msg = "Foster application rejected."
+    else:
+        profile = await service.update_profile(
+            profile_id,
+            FosterProfileUpdate(status=FosterStatus.APPROVED),
+            actor_id=current_user.id,
+            ip_address=ip,
+        )
+        msg = "Foster application approved."
+    return ApiResponse(
+        data=FosterProfileResponse.model_validate(profile),
+        message=msg,
     )
 
 
@@ -893,6 +1006,21 @@ async def convert_to_adopt(
     response_model=ApiResponse[FosterProfileResponse],
     dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
 )
+@router.put(
+    "/{profile_id}/background-check/initiate",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+@router.post(
+    "/admin/fosters/{profile_id}/background-check/initiate",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+@router.put(
+    "/admin/fosters/{profile_id}/background-check/initiate",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
 async def initiate_background_check(
     profile_id: uuid.UUID,
     request: Request,
@@ -918,6 +1046,11 @@ async def initiate_background_check(
     response_model=ApiResponse[FosterProfileResponse],
     dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
 )
+@router.put(
+    "/{profile_id}/background-check/outcome",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
 @router.post(
     "/{profile_id}/background-check",
     response_model=ApiResponse[FosterProfileResponse],
@@ -925,6 +1058,26 @@ async def initiate_background_check(
 )
 @router.put(
     "/{profile_id}/background-check",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+@router.post(
+    "/admin/fosters/{profile_id}/background-check/outcome",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+@router.put(
+    "/admin/fosters/{profile_id}/background-check/outcome",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+@router.post(
+    "/admin/fosters/{profile_id}/background-check",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+@router.put(
+    "/admin/fosters/{profile_id}/background-check",
     response_model=ApiResponse[FosterProfileResponse],
     dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
 )
@@ -950,6 +1103,31 @@ async def record_background_check_outcome(
 
 @router.post(
     "/{profile_id}/home-inspection/schedule",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+@router.put(
+    "/{profile_id}/home-inspection/schedule",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+@router.post(
+    "/{profile_id}/home-inspection",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+@router.put(
+    "/{profile_id}/home-inspection",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+@router.post(
+    "/admin/fosters/{profile_id}/home-inspection/schedule",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
+@router.put(
+    "/admin/fosters/{profile_id}/home-inspection/schedule",
     response_model=ApiResponse[FosterProfileResponse],
     dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
 )
@@ -983,6 +1161,11 @@ async def schedule_home_inspection(
     response_model=ApiResponse[FosterProfileResponse],
     dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
 )
+@router.put(
+    "/{profile_id}/home-inspection/log",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
 async def log_home_inspection(
     profile_id: uuid.UUID,
     payload: FosterHomeInspectionLog,
@@ -1008,13 +1191,18 @@ async def log_home_inspection(
     response_model=ApiResponse[FosterProfileResponse],
     dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
 )
+@router.put(
+    "/{profile_id}/home-inspection/outcome",
+    response_model=ApiResponse[FosterProfileResponse],
+    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+)
 @router.post(
-    "/{profile_id}/home-inspection",
+    "/admin/fosters/{profile_id}/home-inspection/outcome",
     response_model=ApiResponse[FosterProfileResponse],
     dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
 )
 @router.put(
-    "/{profile_id}/home-inspection",
+    "/admin/fosters/{profile_id}/home-inspection/outcome",
     response_model=ApiResponse[FosterProfileResponse],
     dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
 )
