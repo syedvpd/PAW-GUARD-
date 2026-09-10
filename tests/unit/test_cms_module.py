@@ -150,3 +150,22 @@ class TestCmsModule:
         # 6. Verify public API now returns updated published title "Find Your New Lucky Dog..."
         public_after_publish = await service.get_public_cms_page("home")
         assert public_after_publish.sections["hero"]["title"] == "Find Your New Lucky Dog..."
+
+    @pytest.mark.asyncio
+    async def test_cms_seeding_when_existing_demo_pages_present(self, setup_service):
+        service, db_pages = setup_service
+        # Simulate pre-existing demo page in DB
+        demo_page = CmsPage(
+            id=uuid.uuid4(),
+            slug="demo-page-1",
+            name="Demo Page 1",
+            status=ContentStatus.PUBLISHED,
+        )
+        demo_page.sections = []
+        demo_page.versions = []
+        db_pages.append(demo_page)
+
+        # Home page should still be seeded even though db_pages is not empty
+        home_page = await service.get_admin_cms_page("home")
+        assert home_page.slug == "home"
+        assert home_page.name == "Home Page"
