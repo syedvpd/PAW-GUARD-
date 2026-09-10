@@ -118,9 +118,15 @@ class DonationService:
         if donation.receipt_file_key:
             return donation.receipt_file_key
 
-        donor_name = (
-            donation.donor.user.full_name if donation.donor and donation.donor.user else "Donor"
-        )
+        donor_name = "Donor"
+        if donation.donor:
+            if getattr(donation.donor, "user", None) and getattr(
+                donation.donor.user, "full_name", None
+            ):
+                donor_name = donation.donor.user.full_name
+            elif getattr(donation.donor, "full_name", None):
+                donor_name = donation.donor.full_name
+
         settings = get_settings()
         pdf_bytes = await asyncio.to_thread(
             generate_tax_receipt,
@@ -129,8 +135,8 @@ class DonationService:
             currency=donation.currency,
             transaction_id=donation.transaction_id or "",
             donation_date=donation.created_at,
-            org_name=settings.org_name,
-            org_address=settings.org_address,
+            org_name=getattr(settings, "org_name", "PawGuard"),
+            org_address=getattr(settings, "org_address", "PawGuard Animal Shelter"),
         )
 
         if not pdf_bytes or not pdf_bytes[:5] == b"%PDF-":

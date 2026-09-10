@@ -53,13 +53,21 @@ def run_endpoint_audit() -> dict[str, Any]:
             is_public = False
             if security == [] or security == [{}]:
                 is_public = True
-            elif "public" in summary.lower() or "public" in description.lower() or "public" in path.lower():
+            elif (
+                "public" in summary.lower()
+                or "public" in description.lower()
+                or "public" in path.lower()
+            ):
                 is_public = True
 
             if is_public:
                 auth_count["public"] += 1
                 auth_type = "public"
-            elif "admin" in summary.lower() or "admin" in description.lower() or "require_permission" in description.lower():
+            elif (
+                "admin" in summary.lower()
+                or "admin" in description.lower()
+                or "require_permission" in description.lower()
+            ):
                 auth_count["permission_gated"] += 1
                 auth_type = "permission_gated"
             else:
@@ -67,16 +75,18 @@ def run_endpoint_audit() -> dict[str, Any]:
                 auth_type = "authenticated"
 
             responses = operation.get("responses", {})
-            endpoints.append({
-                "method": method_upper,
-                "path": path,
-                "module": module,
-                "summary": summary,
-                "operation_id": op_id,
-                "auth_type": auth_type,
-                "response_codes": list(responses.keys()),
-                "is_compliant": True,
-            })
+            endpoints.append(
+                {
+                    "method": method_upper,
+                    "path": path,
+                    "module": module,
+                    "summary": summary,
+                    "operation_id": op_id,
+                    "auth_type": auth_type,
+                    "response_codes": list(responses.keys()),
+                    "is_compliant": True,
+                }
+            )
 
     total_endpoints = len(endpoints)
     report = {
@@ -114,4 +124,3 @@ def run_endpoint_audit() -> dict[str, Any]:
 
 if __name__ == "__main__":
     run_endpoint_audit()
-

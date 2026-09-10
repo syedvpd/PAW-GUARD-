@@ -16,19 +16,19 @@ VALID_HOSTED_DOG_IMAGES = [
     "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/blog%20success%20stories/pexels-evlivanburak-10996406.jpg",
 ]
 
+
 def run_migration():
     print(f"Starting Dog CEO URL migration against: {base_url}")
 
     # 1. Login as Shelter Manager / Admin
-    login_payload = json.dumps({
-        "email": "shelter.manager@pawguard.com",
-        "password": "PawGuard@2026"
-    }).encode("utf-8")
+    login_payload = json.dumps(
+        {"email": "shelter.manager@pawguard.com", "password": "PawGuard@2026"}
+    ).encode("utf-8")
 
     req = urllib.request.Request(
         f"{base_url}/api/v1/auth/login",
         data=login_payload,
-        headers={"Content-Type": "application/json", "User-Agent": "PawGuard-Migrator"}
+        headers={"Content-Type": "application/json", "User-Agent": "PawGuard-Migrator"},
     )
     with urllib.request.urlopen(req, timeout=15) as resp:
         res = json.loads(resp.read().decode())
@@ -38,7 +38,7 @@ def run_migration():
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
-        "User-Agent": "PawGuard-Migrator"
+        "User-Agent": "PawGuard-Migrator",
     }
 
     # 2. Fetch dogs across all statuses
@@ -70,25 +70,26 @@ def run_migration():
             print(f"Dog '{name}' ({dog_id}) has broken dog.ceo URLs: {photos}")
             print(f"  -> Replacing with valid image: {replacement_img}")
 
-            patch_payload = json.dumps({
-                "image_urls": [replacement_img]
-            }).encode("utf-8")
+            patch_payload = json.dumps({"image_urls": [replacement_img]}).encode("utf-8")
 
             patch_req = urllib.request.Request(
                 f"{base_url}/api/v1/dogs/{dog_id}",
                 data=patch_payload,
                 headers=headers,
-                method="PUT"
+                method="PUT",
             )
             try:
                 with urllib.request.urlopen(patch_req, timeout=15) as patch_resp:
                     patch_res = json.loads(patch_resp.read().decode())
-                    print(f"  -> Successfully updated '{name}'! New photo_url: {patch_res['data'].get('photo_url')}")
+                    print(
+                        f"  -> Successfully updated '{name}'! New photo_url: {patch_res['data'].get('photo_url')}"
+                    )
                     updated_count += 1
             except urllib.error.HTTPError as e:
                 print(f"  -> Failed to update '{name}': {e.code} - {e.read().decode()}")
 
     print(f"\nMigration complete. Total dogs updated: {updated_count}")
+
 
 if __name__ == "__main__":
     run_migration()

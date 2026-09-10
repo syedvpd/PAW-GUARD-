@@ -1556,3 +1556,54 @@ class TestDonationReceiptGeneration:
         mock_storage.put_object.assert_called_once()
         writer.execute.assert_awaited_once()
         writer.flush.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_download_donation_receipt_file_success(
+        self, mock_repo, mock_dog_repo, mock_audit
+    ):
+        """Verify GET /{donation_id}/receipt/download returns binary PDF with application/pdf Content-Type."""
+        from pawguard.modules.donation.router import download_donation_receipt_file
+
+        user_id = uuid.uuid4()
+        donation_id = uuid.uuid4()
+        donor = DonorProfile(id=uuid.uuid4(), user_id=user_id)
+        donation = Donation(
+            id=donation_id,
+            donor_id=donor.id,
+            donor=donor,
+            amount=500.0,
+            currency="INR",
+            donation_type=DonationType.ONE_TIME,
+            status=DonationStatus.SUCCESS,
+            transaction_id="TXN-REC-001",
+            created_at=datetime.now(UTC),
+        )
+        mock_repo.get_donation_by_id.return_value = donation
+        mock_storage = MagicMock(spec=StorageService)
+        mock_storage.get_object.side_effect = Exception("S3 bucket down")
+        mock_storage.build_object_key.return_value = f"documents/receipt_{donation_id}.pdf"
+
+        curr_user = MagicMock()
+        curr_user.user = User(id=user_id, email="donor@example.com")
+        curr_user.id = user_id
+
+        svc = DonationService(
+            mock_repo,
+            mock_dog_repo,
+            audit_service=mock_audit,
+            storage_service=mock_storage,
+        )
+
+        resp = await download_donation_receipt_file(
+            donation_id=donation_id,
+            request=MagicMock(),
+            current_user=curr_user,
+            service=svc,
+            db=AsyncMock(),
+            audit=mock_audit,
+        )
+
+        assert resp.status_code == 200
+        assert resp.media_type == "application/pdf"
+        assert resp.body[:4] == b"%PDF"
+        assert f"tax_receipt_{donation_id}.pdf" in resp.headers["Content-Disposition"]

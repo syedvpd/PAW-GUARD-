@@ -120,7 +120,10 @@ class DonationRepository:
     async def get_donation_by_id(self, donation_id: uuid.UUID) -> Donation | None:
         stmt = (
             select(Donation)
-            .options(selectinload(Donation.donor), selectinload(Donation.dog))
+            .options(
+                selectinload(Donation.donor).selectinload(DonorProfile.user),
+                selectinload(Donation.dog),
+            )
             .where(Donation.id == donation_id)
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
@@ -128,7 +131,10 @@ class DonationRepository:
     async def get_donation_by_gateway_order_id(self, gateway_order_id: str) -> Donation | None:
         stmt = (
             select(Donation)
-            .options(selectinload(Donation.donor), selectinload(Donation.dog))
+            .options(
+                selectinload(Donation.donor).selectinload(DonorProfile.user),
+                selectinload(Donation.dog),
+            )
             .where(Donation.gateway_order_id == gateway_order_id)
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
@@ -166,7 +172,10 @@ class DonationRepository:
         if date_to is not None:
             filters.append(Donation.created_at < date_to + timedelta(days=1))
 
-        stmt = select(Donation).options(selectinload(Donation.donor), selectinload(Donation.dog))
+        stmt = select(Donation).options(
+            selectinload(Donation.donor).selectinload(DonorProfile.user),
+            selectinload(Donation.dog),
+        )
         if filters:
             stmt = stmt.where(*filters)
 

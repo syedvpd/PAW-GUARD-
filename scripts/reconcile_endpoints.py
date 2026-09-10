@@ -48,15 +48,17 @@ def reconcile_and_audit():
 
             auth = "public" if is_public else "authenticated"
 
-            openapi_endpoints.append({
-                "method": method.upper(),
-                "path": path,
-                "module": module,
-                "operation_id": op_id,
-                "summary": summary,
-                "auth": auth,
-                "category": "OpenAPI Operation",
-            })
+            openapi_endpoints.append(
+                {
+                    "method": method.upper(),
+                    "path": path,
+                    "module": module,
+                    "operation_id": op_id,
+                    "summary": summary,
+                    "auth": auth,
+                    "category": "OpenAPI Operation",
+                }
+            )
 
     # 2. Collect Non-OpenAPI / Internal / Starlette routes
     internal_routes = []
@@ -64,33 +66,43 @@ def reconcile_and_audit():
         if isinstance(r, Route):
             r_path = getattr(r, "path", "")
             methods = list(getattr(r, "methods", []))
-            internal_routes.append({
-                "path": r_path,
-                "methods": methods,
-                "name": getattr(r, "name", ""),
-                "type": "Starlette Route / Documentation",
-            })
+            internal_routes.append(
+                {
+                    "path": r_path,
+                    "methods": methods,
+                    "name": getattr(r, "name", ""),
+                    "type": "Starlette Route / Documentation",
+                }
+            )
         elif isinstance(r, WebSocketRoute):
-            internal_routes.append({
-                "path": getattr(r, "path", ""),
-                "methods": ["WEBSOCKET"],
-                "name": getattr(r, "name", ""),
-                "type": "WebSocket Route",
-            })
+            internal_routes.append(
+                {
+                    "path": getattr(r, "path", ""),
+                    "methods": ["WEBSOCKET"],
+                    "name": getattr(r, "name", ""),
+                    "type": "WebSocket Route",
+                }
+            )
         elif isinstance(r, Mount):
-            internal_routes.append({
-                "path": getattr(r, "path", ""),
-                "methods": ["MOUNT"],
-                "name": getattr(r, "name", ""),
-                "type": "Mounted Sub-App / Static",
-            })
+            internal_routes.append(
+                {
+                    "path": getattr(r, "path", ""),
+                    "methods": ["MOUNT"],
+                    "name": getattr(r, "name", ""),
+                    "type": "Mounted Sub-App / Static",
+                }
+            )
 
     # 3. Collect module routers and trailing slash redirect candidates
     # In FastAPI, paths with trailing slash redirects can double client-visible route surfaces
     unique_paths = list(paths.keys())
 
     # Count Summary routes in backend
-    summary_routes = [ep for ep in openapi_endpoints if "summary" in ep["path"].lower() or "summary" in ep["summary"].lower()]
+    summary_routes = [
+        ep
+        for ep in openapi_endpoints
+        if "summary" in ep["path"].lower() or "summary" in ep["summary"].lower()
+    ]
 
     result = {
         "openapi_operation_count": len(openapi_endpoints),
@@ -119,16 +131,20 @@ def reconcile_and_audit():
 
     # Output detailed compliance matrix to JSON
     with open("endpoint_compliance_matrix.json", "w") as f:
-        json.dump({
-            "summary": {
-                "total_openapi_endpoints": len(openapi_endpoints),
-                "unique_paths": len(unique_paths),
-                "internal_system_routes": len(internal_routes),
-                "total_route_surface": len(openapi_endpoints) + len(internal_routes),
+        json.dump(
+            {
+                "summary": {
+                    "total_openapi_endpoints": len(openapi_endpoints),
+                    "unique_paths": len(unique_paths),
+                    "internal_system_routes": len(internal_routes),
+                    "total_route_surface": len(openapi_endpoints) + len(internal_routes),
+                },
+                "endpoints": openapi_endpoints,
+                "internal_routes": internal_routes,
             },
-            "endpoints": openapi_endpoints,
-            "internal_routes": internal_routes,
-        }, f, indent=2)
+            f,
+            indent=2,
+        )
 
     return result
 

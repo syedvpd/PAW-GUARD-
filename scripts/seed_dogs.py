@@ -304,11 +304,13 @@ async def seed_dogs() -> None:
                 # Protect adopted state: if existing dog is already ADOPTED or has an authoritative COMPLETED adoption
                 has_completed_app = (
                     await session.execute(
-                        select(AdoptionApplication.id).where(
+                        select(AdoptionApplication.id)
+                        .where(
                             AdoptionApplication.dog_id == existing.id,
                             AdoptionApplication.status == AdoptionStatus.COMPLETED,
                             AdoptionApplication.deleted_at.is_(None),
-                        ).limit(1)
+                        )
+                        .limit(1)
                     )
                 ).scalar_one_or_none() is not None
 
