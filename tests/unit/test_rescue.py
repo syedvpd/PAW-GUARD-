@@ -1891,3 +1891,140 @@ class TestEmergencyDuplicateAndMediaContract:
         storage._client = mock_s3
         with pytest.raises(ValidationFailedError, match="Unsupported image type"):
             storage.validate_report_media(["rescue/doc.pdf"], None)
+
+    @pytest.mark.asyncio
+    async def test_update_dispatch_mark_en_route_persists_status_and_timestamp(
+        self, service, mock_repo, mock_audit
+    ):
+        from pawguard.modules.rescue.schemas import RescueDispatchUpdate
+
+        dispatch_id = uuid.uuid4()
+        request_id = uuid.uuid4()
+        mock_req = RescueRequest(
+            id=request_id,
+            ticket_number="RES-20260910-0001",
+            reporter_name="Jane Doe",
+            reporter_phone="+1234567890",
+            location_address="456 Elm St",
+            physical_condition=RescuePhysicalCondition.INJURED,
+            status=RescueStatus.DISPATCHED,
+        )
+        mock_dispatch = RescueDispatch(
+            id=dispatch_id,
+            rescue_request_id=request_id,
+            dispatched_at=datetime.now(UTC),
+            en_route_at=None,
+        )
+        mock_dispatch.rescue_request = mock_req
+        mock_repo.get_dispatch_by_id.return_value = mock_dispatch
+        mock_repo.get_request_by_id.return_value = mock_req
+
+        payload = RescueDispatchUpdate(status="en_route")
+        result = await service.update_dispatch(
+            dispatch_id, payload, actor_id=uuid.uuid4(), ip_address="127.0.0.1"
+        )
+
+        assert result.status == RescueStatus.EN_ROUTE
+        assert result.rescue_request.status == RescueStatus.EN_ROUTE
+        assert result.en_route_at is not None
+        assert mock_audit.record.call_count >= 1
+
+    @pytest.mark.asyncio
+    async def test_update_dispatch_invalid_transition_rejected(self, service, mock_repo):
+        from pawguard.modules.rescue.schemas import RescueDispatchUpdate
+
+        dispatch_id = uuid.uuid4()
+        request_id = uuid.uuid4()
+        mock_req = RescueRequest(
+            id=request_id,
+            ticket_number="RES-20260910-0002",
+            reporter_name="Jane Doe",
+            reporter_phone="+1234567890",
+            location_address="456 Elm St",
+            physical_condition=RescuePhysicalCondition.INJURED,
+            status=RescueStatus.REPORTED,  # not dispatched
+        )
+        mock_dispatch = RescueDispatch(
+            id=dispatch_id,
+            rescue_request_id=request_id,
+            dispatched_at=datetime.now(UTC),
+        )
+        mock_dispatch.rescue_request = mock_req
+        mock_repo.get_dispatch_by_id.return_value = mock_dispatch
+        mock_repo.get_request_by_id.return_value = mock_req
+
+        payload = RescueDispatchUpdate(status="en_route")
+        with pytest.raises(ValidationFailedError, match="Cannot mark EN_ROUTE"):
+            await service.update_dispatch(dispatch_id, payload)
+
+    @pytest.mark.asyncio
+    async def test_mark_en_route_dedicated_method(self, service, mock_repo, mock_audit):
+        dispatch_id = uuid.uuid4()
+        request_id = uuid.uuid4()
+        mock_req = RescueRequest(
+            id=request_id,
+            ticket_number="RES-20260910-0003",
+            reporter_name="John Smith",
+            reporter_phone="+1234567890",
+            location_address="789 Pine St",
+            physical_condition=RescuePhysicalCondition.INJURED,
+            status=RescueStatus.DISPATCHED,
+        )
+        mock_dispatch = RescueDispatch(
+            id=dispatch_id,
+            rescue_request_id=request_id,
+            dispatched_at=datetime.now(UTC),
+            en_route_at=None,
+        )
+        mock_dispatch.rescue_request = mock_req
+        mock_repo.get_dispatch_by_id.return_value = mock_dispatch
+        mock_repo.get_request_by_id.return_value = mock_req
+
+        result = await service.mark_en_route(dispatch_id, actor_id=uuid.uuid4())
+        assert result.status == RescueStatus.EN_ROUTE
+        assert result.en_route_at is not None
+        assert mock_audit.record.call_count >= 1
+
+    @pytest.mark.asyncio
+    async def test_en_route_progresses_to_located_and_rescued(self, service, mock_repo, mock_audit):
+        request_id = uuid.uuid4()
+        dispatch_id = uuid.uuid4()
+        mock_req = RescueRequest(
+            id=request_id,
+            ticket_number="RES-20260910-0004",
+            reporter_name="Alex",
+            reporter_phone="+1234567890",
+            location_address="101 Oak St",
+            physical_condition=RescuePhysicalCondition.INJURED,
+            status=RescueStatus.DISPATCHED,
+        )
+        mock_dispatch = RescueDispatch(
+            id=dispatch_id,
+            rescue_request_id=request_id,
+            dispatched_at=datetime.now(UTC),
+        )
+        mock_dispatch.rescue_request = mock_req
+        mock_req.dispatch = mock_dispatch
+        mock_repo.get_request_by_id.return_value = mock_req
+        mock_repo.get_dispatch_by_request_id.return_value = mock_dispatch
+
+        # 1. DISPATCHED -> EN_ROUTE
+        res_en_route = await service.update_dispatch_status(
+            request_id, status=RescueStatus.EN_ROUTE, agent_id=uuid.uuid4()
+        )
+        assert res_en_route.status == RescueStatus.EN_ROUTE
+        assert mock_dispatch.en_route_at is not None
+
+        # 2. EN_ROUTE -> LOCATED
+        res_located = await service.update_dispatch_status(
+            request_id, status=RescueStatus.LOCATED, agent_id=uuid.uuid4()
+        )
+        assert res_located.status == RescueStatus.LOCATED
+        assert mock_dispatch.located_at is not None
+
+        # 3. LOCATED -> RESCUED
+        res_rescued = await service.update_dispatch_status(
+            request_id, status=RescueStatus.RESCUED, agent_id=uuid.uuid4()
+        )
+        assert res_rescued.status == RescueStatus.RESCUED
+        assert mock_dispatch.rescued_at is not None

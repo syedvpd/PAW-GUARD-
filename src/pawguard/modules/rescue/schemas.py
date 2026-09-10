@@ -283,6 +283,7 @@ class RescueDispatchUpdate(BaseModel):
     # Cannot be set to a non-NONE value unless escalation_type exists.
     escalation_status: RescueEscalationStatus | None = None
     notes: str | None = None
+    en_route_at: datetime | None = None
     located_at: datetime | None = None
     rescued_at: datetime | None = None
     admitted_at: datetime | None = None
@@ -338,6 +339,7 @@ class RescueDispatchResponse(BaseModel):
     equipment_details: str | None = None
     dispatched_at: datetime
     accepted_at: datetime | None = None
+    en_route_at: datetime | None = None
     located_at: datetime | None = None
     rescued_at: datetime | None = None
     admitted_at: datetime | None = None
@@ -427,6 +429,7 @@ class RescueDispatchResponse(BaseModel):
             "equipment_details": getattr(data, "equipment_details", None),
             "dispatched_at": getattr(data, "dispatched_at", None),
             "accepted_at": getattr(data, "accepted_at", None),
+            "en_route_at": getattr(data, "en_route_at", None),
             "located_at": getattr(data, "located_at", None),
             "rescued_at": getattr(data, "rescued_at", None),
             "admitted_at": getattr(data, "admitted_at", None),

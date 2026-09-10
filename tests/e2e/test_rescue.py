@@ -466,9 +466,45 @@ class TestRescueEndpoints:
                         "PATCH",
                         f"/api/v1/rescue/dispatch/{dispatch_id}",
                         headers=setup.admin_headers,
+                        expected=200,
+                    )
+                    # Test PATCH /dispatch/{dispatch_id} with status=en_route
+                    await call(
+                        client,
+                        "rescue",
+                        "PATCH",
+                        f"/api/v1/rescue/dispatch/{dispatch_id}",
+                        headers=setup.admin_headers,
                         json={
-                            "notes": "Alt updated",
+                            "status": "en_route",
                         },
+                        expected=200,
+                    )
+                    # Test POST /dispatch/{dispatch_id}/en-route
+                    await call(
+                        client,
+                        "rescue",
+                        "POST",
+                        f"/api/v1/rescue/dispatch/{dispatch_id}/en-route",
+                        headers=setup.admin_headers,
+                        expected=200,
+                    )
+                    # Test POST /dispatches/{dispatch_id}/en-route
+                    await call(
+                        client,
+                        "rescue",
+                        "POST",
+                        f"/api/v1/rescue/dispatches/{dispatch_id}/en-route",
+                        headers=setup.admin_headers,
+                        expected=200,
+                    )
+                    # Test POST /{req_id}/en-route
+                    await call(
+                        client,
+                        "rescue",
+                        "POST",
+                        f"/api/v1/rescue/{req_id}/en-route",
+                        headers=setup.admin_headers,
                         expected=200,
                     )
 

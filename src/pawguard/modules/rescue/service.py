@@ -130,8 +130,9 @@ def _generate_ticket_number(now: datetime | None = None) -> str:
 _BULK_TRANSITION_SOURCES: dict[RescueStatus, set[RescueStatus]] = {
     RescueStatus.VERIFIED: {RescueStatus.REPORTED},
     RescueStatus.DISPATCHED: {RescueStatus.VERIFIED},
-    RescueStatus.LOCATED: {RescueStatus.DISPATCHED},
-    RescueStatus.RESCUED: {RescueStatus.DISPATCHED, RescueStatus.LOCATED},
+    RescueStatus.EN_ROUTE: {RescueStatus.DISPATCHED},
+    RescueStatus.LOCATED: {RescueStatus.DISPATCHED, RescueStatus.EN_ROUTE},
+    RescueStatus.RESCUED: {RescueStatus.DISPATCHED, RescueStatus.EN_ROUTE, RescueStatus.LOCATED},
     RescueStatus.ADMITTED: {RescueStatus.RESCUED},
 }
 
@@ -866,15 +867,17 @@ class RescueService:
         if dispatch is None:
             raise NotFoundError("Rescue dispatch record not found.")
 
+        req = await self._repo.get_request_by_id(dispatch.rescue_request_id)
+        if req is None:
+            raise NotFoundError("Associated rescue request not found.")
+
         if payload.assigned_coordinator_id is not None:
             coord_user = await self._repo._session.get(User, payload.assigned_coordinator_id)
             if coord_user is None or coord_user.deleted_at is not None:
                 raise NotFoundError(
                     f"Assigned coordinator user '{payload.assigned_coordinator_id}' not found."
                 )
-            req = await self._repo.get_request_by_id(dispatch.rescue_request_id)
-            if req is not None:
-                req.coordinator_id = payload.assigned_coordinator_id
+            req.coordinator_id = payload.assigned_coordinator_id
 
         if payload.assigned_driver_id is not None:
             driver_user = await self._repo._session.get(User, payload.assigned_driver_id)
@@ -912,6 +915,8 @@ class RescueService:
             dispatch.escalation_status = payload.escalation_status
         if payload.failure_reason is not None:
             dispatch.failure_reason = parse_enum(RescueFailureReason, payload.failure_reason)
+        if payload.en_route_at is not None:
+            dispatch.en_route_at = payload.en_route_at
         if payload.located_at is not None:
             dispatch.located_at = payload.located_at
         if payload.rescued_at is not None:
@@ -921,8 +926,121 @@ class RescueService:
         if payload.failed_at is not None:
             dispatch.failed_at = payload.failed_at
 
+        # Handle status transition if provided in payload
+        if payload.status is not None:
+            target_status = parse_enum(RescueStatus, payload.status)
+            old_status = req.status
+            now = datetime.now(UTC)
+
+            if target_status == RescueStatus.EN_ROUTE:
+                if req.status not in (RescueStatus.DISPATCHED, RescueStatus.EN_ROUTE):
+                    raise ValidationFailedError(
+                        f"Cannot mark EN_ROUTE from status '{req.status.value}'. Must be in DISPATCHED status."
+                    )
+                if dispatch.en_route_at is None:
+                    dispatch.en_route_at = now
+                req.status = RescueStatus.EN_ROUTE
+
+            elif target_status == RescueStatus.LOCATED:
+                if req.status not in (
+                    RescueStatus.DISPATCHED,
+                    RescueStatus.EN_ROUTE,
+                    RescueStatus.LOCATED,
+                ):
+                    raise ValidationFailedError(
+                        f"Cannot mark LOCATED from status '{req.status.value}'. Must be in DISPATCHED or EN_ROUTE status."
+                    )
+                if dispatch.located_at is None:
+                    dispatch.located_at = now
+                req.status = RescueStatus.LOCATED
+
+            elif target_status == RescueStatus.RESCUED:
+                if req.status not in (
+                    RescueStatus.DISPATCHED,
+                    RescueStatus.EN_ROUTE,
+                    RescueStatus.LOCATED,
+                    RescueStatus.RESCUED,
+                ):
+                    raise ValidationFailedError(
+                        f"Cannot mark RESCUED from status '{req.status.value}'. Must be in DISPATCHED, EN_ROUTE, or LOCATED status."
+                    )
+                if dispatch.rescued_at is None:
+                    dispatch.rescued_at = now
+                req.status = RescueStatus.RESCUED
+
+            elif target_status == RescueStatus.ADMITTED:
+                if req.status not in (RescueStatus.RESCUED, RescueStatus.ADMITTED):
+                    raise ValidationFailedError(
+                        f"Cannot mark ADMITTED from status '{req.status.value}'. Must be in RESCUED status."
+                    )
+                if dispatch.admitted_at is None:
+                    dispatch.admitted_at = now
+                req.status = RescueStatus.ADMITTED
+                await self._fleet_service().release_equipment_for_dispatch(
+                    rescue_dispatch_id=dispatch.id,
+                    actor_id=actor_id,
+                    ip_address=ip_address,
+                )
+                if self._dog_repo is not None:
+                    await self._create_dog_profile_for_admitted(
+                        req, now=now, actor_id=actor_id, ip_address=ip_address
+                    )
+
+            elif target_status == RescueStatus.REJECTED:
+                if dispatch.failed_at is None:
+                    dispatch.failed_at = now
+                if payload.failure_reason:
+                    dispatch.failure_reason = parse_enum(
+                        RescueFailureReason, payload.failure_reason
+                    )
+                req.status = RescueStatus.REJECTED
+                await self._fleet_service().release_equipment_for_dispatch(
+                    rescue_dispatch_id=dispatch.id,
+                    actor_id=actor_id,
+                    ip_address=ip_address,
+                )
+
+            elif target_status == RescueStatus.DISPATCHED:
+                req.status = RescueStatus.DISPATCHED
+
+            else:
+                raise ValidationFailedError(
+                    f"Unsupported status transition to '{target_status.value}'."
+                )
+
+            if self._audit and actor_id:
+                await self._audit.record(
+                    event_type=AuthAuditEventType.RESCUE_STATUS_UPDATED,
+                    actor_id=actor_id,
+                    ip_address=ip_address or "",
+                    user_agent="",
+                    metadata={
+                        "rescue_id": str(req.id),
+                        "dispatch_id": str(dispatch.id),
+                        "old_status": str(
+                            old_status.value if hasattr(old_status, "value") else old_status
+                        ),
+                        "new_status": str(
+                            req.status.value if hasattr(req.status, "value") else req.status
+                        ),
+                        "action": "dispatch_status_update",
+                    },
+                    before_state={
+                        "status": str(
+                            old_status.value if hasattr(old_status, "value") else old_status
+                        )
+                    },
+                    after_state={
+                        "status": str(
+                            req.status.value if hasattr(req.status, "value") else req.status
+                        )
+                    },
+                )
+            await self._publish_dispatch_event()
+
         await self._repo._session.flush()
         await self._repo._session.refresh(dispatch, attribute_names=["updated_at"])
+        dispatch.rescue_request = req
         return dispatch
 
     async def delete_dispatch(
@@ -1058,6 +1176,101 @@ class RescueService:
         fresh_req = await self._repo.get_request_by_id(actual_request_id)
         return fresh_req or request
 
+    async def mark_en_route(
+        self,
+        identifier: uuid.UUID | str,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> RescueDispatch:
+        """Mark a rescue dispatch as EN_ROUTE and persist the state change."""
+        dispatch: RescueDispatch | None = None
+        if isinstance(identifier, uuid.UUID):
+            dispatch = await self._repo.get_dispatch_by_id(identifier)
+            if dispatch is None:
+                dispatch = await self._repo.get_dispatch_by_request_id(identifier)
+        else:
+            try:
+                parsed_uuid = uuid.UUID(str(identifier).strip())
+                dispatch = await self._repo.get_dispatch_by_id(parsed_uuid)
+                if dispatch is None:
+                    dispatch = await self._repo.get_dispatch_by_request_id(parsed_uuid)
+            except ValueError:
+                req_by_ticket = await self._repo.get_request_by_ticket(str(identifier).strip())
+                if req_by_ticket is not None:
+                    dispatch = await self._repo.get_dispatch_by_request_id(req_by_ticket.id)
+
+        if dispatch is None:
+            raise NotFoundError("Rescue dispatch record not found.")
+
+        req = await self._repo.get_request_by_id(dispatch.rescue_request_id)
+        if req is None:
+            raise NotFoundError("Associated rescue request not found.")
+
+        if req.status not in (RescueStatus.DISPATCHED, RescueStatus.EN_ROUTE):
+            raise ValidationFailedError(
+                f"Cannot mark EN_ROUTE from status '{req.status.value}'. Must be in DISPATCHED status."
+            )
+
+        old_status = req.status
+        now = datetime.now(UTC)
+        if dispatch.en_route_at is None:
+            dispatch.en_route_at = now
+        req.status = RescueStatus.EN_ROUTE
+
+        # Governed push notification for EN_ROUTE
+        try:
+            agent_ids = [a.agent_id for a in dispatch.agents]
+            if dispatch.assigned_driver_id and dispatch.assigned_driver_id not in agent_ids:
+                agent_ids.append(dispatch.assigned_driver_id)
+            if req.reporter_user_id and req.reporter_user_id not in agent_ids:
+                agent_ids.append(req.reporter_user_id)
+            if agent_ids:
+                await _send_governed_notification(
+                    self._repo._session,
+                    trigger_code="rescue_en_route",
+                    module_name="rescue",
+                    title="Rescue Team En Route",
+                    body=f"Rescue team is en route for case {req.ticket_number}.",
+                    target_user_ids=agent_ids,
+                    action_url=f"/rescue/{req.id}",
+                    requested_by=actor_id,
+                )
+        except Exception as exc:
+            logger.warning("Failed to send rescue en route push: %s", exc)
+
+        await self._repo._session.flush()
+        await self._repo._session.refresh(dispatch, attribute_names=["updated_at"])
+        dispatch.rescue_request = req
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.RESCUE_STATUS_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "rescue_id": str(req.id),
+                    "dispatch_id": str(dispatch.id),
+                    "old_status": str(
+                        old_status.value if hasattr(old_status, "value") else old_status
+                    ),
+                    "new_status": str(
+                        req.status.value if hasattr(req.status, "value") else req.status
+                    ),
+                    "action": "mark_en_route",
+                },
+                before_state={
+                    "status": str(old_status.value if hasattr(old_status, "value") else old_status)
+                },
+                after_state={
+                    "status": str(req.status.value if hasattr(req.status, "value") else req.status)
+                },
+            )
+
+        await self._publish_dispatch_event()
+        return dispatch
+
     async def add_observation_report(
         self,
         request_id: uuid.UUID | str,
@@ -1122,9 +1335,42 @@ class RescueService:
         old_status = request.status
         now = datetime.now(UTC)
 
-        if status == RescueStatus.LOCATED:
-            if request.status != RescueStatus.DISPATCHED:
-                raise ValidationFailedError("Animal must be in DISPATCHED status to mark LOCATED.")
+        if status == RescueStatus.EN_ROUTE:
+            if request.status not in (RescueStatus.DISPATCHED, RescueStatus.EN_ROUTE):
+                raise ValidationFailedError("Animal must be in DISPATCHED status to mark EN_ROUTE.")
+            dispatch.en_route_at = now
+            request.status = RescueStatus.EN_ROUTE
+
+            # Governed push notification for EN_ROUTE
+            try:
+                agent_ids = [a.agent_id for a in dispatch.agents]
+                if dispatch.assigned_driver_id and dispatch.assigned_driver_id not in agent_ids:
+                    agent_ids.append(dispatch.assigned_driver_id)
+                if request.reporter_user_id and request.reporter_user_id not in agent_ids:
+                    agent_ids.append(request.reporter_user_id)
+                if agent_ids:
+                    await _send_governed_notification(
+                        self._repo._session,
+                        trigger_code="rescue_en_route",
+                        module_name="rescue",
+                        title="Rescue Team En Route",
+                        body=f"Rescue team is en route for case {request.ticket_number}.",
+                        target_user_ids=agent_ids,
+                        action_url=f"/rescue/{actual_request_id}",
+                        requested_by=actor_id,
+                    )
+            except Exception as exc:
+                logger.warning("Failed to send rescue en route push: %s", exc)
+
+        elif status == RescueStatus.LOCATED:
+            if request.status not in (
+                RescueStatus.DISPATCHED,
+                RescueStatus.EN_ROUTE,
+                RescueStatus.LOCATED,
+            ):
+                raise ValidationFailedError(
+                    "Animal must be in DISPATCHED or EN_ROUTE status to mark LOCATED."
+                )
             dispatch.located_at = now
             request.status = RescueStatus.LOCATED
 
@@ -1150,9 +1396,14 @@ class RescueService:
                 logger.warning("Failed to send rescue located push: %s", exc)
 
         elif status == RescueStatus.RESCUED:
-            if request.status not in (RescueStatus.DISPATCHED, RescueStatus.LOCATED):
+            if request.status not in (
+                RescueStatus.DISPATCHED,
+                RescueStatus.EN_ROUTE,
+                RescueStatus.LOCATED,
+                RescueStatus.RESCUED,
+            ):
                 raise ValidationFailedError(
-                    "Animal must be in DISPATCHED or LOCATED status to mark RESCUED."
+                    "Animal must be in DISPATCHED, EN_ROUTE, or LOCATED status to mark RESCUED."
                 )
             dispatch.rescued_at = now
             request.status = RescueStatus.RESCUED

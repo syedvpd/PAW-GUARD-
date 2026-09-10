@@ -31,6 +31,7 @@ class RescueStatus(StrEnum):
     REPORTED = "reported"
     VERIFIED = "verified"
     DISPATCHED = "dispatched"
+    EN_ROUTE = "en_route"
     LOCATED = "located"
     RESCUED = "rescued"
     ADMITTED = "admitted"
@@ -42,6 +43,7 @@ class RescueStatus(StrEnum):
 # leaves this set (ADMITTED or REJECTED), its resources are released.
 ACTIVE_DISPATCH_STATUSES = (
     RescueStatus.DISPATCHED,
+    RescueStatus.EN_ROUTE,
     RescueStatus.LOCATED,
     RescueStatus.RESCUED,
 )
@@ -245,6 +247,7 @@ class RescueDispatch(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    en_route_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     located_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     rescued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     admitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
