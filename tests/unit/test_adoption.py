@@ -7,7 +7,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from pawguard.core.exceptions import ConflictError, NotFoundError, ValidationFailedError
+from pawguard.core.exceptions import (
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+    ValidationFailedError,
+)
 from pawguard.core.pagination import PageParams
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
@@ -41,6 +46,7 @@ def _make_app(**kw):
         has_landlord_approval=False,
         has_yard_fence=False,
         household_members_count=1,
+        is_foster_to_adopt=False,
         created_at=now,
         updated_at=now,
     )
@@ -335,7 +341,9 @@ class TestAdoptionService:
         mock_dog_repo.get_by_id_for_update.return_value = dog
         result = await service.update_application_status(app_id, AdoptionStatus.HOME_CHECK)
         assert result.status == AdoptionStatus.HOME_CHECK
-        assert dog.is_adoptable is True
+        # PRR 7.2: the public Adoption Directory must reflect the lock the
+        # instant it triggers (HOME_CHECK), not wait until COMPLETED.
+        assert dog.is_adoptable is False
 
     @pytest.mark.asyncio
     async def test_completed_conflicts_with_other_completed_application(
@@ -483,6 +491,130 @@ class TestAdoptionService:
             await service.soft_delete_application(uuid.uuid4())
 
     @pytest.mark.asyncio
+    async def test_home_check_auto_rejects_sibling_applications(
+        self, service, mock_repo, mock_dog_repo, mock_audit
+    ):
+        """PRR 7.2 Zero Exclusivity Violation: the moment one application
+        reaches HOME_CHECK, every other still-live application for the same
+        dog auto-rejects."""
+        dog_id = uuid.uuid4()
+        app_id = uuid.uuid4()
+        app = AdoptionApplication(
+            id=app_id,
+            dog_id=dog_id,
+            adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.INTERVIEW,
+            interview_completed_at=datetime.now(UTC),
+            residential_status="owned",
+        )
+        sibling = AdoptionApplication(
+            id=uuid.uuid4(),
+            dog_id=dog_id,
+            adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.SCREENING,
+            residential_status="owned",
+        )
+        mock_repo.get_by_id.side_effect = [app, app, app]
+        mock_repo.get_approved_application_for_dog.return_value = None
+        mock_repo.get_active_siblings_for_dog.return_value = [sibling]
+        dog = DogProfile(
+            id=dog_id,
+            registration_number="DOG-001",
+            name="B",
+            breed="Mix",
+            gender="female",
+            status=DogStatus.SHELTER,
+            is_adoptable=True,
+        )
+        mock_dog_repo.get_by_id.return_value = dog
+        mock_dog_repo.get_by_id_for_update.return_value = dog
+
+        result = await service.update_application_status(
+            app_id, AdoptionStatus.HOME_CHECK, actor_id=uuid.uuid4()
+        )
+
+        assert result.status == AdoptionStatus.HOME_CHECK
+        assert dog.is_adoptable is False
+        assert sibling.status == AdoptionStatus.REJECTED
+        assert "Rejection Reason" in (sibling.vetting_officer_notes or "")
+        mock_repo.get_active_siblings_for_dog.assert_awaited_once_with(dog_id, app_id)
+
+    @pytest.mark.asyncio
+    async def test_withdraw_application_from_active_status_succeeds(self, service, mock_repo):
+        app_id = uuid.uuid4()
+        app = AdoptionApplication(
+            id=app_id,
+            dog_id=uuid.uuid4(),
+            adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.SCREENING,
+            residential_status="owned",
+        )
+        mock_repo.get_by_id.side_effect = [app, app]
+        result = await service.withdraw_application(app_id, reason="Found another dog.")
+        assert result.status == AdoptionStatus.WITHDRAWN
+        assert "Found another dog." in (app.vetting_officer_notes or "")
+
+    @pytest.mark.asyncio
+    async def test_withdraw_application_from_completed_rejected(self, service, mock_repo):
+        app_id = uuid.uuid4()
+        app = AdoptionApplication(
+            id=app_id,
+            dog_id=uuid.uuid4(),
+            adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.COMPLETED,
+            residential_status="owned",
+        )
+        mock_repo.get_by_id.return_value = app
+        with pytest.raises(ValidationFailedError):
+            await service.withdraw_application(app_id)
+
+    @pytest.mark.asyncio
+    async def test_override_completed_adoption_requires_admin_role(self, service, mock_repo):
+        with pytest.raises(ForbiddenError):
+            await service.override_completed_adoption(
+                uuid.uuid4(),
+                "Fraudulent inspection.",
+                actor_id=uuid.uuid4(),
+                actor_roles=frozenset({"adoption_coordinator"}),
+            )
+        mock_repo.get_by_id.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_override_completed_adoption_unlocks_dog(self, service, mock_repo, mock_dog_repo):
+        app_id = uuid.uuid4()
+        dog_id = uuid.uuid4()
+        app = AdoptionApplication(
+            id=app_id,
+            dog_id=dog_id,
+            adopter_id=uuid.uuid4(),
+            status=AdoptionStatus.COMPLETED,
+            residential_status="owned",
+        )
+        mock_repo.get_by_id.side_effect = [app, app]
+        dog = DogProfile(
+            id=dog_id,
+            registration_number="DOG-001",
+            name="B",
+            breed="Mix",
+            gender="female",
+            status=DogStatus.ADOPTED,
+            is_adoptable=False,
+        )
+        mock_dog_repo.get_by_id.return_value = dog
+        mock_dog_repo.get_by_id_for_update.return_value = dog
+
+        result = await service.override_completed_adoption(
+            app_id,
+            "Fraudulent inspection approval.",
+            actor_id=uuid.uuid4(),
+            actor_roles=frozenset({"rescue_centre_admin"}),
+        )
+
+        assert result.status == AdoptionStatus.REJECTED
+        assert dog.is_adoptable is True
+        assert dog.status == DogStatus.SHELTER
+
+    @pytest.mark.asyncio
     async def test_approve_generates_agreement(self, mock_repo, mock_dog_repo, mock_audit):
         app_id = uuid.uuid4()
         dog_id = uuid.uuid4()
@@ -537,13 +669,34 @@ class TestAdoptionService:
         """Every valid transition in the 6-phase pipeline succeeds and
         every invalid transition raises ValidationFailedError."""
         valid_transitions = {
-            AdoptionStatus.SUBMITTED: [AdoptionStatus.SCREENING, AdoptionStatus.REJECTED],
-            AdoptionStatus.SCREENING: [AdoptionStatus.INTERVIEW, AdoptionStatus.REJECTED],
-            AdoptionStatus.INTERVIEW: [AdoptionStatus.HOME_CHECK, AdoptionStatus.REJECTED],
-            AdoptionStatus.HOME_CHECK: [AdoptionStatus.APPROVED, AdoptionStatus.REJECTED],
-            AdoptionStatus.APPROVED: [AdoptionStatus.COMPLETED, AdoptionStatus.REJECTED],
+            AdoptionStatus.SUBMITTED: [
+                AdoptionStatus.SCREENING,
+                AdoptionStatus.REJECTED,
+                AdoptionStatus.WITHDRAWN,
+            ],
+            AdoptionStatus.SCREENING: [
+                AdoptionStatus.INTERVIEW,
+                AdoptionStatus.REJECTED,
+                AdoptionStatus.WITHDRAWN,
+            ],
+            AdoptionStatus.INTERVIEW: [
+                AdoptionStatus.HOME_CHECK,
+                AdoptionStatus.REJECTED,
+                AdoptionStatus.WITHDRAWN,
+            ],
+            AdoptionStatus.HOME_CHECK: [
+                AdoptionStatus.APPROVED,
+                AdoptionStatus.REJECTED,
+                AdoptionStatus.WITHDRAWN,
+            ],
+            AdoptionStatus.APPROVED: [
+                AdoptionStatus.COMPLETED,
+                AdoptionStatus.REJECTED,
+                AdoptionStatus.WITHDRAWN,
+            ],
             AdoptionStatus.COMPLETED: [],
             AdoptionStatus.REJECTED: [],
+            AdoptionStatus.WITHDRAWN: [],
         }
         for start_status, allowed in valid_transitions.items():
             for end_status in allowed:
@@ -558,6 +711,7 @@ class TestAdoptionService:
                         datetime.now(UTC) if start_status == AdoptionStatus.INTERVIEW else None
                     ),
                     residential_status="owned",
+                    is_foster_to_adopt=False,
                 )
                 mock_repo.get_by_id.return_value = app
                 mock_repo.get_approved_application_for_dog.return_value = None

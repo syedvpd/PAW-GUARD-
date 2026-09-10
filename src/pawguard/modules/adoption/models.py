@@ -35,6 +35,7 @@ class AdoptionStatus(StrEnum):
     APPROVED = "approved"
     COMPLETED = "completed"
     REJECTED = "rejected"
+    WITHDRAWN = "withdrawn"
     VETTING = "vetting"  # deprecated legacy value, kept for data compatibility
 
 
@@ -89,10 +90,16 @@ class AdoptionApplication(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMix
         DateTime(timezone=True), nullable=True
     )
     adoption_agreement_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    agreement_signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    agreement_signature_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     fee_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(10, 2), default=Decimal("0.00"), nullable=True
     )
+    # Foster-to-Adopt (PRR 3.8): the applicant already has physical custody of
+    # the dog via an active foster placement, so the home is already known and
+    # SCREENING/INTERVIEW are redundant - see FOSTER_TO_ADOPT_TRANSITIONS.
+    is_foster_to_adopt: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     dog: Mapped["DogProfile"] = relationship("DogProfile", lazy="joined")
     adopter: Mapped["User"] = relationship("User", foreign_keys=[adopter_id], lazy="joined")

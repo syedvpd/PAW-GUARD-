@@ -7,7 +7,12 @@ from decimal import Decimal
 from logging import getLogger
 
 from pawguard.core.config import get_settings
-from pawguard.core.exceptions import ConflictError, NotFoundError, ValidationFailedError
+from pawguard.core.exceptions import (
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+    ValidationFailedError,
+)
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.pdf_generation import generate_adoption_agreement
 from pawguard.core.responses import PaginatedResponse
@@ -51,15 +56,51 @@ FOLLOW_UP_INTERVALS = (30, 90, 180)
 # reachable from a terminal state. The deprecated legacy VETTING member is a
 # data-compatibility holdover and is deliberately absent from the graph.
 VALID_STATUS_TRANSITIONS: dict[AdoptionStatus, set[AdoptionStatus]] = {
-    AdoptionStatus.SUBMITTED: {AdoptionStatus.SCREENING, AdoptionStatus.REJECTED},
-    AdoptionStatus.SCREENING: {AdoptionStatus.INTERVIEW, AdoptionStatus.REJECTED},
-    AdoptionStatus.INTERVIEW: {AdoptionStatus.HOME_CHECK, AdoptionStatus.REJECTED},
-    AdoptionStatus.HOME_CHECK: {AdoptionStatus.APPROVED, AdoptionStatus.REJECTED},
-    AdoptionStatus.APPROVED: {AdoptionStatus.COMPLETED, AdoptionStatus.REJECTED},
+    AdoptionStatus.SUBMITTED: {
+        AdoptionStatus.SCREENING,
+        AdoptionStatus.REJECTED,
+        AdoptionStatus.WITHDRAWN,
+    },
+    AdoptionStatus.SCREENING: {
+        AdoptionStatus.INTERVIEW,
+        AdoptionStatus.REJECTED,
+        AdoptionStatus.WITHDRAWN,
+    },
+    AdoptionStatus.INTERVIEW: {
+        AdoptionStatus.HOME_CHECK,
+        AdoptionStatus.REJECTED,
+        AdoptionStatus.WITHDRAWN,
+    },
+    AdoptionStatus.HOME_CHECK: {
+        AdoptionStatus.APPROVED,
+        AdoptionStatus.REJECTED,
+        AdoptionStatus.WITHDRAWN,
+    },
+    AdoptionStatus.APPROVED: {
+        AdoptionStatus.COMPLETED,
+        AdoptionStatus.REJECTED,
+        AdoptionStatus.WITHDRAWN,
+    },
     AdoptionStatus.COMPLETED: set(),
     AdoptionStatus.REJECTED: set(),
+    AdoptionStatus.WITHDRAWN: set(),
     AdoptionStatus.VETTING: set(),
 }
+
+# Foster-to-Adopt (PRR 3.8): the applicant already has physical custody of the
+# dog, so SCREENING and INTERVIEW are redundant - these applications may jump
+# straight from SUBMITTED to HOME_CHECK. Only consulted when
+# ``AdoptionApplication.is_foster_to_adopt`` is True.
+FOSTER_TO_ADOPT_EXTRA_TRANSITIONS: dict[AdoptionStatus, set[AdoptionStatus]] = {
+    AdoptionStatus.SUBMITTED: {AdoptionStatus.HOME_CHECK},
+    AdoptionStatus.SCREENING: {AdoptionStatus.HOME_CHECK},
+}
+
+# Roles permitted to reverse a COMPLETED adoption (PRR 3.7 edge case: a home
+# inspection approval later found fraudulent or mistaken). Deliberately a
+# smaller set than the ``adoption:lock`` permission grants, since that
+# permission is also seeded to adoption_coordinator for routine locking.
+ADOPTION_OVERRIDE_ROLES = frozenset({"rescue_centre_admin", "super_admin"})
 
 
 class AdoptionService:
@@ -172,7 +213,9 @@ class AdoptionService:
             )
 
     @staticmethod
-    def _check_transition(old_status: AdoptionStatus, new_status: AdoptionStatus) -> None:
+    def _check_transition(
+        old_status: AdoptionStatus, new_status: AdoptionStatus, *, is_foster_to_adopt: bool = False
+    ) -> None:
         if old_status == new_status:
             return
         # old_status may come back as a plain str after a session refresh
@@ -181,11 +224,121 @@ class AdoptionService:
         # before formatting so `.value` access below can't crash.
         old_status = AdoptionStatus(old_status)
         allowed = VALID_STATUS_TRANSITIONS.get(old_status, set())
+        if is_foster_to_adopt:
+            allowed = allowed | FOSTER_TO_ADOPT_EXTRA_TRANSITIONS.get(old_status, set())
         if new_status not in allowed:
             raise ValidationFailedError(
                 f"Cannot transition adoption application from '{old_status.value}' "
                 f"to '{new_status.value}'."
             )
+
+    async def _invalidate_dog_cache(self) -> None:
+        if self._redis is not None and not is_null_redis(self._redis):
+            try:
+                await CacheService(self._redis, namespace="dog").delete_prefix("")
+            except Exception as exc:
+                logger.warning("dog_cache_invalidation_failed", error=str(exc))
+
+    async def _lock_dog_for_application(
+        self,
+        app: AdoptionApplication,
+        *,
+        actor_id: uuid.UUID | None,
+        ip_address: str | None,
+        reject_siblings: bool,
+    ) -> DogProfile | None:
+        """PRR 7.2 Zero Exclusivity Violation: run whenever an application
+        first enters a locking status (HOME_CHECK/APPROVED/COMPLETED, per
+        AdoptionRepository.LOCKING_STATUSES).
+
+        Locks the dog row first (the authoritative guard against a concurrent
+        approval on the same dog), then - if this is the transition that just
+        acquired the lock (``reject_siblings``) - auto-rejects every other
+        still-live application for the same dog so the competition doesn't
+        sit in limbo. Returns the locked dog row so callers don't need a
+        second ``SELECT ... FOR UPDATE`` for the same transaction.
+        """
+        lock_token = str(uuid.uuid4())
+        lock_acquired = False
+        cache_svc = None
+        if self._redis is not None and not is_null_redis(self._redis):
+            cache_svc = CacheService(self._redis, namespace="adoptions")
+            lock_acquired = await cache_svc.acquire_lock(
+                f"lock:dog:{app.dog_id}", lock_token, expire_ms=10000
+            )
+            if not lock_acquired:
+                raise ConflictError(
+                    "This dog is currently being processed. Please try again later."
+                )
+
+        try:
+            # Serializes concurrent transitions for the same dog so the
+            # check-then-act below can't race.
+            dog = await self._dog_repo.get_by_id_for_update(app.dog_id)
+
+            existing_locked = await self._repo.get_approved_application_for_dog(
+                app.dog_id, exclude_id=app.id
+            )
+            # Defensive id check in addition to the repository's exclude_id
+            # filter, so a stale/incorrectly-scoped lookup can never treat an
+            # application as conflicting with itself.
+            if existing_locked is not None and existing_locked.id != app.id:
+                if existing_locked.status == AdoptionStatus.COMPLETED:
+                    raise ConflictError("Another application has already completed adoption for this dog.")
+                raise ConflictError(
+                    f"Another application has already reached '{existing_locked.status}' for this dog."
+                )
+
+            # PRR 7.2: the public Adoption Directory (GET /dogs) must reflect
+            # the lock immediately, not on a delay - flip is_adoptable as soon
+            # as the dog is locked, not only once the adoption COMPLETES.
+            if dog is not None and dog.is_adoptable:
+                dog.is_adoptable = False
+                await self._invalidate_dog_cache()
+
+            if reject_siblings:
+                siblings = await self._repo.get_active_siblings_for_dog(app.dog_id, app.id)
+                for sibling in siblings:
+                    sibling_old_status = AdoptionStatus(sibling.status)
+                    sibling.status = AdoptionStatus.REJECTED
+                    reason = "Dog no longer available - another application reached Home Inspection."
+                    sibling.vetting_officer_notes = (
+                        f"{sibling.vetting_officer_notes}\nRejection Reason: {reason}".strip()
+                        if sibling.vetting_officer_notes
+                        else f"Rejection Reason: {reason}"
+                    )
+                    if self._audit:
+                        await self._audit.record(
+                            event_type=AuthAuditEventType.ADOPTION_LOCK_REJECTED_SIBLING,
+                            actor_id=actor_id,
+                            ip_address=ip_address or "",
+                            user_agent="",
+                            metadata={
+                                "adoption_id": str(sibling.id),
+                                "dog_id": str(app.dog_id),
+                                "locking_application_id": str(app.id),
+                            },
+                            before_state={"status": sibling_old_status.value},
+                            after_state={"status": AdoptionStatus.REJECTED.value},
+                        )
+                    await self._notify_adopter(
+                        sibling,
+                        title="Update on your adoption application",
+                        body=(
+                            "Thank you for your interest. Another applicant has moved "
+                            "forward for this dog, so we are unable to proceed with your "
+                            "application at this time. Please browse other dogs available "
+                            "for adoption."
+                        ),
+                        notification_type="adoption_rejected",
+                        action_url="/adoptions/my-applications",
+                    )
+                await self._repo._session.flush()
+
+            return dog
+        finally:
+            if lock_acquired and cache_svc is not None:
+                await cache_svc.release_lock(f"lock:dog:{app.dog_id}", lock_token)
 
     async def apply_for_adoption(
         self,
@@ -248,6 +401,7 @@ class AdoptionService:
                 household_members_count=payload.household_members_count,
                 existing_pets_medical_details=payload.existing_pets_medical_details,
                 pet_care_experience=payload.pet_care_experience,
+                is_foster_to_adopt=payload.is_foster_to_adopt,
                 status=AdoptionStatus.SUBMITTED,
             )
             await self._repo.create(app)
@@ -307,7 +461,7 @@ class AdoptionService:
 
         if "status" in update_data:
             new_status = update_data["status"]
-            self._check_transition(app.status, new_status)
+            self._check_transition(app.status, new_status, is_foster_to_adopt=app.is_foster_to_adopt)
 
             if app.status == AdoptionStatus.INTERVIEW and new_status == AdoptionStatus.HOME_CHECK:
                 effective_interview_completed_at = update_data.get(
@@ -318,42 +472,29 @@ class AdoptionService:
                         "Complete the interview call before scheduling the home inspection."
                     )
 
-            if new_status == AdoptionStatus.COMPLETED:
-                lock_token = str(uuid.uuid4())
-                lock_acquired = False
-                cache_svc = None
-                if self._redis is not None and not is_null_redis(self._redis):
-                    cache_svc = CacheService(self._redis, namespace="adoptions")
-                    lock_acquired = await cache_svc.acquire_lock(
-                        f"lock:dog:{app.dog_id}", lock_token, expire_ms=10000
-                    )
-                    if not lock_acquired:
-                        raise ConflictError(
-                            "This dog is currently being processed. Please try again later."
-                        )
-
-                try:
-                    # Lock the dog row first: this serializes concurrent approvals
-                    # for the same dog so the check-then-act below can't race.
-                    dog = await self._dog_repo.get_by_id_for_update(app.dog_id)
-
-                    existing_approved = await self._repo.get_approved_application_for_dog(
-                        app.dog_id
-                    )
-                    if existing_approved is not None and existing_approved.id != app_id:
-                        raise ConflictError(
-                            "Another application has already completed adoption for this dog."
-                        )
-
-                    if dog is not None:
-                        dog.is_adoptable = False
-                        dog.status = DogStatus.ADOPTED
-                finally:
-                    if lock_acquired and cache_svc is not None:
-                        await cache_svc.release_lock(f"lock:dog:{app.dog_id}", lock_token)
+            locked_dog = None
+            if new_status in AdoptionRepository.LOCKING_STATUSES:
+                locked_dog = await self._lock_dog_for_application(
+                    app,
+                    actor_id=actor_id,
+                    ip_address=ip_address,
+                    reject_siblings=app.status not in AdoptionRepository.LOCKING_STATUSES,
+                )
+            elif app.status in AdoptionRepository.LOCKING_STATUSES and new_status in (
+                AdoptionStatus.REJECTED,
+                AdoptionStatus.WITHDRAWN,
+            ):
+                dog = await self._dog_repo.get_by_id_for_update(app.dog_id)
+                if dog is not None and not dog.is_adoptable:
+                    dog.is_adoptable = True
+                    await self._invalidate_dog_cache()
 
             if new_status == AdoptionStatus.COMPLETED:
+                if locked_dog is not None:
+                    locked_dog.is_adoptable = False
+                    locked_dog.status = DogStatus.ADOPTED
                 app.completed_at = datetime.now(UTC)
+                await self._invalidate_dog_cache()
 
         for key, value in update_data.items():
             setattr(app, key, value)
@@ -395,7 +536,7 @@ class AdoptionService:
             raise NotFoundError("Adoption application not found.")
 
         old_status = app.status
-        self._check_transition(old_status, status)
+        self._check_transition(old_status, status, is_foster_to_adopt=app.is_foster_to_adopt)
 
         if status == AdoptionStatus.REJECTED:
             reason = rejection_reason or notes
@@ -418,45 +559,31 @@ class AdoptionService:
                     "Complete the interview call before scheduling the home inspection."
                 )
 
-        if status == AdoptionStatus.COMPLETED:
-            lock_token = str(uuid.uuid4())
-            lock_acquired = False
-            cache_svc = None
-            if self._redis is not None and not is_null_redis(self._redis):
-                cache_svc = CacheService(self._redis, namespace="adoptions")
-                lock_acquired = await cache_svc.acquire_lock(
-                    f"lock:dog:{app.dog_id}", lock_token, expire_ms=10000
-                )
-                if not lock_acquired:
-                    raise ConflictError(
-                        "This dog is currently being processed. Please try again later."
-                    )
-
-            try:
-                # Lock the dog row first: this serializes concurrent approvals for
-                # the same dog so the check-then-act below can't race.
-                dog = await self._dog_repo.get_by_id_for_update(app.dog_id)
-
-                existing_approved = await self._repo.get_approved_application_for_dog(app.dog_id)
-                if existing_approved is not None and existing_approved.id != app_id:
-                    raise ConflictError(
-                        "Another application has already completed adoption for this dog."
-                    )
-
-                if dog is not None:
-                    dog.is_adoptable = False
-                    dog.status = DogStatus.ADOPTED
-            finally:
-                if lock_acquired and cache_svc is not None:
-                    await cache_svc.release_lock(f"lock:dog:{app.dog_id}", lock_token)
+        locked_dog = None
+        if status in AdoptionRepository.LOCKING_STATUSES:
+            locked_dog = await self._lock_dog_for_application(
+                app,
+                actor_id=actor_id,
+                ip_address=ip_address,
+                reject_siblings=old_status not in AdoptionRepository.LOCKING_STATUSES,
+            )
+        elif old_status in AdoptionRepository.LOCKING_STATUSES and status in (
+            AdoptionStatus.REJECTED,
+            AdoptionStatus.WITHDRAWN,
+        ):
+            # The one application holding this dog's lock backed out before
+            # completing - free the dog up in the public directory again.
+            dog = await self._dog_repo.get_by_id_for_update(app.dog_id)
+            if dog is not None and not dog.is_adoptable:
+                dog.is_adoptable = True
+                await self._invalidate_dog_cache()
 
         if status == AdoptionStatus.COMPLETED:
+            if locked_dog is not None:
+                locked_dog.is_adoptable = False
+                locked_dog.status = DogStatus.ADOPTED
             app.completed_at = datetime.now(UTC)
-            if self._redis is not None and not is_null_redis(self._redis):
-                try:
-                    await CacheService(self._redis, namespace="dog").delete_prefix("")
-                except Exception as exc:
-                    logger.warning("dog_cache_invalidation_failed", error=str(exc))
+            await self._invalidate_dog_cache()
 
         app.status = status
         await self._repo._session.flush()
@@ -560,6 +687,181 @@ class AdoptionService:
                     "fee_amount": str(app.fee_amount),
                 },
             )
+
+        return res
+
+    async def withdraw_application(
+        self,
+        app_id: uuid.UUID,
+        *,
+        reason: str | None = None,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> AdoptionApplication:
+        """Applicant- or staff-initiated withdrawal (PRR 3.7 edge case), distinct
+        from REJECTED so reporting can tell "we said no" apart from "they left".
+
+        Since active-siblings/directory queries exclude WITHDRAWN, this also
+        frees the dog up for the next-best pending applicant if it was the
+        one holding the exclusivity lock (HOME_CHECK onward).
+        """
+        app = await self._repo.get_by_id(app_id)
+        if app is None:
+            raise NotFoundError("Adoption application not found.")
+
+        old_status = AdoptionStatus(app.status)
+        if old_status not in VALID_STATUS_TRANSITIONS or (
+            AdoptionStatus.WITHDRAWN not in VALID_STATUS_TRANSITIONS[old_status]
+        ):
+            raise ValidationFailedError(
+                f"Cannot withdraw an application from status '{old_status.value}'."
+            )
+
+        if reason and reason.strip():
+            app.vetting_officer_notes = (
+                f"{app.vetting_officer_notes}\nWithdrawal Reason: {reason.strip()}".strip()
+                if app.vetting_officer_notes
+                else f"Withdrawal Reason: {reason.strip()}"
+            )
+        app.status = AdoptionStatus.WITHDRAWN
+
+        if old_status in AdoptionRepository.LOCKING_STATUSES:
+            dog = await self._dog_repo.get_by_id_for_update(app.dog_id)
+            if dog is not None and not dog.is_adoptable:
+                dog.is_adoptable = True
+                await self._invalidate_dog_cache()
+
+        await self._repo._session.flush()
+        res = await self._repo.get_by_id(app_id)
+        if res is None:
+            raise NotFoundError("Adoption application not found after withdrawal.")
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.ADOPTION_WITHDRAWN,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"adoption_id": str(app_id), "reason": reason},
+                before_state={"status": old_status.value},
+                after_state={"status": AdoptionStatus.WITHDRAWN.value},
+            )
+
+        return res
+
+    async def sign_agreement(
+        self,
+        app_id: uuid.UUID,
+        signature_name: str,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> AdoptionApplication:
+        """Lightweight self-serve e-signature: the adopter types their full
+        legal name to attest to the already-generated agreement PDF, and we
+        timestamp it. This is a typed-name attestation, not a drawn signature
+        embedded into the PDF - upgrade to a drawn/DocuSign-style signature
+        with the PDF re-generated to include it if that becomes a hard
+        requirement.
+        """
+        app = await self._repo.get_by_id(app_id)
+        if app is None:
+            raise NotFoundError("Adoption application not found.")
+
+        if not app.adoption_agreement_url:
+            raise ValidationFailedError("The adoption agreement has not been generated yet.")
+        if app.agreement_signed_at is not None:
+            raise ConflictError("This agreement has already been signed.")
+        if not signature_name.strip():
+            raise ValidationFailedError("Signature name is required.")
+
+        app.agreement_signature_name = signature_name.strip()
+        app.agreement_signed_at = datetime.now(UTC)
+        await self._repo._session.flush()
+        res = await self._repo.get_by_id(app_id)
+        if res is None:
+            raise NotFoundError("Adoption application not found after signing.")
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.ADOPTION_AGREEMENT_SIGNED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"adoption_id": str(app_id), "signature_name": app.agreement_signature_name},
+            )
+
+        return res
+
+    async def override_completed_adoption(
+        self,
+        app_id: uuid.UUID,
+        reason: str,
+        *,
+        actor_id: uuid.UUID | None,
+        actor_roles: frozenset[str],
+        ip_address: str | None = None,
+    ) -> AdoptionApplication:
+        """Manual reversal of a COMPLETED adoption later found fraudulent or
+        mistaken (PRR 3.7 edge case). Restricted to ADOPTION_OVERRIDE_ROLES -
+        deliberately narrower than the ``adoption:lock`` permission, which is
+        also seeded to adoption_coordinator for routine locking. Bypasses the
+        normal state machine on purpose (this is an administrative escape
+        hatch), but is audited with explicit before/after state.
+        """
+        if not (actor_roles & ADOPTION_OVERRIDE_ROLES):
+            raise ForbiddenError(
+                "Only a Rescue Centre Admin can reverse a completed adoption."
+            )
+        if not reason or not reason.strip():
+            raise ValidationFailedError("A reason is required to reverse a completed adoption.")
+
+        app = await self._repo.get_by_id(app_id)
+        if app is None:
+            raise NotFoundError("Adoption application not found.")
+        if app.status != AdoptionStatus.COMPLETED:
+            raise ValidationFailedError("Only a COMPLETED adoption can be reversed.")
+
+        dog = await self._dog_repo.get_by_id_for_update(app.dog_id)
+
+        old_status = AdoptionStatus(app.status)
+        app.status = AdoptionStatus.REJECTED
+        app.vetting_officer_notes = (
+            f"{app.vetting_officer_notes}\nOverride Reversal Reason: {reason.strip()}".strip()
+            if app.vetting_officer_notes
+            else f"Override Reversal Reason: {reason.strip()}"
+        )
+        if dog is not None:
+            dog.is_adoptable = True
+            dog.status = DogStatus.SHELTER
+            await self._invalidate_dog_cache()
+
+        await self._repo._session.flush()
+        res = await self._repo.get_by_id(app_id)
+        if res is None:
+            raise NotFoundError("Adoption application not found after reversal.")
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.ADOPTION_OVERRIDE_REVERSED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"adoption_id": str(app_id), "dog_id": str(app.dog_id), "reason": reason.strip()},
+                before_state={"status": old_status.value, "dog_is_adoptable": False},
+                after_state={"status": AdoptionStatus.REJECTED.value, "dog_is_adoptable": True},
+            )
+
+        await self._notify_adopter(
+            res,
+            title="Update regarding your completed adoption",
+            body=(
+                "Our team has reversed the adoption record for this dog following a "
+                "review. Please contact us for details."
+            ),
+            notification_type="adoption_status_changed",
+            action_url="/adoptions/my-applications",
+        )
 
         return res
 
@@ -802,11 +1104,7 @@ class AdoptionService:
         # / COMPLETED) must go through the same exclusivity gate as the
         # single-application update path - otherwise a single staff action can
         # approve multiple applications for the same dog. Reject outright.
-        if status in (
-            AdoptionStatus.HOME_CHECK,
-            AdoptionStatus.APPROVED,
-            AdoptionStatus.COMPLETED,
-        ):
+        if status in AdoptionRepository.LOCKING_STATUSES:
             raise ValidationFailedError(
                 f"Bulk update to '{status.value}' is not permitted. "
                 "These terminal approval states must be applied per-application "
@@ -818,7 +1116,7 @@ class AdoptionService:
         # SUBMITTED -> COMPLETED in one step.
         apps = await self._repo.get_by_ids(ids)
         for app in apps:
-            self._check_transition(app.status, status)
+            self._check_transition(app.status, status, is_foster_to_adopt=app.is_foster_to_adopt)
 
         updated = await self._repo.bulk_update_status(ids, status)
 

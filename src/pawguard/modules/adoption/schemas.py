@@ -26,6 +26,10 @@ class AdoptionApplicationCreate(BaseModel):
     pet_care_experience: str | None = Field(
         None, examples=["Owned a Labrador for 10 years prior to this application."]
     )
+    is_foster_to_adopt: bool = Field(
+        False,
+        description="Applicant already has physical custody of this dog via an active foster placement.",
+    )
 
 
 class AdoptionApplicationUpdate(BaseModel):
@@ -101,6 +105,9 @@ class AdoptionApplicationResponse(BaseModel):
     home_inspection_notes: str | None
     home_inspection_type: str | None
     adoption_agreement_url: str | None
+    agreement_signed_at: datetime | None = None
+    agreement_signature_name: str | None = None
+    is_foster_to_adopt: bool = False
     fee_amount: Decimal | None = Field(None, description="Adoption fee amount")
     completed_at: datetime | None
     created_at: datetime
@@ -156,6 +163,28 @@ class AdoptionFeeUpdate(BaseModel):
     """Staff-only payload for setting the adoption fee before approval."""
 
     fee_amount: Decimal = Field(..., ge=0, description="Adoption fee amount", examples=[250.00])
+
+
+class AdoptionWithdrawRequest(BaseModel):
+    """Applicant/staff-initiated withdrawal of a still-active application."""
+
+    reason: str | None = Field(None, max_length=2000, examples=["Found another dog."])
+
+
+class AdoptionAgreementSignRequest(BaseModel):
+    """Adopter self-serve e-signature attestation for the generated agreement PDF."""
+
+    signature_name: str = Field(
+        ..., min_length=2, max_length=255, examples=["Jordan A. Rivera"]
+    )
+
+
+class AdoptionOverrideRequest(BaseModel):
+    """Rescue Centre Admin-only payload to reverse a COMPLETED adoption."""
+
+    reason: str = Field(
+        ..., min_length=10, max_length=2000, examples=["Home inspection approval was fraudulent."]
+    )
 
 
 class FollowUpProofCreate(BaseModel):

@@ -147,19 +147,43 @@ class AdoptionRepository:
         result = await self._session.execute(stmt)
         return result.rowcount  # type: ignore[attr-defined,no-any-return]
 
-    # Statuses that exclusively lock a dog against other applications.
-    # Only COMPLETED adoptions prevent new applications.
-    LOCKING_STATUSES = (AdoptionStatus.COMPLETED,)
+    # Statuses that exclusively lock a dog against other applications (PRR 7.2 /
+    # module README "Exclusivity Lock Mechanism": lock activates at HOME_CHECK).
+    LOCKING_STATUSES = (AdoptionStatus.HOME_CHECK, AdoptionStatus.APPROVED, AdoptionStatus.COMPLETED)
+
+    # Terminal-ish statuses that no longer compete for the dog.
+    INACTIVE_STATUSES = (AdoptionStatus.REJECTED, AdoptionStatus.WITHDRAWN)
 
     async def get_approved_application_for_dog(
-        self, dog_id: uuid.UUID
+        self, dog_id: uuid.UUID, *, exclude_id: uuid.UUID | None = None
     ) -> AdoptionApplication | None:
         stmt = select(AdoptionApplication).where(
             AdoptionApplication.dog_id == dog_id,
             AdoptionApplication.status.in_(self.LOCKING_STATUSES),
             AdoptionApplication.deleted_at.is_(None),
         )
+        if exclude_id is not None:
+            stmt = stmt.where(AdoptionApplication.id != exclude_id)
         return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def get_active_siblings_for_dog(
+        self, dog_id: uuid.UUID, exclude_id: uuid.UUID
+    ) -> Sequence[AdoptionApplication]:
+        """Every other still-live application for this dog (used to auto-reject
+        the competition once one application locks the dog)."""
+        stmt = (
+            select(AdoptionApplication)
+            .options(selectinload(AdoptionApplication.adopter).selectinload(User.roles))
+            .where(
+                AdoptionApplication.dog_id == dog_id,
+                AdoptionApplication.id != exclude_id,
+                AdoptionApplication.status.notin_(
+                    (*self.INACTIVE_STATUSES, AdoptionStatus.COMPLETED)
+                ),
+                AdoptionApplication.deleted_at.is_(None),
+            )
+        )
+        return (await self._session.execute(stmt)).scalars().all()
 
     async def get_application_by_adopter_and_dog(
         self, adopter_id: uuid.UUID, dog_id: uuid.UUID

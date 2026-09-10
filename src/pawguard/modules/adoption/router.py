@@ -29,6 +29,7 @@ from pawguard.modules.adoption.models import (
 )
 from pawguard.modules.adoption.repository import AdoptionRepository
 from pawguard.modules.adoption.schemas import (
+    AdoptionAgreementSignRequest,
     AdoptionApplicationCreate,
     AdoptionApplicationResponse,
     AdoptionApplicationUpdate,
@@ -37,9 +38,11 @@ from pawguard.modules.adoption.schemas import (
     AdoptionFollowUpResponse,
     AdoptionFollowUpUploadUrlRequest,
     AdoptionFollowUpUploadUrlResponse,
+    AdoptionOverrideRequest,
     AdoptionScoreCreate,
     AdoptionScoreResponse,
     AdoptionStatusUpdate,
+    AdoptionWithdrawRequest,
     FollowUpProofCreate,
 )
 from pawguard.modules.adoption.service import AdoptionService
@@ -294,6 +297,90 @@ async def update_application_status(
     return ApiResponse(
         data=AdoptionApplicationResponse.model_validate(app),
         message="Adoption application status updated successfully.",
+    )
+
+
+@router.post(
+    "/{app_id}/withdraw",
+    response_model=ApiResponse[AdoptionApplicationResponse],
+)
+async def withdraw_application(
+    app_id: uuid.UUID,
+    payload: AdoptionWithdrawRequest,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: AdoptionService = Depends(get_adoption_service),
+) -> ApiResponse[AdoptionApplicationResponse]:
+    app = await service.get_application(app_id)
+    if app.adopter_id != current_user.user.id and not has_permission(
+        current_user.user, "adoption:process"
+    ):
+        raise ForbiddenError("You do not have permission to withdraw this application.")
+
+    updated = await service.withdraw_application(
+        app_id,
+        reason=payload.reason,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(
+        data=AdoptionApplicationResponse.model_validate(updated),
+        message="Adoption application withdrawn.",
+    )
+
+
+@router.post(
+    "/{app_id}/agreement/sign",
+    response_model=ApiResponse[AdoptionApplicationResponse],
+)
+async def sign_agreement(
+    app_id: uuid.UUID,
+    payload: AdoptionAgreementSignRequest,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: AdoptionService = Depends(get_adoption_service),
+) -> ApiResponse[AdoptionApplicationResponse]:
+    app = await service.get_application(app_id)
+    if app.adopter_id != current_user.user.id:
+        raise ForbiddenError("Only the applicant can sign their own adoption agreement.")
+
+    updated = await service.sign_agreement(
+        app_id,
+        payload.signature_name,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(
+        data=AdoptionApplicationResponse.model_validate(updated),
+        message="Adoption agreement signed.",
+    )
+
+
+@router.post(
+    "/{app_id}/override",
+    response_model=ApiResponse[AdoptionApplicationResponse],
+    dependencies=[Depends(require_permission("adoption:lock"))],
+)
+async def override_completed_adoption(
+    app_id: uuid.UUID,
+    payload: AdoptionOverrideRequest,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: AdoptionService = Depends(get_adoption_service),
+) -> ApiResponse[AdoptionApplicationResponse]:
+    """Rescue Centre Admin-only: reverse a COMPLETED adoption later found
+    fraudulent or mistaken, unlocking the dog for other applicants."""
+    actor_roles = frozenset(r.name for r in current_user.user.roles)
+    updated = await service.override_completed_adoption(
+        app_id,
+        payload.reason,
+        actor_id=current_user.id,
+        actor_roles=actor_roles,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(
+        data=AdoptionApplicationResponse.model_validate(updated),
+        message="Adoption reversed and dog unlocked.",
     )
 
 
