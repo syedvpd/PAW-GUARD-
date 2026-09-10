@@ -3,13 +3,18 @@
 import uuid
 from datetime import datetime
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from pawguard.db.base import Base
 from pawguard.db.mixins import AuditMixin, SoftDeleteMixin, TimestampMixin, UUIDPkMixin
+
+if TYPE_CHECKING:
+    from pawguard.modules.auth.models import User
+    from pawguard.modules.dog.models import DogProfile
 
 
 class FacilityStatus(StrEnum):
@@ -229,6 +234,21 @@ class ShelterVetRequest(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     urgency: Mapped[str] = mapped_column(String(32), nullable=False, default="routine")
     status: Mapped[ShelterVetRequestStatus] = mapped_column(
         String(32), default=ShelterVetRequestStatus.PENDING, nullable=False, index=True
+    )
+
+    dog: Mapped["DogProfile"] = relationship("DogProfile", foreign_keys=[dog_id], lazy="selectin")
+    shelter_facility: Mapped["ShelterFacility"] = relationship(
+        "ShelterFacility", foreign_keys=[shelter_facility_id], lazy="selectin"
+    )
+    requested_by: Mapped["User"] = relationship(
+        "User",
+        foreign_keys=[requested_by_id],
+        lazy="selectin",
+    )
+    vet: Mapped["User"] = relationship(
+        "User",
+        foreign_keys=[vet_id],
+        lazy="selectin",
     )
 
 

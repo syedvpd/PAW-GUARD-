@@ -11,7 +11,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from pawguard.core.cache_decorator import invalidate_route_cache
-from pawguard.core.exceptions import ConflictError, ForbiddenError, NotFoundError
+from pawguard.core.exceptions import (
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+    ValidationFailedError,
+)
 from pawguard.core.logging import get_logger
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
@@ -57,6 +62,24 @@ from pawguard.modules.shelter.schemas import (
 from pawguard.services.audit_service import AuditService
 
 logger = get_logger(__name__)
+
+_VALID_SHELTER_VET_REQUEST_TRANSITIONS: dict[
+    ShelterVetRequestStatus, frozenset[ShelterVetRequestStatus]
+] = {
+    ShelterVetRequestStatus.PENDING: frozenset(
+        {ShelterVetRequestStatus.IN_PROGRESS, ShelterVetRequestStatus.CANCELLED}
+    ),
+    ShelterVetRequestStatus.IN_PROGRESS: frozenset(
+        {
+            ShelterVetRequestStatus.COMPLETED,
+            ShelterVetRequestStatus.REJECTED,
+            ShelterVetRequestStatus.CANCELLED,
+        }
+    ),
+    ShelterVetRequestStatus.COMPLETED: frozenset(),
+    ShelterVetRequestStatus.REJECTED: frozenset(),
+    ShelterVetRequestStatus.CANCELLED: frozenset(),
+}
 
 # Sections requiring veterinary sign-off for kennel assignment (master-spec
 # rule, PRR §3.6) — mirrors the Flutter app's clinicalSectionTypes.
@@ -1010,12 +1033,48 @@ class ShelterService:
         new_status: ShelterVetRequestStatus,
         *,
         actor_id: uuid.UUID | None = None,
+        actor_roles: set[str] | None = None,
         ip_address: str | None = None,
     ) -> ShelterVetRequest:
-        """Update the status of a shelter vet request."""
+        """Update the status of a shelter vet request.
+
+        Authorization (enforced here per RULE-003):
+        - veterinarian: scoped to requests assigned to them (clinical actions)
+        - shelter_manager / rescue_centre_admin: scoped to their managed facility (cancel only)
+        - super_admin / system:admin: unrestricted
+        """
         request = await self._repo.get_vet_request(request_id)
         if request is None:
             raise NotFoundError("Shelter vet request not found.")
+
+        roles = set(actor_roles or set())
+        if not roles:
+            raise ForbiddenError("You do not have permission to update the status of this request.")
+
+        if "super_admin" in roles or "system:admin" in roles:
+            pass
+        elif "veterinarian" in roles:
+            if actor_id is None or request.vet_id != actor_id:
+                raise ForbiddenError("You can only update requests assigned to you.")
+        elif "shelter_manager" in roles or "rescue_centre_admin" in roles:
+            if actor_id is None:
+                raise ForbiddenError(
+                    "You do not have permission to update the status of this request."
+                )
+            actor = await self._get_user_with_roles(actor_id)
+            if actor is None or actor.managed_facility_id != request.shelter_facility_id:
+                raise ForbiddenError("You can only update requests for your shelter facility.")
+            if new_status != request.status and new_status != ShelterVetRequestStatus.CANCELLED:
+                raise ForbiddenError("Shelter staff may only cancel requests.")
+        else:
+            raise ForbiddenError("You do not have permission to update the status of this request.")
+
+        if new_status != request.status:
+            allowed = _VALID_SHELTER_VET_REQUEST_TRANSITIONS.get(request.status, frozenset())
+            if new_status not in allowed:
+                raise ValidationFailedError(
+                    f"Cannot transition shelter vet request from {request.status} to {new_status}."
+                )
 
         updated = await self._repo.update_vet_request_status(request_id, new_status)
         if updated is None:
@@ -1029,7 +1088,7 @@ class ShelterService:
                 user_agent="",
                 metadata={
                     "request_id": str(request_id),
-                    "new_status": new_status,
+                    "new_status": str(new_status),
                     "action": "status_update",
                 },
             )

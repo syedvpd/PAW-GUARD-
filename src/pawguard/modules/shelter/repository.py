@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from sqlalchemy import func, select, update
 from sqlalchemy import literal as sa_literal
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from pawguard.core.pagination import PageParams
 from pawguard.core.search import SortParams, apply_sorting, build_search_filter
@@ -451,4 +452,14 @@ class ShelterRepository:
             return None
         request.status = new_status
         await self._session.flush()
-        return request
+        refreshed = (
+            select(ShelterVetRequest)
+            .where(ShelterVetRequest.id == request_id)
+            .options(
+                selectinload(ShelterVetRequest.dog),
+                selectinload(ShelterVetRequest.shelter_facility),
+                selectinload(ShelterVetRequest.requested_by),
+                selectinload(ShelterVetRequest.vet),
+            )
+        )
+        return (await self._session.execute(refreshed)).scalar_one()
