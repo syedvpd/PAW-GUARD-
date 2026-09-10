@@ -13,6 +13,7 @@ from pawguard.modules.shelter.models import (
     FacilityType,
     KennelSanitationState,
     SectionType,
+    ShelterVetRequestStatus,
     TransferStatus,
 )
 
@@ -274,6 +275,12 @@ class ShelterVetCheckRequest(BaseModel):
             if v_clean in ("routine", "urgent", "emergency"):
                 return v_clean
         return "routine"
+
+
+class ShelterVetStatusUpdateRequest(BaseModel):
+    """Request body for PATCH /shelter/medical-requests/{request_id}/status."""
+
+    status: ShelterVetRequestStatus
 
 
 class ShelterVetCheckResponse(BaseModel):

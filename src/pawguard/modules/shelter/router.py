@@ -57,6 +57,7 @@ from pawguard.modules.shelter.schemas import (
     ShelterVetCheckRequest,
     ShelterVetCheckResponse,
     ShelterVetRequestListResponse,
+    ShelterVetStatusUpdateRequest,
     SuggestedQuarantineKennelResponse,
 )
 from pawguard.modules.shelter.service import ShelterService
@@ -807,7 +808,8 @@ async def list_shelter_medical_requests(
 )
 async def update_shelter_medical_request_status(
     request_id: uuid.UUID,
-    request_body: Request,
+    body: ShelterVetStatusUpdateRequest,
+    request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: ShelterService = Depends(get_shelter_service),
 ) -> ApiResponse[ShelterVetCheckResponse]:
@@ -816,29 +818,18 @@ async def update_shelter_medical_request_status(
     Veterinarians can accept/complete/reject requests assigned to them.
     Shelter managers can cancel requests for their facility.
     """
-    from pydantic import BaseModel
-
-    class StatusUpdate(BaseModel):
-        status: str
-
-    body = await request_body.json()
-    new_status_str = body.get("status")
-    if not new_status_str:
-        from pawguard.core.exceptions import ValidationFailedError
-
-        raise ValidationFailedError("status field is required.")
-
-    new_status = parse_enum(ShelterVetRequestStatus, new_status_str, field_name="status")
+    new_status = body.status
 
     actor_roles = set(current_user.claims.roles)
     if hasattr(current_user.user, "roles") and current_user.user.roles:
         actor_roles.update(r.name for r in current_user.user.roles)
 
-    ip = request_body.client.host if request_body.client else None
+    ip = request.client.host if request.client else None
     updated = await service.update_vet_request_status(
         request_id,
         new_status,
         actor_id=current_user.user.id,
+        actor_roles=actor_roles,
         ip_address=ip,
     )
     return ApiResponse(

@@ -66,8 +66,24 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.ext.compiler import compiles
+
+
+@compiles(JSONB, "sqlite")
+def compile_jsonb_sqlite(type_, compiler, **kw):
+    return "JSON"
+
+
+@compiles(PG_UUID, "sqlite")
+def compile_pg_uuid_sqlite(type_, compiler, **kw):
+    return "VARCHAR(36)"
+
+
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -151,18 +167,64 @@ def ensure_local_test_db(url: str) -> None:
 async def engine() -> AsyncGenerator[AsyncEngine]:
     settings = get_settings()
     test_url = settings.database_url_frontend or settings.database_url
-    ensure_local_test_db(test_url)
-    extra_kw = (
-        {}
-        if "sqlite" in test_url
-        else {"connect_args": {"statement_cache_size": 0, "command_timeout": 60}}
-    )
-    eng = create_async_engine(
-        test_url,
-        echo=False,
-        poolclass=NullPool,
-        **extra_kw,
-    )
+
+    # Check if local postgres is available, otherwise fall back to local test sqlite
+    is_sqlite = "sqlite" in test_url
+    if not is_sqlite:
+        ensure_local_test_db(test_url)
+        try:
+            eng = create_async_engine(
+                test_url,
+                echo=False,
+                poolclass=NullPool,
+                connect_args={"statement_cache_size": 0, "command_timeout": 5},
+            )
+            async with eng.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+        except Exception:
+            # Fallback to local SQLite for isolated test execution
+            test_url = "sqlite+aiosqlite:///./test_unit.db"
+            is_sqlite = True
+            eng = create_async_engine(
+                test_url,
+                echo=False,
+                poolclass=NullPool,
+            )
+    else:
+        eng = create_async_engine(
+            test_url,
+            echo=False,
+            poolclass=NullPool,
+        )
+
+    if is_sqlite:
+        from pawguard.db.base import Base
+        from pawguard.modules.adoption import models as _m4  # noqa: F401
+
+        # Register all models for Base.metadata
+        from pawguard.modules.auth import models as _m1  # noqa: F401
+        from pawguard.modules.companion_pet import models as _m19  # noqa: F401
+        from pawguard.modules.dog import models as _m3  # noqa: F401
+        from pawguard.modules.donation import models as _m7  # noqa: F401
+        from pawguard.modules.finance import models as _m16  # noqa: F401
+        from pawguard.modules.fleet import models as _m12  # noqa: F401
+        from pawguard.modules.foster import models as _m6  # noqa: F401
+        from pawguard.modules.grievance import models as _m13  # noqa: F401
+        from pawguard.modules.inventory import models as _m11  # noqa: F401
+        from pawguard.modules.lost_found import models as _m8  # noqa: F401
+        from pawguard.modules.medical import models as _m9  # noqa: F401
+        from pawguard.modules.notifications import models as _m14  # noqa: F401
+        from pawguard.modules.outbox import models as _m20  # noqa: F401
+        from pawguard.modules.portal import models as _m15  # noqa: F401
+        from pawguard.modules.rescue import models as _m2  # noqa: F401
+        from pawguard.modules.settings import models as _m18  # noqa: F401
+        from pawguard.modules.shelter import models as _m10  # noqa: F401
+        from pawguard.modules.storage import models as _m17  # noqa: F401
+        from pawguard.modules.volunteer import models as _m5  # noqa: F401
+
+        async with eng.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
     from scripts.seed_roles_and_permissions import reconcile_roles
     from sqlalchemy.ext.asyncio import async_sessionmaker
 
@@ -175,6 +237,15 @@ async def engine() -> AsyncGenerator[AsyncEngine]:
 
     yield eng
     await eng.dispose()
+    if is_sqlite:
+        import contextlib
+
+        import anyio
+
+        db_path = anyio.Path("./test_unit.db")
+        if await db_path.exists():
+            with contextlib.suppress(Exception):
+                await db_path.unlink()
 
 
 @pytest_asyncio.fixture

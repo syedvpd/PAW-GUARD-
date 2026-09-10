@@ -381,20 +381,24 @@ class NotificationGovernanceService:
                 f"Cannot approve notification in status '{item.status}'. Please resume the notification first."
             )
 
-        if item.expires_at and item.expires_at < datetime.now(UTC):
-            item.status = "EXPIRED"
-            await self.record_audit(
-                notification_id=item.id,
-                trigger_code=item.trigger_code,
-                module_name=item.module_name,
-                actor_user_id=actor_user_id,
-                actor_role=actor_role,
-                action="EXPIRED",
-                previous_status="PENDING_APPROVAL",
-                new_status="EXPIRED",
-                reason="Item expired before approval.",
-            )
-            raise ValidationFailedError("Notification has expired and cannot be approved.")
+        expires_at = item.expires_at
+        if expires_at is not None:
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=UTC)
+            if expires_at < datetime.now(UTC):
+                item.status = "EXPIRED"
+                await self.record_audit(
+                    notification_id=item.id,
+                    trigger_code=item.trigger_code,
+                    module_name=item.module_name,
+                    actor_user_id=actor_user_id,
+                    actor_role=actor_role,
+                    action="EXPIRED",
+                    previous_status="PENDING_APPROVAL",
+                    new_status="EXPIRED",
+                    reason="Item expired before approval.",
+                )
+                raise ValidationFailedError("Notification has expired and cannot be approved.")
 
         # Re-evaluate 3-tier governance rules at approval time
         gov = await self.evaluate_governance(item.trigger_code, item.module_name)

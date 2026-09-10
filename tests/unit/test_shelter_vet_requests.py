@@ -6,7 +6,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from pawguard.core.exceptions import ConflictError, ForbiddenError, NotFoundError
+from pawguard.core.exceptions import (
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+    ValidationFailedError,
+)
 from pawguard.modules.auth.models import Role, User
 from pawguard.modules.dog.models import DogProfile, DogStatus
 from pawguard.modules.dog.repository import DogRepository
@@ -490,3 +495,363 @@ class TestShelterVetCheckRequest:
         # Verify the returned request has an ID (persisted entity)
         assert result.id == request_id
         assert result.status == ShelterVetRequestStatus.PENDING
+
+
+class TestShelterVetStatusUpdate:
+    @pytest.fixture
+    def mock_repo(self):
+        repo = AsyncMock(spec=ShelterRepository)
+        repo._session = AsyncMock()
+        return repo
+
+    @pytest.fixture
+    def mock_dog_repo(self):
+        repo = AsyncMock(spec=DogRepository)
+        repo._session = AsyncMock()
+        return repo
+
+    @pytest.fixture
+    def mock_audit(self):
+        return AsyncMock(spec=AuditService)
+
+    @pytest.fixture
+    def service(self, mock_repo, mock_dog_repo, mock_audit):
+        return ShelterService(mock_repo, mock_dog_repo, mock_audit)
+
+    def _make_role(self, name: str) -> Role:
+        role = Role(id=uuid.uuid4(), name=name, is_system=True)
+        role.permissions = []
+        return role
+
+    def _make_vet_request(self, request_id, vet_id, facility_id, status):
+        return ShelterVetRequest(
+            id=request_id,
+            dog_id=uuid.uuid4(),
+            shelter_facility_id=facility_id,
+            requested_by_id=uuid.uuid4(),
+            vet_id=vet_id,
+            reason="Routine exam",
+            notes=None,
+            urgency="routine",
+            status=status,
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+
+    async def _update_as(
+        self,
+        service,
+        mock_repo,
+        request,
+        actor_id,
+        roles,
+        new_status,
+        expect_forbidden=False,
+        expect_invalid=False,
+    ):
+        mock_repo.get_vet_request.return_value = request
+        updated = self._make_vet_request(
+            request.id,
+            request.vet_id,
+            request.shelter_facility_id,
+            new_status,
+        )
+        mock_repo.update_vet_request_status.return_value = updated
+        try:
+            result = await service.update_vet_request_status(
+                request.id,
+                new_status,
+                actor_id=actor_id,
+                actor_roles=roles,
+                ip_address="127.0.0.1",
+            )
+        except (ForbiddenError, ValidationFailedError) as exc:
+            if expect_forbidden:
+                assert isinstance(exc, ForbiddenError)
+            elif expect_invalid:
+                assert isinstance(exc, ValidationFailedError)
+            else:
+                raise
+            return None
+        assert expect_forbidden is False and expect_invalid is False
+        return result
+
+    @pytest.mark.asyncio
+    async def test_veterinarian_pending_to_in_progress(self, service, mock_repo):
+        vet_id = uuid.uuid4()
+        request = self._make_vet_request(
+            uuid.uuid4(), vet_id, uuid.uuid4(), ShelterVetRequestStatus.PENDING
+        )
+        result = await self._update_as(
+            service,
+            mock_repo,
+            request,
+            vet_id,
+            {"veterinarian"},
+            ShelterVetRequestStatus.IN_PROGRESS,
+        )
+        assert result is not None
+        assert result.status == ShelterVetRequestStatus.IN_PROGRESS
+        mock_repo.update_vet_request_status.assert_awaited_once_with(
+            request.id, ShelterVetRequestStatus.IN_PROGRESS
+        )
+
+    @pytest.mark.asyncio
+    async def test_veterinarian_in_progress_to_completed(self, service, mock_repo):
+        vet_id = uuid.uuid4()
+        request = self._make_vet_request(
+            uuid.uuid4(), vet_id, uuid.uuid4(), ShelterVetRequestStatus.IN_PROGRESS
+        )
+        result = await self._update_as(
+            service,
+            mock_repo,
+            request,
+            vet_id,
+            {"veterinarian"},
+            ShelterVetRequestStatus.COMPLETED,
+        )
+        assert result is not None
+        assert result.status == ShelterVetRequestStatus.COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_veterinarian_in_progress_to_rejected(self, service, mock_repo):
+        vet_id = uuid.uuid4()
+        request = self._make_vet_request(
+            uuid.uuid4(), vet_id, uuid.uuid4(), ShelterVetRequestStatus.IN_PROGRESS
+        )
+        result = await self._update_as(
+            service,
+            mock_repo,
+            request,
+            vet_id,
+            {"veterinarian"},
+            ShelterVetRequestStatus.REJECTED,
+        )
+        assert result is not None
+        assert result.status == ShelterVetRequestStatus.REJECTED
+
+    @pytest.mark.asyncio
+    async def test_veterinarian_cannot_update_request_assigned_to_other(self, service, mock_repo):
+        request = self._make_vet_request(
+            uuid.uuid4(), uuid.uuid4(), uuid.uuid4(), ShelterVetRequestStatus.PENDING
+        )
+        result = await self._update_as(
+            service,
+            mock_repo,
+            request,
+            uuid.uuid4(),
+            {"veterinarian"},
+            ShelterVetRequestStatus.IN_PROGRESS,
+            expect_forbidden=True,
+        )
+        assert result is None
+        mock_repo.update_vet_request_status.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_invalid_transition_rejected(self, service, mock_repo):
+        vet_id = uuid.uuid4()
+        request = self._make_vet_request(
+            uuid.uuid4(), vet_id, uuid.uuid4(), ShelterVetRequestStatus.PENDING
+        )
+        result = await self._update_as(
+            service,
+            mock_repo,
+            request,
+            vet_id,
+            {"veterinarian"},
+            ShelterVetRequestStatus.COMPLETED,
+            expect_invalid=True,
+        )
+        assert result is None
+        mock_repo.update_vet_request_status.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_unauthorized_role_rejected(self, service, mock_repo):
+        request = self._make_vet_request(
+            uuid.uuid4(), uuid.uuid4(), uuid.uuid4(), ShelterVetRequestStatus.PENDING
+        )
+        result = await self._update_as(
+            service,
+            mock_repo,
+            request,
+            uuid.uuid4(),
+            {"volunteer"},
+            ShelterVetRequestStatus.IN_PROGRESS,
+            expect_forbidden=True,
+        )
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_shelter_manager_cancels_facility_request(self, service, mock_repo):
+        facility_id = uuid.uuid4()
+        manager_id = uuid.uuid4()
+        request = self._make_vet_request(
+            uuid.uuid4(), uuid.uuid4(), facility_id, ShelterVetRequestStatus.PENDING
+        )
+        manager = User(
+            id=manager_id,
+            email="manager@example.com",
+            full_name="Manager",
+            hashed_password="hash",
+            managed_facility_id=facility_id,
+        )
+        manager.roles = [self._make_role("shelter_manager")]
+        service._get_user_with_roles = AsyncMock(return_value=manager)
+        result = await self._update_as(
+            service,
+            mock_repo,
+            request,
+            manager_id,
+            {"shelter_manager"},
+            ShelterVetRequestStatus.CANCELLED,
+        )
+        assert result is not None
+        assert result.status == ShelterVetRequestStatus.CANCELLED
+
+    @pytest.mark.asyncio
+    async def test_shelter_manager_cross_facility_rejected(self, service, mock_repo):
+        facility_id = uuid.uuid4()
+        manager_id = uuid.uuid4()
+        request = self._make_vet_request(
+            uuid.uuid4(), uuid.uuid4(), facility_id, ShelterVetRequestStatus.PENDING
+        )
+        manager = User(
+            id=manager_id,
+            email="manager@example.com",
+            full_name="Manager",
+            hashed_password="hash",
+            managed_facility_id=uuid.uuid4(),
+        )
+        manager.roles = [self._make_role("shelter_manager")]
+        service._get_user_with_roles = AsyncMock(return_value=manager)
+        result = await self._update_as(
+            service,
+            mock_repo,
+            request,
+            manager_id,
+            {"shelter_manager"},
+            ShelterVetRequestStatus.CANCELLED,
+            expect_forbidden=True,
+        )
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_shelter_manager_cannot_set_clinical_status(self, service, mock_repo):
+        facility_id = uuid.uuid4()
+        manager_id = uuid.uuid4()
+        request = self._make_vet_request(
+            uuid.uuid4(), uuid.uuid4(), facility_id, ShelterVetRequestStatus.PENDING
+        )
+        manager = User(
+            id=manager_id,
+            email="manager@example.com",
+            full_name="Manager",
+            hashed_password="hash",
+            managed_facility_id=facility_id,
+        )
+        manager.roles = [self._make_role("shelter_manager")]
+        service._get_user_with_roles = AsyncMock(return_value=manager)
+        result = await self._update_as(
+            service,
+            mock_repo,
+            request,
+            manager_id,
+            {"shelter_manager"},
+            ShelterVetRequestStatus.IN_PROGRESS,
+            expect_forbidden=True,
+        )
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_super_admin_any_transition_allowed(self, service, mock_repo):
+        admin_id = uuid.uuid4()
+        request = self._make_vet_request(
+            uuid.uuid4(), uuid.uuid4(), uuid.uuid4(), ShelterVetRequestStatus.PENDING
+        )
+        result = await self._update_as(
+            service,
+            mock_repo,
+            request,
+            admin_id,
+            {"super_admin"},
+            ShelterVetRequestStatus.IN_PROGRESS,
+        )
+        assert result is not None
+        assert result.status == ShelterVetRequestStatus.IN_PROGRESS
+
+
+class _FakeScalarResult:
+    def __init__(self, obj):
+        self._obj = obj
+
+    def __await__(self):
+        return self._resolve().__await__()
+
+    async def _resolve(self):
+        return self
+
+    def scalar_one_or_none(self):
+        return self._obj
+
+    def scalar_one(self):
+        return self._obj
+
+    def scalars(self):
+        return _FakeScalars(self._obj)
+
+
+class _FakeScalars:
+    def __init__(self, obj):
+        self._obj = obj
+
+    def all(self):
+        return [self._obj]
+
+
+class TestShelterVetRepositoryStatusUpdate:
+    @pytest.mark.asyncio
+    async def test_update_requeries_with_relationships_loaded(self):
+        repo = ShelterRepository(AsyncMock())
+
+        request_id = uuid.uuid4()
+        facility_id = uuid.uuid4()
+        pending = ShelterVetRequest(
+            id=request_id,
+            dog_id=uuid.uuid4(),
+            shelter_facility_id=facility_id,
+            requested_by_id=uuid.uuid4(),
+            vet_id=uuid.uuid4(),
+            reason="Routine exam",
+            notes=None,
+            urgency="routine",
+            status=ShelterVetRequestStatus.PENDING,
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+        updated = ShelterVetRequest(
+            id=request_id,
+            dog_id=pending.dog_id,
+            shelter_facility_id=facility_id,
+            requested_by_id=pending.requested_by_id,
+            vet_id=pending.vet_id,
+            reason="Routine exam",
+            notes=None,
+            urgency="routine",
+            status=ShelterVetRequestStatus.IN_PROGRESS,
+            created_at=pending.created_at,
+            updated_at=datetime.now(UTC),
+        )
+
+        repo._session.execute.side_effect = [
+            _FakeScalarResult(pending),
+            _FakeScalarResult(updated),
+        ]
+
+        result = await repo.update_vet_request_status(
+            request_id, ShelterVetRequestStatus.IN_PROGRESS
+        )
+
+        assert result is updated
+        assert result.status == ShelterVetRequestStatus.IN_PROGRESS
+        assert repo._session.execute.await_count == 2
+        repo._session.flush.assert_awaited_once()
