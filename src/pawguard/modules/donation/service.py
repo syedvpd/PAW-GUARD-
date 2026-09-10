@@ -97,10 +97,21 @@ class DonationService:
     ) -> str | None:
         """Generate a tax-receipt PDF, upload it to storage, and persist the key.
 
-        When *raise_on_failure* is ``True`` (default) any error propagates to
-        the caller so the verify/webhook flow can react appropriately.
-        When ``False`` failures are logged and ``None`` is returned.
+        A deployment without object storage skips receipt generation and
+        returns ``None`` (callers decide whether that is acceptable).
+        When *raise_on_failure* is ``True`` (default) any real failure
+        propagates so the verify flow reacts; when ``False`` failures are
+        logged and ``None`` is returned (webhook path).
         """
+        try:
+            return await self._build_and_store_receipt(donation)
+        except Exception:
+            if raise_on_failure:
+                raise
+            logger.warning("Receipt generation failed for donation %s", donation.id, exc_info=True)
+            return None
+
+    async def _build_and_store_receipt(self, donation: Donation) -> str | None:
         if self._storage is None:
             return None
 
