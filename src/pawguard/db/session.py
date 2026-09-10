@@ -34,9 +34,12 @@ def _get_engine_kwargs(url: str) -> dict[str, Any]:
                 "pool_size": _settings.database_pool_size,
                 "max_overflow": _settings.database_max_overflow,
                 "pool_pre_ping": True,
-                "pool_recycle": 1800,
-                "pool_timeout": 30,
-                "connect_args": {"statement_cache_size": 0},
+                "pool_recycle": _settings.database_pool_recycle,
+                "pool_timeout": _settings.database_pool_timeout,
+                "connect_args": {
+                    "statement_cache_size": 0,
+                    "command_timeout": 15,
+                },
             }
         )
     return kwargs
@@ -140,7 +143,7 @@ async def get_db(request: Request = None) -> AsyncGenerator[AsyncSession]:
             try:
                 yield session
                 if session.in_transaction():
-                    await session.commit()
+                    await session.rollback()
             except Exception:
                 if session.in_transaction():
                     await session.rollback()

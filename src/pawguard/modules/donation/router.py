@@ -374,7 +374,13 @@ async def list_donors(
     return PaginatedResponse(data=data, meta=result.meta)
 
 
-async def _get_or_generate_receipt_pdf(donation: Any, storage: StorageService) -> bytes:
+async def _get_or_generate_receipt_pdf(
+    donation: Any,
+    storage: StorageService,
+    *,
+    persist_key: bool = False,
+    db: AsyncSession | None = None,
+) -> bytes:
     pdf_bytes: bytes | None = None
     if donation.receipt_file_key:
         try:
@@ -398,6 +404,34 @@ async def _get_or_generate_receipt_pdf(donation: Any, storage: StorageService) -
             org_name=settings.org_name,
             org_address=settings.org_address,
         )
+        if pdf_bytes and pdf_bytes[:5] == b"%PDF-":
+            try:
+                object_key = storage.build_object_key(
+                    folder="documents", filename=f"receipt_{donation.id}.pdf"
+                )
+                await asyncio.to_thread(
+                    storage.put_object,
+                    object_key=object_key,
+                    content=pdf_bytes,
+                    content_type="application/pdf",
+                )
+                if persist_key and db is not None:
+                    from sqlalchemy import update as sa_update
+
+                    from pawguard.modules.donation.models import Donation
+
+                    await db.execute(
+                        sa_update(Donation)
+                        .where(Donation.id == donation.id)
+                        .values(receipt_file_key=object_key)
+                    )
+                    await db.flush()
+            except Exception as persist_exc:
+                logger.warning(
+                    "jit_receipt_persist_failed",
+                    donation_id=str(donation.id),
+                    error=str(persist_exc),
+                )
     return pdf_bytes
 
 
@@ -447,7 +481,12 @@ async def get_donation_receipt(
     format_param = (request.query_params.get("format") or "").lower()
     download_param = (request.query_params.get("download") or "").lower()
     if "application/pdf" in accept or format_param == "pdf" or download_param in ("true", "1"):
-        pdf_bytes = await _get_or_generate_receipt_pdf(donation, storage)
+        pdf_bytes = await _get_or_generate_receipt_pdf(
+            donation,
+            storage,
+            persist_key=True,
+            db=db,
+        )
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
@@ -496,7 +535,12 @@ async def download_donation_receipt_file(
         raise NotFoundError("Receipt is only available for successful donations.")
 
     storage = StorageService()
-    pdf_bytes = await _get_or_generate_receipt_pdf(donation, storage)
+    pdf_bytes = await _get_or_generate_receipt_pdf(
+        donation,
+        storage,
+        persist_key=True,
+        db=db,
+    )
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",

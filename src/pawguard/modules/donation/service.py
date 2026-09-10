@@ -92,98 +92,124 @@ class DonationService:
                 donation.id,
             )
 
-    async def _generate_receipt(self, donation: Donation) -> None:
-        if self._storage is None:
-            return
+    async def _generate_receipt(
+        self, donation: Donation, *, raise_on_failure: bool = True
+    ) -> str | None:
+        """Generate a tax-receipt PDF, upload it to storage, and persist the key.
+
+        A deployment without object storage skips receipt generation and
+        returns ``None`` (callers decide whether that is acceptable).
+        When *raise_on_failure* is ``True`` (default) any real failure
+        propagates so the verify flow reacts; when ``False`` failures are
+        logged and ``None`` is returned (webhook path).
+        """
         try:
-            donor_name = (
-                donation.donor.user.full_name if donation.donor and donation.donor.user else "Donor"
-            )
-            settings = get_settings()
-            pdf_bytes = await asyncio.to_thread(
-                generate_tax_receipt,
-                donor_name=donor_name,
-                amount=float(donation.amount),
-                currency=donation.currency,
-                transaction_id=donation.transaction_id or "",
-                donation_date=donation.created_at,
-                org_name=settings.org_name,
-                org_address=settings.org_address,
-            )
-            object_key = self._storage.build_object_key(
-                folder="documents", filename=f"receipt_{donation.id}.pdf"
-            )
-            try:
-                await asyncio.to_thread(
-                    self._storage.put_object,
-                    object_key=object_key,
-                    content=pdf_bytes,
-                    content_type="application/pdf",
-                )
-            except Exception as storage_err:
-                logger.warning(
-                    "Storage put_object failed for receipt on donation %s: %s",
-                    donation.id,
-                    storage_err,
-                )
-            stored = StoredFile(
-                object_key=object_key,
-                original_filename=f"tax_receipt_{donation.id}.pdf",
-                mime_type="application/pdf",
-                file_size=len(pdf_bytes),
-                folder=FileFolder.DOCUMENTS.value,
-                is_uploaded=True,
-                uploaded_at=datetime.now(UTC),
-                entity_type="donation",
-                entity_id=donation.id,
-            )
-            self._repo._session.add(stored)
-            donation.receipt_file_key = object_key
-            await self._repo._session.flush()
-
-            # Automated tax receipt delivery via notification + email (PRD 3.11)
-            if self._notification_svc and donation.donor:
-                try:
-                    from pawguard.modules.notifications.schemas import NotificationSend
-
-                    await self._notification_svc.send_notification(
-                        payload=NotificationSend(
-                            user_id=donation.donor.user_id,
-                            title="Your PawGuard tax receipt is ready",
-                            body=(
-                                "Your tax-deductible receipt for donation "
-                                f"{donation.transaction_id or donation.id} is "
-                                "ready for download."
-                            ),
-                            notification_type="tax_receipt",
-                            action_url=f"/api/v1/donations/{donation.id}/receipt",
-                            send_email=True,
-                            send_push=True,
-                        ),
-                        user_email=(donation.donor.user.email if donation.donor.user else None),
-                    )
-                except Exception as notif_exc:
-                    logger.warning(
-                        "Failed to send notification for tax receipt delivery on donation %s: %s",
-                        donation.id,
-                        notif_exc,
-                        exc_info=True,
-                    )
-
-            if self._audit:
-                await self._audit.record(
-                    event_type=AuthAuditEventType.DONATION_RECEIPT_ISSUED,
-                    actor_id=None,
-                    ip_address="",
-                    user_agent="",
-                    metadata={
-                        "donation_id": str(donation.id),
-                        "amount": str(donation.amount),
-                        "currency": donation.currency,
-                    },
-                )
+            return await self._build_and_store_receipt(donation)
         except Exception:
-            logger.warning("Failed to generate receipt for donation %s", donation.id, exc_info=True)
+            if raise_on_failure:
+                raise
+            logger.warning("Receipt generation failed for donation %s", donation.id, exc_info=True)
+            return None
+
+    async def _build_and_store_receipt(self, donation: Donation) -> str | None:
+        if self._storage is None:
+            return None
+
+        if donation.receipt_file_key:
+            return donation.receipt_file_key
+
+        donor_name = (
+            donation.donor.user.full_name if donation.donor and donation.donor.user else "Donor"
+        )
+        settings = get_settings()
+        pdf_bytes = await asyncio.to_thread(
+            generate_tax_receipt,
+            donor_name=donor_name,
+            amount=float(donation.amount),
+            currency=donation.currency,
+            transaction_id=donation.transaction_id or "",
+            donation_date=donation.created_at,
+            org_name=settings.org_name,
+            org_address=settings.org_address,
+        )
+
+        if not pdf_bytes or not pdf_bytes[:5] == b"%PDF-":
+            raise ValidationFailedError("Generated receipt is not a valid PDF.")
+
+        object_key = self._storage.build_object_key(
+            folder="documents", filename=f"receipt_{donation.id}.pdf"
+        )
+
+        await asyncio.to_thread(
+            self._storage.put_object,
+            object_key=object_key,
+            content=pdf_bytes,
+            content_type="application/pdf",
+        )
+
+        stored_size = await asyncio.to_thread(self._storage.get_object_size, object_key=object_key)
+        if stored_size != len(pdf_bytes):
+            raise ValidationFailedError(
+                "Receipt uploaded but storage verification failed (size mismatch)."
+            )
+
+        stored = StoredFile(
+            object_key=object_key,
+            original_filename=f"tax_receipt_{donation.id}.pdf",
+            mime_type="application/pdf",
+            file_size=len(pdf_bytes),
+            folder=FileFolder.DOCUMENTS.value,
+            is_uploaded=True,
+            uploaded_at=datetime.now(UTC),
+            entity_type="donation",
+            entity_id=donation.id,
+        )
+        self._repo._session.add(stored)
+        donation.receipt_file_key = object_key
+        await self._repo._session.flush()
+
+        if self._notification_svc and donation.donor:
+            try:
+                from pawguard.modules.notifications.schemas import NotificationSend
+
+                await self._notification_svc.send_notification(
+                    payload=NotificationSend(
+                        user_id=donation.donor.user_id,
+                        title="Your PawGuard tax receipt is ready",
+                        body=(
+                            "Your tax-deductible receipt for donation "
+                            f"{donation.transaction_id or donation.id} is "
+                            "ready for download."
+                        ),
+                        notification_type="tax_receipt",
+                        action_url=f"/api/v1/donations/{donation.id}/receipt",
+                        send_email=True,
+                        send_push=True,
+                    ),
+                    user_email=(donation.donor.user.email if donation.donor.user else None),
+                )
+            except Exception as notif_exc:
+                logger.warning(
+                    "Failed to send notification for tax receipt delivery on donation %s: %s",
+                    donation.id,
+                    notif_exc,
+                    exc_info=True,
+                )
+
+        if self._audit:
+            await self._audit.record(
+                event_type=AuthAuditEventType.DONATION_RECEIPT_ISSUED,
+                actor_id=None,
+                ip_address="",
+                user_agent="",
+                metadata={
+                    "donation_id": str(donation.id),
+                    "amount": str(donation.amount),
+                    "currency": donation.currency,
+                },
+            )
+
+        return object_key
 
     async def register_donor(
         self,
@@ -494,7 +520,12 @@ class DonationService:
                     "verified_online": True,
                 },
             )
-        await self._generate_receipt(res)
+        await self._generate_receipt(res, raise_on_failure=True)
+        if res.receipt_file_key is None:
+            raise ValidationFailedError(
+                "Receipt generation is required before confirming this donation; "
+                "receipt could not be stored. The donation will be confirmed via webhook."
+            )
         await self._refresh_campaign_progress(res.campaign_id)
         await self._post_donation_to_ledger(res)
 
@@ -514,7 +545,7 @@ class DonationService:
                     action_url="/donations/history",
                 )
             except Exception as exc:
-                logger.warning("failed_sending_donation_push", error=str(exc))
+                logger.warning("failed_sending_donation_push: %s", exc)
 
         return res
 
@@ -554,7 +585,7 @@ class DonationService:
                 )
             refreshed = await self._repo.get_donation_by_id(donation.id)
             if refreshed is not None:
-                await self._generate_receipt(refreshed)
+                await self._generate_receipt(refreshed, raise_on_failure=False)
                 await self._refresh_campaign_progress(refreshed.campaign_id)
                 await self._post_donation_to_ledger(refreshed)
         elif event.event_type == "payment.failed":
