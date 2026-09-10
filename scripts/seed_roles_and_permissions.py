@@ -647,7 +647,7 @@ STANDARD_OPERATIONAL_ACCOUNTS = [
     ("foster.coordinator@pawguard.com", "Foster Coordinator", "foster_coordinator"),
     ("volunteer.coordinator@pawguard.com", "Volunteer Coordinator", "volunteer_coordinator"),
     ("inventory.manager@pawguard.com", "Inventory Manager", "inventory_manager"),
-    ("finance.user@pawguard.com", "Finance User", "finance_manager"),
+    ("finance.user@pawguard.com", "Finance User", "finance_user"),
     ("volunteer@pawguard.com", "Volunteer", "volunteer"),
     ("foster.family@pawguard.com", "Foster Family", "foster_family"),
     ("donor@pawguard.com", "Donor", "donor"),
@@ -679,9 +679,7 @@ async def reconcile_standard_accounts(
         normalized_email = email.lower().strip()
         user = (
             await session.execute(
-                select(User)
-                .options(selectinload(User.roles))
-                .where(User.email == normalized_email)
+                select(User).options(selectinload(User.roles)).where(User.email == normalized_email)
             )
         ).scalar_one_or_none()
 
