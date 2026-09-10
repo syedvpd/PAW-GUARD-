@@ -169,6 +169,30 @@ async def record_movement(
 
 
 @router.get(
+    "/movements",
+    response_model=PaginatedResponse[InventoryMovementResponse],
+    dependencies=[Depends(require_permission("inventory:read"))],
+)
+async def list_all_movements(
+    page: PageParams = Depends(page_params),
+    sort: SortParams = Depends(sort_params),
+    item_id: uuid.UUID | None = None,
+    movement_type: MovementType | None = None,
+    service: InventoryService = Depends(get_inventory_service),
+) -> PaginatedResponse[InventoryMovementResponse]:
+    result = await service.list_movements_paginated(
+        page,
+        sort,
+        item_id=item_id,
+        movement_type=movement_type,
+    )
+    return PaginatedResponse(
+        data=[InventoryMovementResponse.model_validate(m) for m in result.data],
+        meta=result.meta,
+    )
+
+
+@router.get(
     "/items/{item_id}/movements",
     response_model=PaginatedResponse[InventoryMovementResponse],
     dependencies=[Depends(require_permission("inventory:read"))],
@@ -318,12 +342,15 @@ async def bulk_delete_items(
 )
 async def bulk_update_requisition_status(
     payload: BulkStatusUpdateRequest,
+    current_user: CurrentUser = Depends(get_current_user),
     service: InventoryService = Depends(get_inventory_service),
 ) -> BulkStatusUpdateResponse:
-    updated = await service.bulk_update_requisition_status(
-        payload.ids,
-        parse_enum(RequisitionStatus, payload.status),
-    )
+    status = parse_enum(RequisitionStatus, payload.status)
+    # Same rule as the single-requisition endpoint: approval requires
+    # administrator authority, not just inventory:update.
+    if status == RequisitionStatus.APPROVED and not has_permission(current_user.user, "system:admin"):
+        raise ForbiddenError("Requisition approval requires administrator privileges.")
+    updated = await service.bulk_update_requisition_status(payload.ids, status)
     return BulkStatusUpdateResponse(
         message=f"{updated} requisitions updated.",
         updated_count=updated,

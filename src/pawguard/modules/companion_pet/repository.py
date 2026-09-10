@@ -340,7 +340,7 @@ class CompanionPetRepository:
         if pet_id is not None:
             stmt = stmt.where(PetAppointment.pet_id == pet_id)
         count_stmt = (
-            select(func.count(PetAppointment.id)).where(*stmt.whereclause.clauses)
+            select(func.count(PetAppointment.id)).where(stmt.whereclause)
             if stmt.whereclause is not None
             else select(func.count(PetAppointment.id))
         )

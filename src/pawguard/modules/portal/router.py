@@ -1166,6 +1166,19 @@ async def create_urgent_alert(
     )
 
 
+@router.get(
+    "/admin/urgent-alerts/{alert_id}",
+    response_model=ApiResponse[UrgentAlertResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def get_urgent_alert(
+    alert_id: uuid.UUID,
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[UrgentAlertResponse]:
+    alert = await service.get_urgent_alert(alert_id)
+    return ApiResponse(data=UrgentAlertResponse.model_validate(alert))
+
+
 @router.put(
     "/admin/urgent-alerts/{alert_id}",
     response_model=ApiResponse[UrgentAlertResponse],

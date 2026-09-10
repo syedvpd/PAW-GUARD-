@@ -191,6 +191,22 @@ async def log_maintenance(
 
 
 @router.get(
+    "/maintenance",
+    response_model=PaginatedResponse[MaintenanceResponse],
+    dependencies=[Depends(require_permission("vehicle:read"))],
+)
+async def list_all_maintenance(
+    page: PageParams = Depends(page_params),
+    sort: SortParams = Depends(sort_params),
+    service: FleetService = Depends(get_fleet_service),
+) -> PaginatedResponse[MaintenanceResponse]:
+    return await service.list_maintenance_paginated(
+        page=page,
+        sort=sort,
+    )
+
+
+@router.get(
     "/vehicles/{vehicle_id}/maintenance",
     response_model=PaginatedResponse[MaintenanceResponse],
     dependencies=[Depends(require_permission("vehicle:read"))],

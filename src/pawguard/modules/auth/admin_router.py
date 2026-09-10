@@ -173,17 +173,7 @@ async def list_permissions(
 @admin_router.get(
     "/users",
     response_model=ApiResponse[list[AdminUserResponse]],
-    dependencies=[
-        Depends(
-            require_permission(
-                "system:admin",
-                "rescue:read",
-                "rescue:dispatch",
-                "rescue:write",
-                "users:read",
-            )
-        )
-    ],
+    dependencies=[Depends(require_permission("system:admin"))],
 )
 @cache_response(ttl_seconds=60, namespace="admin")
 async def list_users(

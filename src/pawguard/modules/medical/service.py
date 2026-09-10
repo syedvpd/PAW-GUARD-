@@ -512,6 +512,12 @@ class MedicalService:
             meta=build_pagination_meta(total=total, params=page),
         )
 
+    async def get_exam(self, exam_id: uuid.UUID) -> ClinicalExam:
+        exam = await self._get_exam_by_id(exam_id)
+        if exam is None:
+            raise NotFoundError("Clinical exam not found.")
+        return exam
+
     async def soft_delete_exam(
         self,
         exam_id: uuid.UUID,

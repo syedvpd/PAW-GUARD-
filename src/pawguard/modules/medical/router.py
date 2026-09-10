@@ -444,6 +444,19 @@ async def list_prescriptions(
     )
 
 
+@router.get(
+    "/exams/{exam_id}",
+    response_model=ApiResponse[ClinicalExamResponse],
+    dependencies=[Depends(require_permission("medical:read"))],
+)
+async def get_exam(
+    exam_id: uuid.UUID,
+    service: MedicalService = Depends(get_medical_service),
+) -> ApiResponse[ClinicalExamResponse]:
+    exam = await service.get_exam(exam_id)
+    return ApiResponse(data=ClinicalExamResponse.model_validate(exam))
+
+
 @router.put(
     "/prescriptions/{prescription_id}",
     response_model=ApiResponse[PrescriptionResponse],

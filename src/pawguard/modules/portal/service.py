@@ -1460,6 +1460,12 @@ class PortalService:
             )
         return result
 
+    async def get_urgent_alert(self, alert_id: uuid.UUID) -> UrgentAlert:
+        alert = await self._repo.get_urgent_alert(alert_id)
+        if alert is None:
+            raise NotFoundError("Urgent alert not found.")
+        return alert
+
     async def update_urgent_alert(
         self,
         alert_id: uuid.UUID,
