@@ -1768,13 +1768,14 @@ class PortalService:
     # ── Dynamic CMS Pages ───────────────────────────────────────────────────
 
     async def _ensure_default_cms_pages_seeded(self) -> None:
-        """Seed default manageable public pages if cms_pages is empty."""
+        """Seed default manageable public pages for any missing standard slugs."""
         existing = await self._repo.list_cms_pages()
-        if existing:
-            return
+        existing_slugs = {p.slug for p in existing}
 
         now = datetime.now(UTC)
         for seed in DEFAULT_CMS_PAGES_SEED:
+            if seed["slug"] in existing_slugs:
+                continue
             page = CmsPage(
                 id=uuid.uuid4(),
                 slug=seed["slug"],
