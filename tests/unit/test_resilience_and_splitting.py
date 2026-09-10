@@ -3,10 +3,10 @@ import asyncio
 import pytest
 from fastapi import Depends, FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from pawguard.core.resilience import CircuitBreaker, CircuitBreakerOpenException, retry_with_backoff
-from pawguard.db.session import get_db, replica_engine
+from pawguard.db.session import get_db
 
 # --- 1. Resilience Tests ---
 
@@ -125,18 +125,30 @@ async def test_sync_circuit_breaker_transitions() -> None:
 
 
 @pytest.fixture
-def splitting_app() -> FastAPI:
+def splitting_app(monkeypatch: pytest.MonkeyPatch) -> FastAPI:
+    mock_replica_engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    mock_replica_sessionmaker = async_sessionmaker(
+        bind=mock_replica_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autoflush=False,
+    )
+    import pawguard.db.session as db_session
+
+    monkeypatch.setattr(db_session, "replica_engine", mock_replica_engine)
+    monkeypatch.setattr(db_session, "AsyncReplicaSessionLocal", mock_replica_sessionmaker)
+
     app = FastAPI()
 
     @app.get("/test-read")
     async def read_endpoint(session: AsyncSession = Depends(get_db)) -> dict[str, str]:
         # Expose the database engine name bound to this session
-        is_replica = session.bind == replica_engine
+        is_replica = session.bind == mock_replica_engine
         return {"bind": "replica" if is_replica else "primary"}
 
     @app.post("/test-write")
     async def write_endpoint(session: AsyncSession = Depends(get_db)) -> dict[str, str]:
-        is_replica = session.bind == replica_engine
+        is_replica = session.bind == mock_replica_engine
         return {"bind": "replica" if is_replica else "primary"}
 
     return app

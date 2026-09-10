@@ -348,7 +348,9 @@ async def bulk_update_requisition_status(
     status = parse_enum(RequisitionStatus, payload.status)
     # Same rule as the single-requisition endpoint: approval requires
     # administrator authority, not just inventory:update.
-    if status == RequisitionStatus.APPROVED and not has_permission(current_user.user, "system:admin"):
+    if status == RequisitionStatus.APPROVED and not has_permission(
+        current_user.user, "system:admin"
+    ):
         raise ForbiddenError("Requisition approval requires administrator privileges.")
     updated = await service.bulk_update_requisition_status(payload.ids, status)
     return BulkStatusUpdateResponse(

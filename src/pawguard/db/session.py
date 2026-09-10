@@ -36,10 +36,7 @@ def _get_engine_kwargs(url: str) -> dict[str, Any]:
                 "pool_pre_ping": True,
                 "pool_recycle": _settings.database_pool_recycle,
                 "pool_timeout": _settings.database_pool_timeout,
-                "connect_args": {
-                    "statement_cache_size": 0,
-                    "command_timeout": 15,
-                },
+                "connect_args": {"statement_cache_size": 0},
             }
         )
     return kwargs
@@ -143,7 +140,7 @@ async def get_db(request: Request = None) -> AsyncGenerator[AsyncSession]:
             try:
                 yield session
                 if session.in_transaction():
-                    await session.rollback()
+                    await session.commit()
             except Exception:
                 if session.in_transaction():
                     await session.rollback()
