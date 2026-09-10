@@ -25,7 +25,7 @@ def _get_firebase_app() -> Any:
     fcm_credentials_json = getattr(settings, "fcm_credentials_json", "")
 
     if not fcm_credentials_path and not fcm_credentials_json:
-        logger.debug("fcm_not_configured")
+        logger.warning("fcm_not_configured")
         _firebase_initialized = True
         return None
 
