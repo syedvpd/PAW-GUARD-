@@ -2,8 +2,9 @@
 
 import uuid
 from datetime import datetime
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from pawguard.modules.dog.models import DogGender, DogStatus, DogTemperament
 from pawguard.modules.inventory.schemas import InventoryConsumptionItem
@@ -124,7 +125,9 @@ class FacilityTransferCreate(BaseModel):
         description="Must be an Open + Clean kennel belonging to to_facility_id. "
         "Soft-locked against other pending transfers the instant this is created.",
     )
-    vehicle_id: uuid.UUID | None = Field(None, description="Optional Fleet vehicle for the handoff.")
+    vehicle_id: uuid.UUID | None = Field(
+        None, description="Optional Fleet vehicle for the handoff."
+    )
 
 
 class FacilityTransferCancel(BaseModel):
@@ -237,5 +240,65 @@ class NearbyShelterResponse(BaseModel):
     facility_type: FacilityType
     distance_km: float = Field(..., ge=0.0, examples=[2.4])
     adoptable_dogs: list[NearbyShelterDogResponse] = Field(default_factory=list)
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ShelterVetCheckRequest(BaseModel):
+    """Request body for POST /shelter/dogs/{dog_id}/request-vet-check."""
+
+    vet_id: uuid.UUID = Field(..., description="UUID of the assigned veterinarian")
+    reason: str = Field(..., min_length=1, description="Reason for the veterinary examination")
+    notes: str | None = Field(None, description="Additional notes for the veterinarian")
+    urgency: Literal["routine", "urgent", "emergency"] = Field(
+        "routine", description="Urgency level of the request"
+    )
+
+    @field_validator("urgency", mode="before")
+    @classmethod
+    def normalize_urgency(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            v_clean = v.strip().lower()
+            if v_clean in ("routine", "urgent", "emergency"):
+                return v_clean
+        return "routine"
+
+
+class ShelterVetCheckResponse(BaseModel):
+    """Response body for a created shelter vet check request."""
+
+    id: uuid.UUID
+    dog_id: uuid.UUID
+    shelter_facility_id: uuid.UUID
+    vet_id: uuid.UUID
+    requested_by_id: uuid.UUID
+    reason: str
+    notes: str | None
+    urgency: str
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ShelterVetRequestListResponse(BaseModel):
+    """A single shelter vet request enriched with dog and requester info for list views."""
+
+    id: uuid.UUID
+    dog_id: uuid.UUID
+    dog_name: str
+    shelter_facility_id: uuid.UUID
+    shelter_facility_name: str
+    vet_id: uuid.UUID
+    vet_name: str
+    requested_by_id: uuid.UUID
+    requester_name: str
+    reason: str
+    notes: str | None
+    urgency: str
+    status: str
+    created_at: datetime
+    updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

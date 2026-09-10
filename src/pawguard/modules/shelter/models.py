@@ -174,6 +174,56 @@ class FacilityTransfer(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     )
 
 
+class ShelterVetRequestStatus(StrEnum):
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    REJECTED = "rejected"
+    CANCELLED = "cancelled"
+
+
+class ShelterVetRequest(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
+    """Persistent veterinary examination request raised by shelter staff.
+
+    Unlike the foster vet check (which is an ephemeral progress-log entry),
+    shelter vet requests are first-class database records so they can be
+    queried, filtered, and tracked through a full lifecycle.
+    """
+
+    __tablename__ = "shelter_vet_requests"
+
+    dog_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("dog_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    shelter_facility_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("shelter_facilities.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    requested_by_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    vet_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    urgency: Mapped[str] = mapped_column(String(32), nullable=False, default="routine")
+    status: Mapped[ShelterVetRequestStatus] = mapped_column(
+        String(32), default=ShelterVetRequestStatus.PENDING, nullable=False, index=True
+    )
+
+
 class DailyCareLog(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "daily_care_logs"
 

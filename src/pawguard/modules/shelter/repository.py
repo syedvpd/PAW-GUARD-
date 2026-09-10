@@ -24,6 +24,8 @@ from pawguard.modules.shelter.models import (
     SectionType,
     ShelterFacility,
     ShelterSection,
+    ShelterVetRequest,
+    ShelterVetRequestStatus,
     TransferStatus,
 )
 
@@ -394,3 +396,59 @@ class ShelterRepository:
         result = await self._session.execute(stmt)
         await self._session.flush()
         return result.rowcount  # type: ignore[attr-defined,no-any-return]
+
+    async def create_vet_request(self, request: ShelterVetRequest) -> ShelterVetRequest:
+        self._session.add(request)
+        await self._session.flush()
+        return request
+
+    async def get_vet_request(self, request_id: uuid.UUID) -> ShelterVetRequest | None:
+        stmt = select(ShelterVetRequest).where(ShelterVetRequest.id == request_id)
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def find_active_vet_request_for_dog(self, dog_id: uuid.UUID) -> ShelterVetRequest | None:
+        """Find an existing active (pending/in_progress) vet request for a dog."""
+        stmt = select(ShelterVetRequest).where(
+            ShelterVetRequest.dog_id == dog_id,
+            ShelterVetRequest.status.in_(
+                [ShelterVetRequestStatus.PENDING, ShelterVetRequestStatus.IN_PROGRESS]
+            ),
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def list_vet_requests_for_vet(
+        self,
+        vet_id: uuid.UUID,
+        status: ShelterVetRequestStatus | None = None,
+    ) -> Sequence[ShelterVetRequest]:
+        """List vet requests assigned to a specific veterinarian."""
+        stmt = select(ShelterVetRequest).where(ShelterVetRequest.vet_id == vet_id)
+        if status is not None:
+            stmt = stmt.where(ShelterVetRequest.status == status)
+        stmt = stmt.order_by(ShelterVetRequest.created_at.desc())
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def list_vet_requests_for_facility(
+        self,
+        facility_id: uuid.UUID,
+        status: ShelterVetRequestStatus | None = None,
+    ) -> Sequence[ShelterVetRequest]:
+        """List all vet requests for a specific shelter facility."""
+        stmt = select(ShelterVetRequest).where(ShelterVetRequest.shelter_facility_id == facility_id)
+        if status is not None:
+            stmt = stmt.where(ShelterVetRequest.status == status)
+        stmt = stmt.order_by(ShelterVetRequest.created_at.desc())
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def update_vet_request_status(
+        self,
+        request_id: uuid.UUID,
+        new_status: ShelterVetRequestStatus,
+    ) -> ShelterVetRequest | None:
+        stmt = select(ShelterVetRequest).where(ShelterVetRequest.id == request_id)
+        request = (await self._session.execute(stmt)).scalar_one_or_none()
+        if request is None:
+            return None
+        request.status = new_status
+        await self._session.flush()
+        return request

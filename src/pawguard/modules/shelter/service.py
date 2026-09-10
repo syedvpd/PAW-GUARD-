@@ -5,6 +5,7 @@ sanitation tracking, and inter-facility transfers (RULE-003).
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -34,6 +35,8 @@ from pawguard.modules.shelter.models import (
     SectionType,
     ShelterFacility,
     ShelterSection,
+    ShelterVetRequest,
+    ShelterVetRequestStatus,
     TransferStatus,
 )
 from pawguard.modules.shelter.repository import ShelterRepository
@@ -49,6 +52,7 @@ from pawguard.modules.shelter.schemas import (
     ShelterFacilityUpdate,
     ShelterSectionCreate,
     ShelterSectionResponse,
+    ShelterVetCheckRequest,
 )
 from pawguard.services.audit_service import AuditService
 
@@ -344,7 +348,9 @@ class ShelterService:
                 actor_id=actor_id,
             )
         except Exception:  # pragma: no cover - alerting must never break the assignment
-            logger.warning("Failed to send section-full alert for section %s", section.id, exc_info=True)
+            logger.warning(
+                "Failed to send section-full alert for section %s", section.id, exc_info=True
+            )
 
     async def update_kennel_sanitation(
         self,
@@ -443,7 +449,9 @@ class ShelterService:
                 raise NotFoundError("Destination kennel not found.")
             kennel_section = await self._repo.get_section(kennel.section_id)
             if kennel_section is None or kennel_section.facility_id != payload.to_facility_id:
-                raise ConflictError("Destination kennel does not belong to the destination facility.")
+                raise ConflictError(
+                    "Destination kennel does not belong to the destination facility."
+                )
             if kennel.sanitation_state != KennelSanitationState.CLEAN:
                 raise ConflictError(f"Destination kennel {kennel.identifier} is not Clean.")
             occupancy = await self._dog_repo.count_by_kennel(kennel.id)
@@ -848,3 +856,234 @@ class ShelterService:
                 actor_id=actor_id,
                 ip_address=ip_address,
             )
+
+    # --- Shelter Vet Check Request Workflow ---
+
+    async def request_vet_check(
+        self,
+        dog_id: uuid.UUID,
+        payload: "ShelterVetCheckRequest",
+        *,
+        actor_id: uuid.UUID,
+        actor_roles: set[str],
+        ip_address: str | None = None,
+    ) -> ShelterVetRequest:
+        """Create a persistent veterinary examination request for a shelter dog.
+
+        Authorization (enforced here per RULE-003):
+        - shelter_manager: scoped to their managed_facility_id
+        - rescue_centre_admin: scoped to their facility
+        - super_admin / system:admin: unrestricted
+        """
+        from pawguard.core.exceptions import ConflictError
+
+        # 1. Load the dog and verify it exists
+        dog = await self._dog_repo.get_by_id(dog_id)
+        if dog is None:
+            raise NotFoundError("Dog profile not found.")
+
+        # 2. Facility-scoped access control for shelter_manager and rescue_centre_admin
+        if "super_admin" not in actor_roles and "system:admin" not in actor_roles:
+            if dog.shelter_facility_id is None:
+                raise ForbiddenError("This dog is not currently assigned to a shelter facility.")
+
+            # For shelter_manager: verify the user manages this facility
+            if "shelter_manager" in actor_roles or "rescue_centre_admin" in actor_roles:
+                user = await self._get_user_with_roles(actor_id)
+                if user is None or user.managed_facility_id != dog.shelter_facility_id:
+                    raise ForbiddenError(
+                        "You do not have access to request a vet check for a dog "
+                        "at a different shelter facility."
+                    )
+            else:
+                raise ForbiddenError(
+                    "You do not have permission to request a vet check for this dog."
+                )
+
+        # 3. Validate the veterinarian exists and is active
+        vet_user = await self._get_user_with_roles(payload.vet_id)
+        if vet_user is None or not vet_user.is_active:
+            raise NotFoundError("The selected veterinarian does not exist or is inactive.")
+
+        # Check the vet actually has the veterinarian role
+        vet_role_names = {r.name for r in vet_user.roles} if vet_user.roles else set()
+        if "veterinarian" not in vet_role_names:
+            raise NotFoundError("The selected user is not a registered veterinarian.")
+
+        # 4. Idempotency: reject if an active request already exists for this dog
+        existing = await self._repo.find_active_vet_request_for_dog(dog_id)
+        if existing is not None:
+            raise ConflictError(
+                "An active veterinary request already exists for this dog. "
+                "Please wait for the current request to be completed or cancelled."
+            )
+
+        # 5. Persist the request
+        request = ShelterVetRequest(
+            dog_id=dog_id,
+            shelter_facility_id=dog.shelter_facility_id,
+            requested_by_id=actor_id,
+            vet_id=payload.vet_id,
+            reason=payload.reason,
+            notes=payload.notes,
+            urgency=payload.urgency,
+            status=ShelterVetRequestStatus.PENDING,
+        )
+        request = await self._repo.create_vet_request(request)
+
+        # 6. Notification (best-effort, after successful persistence)
+        try:
+            await self._notify_vet_check_requested(
+                request=request,
+                dog=dog,
+                actor_id=actor_id,
+                vet_user=vet_user,
+            )
+        except Exception as exc:
+            logger.warning("shelter_vet_check_notification_failed", error=str(exc))
+
+        # 7. Audit log
+        if self._audit:
+            await self._audit.record(
+                event_type=AuthAuditEventType.SHELTER_VET_CHECK_REQUESTED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "request_id": str(request.id),
+                    "dog_id": str(dog_id),
+                    "vet_id": str(payload.vet_id),
+                    "urgency": payload.urgency,
+                    "reason": payload.reason,
+                },
+            )
+
+        return request
+
+    async def list_vet_requests_for_vet(
+        self,
+        vet_id: uuid.UUID,
+        *,
+        status: ShelterVetRequestStatus | None = None,
+    ) -> list[dict[str, Any]]:
+        """List vet requests assigned to a veterinarian with enriched data.
+
+        Returns a list of dicts containing dog name, facility name, requester name, etc.
+        """
+        requests = await self._repo.list_vet_requests_for_vet(vet_id, status=status)
+        return await self._enrich_vet_requests(requests)
+
+    async def list_vet_requests_for_facility(
+        self,
+        facility_id: uuid.UUID,
+        *,
+        status: ShelterVetRequestStatus | None = None,
+    ) -> list[dict[str, Any]]:
+        """List all vet requests for a facility with enriched data."""
+        requests = await self._repo.list_vet_requests_for_facility(facility_id, status=status)
+        return await self._enrich_vet_requests(requests)
+
+    async def update_vet_request_status(
+        self,
+        request_id: uuid.UUID,
+        new_status: ShelterVetRequestStatus,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> ShelterVetRequest:
+        """Update the status of a shelter vet request."""
+        request = await self._repo.get_vet_request(request_id)
+        if request is None:
+            raise NotFoundError("Shelter vet request not found.")
+
+        updated = await self._repo.update_vet_request_status(request_id, new_status)
+        if updated is None:
+            raise NotFoundError("Shelter vet request not found.")
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.SHELTER_VET_CHECK_REQUESTED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "request_id": str(request_id),
+                    "new_status": new_status,
+                    "action": "status_update",
+                },
+            )
+
+        return updated
+
+    async def _enrich_vet_requests(
+        self, requests: Sequence[ShelterVetRequest]
+    ) -> list[dict[str, Any]]:
+        """Enrich raw ShelterVetRequest records with dog, facility, and user names."""
+        enriched: list[dict[str, Any]] = []
+        for req in requests:
+            dog = await self._dog_repo.get_by_id(req.dog_id)
+            facility = await self._repo.get_facility(req.shelter_facility_id)
+            vet_user = await self._get_user_with_roles(req.vet_id)
+            requester_user = await self._get_user_with_roles(req.requested_by_id)
+
+            enriched.append(
+                {
+                    "id": req.id,
+                    "dog_id": req.dog_id,
+                    "dog_name": dog.name if dog else "Unknown",
+                    "shelter_facility_id": req.shelter_facility_id,
+                    "shelter_facility_name": facility.name if facility else "Unknown",
+                    "vet_id": req.vet_id,
+                    "vet_name": vet_user.full_name if vet_user else "Unknown",
+                    "requested_by_id": req.requested_by_id,
+                    "requester_name": requester_user.full_name if requester_user else "Unknown",
+                    "reason": req.reason,
+                    "notes": req.notes,
+                    "urgency": req.urgency,
+                    "status": req.status,
+                    "created_at": req.created_at,
+                    "updated_at": req.updated_at,
+                }
+            )
+        return enriched
+
+    async def _get_user_with_roles(self, user_id: uuid.UUID) -> User | None:
+        from sqlalchemy.orm import selectinload as _sel
+
+        stmt = select(User).options(_sel(User.roles)).where(User.id == user_id)
+        return (await self._repo._session.execute(stmt)).scalar_one_or_none()
+
+    async def _notify_vet_check_requested(
+        self,
+        *,
+        request: ShelterVetRequest,
+        dog: DogProfile,
+        actor_id: uuid.UUID,
+        vet_user: User,
+    ) -> None:
+        """Send governed notification to the assigned veterinarian."""
+        from pawguard.modules.notifications.governance_service import (
+            dispatch_governed_notification,
+        )
+
+        actor = await self._get_user_with_roles(actor_id)
+        actor_name = actor.full_name if actor else "Shelter Staff"
+        dog_name = dog.name if dog else "Unknown dog"
+
+        title = "Medical Check Requested"
+        body = (
+            f"{actor_name} has requested a veterinary examination for {dog_name}. "
+            f"Reason: {request.reason}. "
+            f"Urgency: {request.urgency.upper()}."
+        )
+
+        await dispatch_governed_notification(
+            self._repo._session,
+            trigger_code="shelter_vet_check_requested",
+            module_name="shelter",
+            title=title,
+            body=body,
+            target_user_ids=[request.vet_id],
+            action_url=f"/shelter/dogs/{request.dog_id}",
+            requested_by=actor_id,
+        )

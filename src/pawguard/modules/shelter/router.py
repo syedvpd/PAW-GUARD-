@@ -6,7 +6,7 @@ Routers only validate and call services (RULE-004).
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.bulk import (
@@ -34,6 +34,7 @@ from pawguard.modules.shelter.models import (
     FacilityType,
     KennelSanitationState,
     SectionType,
+    ShelterVetRequestStatus,
 )
 from pawguard.modules.shelter.repository import ShelterRepository
 from pawguard.modules.shelter.schemas import (
@@ -53,6 +54,9 @@ from pawguard.modules.shelter.schemas import (
     ShelterFacilityUpdate,
     ShelterSectionCreate,
     ShelterSectionResponse,
+    ShelterVetCheckRequest,
+    ShelterVetCheckResponse,
+    ShelterVetRequestListResponse,
 )
 from pawguard.modules.shelter.service import ShelterService
 from pawguard.services.audit_service import AuditService
@@ -636,4 +640,173 @@ async def bulk_update_facility_status(
     return BulkStatusUpdateResponse(
         message=f"{updated} facilities updated.",
         updated_count=updated,
+    )
+
+
+# --- Shelter Vet Check Request Endpoints ---
+
+
+@router.post(
+    "/dogs/{dog_id}/request-vet-check",
+    response_model=ApiResponse[ShelterVetCheckResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def request_shelter_vet_check(
+    dog_id: uuid.UUID,
+    payload: ShelterVetCheckRequest,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: ShelterService = Depends(get_shelter_service),
+) -> ApiResponse[ShelterVetCheckResponse]:
+    """Request a veterinary examination for a shelter dog.
+
+    Available to: shelter_manager, rescue_centre_admin, super_admin.
+    Does NOT require medical:create or appointment:create permissions.
+    """
+    from pawguard.modules.auth.rbac import has_permission
+
+    # Inline RBAC: allow shelter_manager, rescue_centre_admin, super_admin
+    is_authorized = (
+        has_permission(current_user.user, "shelter:update")
+        or has_permission(current_user.user, "shelter:read")
+        or any(
+            r in {"shelter_manager", "rescue_centre_admin", "super_admin", "system:admin"}
+            for r in (current_user.claims.roles or [])
+        )
+    )
+    if not is_authorized:
+        from pawguard.modules.auth.exceptions import InsufficientPermissionsError
+
+        raise InsufficientPermissionsError(
+            "Missing required permission: shelter:update or shelter_manager role"
+        )
+
+    actor_roles = set(current_user.claims.roles)
+    if hasattr(current_user.user, "roles") and current_user.user.roles:
+        actor_roles.update(r.name for r in current_user.user.roles)
+
+    ip = request.client.host if request.client else None
+    vet_request = await service.request_vet_check(
+        dog_id,
+        payload,
+        actor_id=current_user.user.id,
+        actor_roles=actor_roles,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=ShelterVetCheckResponse.model_validate(vet_request),
+        message="Veterinary examination request created successfully.",
+    )
+
+
+@router.get(
+    "/medical-requests",
+    response_model=ApiResponse[list[ShelterVetRequestListResponse]],
+)
+async def list_shelter_medical_requests(
+    current_user: CurrentUser = Depends(get_current_user),
+    status_filter: str | None = Query(None, alias="status", description="Filter by status"),
+    service: ShelterService = Depends(get_shelter_service),
+) -> ApiResponse[list[ShelterVetRequestListResponse]]:
+    """List shelter veterinary requests.
+
+    Veterinarians see requests assigned to them.
+    Shelter managers/admins see requests for their facility.
+    Super admins see all requests.
+    """
+
+    actor_roles = set(current_user.claims.roles)
+    if hasattr(current_user.user, "roles") and current_user.user.roles:
+        actor_roles.update(r.name for r in current_user.user.roles)
+
+    parsed_status = None
+    if status_filter:
+        parsed_status = parse_enum(ShelterVetRequestStatus, status_filter, field_name="status")
+
+    # Veterinarians see requests assigned to them
+    if "veterinarian" in actor_roles:
+        enriched = await service.list_vet_requests_for_vet(
+            current_user.user.id, status=parsed_status
+        )
+        return ApiResponse(
+            data=[ShelterVetRequestListResponse(**item) for item in enriched],
+        )
+
+    # Facility-scoped users see requests for their facility
+    user = current_user.user
+    if user.managed_facility_id and (
+        "shelter_manager" in actor_roles or "rescue_centre_admin" in actor_roles
+    ):
+        enriched = await service.list_vet_requests_for_facility(
+            user.managed_facility_id, status=parsed_status
+        )
+        return ApiResponse(
+            data=[ShelterVetRequestListResponse(**item) for item in enriched],
+        )
+
+    # Super admins see all
+    if "super_admin" in actor_roles or "system:admin" in actor_roles:
+        # For super_admin, list all facilities' requests
+        from pawguard.modules.shelter.repository import ShelterRepository
+
+        repo = ShelterRepository(current_user.db)
+        all_facilities = await repo.list_facilities()
+        all_requests: list[dict] = []
+        for facility in all_facilities:
+            facility_requests = await service.list_vet_requests_for_facility(
+                facility.id, status=parsed_status
+            )
+            all_requests.extend(facility_requests)
+        return ApiResponse(
+            data=[ShelterVetRequestListResponse(**item) for item in all_requests],
+        )
+
+    from pawguard.core.exceptions import ForbiddenError
+
+    raise ForbiddenError("You do not have permission to view shelter medical requests.")
+
+
+@router.patch(
+    "/medical-requests/{request_id}/status",
+    response_model=ApiResponse[ShelterVetCheckResponse],
+)
+async def update_shelter_medical_request_status(
+    request_id: uuid.UUID,
+    request_body: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: ShelterService = Depends(get_shelter_service),
+) -> ApiResponse[ShelterVetCheckResponse]:
+    """Update the status of a shelter veterinary request.
+
+    Veterinarians can accept/complete/reject requests assigned to them.
+    Shelter managers can cancel requests for their facility.
+    """
+    from pydantic import BaseModel
+
+    class StatusUpdate(BaseModel):
+        status: str
+
+    body = await request_body.json()
+    new_status_str = body.get("status")
+    if not new_status_str:
+        from pawguard.core.exceptions import ValidationFailedError
+
+        raise ValidationFailedError("status field is required.")
+
+    new_status = parse_enum(ShelterVetRequestStatus, new_status_str, field_name="status")
+
+    actor_roles = set(current_user.claims.roles)
+    if hasattr(current_user.user, "roles") and current_user.user.roles:
+        actor_roles.update(r.name for r in current_user.user.roles)
+
+    ip = request_body.client.host if request_body.client else None
+    updated = await service.update_vet_request_status(
+        request_id,
+        new_status,
+        actor_id=current_user.user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=ShelterVetCheckResponse.model_validate(updated),
+        message=f"Request status updated to {new_status}.",
     )

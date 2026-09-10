@@ -117,6 +117,16 @@ DEFAULT_TRIGGERS = [
         False,
         "NORMAL",
     ),
+    # Shelter
+    (
+        "shelter_vet_check_requested",
+        "shelter",
+        "Shelter Vet Check Requested",
+        True,
+        True,
+        False,
+        "HIGH",
+    ),
 ]
 
 

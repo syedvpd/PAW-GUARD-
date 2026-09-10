@@ -8,7 +8,10 @@ import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from logging import getLogger
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from pawguard.modules.shelter.service import ShelterService
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
