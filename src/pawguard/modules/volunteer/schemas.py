@@ -10,8 +10,12 @@ from pawguard.modules.volunteer.models import ApplicationStatus, AttendanceStatu
 
 
 class VolunteerProfileCreate(BaseModel):
-    emergency_contact_name: str = Field(..., min_length=1, max_length=255, examples=["Jane Doe"])
-    emergency_contact_phone: str = Field(..., min_length=1, max_length=32, examples=["+1-555-0100"])
+    full_name: str | None = Field(None, max_length=255, examples=["Jane Doe"])
+    email: EmailStr | None = Field(None, examples=["jane@example.com"])
+    phone: str | None = Field(None, max_length=32, examples=["+1-555-0100"])
+    preferred_role: str | None = Field(None, max_length=255, examples=["Shelter Support"])
+    emergency_contact_name: str | None = Field(None, max_length=255, examples=["Jane Doe"])
+    emergency_contact_phone: str | None = Field(None, max_length=32, examples=["+1-555-0100"])
     applied_role: str | None = Field(
         None,
         max_length=255,
@@ -20,12 +24,24 @@ class VolunteerProfileCreate(BaseModel):
     skills: str | None = Field(None, examples=["Grooming, Transport, Photography"])
     availability: str | None = Field(None, max_length=255, examples=["Weekends, Evenings"])
     notes: str | None = Field(None, examples=["Available for emergency call-outs on weekends."])
-    # Self-reported at application time. background_check_completed is staff-
-    # verified and deliberately not settable here - see VolunteerProfileUpdate.
     medical_conditions: str | None = Field(None, examples=["None"])
     animal_handling_experience: str | None = Field(
         None, examples=["3 years volunteering at a local shelter, comfortable with large breeds."]
     )
+
+    @model_validator(mode="after")
+    def _normalize_intake_fields(self) -> "VolunteerProfileCreate":
+        if not self.applied_role and self.preferred_role:
+            self.applied_role = self.preferred_role
+        elif not self.preferred_role and self.applied_role:
+            self.preferred_role = self.applied_role
+
+        if not self.emergency_contact_name:
+            self.emergency_contact_name = self.full_name or "N/A"
+        if not self.emergency_contact_phone:
+            self.emergency_contact_phone = self.phone or "N/A"
+
+        return self
 
 
 class VolunteerProfileUpdate(BaseModel):

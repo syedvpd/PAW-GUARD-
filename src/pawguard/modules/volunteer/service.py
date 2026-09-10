@@ -138,15 +138,109 @@ class VolunteerService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> VolunteerApplication:
-        # Check if user already has an application
-        existing_app = await self._repo.get_application_by_user_id(user_id)
+        from sqlalchemy.exc import IntegrityError
+
+        from pawguard.core.security import generate_opaque_token, hash_password
+        from pawguard.modules.auth.models import User
+        from pawguard.modules.auth.repository import UserRepository
+
+        user_repo = UserRepository(self._repo._session)
+        normalized_email = payload.email.lower().strip() if payload.email else None
+        normalized_phone = payload.phone.strip() if payload.phone else None
+
+        target_user_id = user_id
+
+        # 1. Resolve applicant user if email or phone is supplied in payload
+        if normalized_email or normalized_phone:
+            existing_user_by_email = (
+                await user_repo.get_by_email(normalized_email) if normalized_email else None
+            )
+            existing_user_by_phone = (
+                await user_repo.get_by_phone(normalized_phone) if normalized_phone else None
+            )
+
+            if (
+                existing_user_by_email is not None
+                and existing_user_by_phone is not None
+                and existing_user_by_email.id != existing_user_by_phone.id
+            ):
+                raise ConflictError(
+                    "An active volunteer application or profile already exists for this email or phone number."
+                )
+
+            applicant_user = existing_user_by_email or existing_user_by_phone
+
+            if applicant_user is None:
+                default_role = await user_repo.get_default_role()
+                random_pw = generate_opaque_token()
+                hashed_pw = await asyncio.to_thread(hash_password, random_pw)
+                email_to_use = (
+                    normalized_email or f"volunteer_{uuid.uuid4().hex[:8]}@pawguard.internal"
+                )
+
+                try:
+                    new_user = User(
+                        id=uuid.uuid4(),
+                        email=email_to_use,
+                        full_name=payload.full_name or "Volunteer Applicant",
+                        phone=normalized_phone,
+                        hashed_password=hashed_pw,
+                        is_active=True,
+                        is_verified=False,
+                    )
+                    if default_role is not None:
+                        new_user.roles.append(default_role)
+
+                    applicant_user = await user_repo.create(new_user)
+                except IntegrityError:
+                    await self._repo._session.rollback()
+                    applicant_user = (await user_repo.get_by_email(email_to_use)) or (
+                        await user_repo.get_by_phone(normalized_phone) if normalized_phone else None
+                    )
+                    if applicant_user is None:
+                        raise ConflictError(
+                            "An application or volunteer already exists for this email or phone number."
+                        ) from None
+
+            target_user_id = applicant_user.id
+
+        ACTIVE_PROFILE_STATUSES = (
+            VolunteerStatus.ACTIVE,
+            VolunteerStatus.APPROVED,
+            VolunteerStatus.PENDING,
+            VolunteerStatus.APPLIED,
+            VolunteerStatus.ONBOARDED,
+        )
+
+        ACTIVE_APP_STATUSES = (
+            ApplicationStatus.SUBMITTED,
+            ApplicationStatus.UNDER_REVIEW,
+            ApplicationStatus.APPROVED,
+        )
+
+        # 2. Check profile and application status for target_user_id
+        existing_profile = await self._repo.get_profile_by_user_id(target_user_id)
+        if existing_profile is not None and existing_profile.status in ACTIVE_PROFILE_STATUSES:
+            raise ConflictError(
+                "You have already applied or registered as a volunteer."
+            )
+
+        existing_app = await self._repo.get_application_by_user_id(target_user_id)
         if existing_app is not None:
-            if existing_app.status == ApplicationStatus.REJECTED:
-                # Allow reapplication after rejection - update the existing application
+            if existing_app.status in ACTIVE_APP_STATUSES:
+                raise ConflictError(
+                    "You have already applied as a volunteer and your application is still active."
+                )
+            else:
+                # Reapplication after REJECTED or WITHDRAWN
                 existing_app.status = ApplicationStatus.SUBMITTED
-                existing_app.emergency_contact_name = payload.emergency_contact_name
-                existing_app.emergency_contact_phone = payload.emergency_contact_phone
-                existing_app.applied_role = payload.applied_role
+                existing_app.emergency_contact_name = (
+                    payload.emergency_contact_name or payload.full_name or "N/A"
+                )
+                existing_app.emergency_contact_phone = (
+                    payload.emergency_contact_phone or payload.phone or "N/A"
+                )
+                existing_app.applied_role = payload.applied_role or payload.preferred_role
                 existing_app.skills = payload.skills
                 existing_app.availability = payload.availability
                 existing_app.notes = payload.notes
@@ -168,7 +262,7 @@ class VolunteerService:
                         user_agent="",
                         metadata={
                             "application_id": str(res.id),
-                            "user_id": str(user_id),
+                            "user_id": str(target_user_id),
                             "action": "reapplication",
                         },
                     )
@@ -184,20 +278,16 @@ class VolunteerService:
                     action_url="/volunteers/my-profile",
                 )
                 return res
-            else:
-                raise ConflictError("You have already applied or registered as a volunteer.")
 
-        # Check if user already has a volunteer profile
-        existing_profile = await self._repo.get_profile_by_user_id(user_id)
-        if existing_profile is not None:
-            raise ConflictError("You are already a volunteer.")
+        # 3. Create new application if no existing application record
+        contact_name = payload.emergency_contact_name or payload.full_name or "N/A"
+        contact_phone = payload.emergency_contact_phone or payload.phone or "N/A"
 
-        # Create new application
         application = VolunteerApplication(
-            user_id=user_id,
-            emergency_contact_name=payload.emergency_contact_name,
-            emergency_contact_phone=payload.emergency_contact_phone,
-            applied_role=payload.applied_role,
+            user_id=target_user_id,
+            emergency_contact_name=contact_name,
+            emergency_contact_phone=contact_phone,
+            applied_role=payload.applied_role or payload.preferred_role,
             skills=payload.skills,
             availability=payload.availability,
             notes=payload.notes,
@@ -218,7 +308,7 @@ class VolunteerService:
                 user_agent="",
                 metadata={
                     "application_id": str(res.id),
-                    "user_id": str(user_id),
+                    "user_id": str(target_user_id),
                 },
             )
 
@@ -250,6 +340,7 @@ class VolunteerService:
         from sqlalchemy.exc import IntegrityError
 
         from pawguard.core.security import generate_opaque_token, hash_password
+        from pawguard.modules.auth.models import User
         from pawguard.modules.auth.repository import UserRepository
 
         user_repo = UserRepository(self._repo._session)
@@ -268,24 +359,42 @@ class VolunteerService:
             and existing_user_by_email.id != existing_user_by_phone.id
         ):
             raise ConflictError(
-                "An application or volunteer already exists for this email or phone number."
+                "An active volunteer application or profile already exists for this email or phone number."
             )
 
         applicant_user = existing_user_by_email or existing_user_by_phone
+
+        ACTIVE_PROFILE_STATUSES = (
+            VolunteerStatus.ACTIVE,
+            VolunteerStatus.APPROVED,
+            VolunteerStatus.PENDING,
+            VolunteerStatus.APPLIED,
+            VolunteerStatus.ONBOARDED,
+        )
+
+        ACTIVE_APP_STATUSES = (
+            ApplicationStatus.SUBMITTED,
+            ApplicationStatus.UNDER_REVIEW,
+            ApplicationStatus.APPROVED,
+        )
 
         if applicant_user is not None:
             # Check if target applicant already has an application or profile
             existing_app = await self._repo.get_application_by_user_id(applicant_user.id)
             existing_profile = await self._repo.get_profile_by_user_id(applicant_user.id)
 
-            if existing_profile is not None:
+            if existing_profile is not None and existing_profile.status in ACTIVE_PROFILE_STATUSES:
                 raise ConflictError(
-                    "An application or volunteer already exists for this email or phone number."
+                    "You have already applied or registered as a volunteer."
                 )
 
             if existing_app is not None:
-                if existing_app.status == ApplicationStatus.REJECTED:
-                    # Reapplication after rejection
+                if existing_app.status in ACTIVE_APP_STATUSES:
+                    raise ConflictError(
+                        "An active volunteer application already exists for this applicant."
+                    )
+                else:
+                    # Reapplication after REJECTED or WITHDRAWN
                     existing_app.status = ApplicationStatus.SUBMITTED
                     existing_app.emergency_contact_name = (
                         payload.emergency_contact_name or payload.full_name
@@ -322,10 +431,6 @@ class VolunteerService:
                             },
                         )
                     return res
-                else:
-                    raise ConflictError(
-                        "An application or volunteer already exists for this email or phone number."
-                    )
         else:
             # Create new applicant User record
             default_role = await user_repo.get_default_role()
@@ -349,7 +454,7 @@ class VolunteerService:
             except IntegrityError as err:
                 await self._repo._session.rollback()
                 raise ConflictError(
-                    "An application or volunteer already exists for this email or phone number."
+                    "An active volunteer application or profile already exists for this email or phone number."
                 ) from err
             except Exception:
                 await self._repo._session.rollback()
