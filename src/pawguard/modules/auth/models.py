@@ -75,6 +75,7 @@ class AuthAuditEventType(StrEnum):
     KENNEL_SANITATION_UPDATED = "kennel_sanitation_updated"
     TRANSFER_REQUESTED = "transfer_requested"
     TRANSFER_CONFIRMED = "transfer_confirmed"
+    TRANSFER_CANCELLED = "transfer_cancelled"
     CARE_LOG_SUBMITTED = "care_log_submitted"
     MEDICAL_RECORD_CREATED = "medical_record_created"
     MEDICAL_RECORD_UPDATED = "medical_record_updated"

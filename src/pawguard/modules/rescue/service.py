@@ -204,6 +204,92 @@ class RescueService:
             audit_service=self._audit,
         )
 
+    def _shelter_service(self) -> "ShelterService":
+        """Cross-domain delegation (shelter) sharing this request's session,
+        used to auto-reserve a Quarantine kennel when a rescue is ADMITTED."""
+        from pawguard.modules.notifications.repository import NotificationRepository
+        from pawguard.modules.notifications.service import NotificationService
+        from pawguard.modules.shelter.repository import ShelterRepository
+        from pawguard.modules.shelter.service import ShelterService
+
+        notification_svc = NotificationService(
+            repository=NotificationRepository(self._repo._session), arq_pool=self._arq
+        )
+        return ShelterService(
+            ShelterRepository(self._repo._session),
+            self._dog_repo,
+            audit_service=self._audit,
+            notification_service=notification_svc,
+        )
+
+    async def _reserve_quarantine_kennel_for_admitted(
+        self,
+        dog: DogProfile,
+        request: RescueRequest,
+        *,
+        actor_id: uuid.UUID | None,
+        ip_address: str | None,
+    ) -> None:
+        """PRR: an ADMITTED rescue must be supplied an available Quarantine
+        kennel and atomically assigned to it, rather than leaving placement
+        as a manual follow-up step. Escalates to Rescue Centre Admin / Super
+        Admin when no facility has capacity."""
+        try:
+            shelter_svc = self._shelter_service()
+            kennel = await shelter_svc.find_available_quarantine_kennel()
+            if kennel is not None:
+                try:
+                    await shelter_svc.assign_dog_to_kennel(
+                        dog.id,
+                        kennel.id,
+                        actor_id=actor_id,
+                        ip_address=ip_address,
+                        system_assignment=True,
+                    )
+                    return
+                except Exception as exc:
+                    logger.warning(
+                        "Auto-assignment to kennel %s failed for admitted dog %s: %s",
+                        kennel.id,
+                        dog.id,
+                        exc,
+                    )
+
+            from pawguard.modules.auth.repository import UserRepository
+            from pawguard.modules.notifications.repository import NotificationRepository
+            from pawguard.modules.notifications.schemas import BroadcastCreate
+            from pawguard.modules.notifications.service import NotificationService
+
+            user_repo = UserRepository(self._repo._session)
+            admin_ids = list(
+                await user_repo.get_user_ids_by_roles(["rescue_centre_admin", "super_admin"])
+            )
+            if admin_ids:
+                notif_svc = NotificationService(
+                    repository=NotificationRepository(self._repo._session), arq_pool=self._arq
+                )
+                await notif_svc.broadcast(
+                    payload=BroadcastCreate(
+                        title="No shelter capacity for admitted animal",
+                        body=(
+                            f"Animal from case {request.ticket_number} was admitted but no "
+                            "Quarantine kennel is available at any active facility. Manual "
+                            "placement required."
+                        ),
+                        notification_type="shelter_capacity_critical",
+                        action_url=f"/rescue/{request.id}",
+                        target_roles=["rescue_centre_admin", "super_admin"],
+                    ),
+                    user_ids=[],
+                    actor_id=actor_id,
+                )
+        except Exception:  # pragma: no cover - never break the ADMITTED transition
+            logger.warning(
+                "Failed to auto-reserve/escalate quarantine kennel for dog %s",
+                dog.id,
+                exc_info=True,
+            )
+
     async def _resolve_request(self, identifier: uuid.UUID | str) -> RescueRequest | None:
         """Resolve a rescue request by either UUID or human-readable ticket number."""
         if isinstance(identifier, uuid.UUID):
@@ -1256,6 +1342,10 @@ class RescueService:
                     "auto_created": True,
                 },
             )
+
+        await self._reserve_quarantine_kennel_for_admitted(
+            dog, request, actor_id=actor_id, ip_address=ip_address
+        )
 
         if self._redis is not None:
             with contextlib.suppress(Exception):

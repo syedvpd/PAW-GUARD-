@@ -40,6 +40,7 @@ from pawguard.modules.shelter.schemas import (
     DailyCareLogCreate,
     DailyCareLogResponse,
     FacilityStatusUpdate,
+    FacilityTransferCancel,
     FacilityTransferCreate,
     FacilityTransferResponse,
     KennelAssignmentRequest,
@@ -501,6 +502,31 @@ async def confirm_transfer_receiver(
     return ApiResponse(
         data=FacilityTransferResponse.model_validate(transfer),
         message="Receiving facility confirmation recorded.",
+    )
+
+
+@router.post(
+    "/transfers/{transfer_id}/cancel",
+    response_model=ApiResponse[FacilityTransferResponse],
+    dependencies=[Depends(require_permission("shelter:update"))],
+)
+async def cancel_transfer(
+    transfer_id: uuid.UUID,
+    payload: FacilityTransferCancel,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: ShelterService = Depends(get_shelter_service),
+) -> ApiResponse[FacilityTransferResponse]:
+    """Cancels a transfer at any point before Completed. A reason is mandatory."""
+    transfer = await service.cancel_transfer(
+        transfer_id,
+        payload.reason,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(
+        data=FacilityTransferResponse.model_validate(transfer),
+        message="Transfer cancelled.",
     )
 
 

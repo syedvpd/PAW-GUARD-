@@ -42,7 +42,8 @@ class SectionType(StrEnum):
 
 
 class TransferStatus(StrEnum):
-    PENDING = "pending"
+    PENDING = "pending"  # Requested, awaiting sender dispatch confirmation
+    IN_TRANSIT = "in_transit"  # Sender confirmed dispatch, awaiting receiver confirmation
     COMPLETED = "completed"
     CANCELLED = "cancelled"
 
@@ -131,6 +132,25 @@ class FacilityTransfer(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
         String(32), default=TransferStatus.PENDING, nullable=False
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cancel_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Soft-locked the moment a transfer is requested (RULE: two transfers
+    # can't target the same kennel) — enforced in ShelterService by checking
+    # for another PENDING/IN_TRANSIT transfer against this kennel, not by a
+    # separate reservation table.
+    destination_kennel_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("kennels.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    # Optional link to the Fleet module's vehicle used for the handoff.
+    vehicle_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("vehicles.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     # Dual confirmation: a transfer only completes once both the sending and
     # the receiving facility have separately confirmed it (PRR 3.6).

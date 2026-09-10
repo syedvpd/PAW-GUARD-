@@ -194,6 +194,7 @@ class ShelterService:
         ip_address: str | None = None,
         emergency_override: bool = False,
         override_notes: str | None = None,
+        system_assignment: bool = False,
     ) -> bool:
         dog = await self._dog_repo.get_by_id(dog_id)
         if dog is None:
@@ -228,13 +229,28 @@ class ShelterService:
         if section is None:
             raise NotFoundError("Associated shelter section not found.")
 
+        # Over-capacity gate: once a section is at (or would exceed) its
+        # capacity, no further assignment into it is allowed until a kennel
+        # is freed or the section's capacity is raised.
+        section_occupied = await self._repo.count_occupied_in_section(
+            section.id, exclude_dog_id=dog.id
+        )
+        if section_occupied >= section.capacity:
+            raise ConflictError(
+                f"Section '{section.name}' is at full capacity "
+                f"({section_occupied}/{section.capacity}). Assignment blocked until resolved."
+            )
+
         # Master-spec rule: Quarantine/Isolation/Surgical assignment normally
         # requires a veterinarian. A Shelter Manager may force it through in
         # a genuine emergency via emergency_override — a documented exception
         # path (mandatory justification, flagged for vet review), not a
-        # silent bypass of the sign-off requirement.
+        # silent bypass of the sign-off requirement. system_assignment skips
+        # this check for the automated rescue-ADMITTED intake pipeline, which
+        # places a dog into quarantine pending vet clearance rather than
+        # having staff sign off on the placement itself.
         used_override = False
-        if section.section_type in CLINICAL_SECTION_TYPES:
+        if section.section_type in CLINICAL_SECTION_TYPES and not system_assignment:
             actor_roles = await self._actor_role_names(actor_id)
             is_privileged = bool(
                 actor_roles & {"veterinarian", "super_admin", "rescue_centre_admin"}
@@ -251,6 +267,9 @@ class ShelterService:
         await self._dog_repo._session.flush()
         await invalidate_route_cache("dog")
         await invalidate_route_cache("dashboards")
+
+        if section_occupied + 1 >= section.capacity:
+            await self._notify_section_full(section, section_occupied + 1, actor_id)
         if self._audit and actor_id:
             await self._audit.record(
                 event_type=AuthAuditEventType.KENNEL_ASSIGNED,
@@ -298,6 +317,34 @@ class ShelterService:
             logger.warning(
                 "Failed to send clinical-override alert for dog %s", dog.id, exc_info=True
             )
+
+    async def _notify_section_full(
+        self,
+        section: ShelterSection,
+        occupied: int,
+        actor_id: uuid.UUID | None,
+    ) -> None:
+        """Fires the instant a section hits 100% occupancy (RULE)."""
+        if self._notification_svc is None:
+            return
+        try:
+            await self._notification_svc.broadcast(
+                payload=BroadcastCreate(
+                    title=f"Section at capacity: {section.name}",
+                    body=(
+                        f"Section '{section.name}' has reached full capacity "
+                        f"({occupied}/{section.capacity}). Further assignments are blocked "
+                        "until a kennel is freed or capacity is increased."
+                    ),
+                    notification_type="shelter_section_full",
+                    action_url=f"/shelter/kennel-grid?sectionId={section.id}",
+                    target_roles=["rescue_centre_admin"],
+                ),
+                user_ids=[],
+                actor_id=actor_id,
+            )
+        except Exception:  # pragma: no cover - alerting must never break the assignment
+            logger.warning("Failed to send section-full alert for section %s", section.id, exc_info=True)
 
     async def update_kennel_sanitation(
         self,
@@ -387,6 +434,27 @@ class ShelterService:
         if from_fac is None or to_fac is None:
             raise NotFoundError("Origin or destination facility not found.")
 
+        if payload.destination_kennel_id is not None:
+            # Row-lock the destination kennel for the same reason kennel
+            # assignment does: two transfers requested concurrently for the
+            # same kennel must not both pass the availability check.
+            kennel = await self._repo.get_kennel_for_update(payload.destination_kennel_id)
+            if kennel is None:
+                raise NotFoundError("Destination kennel not found.")
+            kennel_section = await self._repo.get_section(kennel.section_id)
+            if kennel_section is None or kennel_section.facility_id != payload.to_facility_id:
+                raise ConflictError("Destination kennel does not belong to the destination facility.")
+            if kennel.sanitation_state != KennelSanitationState.CLEAN:
+                raise ConflictError(f"Destination kennel {kennel.identifier} is not Clean.")
+            occupancy = await self._dog_repo.count_by_kennel(kennel.id)
+            if occupancy >= kennel.capacity:
+                raise ConflictError(f"Destination kennel {kennel.identifier} is occupied.")
+            already_reserved = await self._repo.get_active_transfer_for_kennel(kennel.id)
+            if already_reserved is not None:
+                raise ConflictError(
+                    f"Destination kennel {kennel.identifier} is already reserved by another pending transfer."
+                )
+
         transfer = FacilityTransfer(
             dog_id=payload.dog_id,
             from_facility_id=payload.from_facility_id,
@@ -394,6 +462,8 @@ class ShelterService:
             transferred_by=user_id,
             status=TransferStatus.PENDING,
             notes=payload.notes,
+            destination_kennel_id=payload.destination_kennel_id,
+            vehicle_id=payload.vehicle_id,
         )
         transfer = await self._repo.create_transfer(transfer)
         if self._audit and actor_id:
@@ -426,7 +496,7 @@ class ShelterService:
         if transfer is None:
             raise NotFoundError("Facility transfer request not found.")
 
-        if transfer.status != TransferStatus.PENDING:
+        if transfer.status not in (TransferStatus.PENDING, TransferStatus.IN_TRANSIT):
             raise ConflictError("Transfer request has already been processed.")
 
         other_side = "receiver" if side == "sender" else "sender"
@@ -464,9 +534,16 @@ class ShelterService:
                             f"Caller's managed facility ({actor.managed_facility_id}) does not match the {facility_label} facility ({required_facility_id})."
                         )
 
+        if side == "receiver" and transfer.sender_confirmed_at is None:
+            raise ConflictError(
+                "The sending facility must confirm dispatch before the receiving facility can confirm receipt."
+            )
+
         now = datetime.now(UTC)
         setattr(transfer, f"{side}_confirmed_at", now)
         setattr(transfer, f"{side}_confirmed_by", actor_id)
+        if side == "sender":
+            transfer.status = TransferStatus.IN_TRANSIT
 
         if self._audit and actor_id:
             await self._audit.record(
@@ -481,8 +558,23 @@ class ShelterService:
             dog = await self._dog_repo.get_by_id(transfer.dog_id)
             if dog is None:
                 raise NotFoundError("Dog profile not found.")
+            if transfer.destination_kennel_id is not None:
+                # Re-validate the reservation at completion time: it may have
+                # gone dirty or been taken out of service since it was requested.
+                kennel = await self._repo.get_kennel_for_update(transfer.destination_kennel_id)
+                if kennel is None or kennel.sanitation_state != KennelSanitationState.CLEAN:
+                    raise ConflictError(
+                        "Destination kennel is no longer Open + Clean; cannot complete transfer."
+                    )
+                occupancy = await self._dog_repo.count_by_kennel(kennel.id, exclude_dog_id=dog.id)
+                if occupancy >= kennel.capacity:
+                    raise ConflictError(
+                        "Destination kennel is no longer available; cannot complete transfer."
+                    )
+                dog.kennel_id = kennel.id
+            else:
+                dog.kennel_id = None  # require re-assignment to kennel at destination
             dog.shelter_facility_id = transfer.to_facility_id
-            dog.kennel_id = None  # require re-assignment to kennel at destination
             transfer.status = TransferStatus.COMPLETED
 
         await self._repo._session.flush()
@@ -504,6 +596,44 @@ class ShelterService:
         ip_address: str | None = None,
     ) -> FacilityTransfer:
         return await self._confirm_transfer_side(transfer_id, "receiver", actor_id, ip_address)
+
+    async def cancel_transfer(
+        self,
+        transfer_id: uuid.UUID,
+        reason: str,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> FacilityTransfer:
+        """Cancels a transfer at any point before Completed (RULE). The dog's
+        placement is untouched by Requested/SenderConfirmed/InTransit, so
+        cancelling simply leaves it at the origin kennel — no revert needed."""
+        transfer = await self._repo.get_transfer(transfer_id)
+        if transfer is None:
+            raise NotFoundError("Facility transfer request not found.")
+        if transfer.status in (TransferStatus.COMPLETED, TransferStatus.CANCELLED):
+            raise ConflictError(
+                f"Transfer request is already {transfer.status.value} and cannot be cancelled."
+            )
+
+        transfer.status = TransferStatus.CANCELLED
+        transfer.cancel_reason = reason
+        await self._repo._session.flush()
+        await self._repo._session.refresh(transfer, attribute_names=["updated_at"])
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.TRANSFER_CANCELLED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"transfer_id": str(transfer_id), "reason": reason},
+            )
+        return transfer
+
+    async def find_available_quarantine_kennel(self) -> Kennel | None:
+        """First Open + Clean Quarantine kennel at any active facility — used
+        by the rescue ADMITTED flow to auto-reserve shelter capacity."""
+        return await self._repo.find_available_kennel_by_section_type(SectionType.QUARANTINE)
 
     async def get_transfer(self, transfer_id: uuid.UUID) -> FacilityTransfer:
         transfer = await self._repo.get_transfer(transfer_id)

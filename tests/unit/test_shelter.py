@@ -44,6 +44,10 @@ class TestShelterService:
     def mock_repo(self):
         repo = AsyncMock(spec=ShelterRepository)
         repo._session = AsyncMock()
+        # Default to "plenty of room" so the over-capacity gate only engages
+        # in tests that explicitly configure it.
+        repo.count_occupied_in_section.return_value = 0
+        repo.get_active_transfer_for_kennel.return_value = None
         return repo
 
     @pytest.fixture
@@ -433,7 +437,7 @@ class TestShelterService:
 
         # Sender confirms alone: not enough to complete the transfer.
         result = await service.confirm_transfer_sender(transfer_id, actor_id=sender_id)
-        assert result.status == TransferStatus.PENDING
+        assert result.status == TransferStatus.IN_TRANSIT
         assert result.sender_confirmed_at is not None
         assert dog.shelter_facility_id != to_fac_id
 

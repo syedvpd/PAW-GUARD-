@@ -20,9 +20,11 @@ from pawguard.modules.shelter.models import (
     FacilityType,
     Kennel,
     KennelCleaningLog,
+    KennelSanitationState,
     SectionType,
     ShelterFacility,
     ShelterSection,
+    TransferStatus,
 )
 
 
@@ -153,6 +155,61 @@ class ShelterRepository:
             select(Kennel).where(Kennel.section_id == section_id).order_by(Kennel.identifier.asc())
         )
         return (await self._session.execute(stmt)).scalars().all()
+
+    async def count_occupied_in_section(
+        self, section_id: uuid.UUID, exclude_dog_id: uuid.UUID | None = None
+    ) -> int:
+        """Dogs currently housed in any kennel of this section — the section-level
+        occupancy the over-capacity alert (RULE) is measured against, distinct
+        from a single kennel's own capacity."""
+        filters = [Kennel.section_id == section_id, DogProfile.deleted_at.is_(None)]
+        if exclude_dog_id is not None:
+            filters.append(DogProfile.id != exclude_dog_id)
+        stmt = (
+            select(func.count(DogProfile.id))
+            .join(Kennel, Kennel.id == DogProfile.kennel_id)
+            .where(*filters)
+        )
+        return (await self._session.execute(stmt)).scalar_one()
+
+    async def find_available_kennel_by_section_type(
+        self, section_type: SectionType, facility_id: uuid.UUID | None = None
+    ) -> Kennel | None:
+        """First Open + Clean kennel in an active facility's section of this
+        type — used by the rescue ADMITTED flow to auto-reserve a Quarantine
+        kennel without staff having to pick one manually."""
+        from sqlalchemy import and_
+
+        stmt = (
+            select(Kennel)
+            .join(ShelterSection, ShelterSection.id == Kennel.section_id)
+            .join(ShelterFacility, ShelterFacility.id == ShelterSection.facility_id)
+            .outerjoin(
+                DogProfile,
+                and_(DogProfile.kennel_id == Kennel.id, DogProfile.deleted_at.is_(None)),
+            )
+            .where(
+                ShelterSection.section_type == section_type,
+                Kennel.sanitation_state == KennelSanitationState.CLEAN,
+                DogProfile.id.is_(None),
+                ShelterFacility.status == FacilityStatus.ACTIVE,
+                ShelterFacility.deleted_at.is_(None),
+            )
+        )
+        if facility_id is not None:
+            stmt = stmt.where(ShelterFacility.id == facility_id)
+        stmt = stmt.order_by(Kennel.identifier.asc()).limit(1)
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def get_active_transfer_for_kennel(self, kennel_id: uuid.UUID) -> FacilityTransfer | None:
+        """The transfer (if any) currently soft-locking this kennel as a
+        destination — a second transfer targeting the same kennel must be
+        rejected, not silently overwrite the reservation."""
+        stmt = select(FacilityTransfer).where(
+            FacilityTransfer.destination_kennel_id == kennel_id,
+            FacilityTransfer.status.in_([TransferStatus.PENDING, TransferStatus.IN_TRANSIT]),
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def create_transfer(self, transfer: FacilityTransfer) -> FacilityTransfer:
         self._session.add(transfer)

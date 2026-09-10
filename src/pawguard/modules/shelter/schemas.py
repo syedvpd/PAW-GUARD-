@@ -119,6 +119,16 @@ class FacilityTransferCreate(BaseModel):
     from_facility_id: uuid.UUID
     to_facility_id: uuid.UUID
     notes: str | None = Field(None, examples=["Transferring for specialized surgical care."])
+    destination_kennel_id: uuid.UUID | None = Field(
+        None,
+        description="Must be an Open + Clean kennel belonging to to_facility_id. "
+        "Soft-locked against other pending transfers the instant this is created.",
+    )
+    vehicle_id: uuid.UUID | None = Field(None, description="Optional Fleet vehicle for the handoff.")
+
+
+class FacilityTransferCancel(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=1000, examples=["Dog too unwell to travel."])
 
 
 class FacilityTransferResponse(BaseModel):
@@ -129,6 +139,9 @@ class FacilityTransferResponse(BaseModel):
     transferred_by: uuid.UUID
     status: TransferStatus
     notes: str | None
+    cancel_reason: str | None
+    destination_kennel_id: uuid.UUID | None
+    vehicle_id: uuid.UUID | None
     sender_confirmed_at: datetime | None
     sender_confirmed_by: uuid.UUID | None
     receiver_confirmed_at: datetime | None
