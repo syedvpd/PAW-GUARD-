@@ -336,49 +336,54 @@ class TestDeleteMyAccount:
 
 class TestPublicWebsiteAuthRestrictions:
     @pytest.mark.asyncio
-    async def test_staff_roles_blocked_on_public_web_origin(self) -> None:
-        from pawguard.modules.auth.exceptions import StaffLoginRestrictedOnPublicWebError
-        from pawguard.modules.auth.models import Role
+    async def test_all_roles_allowed_on_public_web_origin(self) -> None:
+        from pawguard.modules.auth.models import Role, UserSession
         from pawguard.modules.auth.schemas import DeviceContext
 
         service = _make_service()
         user = _make_user()
+        user.mfa_enabled = False
         role = Role(id=uuid.uuid4(), name="veterinarian", description="Veterinarian")
         user.roles = [role]
 
         service._users.get_by_email.return_value = user
+        session = UserSession(id=uuid.uuid4(), user_id=user.id, is_active=True)
+        service._sessions.create.return_value = session
+        service._refresh_tokens.create.return_value = AsyncMock()
 
-        with pytest.raises(StaffLoginRestrictedOnPublicWebError) as exc_info:
-            await service.login(
-                email=user.email,
-                password="CurrentP@ss99",
-                device=DeviceContext(device_id="dev-1"),
-                ctx=_ctx(),
-                origin="https://pawguard-public-web.vercel.app",
-            )
-        assert "cannot sign in on the public website" in str(exc_info.value)
+        tokens = await service.login(
+            email=user.email,
+            password="CurrentP@ss99",
+            device=DeviceContext(device_id="dev-1"),
+            ctx=_ctx(),
+            origin="https://pawguard-public-web.vercel.app",
+        )
+        assert tokens is not None
 
     @pytest.mark.asyncio
-    async def test_staff_roles_blocked_on_public_web_client_type(self) -> None:
-        from pawguard.modules.auth.exceptions import StaffLoginRestrictedOnPublicWebError
-        from pawguard.modules.auth.models import Role
+    async def test_staff_roles_allowed_on_public_web_client_type(self) -> None:
+        from pawguard.modules.auth.models import Role, UserSession
         from pawguard.modules.auth.schemas import DeviceContext
 
         service = _make_service()
         user = _make_user()
+        user.mfa_enabled = False
         role = Role(id=uuid.uuid4(), name="inventory_manager", description="Inventory Manager")
         user.roles = [role]
 
         service._users.get_by_email.return_value = user
+        session = UserSession(id=uuid.uuid4(), user_id=user.id, is_active=True)
+        service._sessions.create.return_value = session
+        service._refresh_tokens.create.return_value = AsyncMock()
 
-        with pytest.raises(StaffLoginRestrictedOnPublicWebError):
-            await service.login(
-                email=user.email,
-                password="CurrentP@ss99",
-                device=DeviceContext(device_id="dev-1"),
-                ctx=_ctx(),
-                client_type="public_web",
-            )
+        tokens = await service.login(
+            email=user.email,
+            password="CurrentP@ss99",
+            device=DeviceContext(device_id="dev-1"),
+            ctx=_ctx(),
+            client_type="public_web",
+        )
+        assert tokens is not None
 
     @pytest.mark.asyncio
     async def test_public_role_allowed_on_public_web(self) -> None:
@@ -429,25 +434,3 @@ class TestPublicWebsiteAuthRestrictions:
             origin="https://pawguard-admin.vercel.app",
         )
         assert tokens is not None
-
-    @pytest.mark.asyncio
-    async def test_finance_manager_role_blocked_on_public_web_origin(self) -> None:
-        from pawguard.modules.auth.exceptions import StaffLoginRestrictedOnPublicWebError
-        from pawguard.modules.auth.models import Role
-        from pawguard.modules.auth.schemas import DeviceContext
-
-        service = _make_service()
-        user = _make_user()
-        role = Role(id=uuid.uuid4(), name="finance_manager", description="Finance Manager")
-        user.roles = [role]
-
-        service._users.get_by_email.return_value = user
-
-        with pytest.raises(StaffLoginRestrictedOnPublicWebError):
-            await service.login(
-                email=user.email,
-                password="CurrentP@ss99",
-                device=DeviceContext(device_id="dev-1"),
-                ctx=_ctx(),
-                origin="https://pawguard-public-web.vercel.app",
-            )
