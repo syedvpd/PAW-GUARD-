@@ -6,6 +6,7 @@ from pawguard.core.config import get_settings
 from pawguard.core.payments.base import (
     PaymentGateway,
     PaymentGatewayError,
+    PaymentLink,
     PaymentOrder,
     PaymentVerificationResult,
     WebhookEvent,
@@ -14,6 +15,7 @@ from pawguard.core.payments.base import (
 __all__ = [
     "PaymentGateway",
     "PaymentGatewayError",
+    "PaymentLink",
     "PaymentOrder",
     "PaymentVerificationResult",
     "WebhookEvent",

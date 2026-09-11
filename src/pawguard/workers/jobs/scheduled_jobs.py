@@ -720,3 +720,18 @@ async def send_volunteer_shift_reminders(ctx: dict[str, object]) -> int:
             await session.commit()
 
     return sent
+
+
+async def sweep_overdue_invoices(ctx: dict[str, object]) -> int:
+    """Sweep SENT invoices whose due_date has passed into OVERDUE status."""
+    from pawguard.modules.invoice.repository import InvoiceRepository
+    from pawguard.modules.invoice.service import InvoiceService
+
+    async with AsyncSessionLocal() as session:
+        repo = InvoiceRepository(session)
+        service = InvoiceService(repo)
+        count = await service.sweep_overdue_invoices()
+        await session.commit()
+
+    logger.info("Overdue invoices sweep completed; %d invoices updated.", count)
+    return count

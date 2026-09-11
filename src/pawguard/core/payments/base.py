@@ -8,6 +8,7 @@ so swapping providers means writing one new adapter and flipping a config value
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from datetime import datetime
 
 
 @dataclass(frozen=True)
@@ -20,6 +21,19 @@ class PaymentOrder:
     currency: str
     checkout_key: str
     receipt: str
+
+
+@dataclass(frozen=True)
+class PaymentLink:
+    """A provider-created hosted payment link sent to external parties without app-side checkout."""
+
+    provider: str
+    link_id: str
+    short_url: str
+    amount: float
+    currency: str
+    status: str
+    expires_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -37,6 +51,7 @@ class WebhookEvent:
     payment_id: str | None
     is_success: bool
     raw_payload: dict[str, object]
+    payment_link_id: str | None = None
 
 
 class PaymentGateway(ABC):
@@ -49,6 +64,26 @@ class PaymentGateway(ABC):
         self, *, amount: float, currency: str, receipt: str, notes: dict[str, str] | None = None
     ) -> PaymentOrder:
         """Create a payment intent/order with the provider ahead of client-side checkout."""
+
+    @abstractmethod
+    async def create_payment_link(
+        self,
+        *,
+        amount: float,
+        currency: str,
+        description: str,
+        reference_id: str,
+        recipient_name: str | None = None,
+        recipient_email: str | None = None,
+        recipient_phone: str | None = None,
+        expires_at: datetime | None = None,
+        notes: dict[str, str] | None = None,
+    ) -> PaymentLink:
+        """Create a hosted payment link for a party without app-side checkout."""
+
+    @abstractmethod
+    async def cancel_payment_link(self, *, link_id: str) -> None:
+        """Void an unpaid link (e.g. invoice cancelled before payment)."""
 
     @abstractmethod
     def verify_payment_signature(

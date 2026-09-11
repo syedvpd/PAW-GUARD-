@@ -113,7 +113,11 @@ async def create_facility(
 @router.get(
     "/facilities",
     response_model=PaginatedResponse[ShelterFacilityResponse],
-    dependencies=[Depends(require_permission("shelter:read"))],
+    dependencies=[
+        Depends(
+            require_permission("shelter:read", "volunteer:read", "volunteer:manage", "rescue:read")
+        )
+    ],
 )
 @cache_response(ttl_seconds=60, namespace="shelter")
 async def list_facilities(

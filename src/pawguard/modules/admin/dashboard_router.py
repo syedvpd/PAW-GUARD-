@@ -98,7 +98,7 @@ async def get_recent_activity(
 @admin_dashboard_router.get(
     "/inventory-alerts",
     response_model=ApiResponse[list[dict[str, Any]]],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_permission("system:admin", "inventory:read"))],
 )
 @cache_response(ttl_seconds=300, namespace="admin_dashboard")
 async def get_inventory_alerts(
@@ -112,7 +112,7 @@ async def get_inventory_alerts(
 @admin_dashboard_router.get(
     "/donation-summary",
     response_model=ApiResponse[dict[str, Any]],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_permission("system:admin", "donations:read", "finance:read"))],
 )
 @cache_response(ttl_seconds=300, namespace="admin_dashboard")
 async def get_donation_summary(
@@ -126,7 +126,7 @@ async def get_donation_summary(
 @admin_dashboard_router.get(
     "/rescue-stats",
     response_model=ApiResponse[dict[str, Any]],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_permission("system:admin", "rescue:read"))],
 )
 @cache_response(ttl_seconds=300, namespace="admin_dashboard")
 async def get_rescue_stats(
@@ -140,7 +140,7 @@ async def get_rescue_stats(
 @admin_dashboard_router.get(
     "/medical-stats",
     response_model=ApiResponse[dict[str, Any]],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_permission("system:admin", "medical:read"))],
 )
 @cache_response(ttl_seconds=300, namespace="admin_dashboard")
 async def get_medical_stats(
@@ -154,7 +154,7 @@ async def get_medical_stats(
 @admin_dashboard_router.get(
     "/adoption-stats",
     response_model=ApiResponse[dict[str, Any]],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_permission("system:admin", "adoption:read"))],
 )
 @cache_response(ttl_seconds=300, namespace="admin_dashboard")
 async def get_adoption_stats(
@@ -168,7 +168,9 @@ async def get_adoption_stats(
 @admin_dashboard_router.get(
     "/volunteer-stats",
     response_model=ApiResponse[dict[str, Any]],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[
+        Depends(require_permission("system:admin", "volunteer:read", "volunteer:manage"))
+    ],
 )
 @cache_response(ttl_seconds=300, namespace="admin_dashboard")
 async def get_volunteer_stats(
@@ -182,7 +184,7 @@ async def get_volunteer_stats(
 @admin_dashboard_router.get(
     "/notification-summary",
     response_model=ApiResponse[dict[str, Any]],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_permission("system:admin", "notification:read"))],
 )
 @cache_response(ttl_seconds=300, namespace="admin_dashboard")
 async def get_notification_summary(
@@ -196,7 +198,7 @@ async def get_notification_summary(
 @admin_dashboard_router.get(
     "/shelter-stats",
     response_model=ApiResponse[dict[str, Any]],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_permission("system:admin", "shelter:read"))],
 )
 @cache_response(ttl_seconds=300, namespace="admin_dashboard")
 async def get_shelter_stats(
@@ -210,7 +212,7 @@ async def get_shelter_stats(
 @admin_dashboard_router.get(
     "/foster-stats",
     response_model=ApiResponse[dict[str, Any]],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_permission("system:admin", "foster:read"))],
 )
 @cache_response(ttl_seconds=300, namespace="admin_dashboard")
 async def get_foster_stats(
@@ -224,7 +226,7 @@ async def get_foster_stats(
 @admin_dashboard_router.get(
     "/lost-found-stats",
     response_model=ApiResponse[dict[str, Any]],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_permission("system:admin", "lost_found:read"))],
 )
 @cache_response(ttl_seconds=300, namespace="admin_dashboard")
 async def get_lost_found_stats(
@@ -238,7 +240,7 @@ async def get_lost_found_stats(
 @admin_dashboard_router.get(
     "/grievance-stats",
     response_model=ApiResponse[dict[str, Any]],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_permission("system:admin", "grievance:read"))],
 )
 @cache_response(ttl_seconds=300, namespace="admin_dashboard")
 async def get_grievance_stats(

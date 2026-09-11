@@ -16,6 +16,7 @@ from pawguard.modules.fleet.router import router as fleet_router
 from pawguard.modules.foster.router import router as foster_router
 from pawguard.modules.grievance.router import router as grievance_router
 from pawguard.modules.inventory.router import router as inventory_router
+from pawguard.modules.invoice.router import router as invoice_router
 from pawguard.modules.lost_found.router import router as lost_found_router
 from pawguard.modules.medical.router import router as medical_router
 from pawguard.modules.notifications.admin_router import admin_router as admin_notifications_router
@@ -50,6 +51,8 @@ api_v1_router.include_router(volunteer_router)
 api_v1_router.include_router(foster_router, prefix="/fosters")
 api_v1_router.include_router(foster_router, prefix="/foster")
 api_v1_router.include_router(donation_router)
+api_v1_router.include_router(invoice_router)
+api_v1_router.include_router(invoice_router, prefix="/finance")
 api_v1_router.include_router(lost_found_router)
 api_v1_router.include_router(inventory_router)
 api_v1_router.include_router(shelter_router)
