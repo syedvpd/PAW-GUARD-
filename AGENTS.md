@@ -129,6 +129,10 @@ Every generated change or commit SHALL pass all linting, formatting, type checki
 - `uv run mypy src/` (Type check)
 - `uv run pytest tests/unit/` (Unit tests)
 
+RULE-009
+
+For every reported task or bug, the AI SHALL verify whether the issue is a backend issue or a frontend issue. If the backend permits invalid states or bypasses enforcement (e.g. unverified sign-in), the backend MUST strictly enforce it. If an issue is purely client-side UI, the AI SHALL explicitly document frontend vs backend responsibilities.
+
 ---
 
 # ARCHITECTURE CONTRACT

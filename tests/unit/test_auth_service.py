@@ -34,6 +34,7 @@ def _make_user() -> User:
         hashed_password=hash_password("CurrentP@ss99"),
         mfa_enabled=True,
         is_active=True,
+        is_verified=True,
     )
 
 
@@ -434,3 +435,47 @@ class TestPublicWebsiteAuthRestrictions:
             origin="https://pawguard-admin.vercel.app",
         )
         assert tokens is not None
+
+
+class TestEmailVerificationEnforcement:
+    @pytest.mark.asyncio
+    async def test_unverified_user_login_blocked(self) -> None:
+        from pawguard.modules.auth.exceptions import EmailNotVerifiedError
+        from pawguard.modules.auth.schemas import DeviceContext
+
+        service = _make_service()
+        user = _make_user()
+        user.is_verified = False
+        service._users.get_by_email.return_value = user
+
+        with pytest.raises(EmailNotVerifiedError, match="verify your email address"):
+            await service.login(
+                email=user.email,
+                password="CurrentP@ss99",
+                device=DeviceContext(device_id="dev-1"),
+                ctx=_ctx(),
+            )
+
+    @pytest.mark.asyncio
+    async def test_request_email_verification_by_email_generates_token_for_unverified(
+        self,
+    ) -> None:
+        service = _make_service()
+        user = _make_user()
+        user.is_verified = False
+        service._users.get_by_email.return_value = user
+
+        raw_token = await service.request_email_verification_by_email(email=user.email, ctx=_ctx())
+        assert raw_token is not None
+        service._email_verifications.create.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_request_email_verification_by_email_returns_none_for_verified(self) -> None:
+        service = _make_service()
+        user = _make_user()
+        user.is_verified = True
+        service._users.get_by_email.return_value = user
+
+        raw_token = await service.request_email_verification_by_email(email=user.email, ctx=_ctx())
+        assert raw_token is None
+        service._email_verifications.create.assert_not_awaited()

@@ -36,6 +36,7 @@ from pawguard.modules.auth.exceptions import (
     AccountInactiveError,
     AccountLockedError,
     EmailAlreadyRegisteredError,
+    EmailNotVerifiedError,
     InvalidCredentialsError,
     InvalidMFACodeError,
     InvalidRefreshTokenError,
@@ -222,6 +223,11 @@ class AuthService:
 
         if not user.is_active:
             raise AccountInactiveError("This account has been deactivated.")
+
+        if self._settings.require_email_verification and not user.is_verified:
+            raise EmailNotVerifiedError(
+                "Please verify your email address before signing in. Check your inbox for a verification email or click resend."
+            )
 
         user.failed_login_count = 0
         user.locked_until = None
@@ -548,6 +554,15 @@ class AuthService:
             user_agent=ctx.user_agent,
         )
         return raw_token
+
+    async def request_email_verification_by_email(
+        self, *, email: str, ctx: RequestContext
+    ) -> str | None:
+        """Generate email verification token by email address for unauthenticated resend requests."""
+        user = await self._users.get_by_email(email.lower())
+        if user is None or user.is_verified or not user.is_active:
+            return None
+        return await self.request_email_verification(user=user, ctx=ctx)
 
     async def confirm_email_verification(self, *, raw_token: str, ctx: RequestContext) -> None:
         token_hash = hash_opaque_token(raw_token)

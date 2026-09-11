@@ -38,6 +38,7 @@ def _make_service(**overrides: object) -> AuthService:
 
 def _admin_user(**kw: object) -> User:
     mfa_enabled = kw.pop("mfa_enabled", False)
+    is_verified = kw.pop("is_verified", True)
     role = Role(name="Super Admin", description="System administrator", is_system=True)
     role.permissions = [Permission(code="system:admin")]
     user = User(
@@ -45,6 +46,7 @@ def _admin_user(**kw: object) -> User:
         hashed_password="x",
         full_name="Admin User",
         is_active=True,
+        is_verified=is_verified,
         mfa_enabled=mfa_enabled,
         **kw,
     )
@@ -55,12 +57,14 @@ def _admin_user(**kw: object) -> User:
 
 def _regular_user(**kw: object) -> User:
     mfa_enabled = kw.pop("mfa_enabled", False)
+    is_verified = kw.pop("is_verified", True)
     hashed_password = kw.pop("hashed_password", "x")
     user = User(
         email="user@example.com",
         hashed_password=hashed_password,
         full_name="Regular User",
         is_active=True,
+        is_verified=is_verified,
         mfa_enabled=mfa_enabled,
         **kw,
     )

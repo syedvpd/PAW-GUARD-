@@ -53,6 +53,7 @@ from pawguard.modules.auth.schemas import (
     RefreshRequest,
     RefreshResponse,
     RegisterRequest,
+    ResendEmailVerificationRequest,
     SessionInfo,
     UserProfile,
     UserProfileUpdate,
@@ -609,6 +610,41 @@ async def request_email_verification(
     except Exception as exc:
         logger.warning("email_verification_job_enqueue_failed", error=str(exc))
     return ApiResponse(message="Verification email sent.")
+
+
+@router.post(
+    "/email/verify/resend",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(email_verify_request_rate_limiter)],
+    summary="Unauthenticated endpoint to resend email verification link",
+)
+@router.post(
+    "/resend-verification",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(email_verify_request_rate_limiter)],
+    summary="Unauthenticated endpoint to resend email verification link",
+)
+async def resend_email_verification(
+    payload: ResendEmailVerificationRequest,
+    request: Request,
+    client_type: str | None = Header(default=None, alias=CLIENT_TYPE_HEADER),
+    auth_service: AuthService = Depends(get_auth_service),
+    db: AsyncSession = Depends(get_db),
+) -> ApiResponse[None]:
+    raw_token = await auth_service.request_email_verification_by_email(
+        email=payload.email, ctx=_build_request_context(request)
+    )
+    if raw_token is not None:
+        verify_url = _build_verify_url(raw_token, client_type)
+        try:
+            await OutboxService.enqueue_job(
+                db, "send_email_verification_email_job", to=payload.email, verify_url=verify_url
+            )
+        except Exception as exc:
+            logger.warning("email_verification_job_enqueue_failed", error=str(exc))
+    return ApiResponse(
+        message="If an unverified account exists for that email, a verification link has been sent."
+    )
 
 
 @router.post("/mfa/enroll", response_model=ApiResponse[MFAEnrollResponse])

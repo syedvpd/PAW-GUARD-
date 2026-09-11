@@ -180,6 +180,10 @@ class EmailVerificationConfirmRequest(BaseModel):
     token: str = Field(..., examples=["a1b2c3d4e5f6-verify-token"])
 
 
+class ResendEmailVerificationRequest(BaseModel):
+    email: EmailStr = Field(..., examples=["jane.doe@example.com"])
+
+
 class MFAEnrollResponse(BaseModel):
     secret: str
     provisioning_uri: str

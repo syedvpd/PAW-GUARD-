@@ -118,6 +118,10 @@ class Settings(BaseSettings):
         default=False,
         description="Bypass MFA enforcement in dev/test environments",
     )
+    require_email_verification: bool = Field(
+        default=True,
+        description="Enforce email verification before user sign in.",
+    )
 
     # --- OAuth / Social login ---
     # Audience (client id) of the Google / Apple application this backend
