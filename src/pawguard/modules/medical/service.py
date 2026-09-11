@@ -757,12 +757,15 @@ class MedicalService:
 
     async def get_dog_reminders(self, dog_id: uuid.UUID) -> DogMedicalRemindersResponse:
         """Aggregate automated vaccination, medication, and preventative care reminders for a dog."""
-        from datetime import date
+        from datetime import date, timedelta
 
         dog = await self._dog_repo.get_by_id(dog_id)
-        dog_name = dog.name if dog else "Dog"
+        if dog is None:
+            raise NotFoundError("Dog profile not found.")
 
+        dog_name = dog.name if dog else "Dog"
         today = date.today()
+
         vaccinations: list[DogMedicalReminderItem] = []
         medications: list[DogMedicalReminderItem] = []
         preventative_care: list[DogMedicalReminderItem] = []
@@ -779,6 +782,11 @@ class MedicalService:
                 else admin_raw
             )
             lot = getattr(v, "lot_number", getattr(v, "batch_number", "N/A"))
+
+            # Fallback due date if missing
+            if due is None and admin_date is not None:
+                due = admin_date + timedelta(days=365)
+
             if due is not None:
                 days = (due - today).days
                 if days < 0:
@@ -787,17 +795,21 @@ class MedicalService:
                     status = "due_today"
                 else:
                     status = "upcoming"
-                vaccinations.append(
-                    DogMedicalReminderItem(
-                        id=f"vax-{v.id}",
-                        kind="vaccination",
-                        title=f"{v.vaccine_name} Booster",
-                        due_date=due,
-                        status=status,
-                        details=(f"Last administered on {admin_date} (Lot/Batch: {lot or 'N/A'})"),
-                        days_until_due=days,
-                    )
+            else:
+                days = None
+                status = "active"
+
+            vaccinations.append(
+                DogMedicalReminderItem(
+                    id=f"vax-{v.id}",
+                    kind="vaccination",
+                    title=f"{v.vaccine_name} Booster",
+                    due_date=due,
+                    status=status,
+                    details=f"Last administered on {admin_date or 'N/A'} (Lot/Batch: {lot or 'N/A'})",
+                    days_until_due=days,
                 )
+            )
 
         # 2. Fetch active prescriptions
         prescriptions = await self._repo.get_prescriptions_by_dog(dog_id)
@@ -809,15 +821,21 @@ class MedicalService:
                     if (end_raw is not None and hasattr(end_raw, "date"))
                     else end_raw
                 )
+                if end_date is not None and (end_date - today).days < 0:
+                    status = "overdue"
+                else:
+                    status = "active"
+                days = (end_date - today).days if end_date else None
+
                 medications.append(
                     DogMedicalReminderItem(
                         id=f"rx-{p.id}",
                         kind="medication",
                         title=f"{p.drug_name} {p.dosage}",
                         due_date=end_date,
-                        status="active",
+                        status=status,
                         details=f"Route: {getattr(p, 'route', 'N/A')}, Frequency: {getattr(p, 'frequency', 'Daily')}",
-                        days_until_due=(end_date - today).days if end_date else None,
+                        days_until_due=days,
                     )
                 )
 
@@ -827,16 +845,37 @@ class MedicalService:
             t_type = (t.treatment_type or "").lower()
             t_raw = getattr(t, "treatment_date", None)
             t_date = t_raw.date() if (t_raw is not None and hasattr(t_raw, "date")) else t_raw
+
             if any(term in t_type for term in ("deworm", "flea", "tick", "prevent", "parasite")):
+                if "flea" in t_type or "tick" in t_type:
+                    interval = 30
+                elif "deworm" in t_type or "parasite" in t_type:
+                    interval = 90
+                else:
+                    interval = 60
+
+                due = t_date + timedelta(days=interval) if t_date else None
+                if due is not None:
+                    days = (due - today).days
+                    if days < 0:
+                        status = "overdue"
+                    elif days == 0:
+                        status = "due_today"
+                    else:
+                        status = "upcoming"
+                else:
+                    days = None
+                    status = "active"
+
                 preventative_care.append(
                     DogMedicalReminderItem(
                         id=f"prev-{t.id}",
                         kind="preventative_care",
                         title=t.treatment_type.title(),
-                        due_date=t_date,
-                        status="active",
+                        due_date=due or t_date,
+                        status=status,
                         details=t.description,
-                        days_until_due=None,
+                        days_until_due=days,
                     )
                 )
 

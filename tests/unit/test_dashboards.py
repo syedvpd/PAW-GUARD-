@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.modules.adoption.models import AdoptionApplication
+from pawguard.modules.auth.models import User
 from pawguard.modules.dashboards.router import stream_rescue_dashboard
 from pawguard.modules.dashboards.service import (
     adoption_dashboard,
@@ -24,7 +25,6 @@ from pawguard.modules.dashboards.service import (
     staff_dashboard,
     volunteer_dashboard,
 )
-from pawguard.modules.auth.models import User
 from pawguard.modules.dog.models import DogProfile
 
 

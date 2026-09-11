@@ -221,9 +221,7 @@ class VolunteerService:
         # 2. Check profile and application status for target_user_id
         existing_profile = await self._repo.get_profile_by_user_id(target_user_id)
         if existing_profile is not None and existing_profile.status in ACTIVE_PROFILE_STATUSES:
-            raise ConflictError(
-                "You have already applied or registered as a volunteer."
-            )
+            raise ConflictError("You have already applied or registered as a volunteer.")
 
         existing_app = await self._repo.get_application_by_user_id(target_user_id)
         if existing_app is not None:
@@ -384,9 +382,7 @@ class VolunteerService:
             existing_profile = await self._repo.get_profile_by_user_id(applicant_user.id)
 
             if existing_profile is not None and existing_profile.status in ACTIVE_PROFILE_STATUSES:
-                raise ConflictError(
-                    "You have already applied or registered as a volunteer."
-                )
+                raise ConflictError("You have already applied or registered as a volunteer.")
 
             if existing_app is not None:
                 if existing_app.status in ACTIVE_APP_STATUSES:

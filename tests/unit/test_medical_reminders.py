@@ -92,3 +92,62 @@ async def test_get_dog_reminders_aggregates_upcoming_and_overdue(
     assert res.upcoming_count == 1
     assert len(res.vaccinations) == 2
     assert len(res.medications) == 1
+
+
+@pytest.mark.asyncio
+async def test_get_dog_reminders_dog_not_found(medical_service, mock_dog_repo):
+    from pawguard.core.exceptions import NotFoundError
+
+    mock_dog_repo.get_by_id.return_value = None
+    with pytest.raises(NotFoundError, match="Dog profile not found"):
+        await medical_service.get_dog_reminders(uuid.uuid4())
+
+
+@pytest.mark.asyncio
+async def test_get_dog_reminders_preventative_care_and_vaccine_fallback(
+    medical_service, mock_repo, mock_dog_repo
+):
+    from pawguard.modules.medical.models import MedicalTreatment
+
+    dog_id = uuid.uuid4()
+    dog = DogProfile(
+        id=dog_id,
+        registration_number="DOG-REM-02",
+        name="Luna",
+        breed="Beagle",
+        status=DogStatus.SHELTER,
+        is_adoptable=True,
+    )
+    mock_dog_repo.get_by_id.return_value = dog
+
+    today = datetime.now(UTC)
+    # Vaccination without explicit next_due_at -> auto fallback to administered_at + 365 days
+    vax = VaccinationRecord(
+        id=uuid.uuid4(),
+        dog_id=dog_id,
+        administered_by=uuid.uuid4(),
+        vaccine_name="Bordetella",
+        administered_at=today - timedelta(days=400),
+        next_due_at=None,
+        lot_number="LOT-003",
+    )
+    mock_repo.get_vaccinations_by_dog.return_value = [vax]
+    mock_repo.get_prescriptions_by_dog.return_value = []
+
+    # Preventative care treatment: Flea & Tick given 40 days ago (30-day interval -> overdue)
+    t1 = MedicalTreatment(
+        id=uuid.uuid4(),
+        dog_id=dog_id,
+        vet_id=uuid.uuid4(),
+        treatment_date=today - timedelta(days=40),
+        treatment_type="Flea & Tick Prevention",
+        description="Applied monthly topical treatment.",
+    )
+    mock_repo.get_treatments_by_dog.return_value = [t1]
+
+    res = await medical_service.get_dog_reminders(dog_id)
+    assert res.total_reminders == 2
+    assert res.overdue_count == 2  # Both vax (>365d) and flea/tick (>30d) are overdue
+    assert len(res.preventative_care) == 1
+    assert res.preventative_care[0].kind == "preventative_care"
+    assert res.preventative_care[0].status == "overdue"
