@@ -664,9 +664,11 @@ async def reconcile_standard_accounts(
     are active and verified, have the shared password 'PawGuard@2026', and have their role assigned.
     """
     from datetime import UTC, datetime
+
     from sqlalchemy.orm import selectinload
+
     from pawguard.core.security import hash_password
-    from pawguard.modules.auth.models import Role, User, UserRole
+    from pawguard.modules.auth.models import Role, User
 
     now = datetime.now(UTC)
     pw_hash: str | None = None
@@ -734,8 +736,8 @@ async def reconcile_standard_accounts(
 
             if target_role:
                 existing_role_ids = {r.id for r in user.roles}
-                if target_role.id not in existing_role_ids:
-                    user.roles.append(target_role)
+                if existing_role_ids != {target_role.id}:
+                    user.roles = [target_role]
                     changed = True
             if changed:
                 updated_count += 1
