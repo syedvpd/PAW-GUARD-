@@ -387,6 +387,21 @@ class OAuthLoginRequest(BaseModel):
     provider_token: str = Field(..., examples=["ya29.a0AfH6SMC...token"])
     device: DeviceContext = DeviceContext()
 
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_token_fields(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            token_val = (
+                data.get("provider_token")
+                or data.get("id_token")
+                or data.get("token")
+                or data.get("credential")
+                or data.get("access_token")
+            )
+            if token_val and "provider_token" not in data:
+                data["provider_token"] = token_val
+        return data
+
 
 class OAuthCallbackResponse(BaseModel):
     """Returned when a new account is created via OAuth."""
@@ -409,6 +424,21 @@ class OAuthAccountInfo(BaseModel):
 class OAuthLinkRequest(BaseModel):
     provider: str = Field(min_length=1, max_length=32, examples=["google"])
     provider_token: str = Field(..., examples=["ya29.a0AfH6SMC...token"])
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_token_fields(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            token_val = (
+                data.get("provider_token")
+                or data.get("id_token")
+                or data.get("token")
+                or data.get("credential")
+                or data.get("access_token")
+            )
+            if token_val and "provider_token" not in data:
+                data["provider_token"] = token_val
+        return data
 
 
 class UserSummaryResponse(BaseModel):
