@@ -1004,22 +1004,38 @@ async def convert_to_adopt(
 @router.post(
     "/{profile_id}/background-check/initiate",
     response_model=ApiResponse[FosterProfileResponse],
-    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+    dependencies=[
+        Depends(
+            require_permission("foster:approve", "foster:update", "foster:manage", "system:admin")
+        )
+    ],
 )
 @router.put(
     "/{profile_id}/background-check/initiate",
     response_model=ApiResponse[FosterProfileResponse],
-    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+    dependencies=[
+        Depends(
+            require_permission("foster:approve", "foster:update", "foster:manage", "system:admin")
+        )
+    ],
 )
 @router.post(
     "/admin/fosters/{profile_id}/background-check/initiate",
     response_model=ApiResponse[FosterProfileResponse],
-    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+    dependencies=[
+        Depends(
+            require_permission("foster:approve", "foster:update", "foster:manage", "system:admin")
+        )
+    ],
 )
 @router.put(
     "/admin/fosters/{profile_id}/background-check/initiate",
     response_model=ApiResponse[FosterProfileResponse],
-    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+    dependencies=[
+        Depends(
+            require_permission("foster:approve", "foster:update", "foster:manage", "system:admin")
+        )
+    ],
 )
 async def initiate_background_check(
     profile_id: uuid.UUID,
@@ -1044,42 +1060,74 @@ async def initiate_background_check(
 @router.post(
     "/{profile_id}/background-check/outcome",
     response_model=ApiResponse[FosterProfileResponse],
-    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+    dependencies=[
+        Depends(
+            require_permission("foster:approve", "foster:update", "foster:manage", "system:admin")
+        )
+    ],
 )
 @router.put(
     "/{profile_id}/background-check/outcome",
     response_model=ApiResponse[FosterProfileResponse],
-    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+    dependencies=[
+        Depends(
+            require_permission("foster:approve", "foster:update", "foster:manage", "system:admin")
+        )
+    ],
 )
 @router.post(
     "/{profile_id}/background-check",
     response_model=ApiResponse[FosterProfileResponse],
-    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+    dependencies=[
+        Depends(
+            require_permission("foster:approve", "foster:update", "foster:manage", "system:admin")
+        )
+    ],
 )
 @router.put(
     "/{profile_id}/background-check",
     response_model=ApiResponse[FosterProfileResponse],
-    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+    dependencies=[
+        Depends(
+            require_permission("foster:approve", "foster:update", "foster:manage", "system:admin")
+        )
+    ],
 )
 @router.post(
     "/admin/fosters/{profile_id}/background-check/outcome",
     response_model=ApiResponse[FosterProfileResponse],
-    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+    dependencies=[
+        Depends(
+            require_permission("foster:approve", "foster:update", "foster:manage", "system:admin")
+        )
+    ],
 )
 @router.put(
     "/admin/fosters/{profile_id}/background-check/outcome",
     response_model=ApiResponse[FosterProfileResponse],
-    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+    dependencies=[
+        Depends(
+            require_permission("foster:approve", "foster:update", "foster:manage", "system:admin")
+        )
+    ],
 )
 @router.post(
     "/admin/fosters/{profile_id}/background-check",
     response_model=ApiResponse[FosterProfileResponse],
-    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+    dependencies=[
+        Depends(
+            require_permission("foster:approve", "foster:update", "foster:manage", "system:admin")
+        )
+    ],
 )
 @router.put(
     "/admin/fosters/{profile_id}/background-check",
     response_model=ApiResponse[FosterProfileResponse],
-    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+    dependencies=[
+        Depends(
+            require_permission("foster:approve", "foster:update", "foster:manage", "system:admin")
+        )
+    ],
 )
 async def record_background_check_outcome(
     profile_id: uuid.UUID,
@@ -1104,32 +1152,56 @@ async def record_background_check_outcome(
 @router.post(
     "/{profile_id}/home-inspection/schedule",
     response_model=ApiResponse[FosterProfileResponse],
-    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+    dependencies=[
+        Depends(
+            require_permission("foster:approve", "foster:update", "foster:manage", "system:admin")
+        )
+    ],
 )
 @router.put(
     "/{profile_id}/home-inspection/schedule",
     response_model=ApiResponse[FosterProfileResponse],
-    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+    dependencies=[
+        Depends(
+            require_permission("foster:approve", "foster:update", "foster:manage", "system:admin")
+        )
+    ],
 )
 @router.post(
     "/{profile_id}/home-inspection",
     response_model=ApiResponse[FosterProfileResponse],
-    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+    dependencies=[
+        Depends(
+            require_permission("foster:approve", "foster:update", "foster:manage", "system:admin")
+        )
+    ],
 )
 @router.put(
     "/{profile_id}/home-inspection",
     response_model=ApiResponse[FosterProfileResponse],
-    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+    dependencies=[
+        Depends(
+            require_permission("foster:approve", "foster:update", "foster:manage", "system:admin")
+        )
+    ],
 )
 @router.post(
     "/admin/fosters/{profile_id}/home-inspection/schedule",
     response_model=ApiResponse[FosterProfileResponse],
-    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+    dependencies=[
+        Depends(
+            require_permission("foster:approve", "foster:update", "foster:manage", "system:admin")
+        )
+    ],
 )
 @router.put(
     "/admin/fosters/{profile_id}/home-inspection/schedule",
     response_model=ApiResponse[FosterProfileResponse],
-    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+    dependencies=[
+        Depends(
+            require_permission("foster:approve", "foster:update", "foster:manage", "system:admin")
+        )
+    ],
 )
 async def schedule_home_inspection(
     profile_id: uuid.UUID,
@@ -1154,17 +1226,29 @@ async def schedule_home_inspection(
 @router.post(
     "/{profile_id}/home-inspection/log",
     response_model=ApiResponse[FosterProfileResponse],
-    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+    dependencies=[
+        Depends(
+            require_permission("foster:approve", "foster:update", "foster:manage", "system:admin")
+        )
+    ],
 )
 @router.post(
     "/{profile_id}/home-inspection/audit",
     response_model=ApiResponse[FosterProfileResponse],
-    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+    dependencies=[
+        Depends(
+            require_permission("foster:approve", "foster:update", "foster:manage", "system:admin")
+        )
+    ],
 )
 @router.put(
     "/{profile_id}/home-inspection/log",
     response_model=ApiResponse[FosterProfileResponse],
-    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+    dependencies=[
+        Depends(
+            require_permission("foster:approve", "foster:update", "foster:manage", "system:admin")
+        )
+    ],
 )
 async def log_home_inspection(
     profile_id: uuid.UUID,
@@ -1189,22 +1273,38 @@ async def log_home_inspection(
 @router.post(
     "/{profile_id}/home-inspection/outcome",
     response_model=ApiResponse[FosterProfileResponse],
-    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+    dependencies=[
+        Depends(
+            require_permission("foster:approve", "foster:update", "foster:manage", "system:admin")
+        )
+    ],
 )
 @router.put(
     "/{profile_id}/home-inspection/outcome",
     response_model=ApiResponse[FosterProfileResponse],
-    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+    dependencies=[
+        Depends(
+            require_permission("foster:approve", "foster:update", "foster:manage", "system:admin")
+        )
+    ],
 )
 @router.post(
     "/admin/fosters/{profile_id}/home-inspection/outcome",
     response_model=ApiResponse[FosterProfileResponse],
-    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+    dependencies=[
+        Depends(
+            require_permission("foster:approve", "foster:update", "foster:manage", "system:admin")
+        )
+    ],
 )
 @router.put(
     "/admin/fosters/{profile_id}/home-inspection/outcome",
     response_model=ApiResponse[FosterProfileResponse],
-    dependencies=[Depends(require_permission("foster:approve", "foster:update"))],
+    dependencies=[
+        Depends(
+            require_permission("foster:approve", "foster:update", "foster:manage", "system:admin")
+        )
+    ],
 )
 async def record_home_inspection_outcome(
     profile_id: uuid.UUID,

@@ -241,6 +241,33 @@ class FosterBackgroundCheckInitiate(BaseModel):
     provider: str | None = Field(None, examples=["Checkr", "Internal Vetting"])
     notes: str | None = Field(None, examples=["Initiating criminal and identity verification"])
 
+    @model_validator(mode="before")
+    @classmethod
+    def flex_fields(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        d = dict(data)
+        prov = (
+            d.get("provider")
+            or d.get("verification_provider")
+            or d.get("id_type")
+            or d.get("identity_provider")
+            or d.get("service")
+            or d.get("service_name")
+        )
+        if prov:
+            d["provider"] = str(prov).strip()
+        nts = (
+            d.get("notes")
+            or d.get("dispatch_notes")
+            or d.get("reference_notes")
+            or d.get("comments")
+            or d.get("details")
+        )
+        if nts:
+            d["notes"] = str(nts).strip()
+        return d
+
 
 class FosterBackgroundCheckOutcome(BaseModel):
     outcome: str = Field("cleared", examples=["cleared", "flagged", "rejected"])

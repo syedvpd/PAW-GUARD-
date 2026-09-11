@@ -453,3 +453,65 @@ async def test_paw_fc_008_home_inspection_workflow_and_gate(service, mock_repo, 
     resp_approved = FosterProfileResponse.model_validate(profile)
     assert resp_approved.home_inspection_status == "approved"
     assert profile.home_inspection_passed is True
+
+
+@pytest.mark.asyncio
+async def test_foster_background_check_audit_logging_and_db_updates(service, mock_repo):
+    profile_id = uuid.uuid4()
+    actor_id = uuid.uuid4()
+    profile = FosterProfile(
+        id=profile_id,
+        user_id=uuid.uuid4(),
+        status=FosterStatus.APPLIED,
+        background_check_passed=None,
+        home_inspection_passed=None,
+    )
+    mock_repo.get_profile_by_id.return_value = profile
+
+    # Audit service active
+    audit_mock = AsyncMock()
+    service._audit = audit_mock
+
+    # 1. Initiate background check
+    await service.initiate_background_check(
+        profile_id,
+        FosterBackgroundCheckInitiate(provider="ID.me Government ID", notes="Initiated ID check"),
+        actor_id=actor_id,
+        ip_address="127.0.0.1",
+    )
+    assert profile.vetted_at is not None
+    assert "ID.me Government ID" in (profile.background_check_notes or "")
+    audit_mock.record.assert_called_once()
+    assert audit_mock.record.call_args[1]["metadata"]["action"] == "background_check_initiated"
+
+    # 2. Record Outcome
+    audit_mock.reset_mock()
+    await service.record_background_check_outcome(
+        profile_id,
+        FosterBackgroundCheckOutcome(
+            outcome="cleared",
+            notes="ID verified and cleared",
+            references_checked=True,
+        ),
+        actor_id=actor_id,
+        ip_address="127.0.0.1",
+    )
+    assert profile.background_check_passed is True
+    assert profile.references_checked is True
+    audit_mock.record.assert_called_once()
+
+    # 3. Schedule Inspection
+    audit_mock.reset_mock()
+    await service.schedule_home_inspection(
+        profile_id,
+        FosterHomeInspectionSchedule(
+            scheduled_at=datetime.now(UTC),
+            inspector_name="Inspector Dave",
+            inspection_type="physical",
+            address="456 Elm St",
+        ),
+        actor_id=actor_id,
+        ip_address="127.0.0.1",
+    )
+    assert profile.home_inspection_address == "456 Elm St"
+    audit_mock.record.assert_called_once()

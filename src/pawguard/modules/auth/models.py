@@ -183,6 +183,12 @@ class AuthAuditEventType(StrEnum):
     PET_APPOINTMENT_STATUS_CHANGED = "pet_appointment_status_changed"
     LOST_FOUND_BROADCAST_QUEUED = "lost_found_broadcast_queued"
     REPORT_DOWNLOADED = "report_downloaded"
+    FOSTER_UPDATED = "foster_updated"
+    SYSTEM_CONFIG_UPDATED = "system_config_updated"
+    INVOICE_CREATED = "invoice_created"
+    INVOICE_UPDATED = "invoice_updated"
+    INVOICE_CANCELLED = "invoice_cancelled"
+    ADOPTION_APPLICATION_SUBMITTED = "adoption_application_submitted"
 
 
 class Role(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
