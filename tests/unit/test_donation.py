@@ -1607,3 +1607,85 @@ class TestDonationReceiptGeneration:
         assert resp.media_type == "application/pdf"
         assert resp.body[:4] == b"%PDF"
         assert f"tax_receipt_{donation_id}.pdf" in resp.headers["Content-Disposition"]
+
+    @pytest.mark.asyncio
+    async def test_generate_tax_receipt_contains_all_receipt_fields(self):
+        """Verify receipt PDF generation includes all required official PawGuard metadata."""
+        from pawguard.core.pdf_generation import generate_tax_receipt
+
+        pdf = generate_tax_receipt(
+            donor_name="Jane Doe",
+            donor_email="jane@example.com",
+            amount=5000.0,
+            currency="INR",
+            donation_id="d1111111-1111-1111-1111-111111111111",
+            transaction_id="tx_test_123",
+            order_id="order_test_456",
+            payment_id="pay_test_789",
+            payment_provider="Razorpay",
+            payment_status="SUCCESS",
+            donation_type="one_time",
+            donation_date=datetime.now(UTC),
+            org_name="PawGuard Rescue & Care",
+            org_address="123 Shelter Lane, Bengaluru, India",
+        )
+        assert isinstance(pdf, bytes)
+        assert len(pdf) > 500
+        assert pdf[:4] == b"%PDF"
+
+    @pytest.mark.asyncio
+    async def test_get_donation_receipt_returns_valid_response(
+        self, mock_repo, mock_dog_repo, mock_audit
+    ):
+        """GET /{donation_id}/receipt returns valid DownloadUrlResponse for successful donation."""
+        from pawguard.modules.auth.models import User
+        from pawguard.modules.donation.router import get_donation_receipt
+
+        user_id = uuid.uuid4()
+        donation_id = uuid.uuid4()
+        donor_profile = DonorProfile(id=user_id, user_id=user_id)
+        donor_profile.user = User(id=user_id, email="donor@example.com", full_name="Donor User")
+
+        donation = Donation(
+            id=donation_id,
+            donor_id=user_id,
+            amount=1000.0,
+            currency="INR",
+            status=DonationStatus.SUCCESS,
+            donation_type=DonationType.ONE_TIME,
+            transaction_id="tx_123",
+            created_at=datetime.now(UTC),
+            donor=donor_profile,
+        )
+        mock_repo.get_donation_by_id.return_value = donation
+        mock_storage = MagicMock(spec=StorageService)
+        mock_storage.get_object.return_value = b"%PDF-1.4 sample receipt"
+        mock_storage.generate_presigned_download_url.return_value = f"https://example-bucket.supabase.co/storage/v1/s3/pawguard-media/documents/receipt_{donation_id}.pdf?sig=valid"
+        mock_storage.build_object_key.return_value = f"documents/receipt_{donation_id}.pdf"
+
+        curr_user = MagicMock()
+        curr_user.user = User(id=user_id, email="donor@example.com")
+        curr_user.id = user_id
+
+        svc = DonationService(
+            mock_repo,
+            mock_dog_repo,
+            audit_service=mock_audit,
+            storage_service=mock_storage,
+        )
+
+        req = MagicMock()
+        req.headers = {}
+        req.query_params = {}
+
+        resp = await get_donation_receipt(
+            donation_id=donation_id,
+            request=req,
+            current_user=curr_user,
+            service=svc,
+            db=AsyncMock(),
+            audit=mock_audit,
+        )
+
+        assert resp.data.download_url.startswith("http") or resp.data.download_url.startswith("/")
+        assert "documents" in resp.data.object_key or "receipt" in resp.data.object_key

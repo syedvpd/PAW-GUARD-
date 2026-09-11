@@ -397,25 +397,44 @@ async def _get_or_generate_receipt_pdf(
 
     if not pdf_bytes or pdf_bytes[:4] != b"%PDF":
         donor_name = "Donor"
+        donor_email = None
         if donation.donor:
-            if getattr(donation.donor, "user", None) and getattr(
-                donation.donor.user, "full_name", None
-            ):
-                donor_name = donation.donor.user.full_name
+            if getattr(donation.donor, "user", None):
+                donor_name = getattr(donation.donor.user, "full_name", None) or "Donor"
+                donor_email = getattr(donation.donor.user, "email", None)
             elif getattr(donation.donor, "full_name", None):
                 donor_name = donation.donor.full_name
 
         settings = get_settings()
+        status_val = (
+            donation.status.value if hasattr(donation.status, "value") else str(donation.status)
+        )
+        type_val = (
+            donation.donation_type.value
+            if hasattr(donation.donation_type, "value")
+            else str(donation.donation_type)
+        )
         try:
             pdf_bytes = await asyncio.to_thread(
                 generate_tax_receipt,
                 donor_name=donor_name,
+                donor_email=donor_email,
                 amount=float(donation.amount) if donation.amount is not None else 0.0,
                 currency=donation.currency or "INR",
+                donation_id=str(donation.id),
                 transaction_id=donation.transaction_id or str(donation.id),
+                order_id=getattr(donation, "gateway_order_id", None) or "",
+                payment_id=getattr(donation, "gateway_payment_id", None) or "",
+                payment_provider=getattr(donation, "payment_provider", None) or "Razorpay Gateway",
+                payment_status=status_val,
+                donation_type=type_val,
                 donation_date=donation.created_at or datetime.now(UTC),
-                org_name=getattr(settings, "org_name", "PawGuard"),
-                org_address=getattr(settings, "org_address", "PawGuard Animal Shelter"),
+                org_name=getattr(settings, "org_name", "PawGuard Rescue & Care"),
+                org_address=getattr(
+                    settings,
+                    "org_address",
+                    "PawGuard Animal Shelter & Wildlife Rehabilitation Center",
+                ),
             )
         except Exception as gen_exc:
             logger.error(
@@ -460,6 +479,7 @@ async def _get_or_generate_receipt_pdf(
                         .values(receipt_file_key=object_key)
                     )
                     await db.flush()
+                donation.receipt_file_key = object_key
             except Exception as persist_exc:
                 logger.warning(
                     "jit_receipt_persist_failed",
@@ -503,34 +523,18 @@ async def get_donation_receipt(
 
     storage = StorageService()
 
-    if not donation.receipt_file_key:
-        from pawguard.db.session import AsyncSessionLocal
-        from pawguard.modules.finance.repository import FinanceRepository
-        from pawguard.modules.finance.service import FinanceService
-
-        try:
-            async with AsyncSessionLocal() as write_db:
-                finance = FinanceService(FinanceRepository(write_db), audit_service=audit)
-                await finance.ensure_donation_receipt(donation_id, actor_id=current_user.id)
-                await write_db.commit()
-            donation = await service.get_donation(donation_id)
-        except Exception as exc:
-            logger.warning(
-                "ensure_donation_receipt_failed",
-                donation_id=str(donation_id),
-                error=str(exc),
-            )
+    # Ensure receipt PDF is physically generated and uploaded before issuing download URL
+    pdf_bytes = await _get_or_generate_receipt_pdf(
+        donation,
+        storage,
+        persist_key=True,
+        db=db,
+    )
 
     accept = request.headers.get("accept", "").lower()
     format_param = (request.query_params.get("format") or "").lower()
     download_param = (request.query_params.get("download") or "").lower()
     if "application/pdf" in accept or format_param == "pdf" or download_param in ("true", "1"):
-        pdf_bytes = await _get_or_generate_receipt_pdf(
-            donation,
-            storage,
-            persist_key=True,
-            db=db,
-        )
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
@@ -540,18 +544,15 @@ async def get_donation_receipt(
             },
         )
 
-    download_url = (
-        storage.generate_presigned_download_url(object_key=donation.receipt_file_key)
-        if donation.receipt_file_key
-        else None
-    )
+    object_key = donation.receipt_file_key or f"documents/receipt_{donation.id}.pdf"
+    download_url = storage.generate_presigned_download_url(object_key=object_key)
     if not download_url or "token=" in download_url:
         download_url = f"/api/v1/donations/{donation.id}/receipt/download"
 
     return ApiResponse(
         data=DownloadUrlResponse(
             download_url=download_url,
-            object_key=donation.receipt_file_key or f"documents/receipt_{donation.id}.pdf",
+            object_key=object_key,
             file_id=donation.id,
         ),
     )

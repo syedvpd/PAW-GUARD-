@@ -119,24 +119,41 @@ class DonationService:
             return donation.receipt_file_key
 
         donor_name = "Donor"
+        donor_email = None
         if donation.donor:
-            if getattr(donation.donor, "user", None) and getattr(
-                donation.donor.user, "full_name", None
-            ):
-                donor_name = donation.donor.user.full_name
+            if getattr(donation.donor, "user", None):
+                donor_name = getattr(donation.donor.user, "full_name", None) or "Donor"
+                donor_email = getattr(donation.donor.user, "email", None)
             elif getattr(donation.donor, "full_name", None):
                 donor_name = donation.donor.full_name
 
         settings = get_settings()
+        status_val = (
+            donation.status.value if hasattr(donation.status, "value") else str(donation.status)
+        )
+        type_val = (
+            donation.donation_type.value
+            if hasattr(donation.donation_type, "value")
+            else str(donation.donation_type)
+        )
         pdf_bytes = await asyncio.to_thread(
             generate_tax_receipt,
             donor_name=donor_name,
+            donor_email=donor_email,
             amount=float(donation.amount),
             currency=donation.currency,
+            donation_id=str(donation.id),
             transaction_id=donation.transaction_id or "",
+            order_id=getattr(donation, "gateway_order_id", None) or "",
+            payment_id=getattr(donation, "gateway_payment_id", None) or "",
+            payment_provider=getattr(donation, "payment_provider", None) or "Razorpay Gateway",
+            payment_status=status_val,
+            donation_type=type_val,
             donation_date=donation.created_at,
-            org_name=getattr(settings, "org_name", "PawGuard"),
-            org_address=getattr(settings, "org_address", "PawGuard Animal Shelter"),
+            org_name=getattr(settings, "org_name", "PawGuard Rescue & Care"),
+            org_address=getattr(
+                settings, "org_address", "PawGuard Animal Shelter & Wildlife Rehabilitation Center"
+            ),
         )
 
         if not pdf_bytes or not pdf_bytes[:5] == b"%PDF-":

@@ -21,18 +21,32 @@ from reportlab.platypus import (
 def generate_tax_receipt(
     *,
     donor_name: str | None = None,
+    donor_email: str | None = None,
     amount: float | int | Any = 0.0,
     currency: str | None = None,
+    donation_id: str | None = None,
     transaction_id: str | None = None,
+    order_id: str | None = None,
+    payment_id: str | None = None,
+    payment_provider: str | None = None,
+    payment_status: str | None = None,
+    donation_type: str | None = None,
     donation_date: datetime | str | None = None,
     org_name: str | None = None,
     org_address: str | None = None,
 ) -> bytes:
     donor_name_str = donor_name or "Valued Donor"
+    donor_email_str = donor_email or "Not Provided"
     currency_str = currency or "INR"
+    donation_id_str = donation_id or ""
     tx_id_str = transaction_id or ""
+    order_id_str = order_id or ""
+    payment_id_str = payment_id or ""
+    provider_str = payment_provider or "Razorpay Gateway"
+    status_str = (payment_status or "SUCCESS").upper()
+    dtype_str = (donation_type or "One-Time Donation").replace("_", " ").title()
     org_name_str = org_name or "PawGuard Rescue & Care"
-    org_address_str = org_address or "PawGuard Animal Shelter"
+    org_address_str = org_address or "PawGuard Animal Shelter & Wildlife Rehabilitation Center"
 
     try:
         amount_float = float(amount)
@@ -40,15 +54,15 @@ def generate_tax_receipt(
         amount_float = 0.0
 
     if isinstance(donation_date, datetime):
-        date_str = donation_date.strftime("%B %d, %Y")
+        date_str = donation_date.strftime("%B %d, %Y, %I:%M %p UTC")
     elif isinstance(donation_date, str):
         try:
             dt = datetime.fromisoformat(donation_date.replace("Z", "+00:00"))
-            date_str = dt.strftime("%B %d, %Y")
+            date_str = dt.strftime("%B %d, %Y, %I:%M %p UTC")
         except Exception:
             date_str = donation_date
     else:
-        date_str = datetime.now().strftime("%B %d, %Y")
+        date_str = datetime.now().strftime("%B %d, %Y, %I:%M %p UTC")
 
     buf = io.BytesIO()
     try:
@@ -63,44 +77,69 @@ def generate_tax_receipt(
         styles = getSampleStyleSheet()
         elements = []
 
-        elements.append(Paragraph(org_name_str, styles["Title"]))
+        # Organization Header & Branding
+        elements.append(Paragraph(f"<b>{org_name_str}</b>", styles["Title"]))
         elements.append(Paragraph(org_address_str, styles["Normal"]))
-        elements.append(Spacer(1, 0.25 * inch))
-
-        elements.append(Paragraph("Tax Deductible Receipt", styles["Heading1"]))
         elements.append(Spacer(1, 0.2 * inch))
+
+        # Receipt Title & Verification Status
+        elements.append(
+            Paragraph("Official Donation Receipt — 80G Tax Exemption", styles["Heading1"])
+        )
+        elements.append(
+            Paragraph(
+                f"<b>Receipt Status:</b> <font color='#16a34a'>{status_str}</font> (Verified Payment)",
+                styles["Normal"],
+            )
+        )
+        elements.append(Spacer(1, 0.15 * inch))
 
         receipt_data = [
             ["Donor Name:", donor_name_str],
-            ["Amount:", f"{currency_str} {amount_float:,.2f}"],
-            ["Transaction ID:", tx_id_str],
-            ["Date:", date_str],
+            ["Donor Email:", donor_email_str],
+            ["Donation Amount:", f"{currency_str} {amount_float:,.2f}"],
+            ["Donation Type:", dtype_str],
+            ["Payment Status:", status_str],
+            ["Payment Provider:", provider_str],
         ]
-        table = Table(receipt_data, colWidths=[2 * inch, 3.5 * inch])
+        if donation_id_str:
+            receipt_data.append(["Donation ID:", donation_id_str])
+        if tx_id_str:
+            receipt_data.append(["Transaction ID:", tx_id_str])
+        if payment_id_str and payment_id_str != tx_id_str:
+            receipt_data.append(["Payment ID:", payment_id_str])
+        if order_id_str:
+            receipt_data.append(["Gateway Order ID:", order_id_str])
+        receipt_data.append(["Date & Time:", date_str])
+
+        table = Table(receipt_data, colWidths=[2.2 * inch, 4.3 * inch])
         table.setStyle(
             TableStyle(
                 [
                     ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
                     ("FONTNAME", (1, 0), (1, -1), "Helvetica"),
-                    ("FONTSIZE", (0, 0), (-1, -1), 11),
+                    ("FONTSIZE", (0, 0), (-1, -1), 10),
                     ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                    ("TOPPADDING", (0, 0), (-1, -1), 6),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e2e8f0")),
+                    ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f8fafc")),
                 ]
             )
         )
         elements.append(table)
-        elements.append(Spacer(1, 0.3 * inch))
+        elements.append(Spacer(1, 0.25 * inch))
 
         elements.append(
             Paragraph(
-                "This donation is tax-deductible to the extent permitted by law.",
+                "<b>Tax Exemption Notice:</b> This receipt is issued in compliance with Section 80G of the Income Tax Act. Donations made to PawGuard are deductible to the extent permitted by law.",
                 styles["Normal"],
             )
         )
         elements.append(Spacer(1, 0.15 * inch))
         elements.append(
             Paragraph(
-                "Thank you for your generous support!",
+                "<i>Thank you for your generous contribution to rescue, medical care, and lifetime animal sanctuary!</i>",
                 styles["Normal"],
             )
         )
