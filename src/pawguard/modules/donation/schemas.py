@@ -89,6 +89,8 @@ class DonationResponse(BaseModel):
     donation_type: DonationType
     status: DonationStatus
     transaction_id: str | None
+    gateway_order_id: str | None = None
+    gateway_payment_id: str | None = None
     notes: str | None
     payment_provider: str | None
     receipt_file_key: str | None
