@@ -274,6 +274,11 @@ class Settings(BaseSettings):
 
     @computed_field  # type: ignore[prop-decorator]
     @property
+    def env(self) -> str:
+        return str(self.environment.value)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
     def is_production(self) -> bool:
         return self.environment == Environment.PRODUCTION
 

@@ -146,7 +146,11 @@ def _cookie_domain() -> str | None:
 def _set_auth_cookies(response: Response, *, access_token: str, refresh_token: str | None) -> None:
     settings = get_settings()
     domain = _cookie_domain()
-    is_secure = settings.cookie_secure or (settings.env not in ("development", "test"))
+    from pawguard.core.constants import Environment
+
+    is_secure = settings.cookie_secure or (
+        settings.environment not in (Environment.LOCAL, Environment.TEST)
+    )
     samesite_mode = "none" if is_secure else "lax"
 
     response.set_cookie(
@@ -173,7 +177,11 @@ def _set_auth_cookies(response: Response, *, access_token: str, refresh_token: s
 def _clear_auth_cookies(response: Response) -> None:
     settings = get_settings()
     domain = _cookie_domain()
-    is_secure = settings.cookie_secure or (settings.env not in ("development", "test"))
+    from pawguard.core.constants import Environment
+
+    is_secure = settings.cookie_secure or (
+        settings.environment not in (Environment.LOCAL, Environment.TEST)
+    )
     samesite_mode = "none" if is_secure else "lax"
 
     response.delete_cookie(
