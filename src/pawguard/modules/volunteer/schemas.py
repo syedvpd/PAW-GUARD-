@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
@@ -28,6 +29,42 @@ class VolunteerProfileCreate(BaseModel):
     animal_handling_experience: str | None = Field(
         None, examples=["3 years volunteering at a local shelter, comfortable with large breeds."]
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _pre_normalize(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            d = dict(data)
+            if not d.get("full_name"):
+                d["full_name"] = d.get("name") or d.get("applicant_name")
+            if not d.get("email") and (d.get("applicant_email") or d.get("contact_email")):
+                d["email"] = d.get("applicant_email") or d.get("contact_email")
+            if d.get("email") == "":
+                d["email"] = None
+            if not d.get("phone"):
+                d["phone"] = (
+                    d.get("phone_number")
+                    or d.get("contact_number")
+                    or d.get("mobile")
+                    or d.get("applicant_phone")
+                    or d.get("contact_phone")
+                )
+            if d.get("phone") == "":
+                d["phone"] = None
+            if not d.get("preferred_role") and (d.get("role") or d.get("applied_role")):
+                d["preferred_role"] = d.get("role") or d.get("applied_role")
+            if not d.get("animal_handling_experience"):
+                d["animal_handling_experience"] = (
+                    d.get("animal_handling") or d.get("experience") or d.get("experience_notes")
+                )
+            if not d.get("availability"):
+                d["availability"] = d.get("schedule") or d.get("available_times")
+            if not d.get("notes"):
+                d["notes"] = (
+                    d.get("experience_notes") or d.get("comments") or d.get("additional_notes")
+                )
+            return d
+        return data
 
     @model_validator(mode="after")
     def _normalize_intake_fields(self) -> "VolunteerProfileCreate":
@@ -272,6 +309,38 @@ class VolunteerAdminIntakeRequest(BaseModel):
     animal_handling_experience: str | None = Field(
         None, examples=["3 years volunteering at a local shelter"]
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _pre_normalize(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            d = dict(data)
+            if not d.get("full_name"):
+                d["full_name"] = d.get("name") or d.get("applicant_name")
+            if not d.get("email") and (d.get("applicant_email") or d.get("contact_email")):
+                d["email"] = d.get("applicant_email") or d.get("contact_email")
+            if not d.get("phone"):
+                d["phone"] = (
+                    d.get("phone_number")
+                    or d.get("contact_number")
+                    or d.get("mobile")
+                    or d.get("applicant_phone")
+                    or d.get("contact_phone")
+                )
+            if not d.get("preferred_role") and (d.get("role") or d.get("applied_role")):
+                d["preferred_role"] = d.get("role") or d.get("applied_role")
+            if not d.get("animal_handling_experience"):
+                d["animal_handling_experience"] = (
+                    d.get("animal_handling") or d.get("experience") or d.get("experience_notes")
+                )
+            if not d.get("availability"):
+                d["availability"] = d.get("schedule") or d.get("available_times")
+            if not d.get("notes"):
+                d["notes"] = (
+                    d.get("experience_notes") or d.get("comments") or d.get("additional_notes")
+                )
+            return d
+        return data
 
     @model_validator(mode="after")
     def _normalize_fields(self) -> "VolunteerAdminIntakeRequest":

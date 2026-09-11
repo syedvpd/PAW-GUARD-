@@ -248,7 +248,7 @@ class TestVolunteerService:
             assert res.user_id != coordinator_id
 
     @pytest.mark.asyncio
-    async def test_admin_volunteer_intake_duplicate_email(self, mock_repo):
+    async def test_admin_volunteer_intake_duplicate_email_with_active_profile(self, mock_repo):
         coordinator_id = uuid.uuid4()
         existing_applicant_id = uuid.uuid4()
         svc = VolunteerService(mock_repo)
@@ -262,13 +262,20 @@ class TestVolunteerService:
         existing_app = VolunteerApplication(
             id=uuid.uuid4(),
             user_id=existing_applicant_id,
-            status=ApplicationStatus.SUBMITTED,
+            status=ApplicationStatus.APPROVED,
+            emergency_contact_name="Prasad",
+            emergency_contact_phone="6303001088",
+        )
+        existing_profile = VolunteerProfile(
+            id=uuid.uuid4(),
+            user_id=existing_applicant_id,
+            status=VolunteerStatus.ACTIVE,
             emergency_contact_name="Prasad",
             emergency_contact_phone="6303001088",
         )
 
         mock_repo.get_application_by_user_id.return_value = existing_app
-        mock_repo.get_profile_by_user_id.return_value = None
+        mock_repo.get_profile_by_user_id.return_value = existing_profile
 
         with (
             patch(
@@ -285,49 +292,57 @@ class TestVolunteerService:
                 email="prasad@gmail.com",
                 phone="6303001088",
             )
-            with pytest.raises(ConflictError, match="already exists"):
+            with pytest.raises(ConflictError, match="already active and approved"):
                 await svc.admin_volunteer_intake(payload, actor_id=coordinator_id)
 
     @pytest.mark.asyncio
-    async def test_admin_volunteer_intake_duplicate_phone(self, mock_repo):
+    async def test_admin_volunteer_intake_updates_existing_submitted_application(self, mock_repo):
         coordinator_id = uuid.uuid4()
         existing_applicant_id = uuid.uuid4()
         svc = VolunteerService(mock_repo)
 
         existing_user = User(
             id=existing_applicant_id,
-            email="other@gmail.com",
+            email="prasad@gmail.com",
             phone="6303001088",
-            full_name="Other",
+            full_name="Prasad",
         )
+        app_id = uuid.uuid4()
         existing_app = VolunteerApplication(
-            id=uuid.uuid4(),
+            id=app_id,
             user_id=existing_applicant_id,
             status=ApplicationStatus.SUBMITTED,
-            emergency_contact_name="Other",
+            emergency_contact_name="Old Contact",
             emergency_contact_phone="6303001088",
         )
 
         mock_repo.get_application_by_user_id.return_value = existing_app
+        mock_repo.get_application_by_id.return_value = existing_app
         mock_repo.get_profile_by_user_id.return_value = None
 
         with (
             patch(
                 "pawguard.modules.auth.repository.UserRepository.get_by_email",
-                AsyncMock(return_value=None),
+                AsyncMock(return_value=existing_user),
             ),
             patch(
                 "pawguard.modules.auth.repository.UserRepository.get_by_phone",
-                AsyncMock(return_value=existing_user),
+                AsyncMock(return_value=None),
             ),
         ):
             payload = VolunteerAdminIntakeRequest(
-                full_name="Different Name",
-                email="newemail@gmail.com",
+                full_name="Prasad Updated",
+                email="prasad@gmail.com",
                 phone="6303001088",
+                preferred_role="Shelter Support",
+                notes="Quick intake note",
             )
-            with pytest.raises(ConflictError, match="already exists"):
-                await svc.admin_volunteer_intake(payload, actor_id=coordinator_id)
+            res = await svc.admin_volunteer_intake(payload, actor_id=coordinator_id)
+            assert res.id == app_id
+            assert res.user_id == existing_applicant_id
+            assert res.status == ApplicationStatus.SUBMITTED
+            assert res.applied_role == "Shelter Support"
+            assert res.notes == "Quick intake note"
 
     @pytest.mark.asyncio
     async def test_admin_volunteer_intake_coordinator_profile_does_not_prevent_intake(

@@ -164,11 +164,9 @@ class VolunteerService:
                 and existing_user_by_phone is not None
                 and existing_user_by_email.id != existing_user_by_phone.id
             ):
-                raise ConflictError(
-                    "An active volunteer application or profile already exists for this email or phone number."
-                )
-
-            applicant_user = existing_user_by_email or existing_user_by_phone
+                applicant_user = existing_user_by_email
+            else:
+                applicant_user = existing_user_by_email or existing_user_by_phone
 
             if applicant_user is None:
                 default_role = await user_repo.get_default_role()
@@ -203,12 +201,9 @@ class VolunteerService:
                         ) from None
 
             target_user_id = applicant_user.id
-
         ACTIVE_PROFILE_STATUSES = (
             VolunteerStatus.ACTIVE,
             VolunteerStatus.APPROVED,
-            VolunteerStatus.PENDING,
-            VolunteerStatus.APPLIED,
             VolunteerStatus.ONBOARDED,
         )
 
@@ -221,61 +216,63 @@ class VolunteerService:
         # 2. Check profile and application status for target_user_id
         existing_profile = await self._repo.get_profile_by_user_id(target_user_id)
         if existing_profile is not None and existing_profile.status in ACTIVE_PROFILE_STATUSES:
-            raise ConflictError("You have already applied or registered as a volunteer.")
+            raise ConflictError("A volunteer profile is already active and approved for this user.")
 
         existing_app = await self._repo.get_application_by_user_id(target_user_id)
         if existing_app is not None:
-            if existing_app.status in ACTIVE_APP_STATUSES:
+            # If the applicant themselves is applying and already has an active application, raise conflict
+            is_self_apply = actor_id is None or actor_id == target_user_id
+            if is_self_apply and existing_app.status in ACTIVE_APP_STATUSES:
                 raise ConflictError(
                     "You have already applied as a volunteer and your application is still active."
                 )
-            else:
-                # Reapplication after REJECTED or WITHDRAWN
-                existing_app.status = ApplicationStatus.SUBMITTED
-                existing_app.emergency_contact_name = (
-                    payload.emergency_contact_name or payload.full_name or "N/A"
-                )
-                existing_app.emergency_contact_phone = (
-                    payload.emergency_contact_phone or payload.phone or "N/A"
-                )
-                existing_app.applied_role = payload.applied_role or payload.preferred_role
-                existing_app.skills = payload.skills
-                existing_app.availability = payload.availability
-                existing_app.notes = payload.notes
-                existing_app.medical_conditions = payload.medical_conditions
-                existing_app.animal_handling_experience = payload.animal_handling_experience
-                existing_app.reviewed_by = None
-                existing_app.reviewed_at = None
-                existing_app.rejection_reason = None
-                await self._repo._session.flush()
-                res = await self._repo.get_application_by_id(existing_app.id)
-                if res is None:
-                    raise NotFoundError("Failed to fetch re-submitted volunteer application.")
 
-                if self._audit:
-                    await self._audit.record(
-                        event_type=AuthAuditEventType.VOLUNTEER_APPLICATION_SUBMITTED,
-                        actor_id=actor_id,
-                        ip_address=ip_address or "",
-                        user_agent="",
-                        metadata={
-                            "application_id": str(res.id),
-                            "user_id": str(target_user_id),
-                            "action": "reapplication",
-                        },
-                    )
+            # Reapplication after REJECTED/WITHDRAWN or Coordinator/Admin intake update
+            existing_app.status = ApplicationStatus.SUBMITTED
+            existing_app.emergency_contact_name = (
+                payload.emergency_contact_name or payload.full_name or "N/A"
+            )
+            existing_app.emergency_contact_phone = (
+                payload.emergency_contact_phone or payload.phone or "N/A"
+            )
+            existing_app.applied_role = payload.applied_role or payload.preferred_role
+            existing_app.skills = payload.skills
+            existing_app.availability = payload.availability
+            existing_app.notes = payload.notes
+            existing_app.medical_conditions = payload.medical_conditions
+            existing_app.animal_handling_experience = payload.animal_handling_experience
+            existing_app.reviewed_by = None
+            existing_app.reviewed_at = None
+            existing_app.rejection_reason = None
+            await self._repo._session.flush()
+            res = await self._repo.get_application_by_id(existing_app.id)
+            if res is None:
+                raise NotFoundError("Failed to fetch re-submitted volunteer application.")
 
-                await self._notify_volunteer_application(
-                    res,
-                    title="Volunteer application re-submitted",
-                    body=(
-                        "Your volunteer application has been re-submitted for review. "
-                        "Our coordinator will review your updated application."
-                    ),
-                    notification_type="volunteer_applied",
-                    action_url="/volunteers/my-profile",
+            if self._audit:
+                await self._audit.record(
+                    event_type=AuthAuditEventType.VOLUNTEER_APPLICATION_SUBMITTED,
+                    actor_id=actor_id,
+                    ip_address=ip_address or "",
+                    user_agent="",
+                    metadata={
+                        "application_id": str(res.id),
+                        "user_id": str(target_user_id),
+                        "action": "reapplication",
+                    },
                 )
-                return res
+
+            await self._notify_volunteer_application(
+                res,
+                title="Volunteer application re-submitted",
+                body=(
+                    "Your volunteer application has been re-submitted for review. "
+                    "Our coordinator will review your updated application."
+                ),
+                notification_type="volunteer_applied",
+                action_url="/volunteers/my-profile",
+            )
+            return res
 
         # 3. Create new application if no existing application record
         contact_name = payload.emergency_contact_name or payload.full_name or "N/A"
@@ -365,15 +362,7 @@ class VolunteerService:
         ACTIVE_PROFILE_STATUSES = (
             VolunteerStatus.ACTIVE,
             VolunteerStatus.APPROVED,
-            VolunteerStatus.PENDING,
-            VolunteerStatus.APPLIED,
             VolunteerStatus.ONBOARDED,
-        )
-
-        ACTIVE_APP_STATUSES = (
-            ApplicationStatus.SUBMITTED,
-            ApplicationStatus.UNDER_REVIEW,
-            ApplicationStatus.APPROVED,
         )
 
         if applicant_user is not None:
@@ -382,51 +371,48 @@ class VolunteerService:
             existing_profile = await self._repo.get_profile_by_user_id(applicant_user.id)
 
             if existing_profile is not None and existing_profile.status in ACTIVE_PROFILE_STATUSES:
-                raise ConflictError("You have already applied or registered as a volunteer.")
+                raise ConflictError(
+                    "A volunteer profile is already active and approved for this applicant."
+                )
 
             if existing_app is not None:
-                if existing_app.status in ACTIVE_APP_STATUSES:
-                    raise ConflictError(
-                        "An active volunteer application already exists for this applicant."
-                    )
-                else:
-                    # Reapplication after REJECTED or WITHDRAWN
-                    existing_app.status = ApplicationStatus.SUBMITTED
-                    existing_app.emergency_contact_name = (
-                        payload.emergency_contact_name or payload.full_name
-                    )
-                    existing_app.emergency_contact_phone = (
-                        payload.emergency_contact_phone or payload.phone
-                    )
-                    existing_app.applied_role = payload.applied_role or payload.preferred_role
-                    existing_app.skills = payload.skills
-                    existing_app.availability = payload.availability
-                    existing_app.notes = payload.notes
-                    existing_app.medical_conditions = payload.medical_conditions
-                    existing_app.animal_handling_experience = (
-                        payload.animal_handling_experience or payload.animal_handling
-                    )
-                    existing_app.reviewed_by = None
-                    existing_app.reviewed_at = None
-                    existing_app.rejection_reason = None
-                    await self._repo._session.flush()
-                    res = await self._repo.get_application_by_id(existing_app.id)
-                    if res is None:
-                        raise NotFoundError("Failed to fetch re-submitted volunteer application.")
+                # Reapplication / Intake update
+                existing_app.status = ApplicationStatus.SUBMITTED
+                existing_app.emergency_contact_name = (
+                    payload.emergency_contact_name or payload.full_name
+                )
+                existing_app.emergency_contact_phone = (
+                    payload.emergency_contact_phone or payload.phone
+                )
+                existing_app.applied_role = payload.applied_role or payload.preferred_role
+                existing_app.skills = payload.skills
+                existing_app.availability = payload.availability
+                existing_app.notes = payload.notes
+                existing_app.medical_conditions = payload.medical_conditions
+                existing_app.animal_handling_experience = (
+                    payload.animal_handling_experience or payload.animal_handling
+                )
+                existing_app.reviewed_by = None
+                existing_app.reviewed_at = None
+                existing_app.rejection_reason = None
+                await self._repo._session.flush()
+                res = await self._repo.get_application_by_id(existing_app.id)
+                if res is None:
+                    raise NotFoundError("Failed to fetch re-submitted volunteer application.")
 
-                    if self._audit:
-                        await self._audit.record(
-                            event_type=AuthAuditEventType.VOLUNTEER_APPLICATION_SUBMITTED,
-                            actor_id=actor_id,
-                            ip_address=ip_address or "",
-                            user_agent="",
-                            metadata={
-                                "application_id": str(res.id),
-                                "user_id": str(applicant_user.id),
-                                "action": "admin_intake_reapplication",
-                            },
-                        )
-                    return res
+                if self._audit:
+                    await self._audit.record(
+                        event_type=AuthAuditEventType.VOLUNTEER_APPLICATION_SUBMITTED,
+                        actor_id=actor_id,
+                        ip_address=ip_address or "",
+                        user_agent="",
+                        metadata={
+                            "application_id": str(res.id),
+                            "user_id": str(applicant_user.id),
+                            "action": "admin_intake_reapplication",
+                        },
+                    )
+                return res
         else:
             # Create new applicant User record
             default_role = await user_repo.get_default_role()
