@@ -971,16 +971,26 @@ async def convert_to_adopt(
     service: FosterService = Depends(get_foster_service),
 ) -> ApiResponse[dict[str, Any]]:
     placement = await service.get_placement(placement_id)
-    is_owner = (
-        placement.foster.user_id == current_user.user.id
-        if (placement.foster and hasattr(placement.foster, "user_id"))
-        else False
-    )
+    is_owner = False
+    if (
+        placement.foster
+        and hasattr(placement.foster, "user_id")
+        and placement.foster.user_id == current_user.user.id
+    ) or current_user.user.id == placement.foster_id:
+        is_owner = True
+    else:
+        user_foster_profile = await service.get_profile_by_user_id(current_user.user.id)
+        if user_foster_profile and user_foster_profile.id == placement.foster_id:
+            is_owner = True
+
     is_authorized = (
         is_owner
         or has_permission(current_user.user, "foster:approve")
         or has_permission(current_user.user, "foster:update")
+        or has_permission(current_user.user, "foster:manage")
         or has_permission(current_user.user, "adoption:create")
+        or has_permission(current_user.user, "adoption:submit")
+        or has_permission(current_user.user, "system:admin")
     )
     if not is_authorized:
         raise ForbiddenError("You do not have permission to convert this placement to adoption.")

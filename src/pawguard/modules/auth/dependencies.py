@@ -56,6 +56,20 @@ def _extract_access_token(
         return token
     if isinstance(access_token_cookie, str) and access_token_cookie.strip():
         return access_token_cookie.strip()
+    if hasattr(request, "cookies") and request.cookies:
+        for cname in (
+            "pawguard_access_token",
+            "access_token",
+            "auth_token",
+            "token",
+            "session_token",
+            "jwt",
+            "next-auth.session-token",
+            "__Secure-next-auth.session-token",
+        ):
+            cval = request.cookies.get(cname)
+            if cval and isinstance(cval, str) and cval.strip():
+                return cval.strip()
     if hasattr(request, "query_params"):
         query_token = request.query_params.get("access_token") or request.query_params.get("token")
         if query_token and query_token.strip():

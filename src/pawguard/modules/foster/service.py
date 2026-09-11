@@ -839,8 +839,20 @@ class FosterService:
         placement = await self._repo.get_placement_by_id(placement_id)
         if placement is None:
             raise NotFoundError("Foster placement not found.")
+
+        # Idempotent handling: If already converted, return existing adoption application
+        if (
+            placement.status == FosterPlacementStatus.CONVERTED_TO_ADOPT
+            and placement.adoption_application_id is not None
+        ):
+            existing_app = await self._adoption_repo.get_by_id(placement.adoption_application_id)
+            if existing_app is not None:
+                return existing_app
+
         if not placement.is_active:
-            raise ConflictError("Placement is not active.")
+            raise ConflictError(
+                f"Placement is not active (current status: {placement.status.value})."
+            )
 
         foster = await self._repo.get_profile_by_id(placement.foster_id)
         if foster is None:
