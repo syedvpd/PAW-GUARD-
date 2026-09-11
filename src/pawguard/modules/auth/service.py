@@ -36,7 +36,6 @@ from pawguard.modules.auth.exceptions import (
     AccountInactiveError,
     AccountLockedError,
     EmailAlreadyRegisteredError,
-    EmailNotVerifiedError,
     InvalidCredentialsError,
     InvalidMFACodeError,
     InvalidRefreshTokenError,
@@ -223,11 +222,6 @@ class AuthService:
 
         if not user.is_active:
             raise AccountInactiveError("This account has been deactivated.")
-
-        if self._settings.require_email_verification and not user.is_verified:
-            raise EmailNotVerifiedError(
-                "Please verify your email address before signing in. Check your inbox for a verification email or click resend."
-            )
 
         user.failed_login_count = 0
         user.locked_until = None

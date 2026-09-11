@@ -439,23 +439,21 @@ class TestPublicWebsiteAuthRestrictions:
 
 class TestEmailVerificationEnforcement:
     @pytest.mark.asyncio
-    async def test_unverified_user_login_blocked(self) -> None:
-        from pawguard.modules.auth.exceptions import EmailNotVerifiedError
+    async def test_unverified_user_login_succeeds(self) -> None:
         from pawguard.modules.auth.schemas import DeviceContext
 
         service = _make_service()
-        service._settings.require_email_verification = True
         user = _make_user()
         user.is_verified = False
         service._users.get_by_email.return_value = user
 
-        with pytest.raises(EmailNotVerifiedError, match="verify your email address"):
-            await service.login(
-                email=user.email,
-                password="CurrentP@ss99",
-                device=DeviceContext(device_id="dev-1"),
-                ctx=_ctx(),
-            )
+        tokens = await service.login(
+            email=user.email,
+            password="CurrentP@ss99",
+            device=DeviceContext(device_id="dev-1"),
+            ctx=_ctx(),
+        )
+        assert tokens is not None
 
     @pytest.mark.asyncio
     async def test_request_email_verification_by_email_generates_token_for_unverified(
