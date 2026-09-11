@@ -64,7 +64,7 @@ class FosterProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Ba
     home_inspection_address: Mapped[str | None] = mapped_column(Text, nullable=True)
     inspected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    user: Mapped["User"] = relationship("User", foreign_keys=[user_id], lazy="joined")
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id], lazy="selectin")
     placements: Mapped[list["FosterPlacement"]] = relationship(
         back_populates="foster", cascade="all, delete-orphan"
     )
@@ -101,7 +101,7 @@ class FosterPlacement(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     foster: Mapped["FosterProfile"] = relationship(back_populates="placements")
-    dog: Mapped["DogProfile"] = relationship("DogProfile", lazy="joined")
+    dog: Mapped["DogProfile"] = relationship("DogProfile", lazy="selectin")
     progress_logs: Mapped[list["FosterProgressLog"]] = relationship(
         back_populates="placement", cascade="all, delete-orphan"
     )

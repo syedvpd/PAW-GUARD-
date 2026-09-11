@@ -180,6 +180,45 @@ class FosterProfileResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+    @model_validator(mode="before")
+    @classmethod
+    def safe_from_orm(cls, data: Any) -> Any:
+        if not isinstance(data, dict) and hasattr(data, "__dict__"):
+            user_val = None
+            if "user" in data.__dict__ and data.__dict__["user"] is not None:
+                user_val = data.__dict__["user"]
+            elif hasattr(data, "user"):
+                try:
+                    user_val = data.user
+                except Exception:
+                    user_val = None
+
+            return {
+                "id": getattr(data, "id", None),
+                "user_id": getattr(data, "user_id", None),
+                "status": getattr(data, "status", FosterStatus.APPLIED),
+                "preferences": getattr(data, "preferences", None),
+                "max_capacity": getattr(data, "max_capacity", 1),
+                "active_count": getattr(data, "active_count", 0),
+                "is_available": getattr(data, "is_available", True),
+                "notes": getattr(data, "notes", None),
+                "background_check_passed": getattr(data, "background_check_passed", None),
+                "background_check_notes": getattr(data, "background_check_notes", None),
+                "references_checked": getattr(data, "references_checked", None),
+                "reference_notes": getattr(data, "reference_notes", None),
+                "vetting_notes": getattr(data, "vetting_notes", None),
+                "vetted_at": getattr(data, "vetted_at", None),
+                "home_inspection_passed": getattr(data, "home_inspection_passed", None),
+                "home_inspection_notes": getattr(data, "home_inspection_notes", None),
+                "home_inspection_address": getattr(data, "home_inspection_address", None),
+                "inspected_at": getattr(data, "inspected_at", None),
+                "home_inspection_details": getattr(data, "home_inspection_details", None),
+                "created_at": getattr(data, "created_at", None),
+                "updated_at": getattr(data, "updated_at", None),
+                "user": user_val,
+            }
+        return data
+
     def model_post_init(self, __context: Any) -> None:
         if self.background_check_passed is True:
             self.background_check_status = "cleared"
@@ -476,6 +515,46 @@ class FosterPlacementResponse(BaseModel):
     dog_name: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def safe_from_orm(cls, data: Any) -> Any:
+        if not isinstance(data, dict) and hasattr(data, "__dict__"):
+            dog_val = None
+            if "dog" in data.__dict__ and data.__dict__["dog"] is not None:
+                dog_val = data.__dict__["dog"]
+            elif hasattr(data, "dog"):
+                try:
+                    dog_val = data.dog
+                except Exception:
+                    dog_val = None
+
+            foster_val = None
+            if "foster" in data.__dict__ and data.__dict__["foster"] is not None:
+                foster_val = data.__dict__["foster"]
+            elif hasattr(data, "foster"):
+                try:
+                    foster_val = data.foster
+                except Exception:
+                    foster_val = None
+
+            return {
+                "id": getattr(data, "id", None),
+                "foster_id": getattr(data, "foster_id", None),
+                "dog_id": getattr(data, "dog_id", None),
+                "placed_at": getattr(data, "placed_at", None),
+                "returned_at": getattr(data, "returned_at", None),
+                "is_active": getattr(data, "is_active", True),
+                "status": getattr(data, "status", FosterPlacementStatus.ACTIVE),
+                "adoption_application_id": getattr(data, "adoption_application_id", None),
+                "notes": getattr(data, "notes", None),
+                "created_at": getattr(data, "created_at", None),
+                "dog": dog_val,
+                "foster": foster_val,
+                "foster_name": getattr(data, "foster_name", None),
+                "dog_name": getattr(data, "dog_name", None),
+            }
+        return data
 
     @model_validator(mode="after")
     def populate_names(self) -> "FosterPlacementResponse":

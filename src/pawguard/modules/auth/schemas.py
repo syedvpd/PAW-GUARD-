@@ -342,8 +342,55 @@ class UserProfile(BaseModel):
     can_drive: bool | None = False
     managed_facility_id: uuid.UUID | None = None
     has_password: bool = True
-    auth_provider: str | None = None
-    roles: list[str]
+    roles: list[str] = []
+
+    @model_validator(mode="before")
+    @classmethod
+    def safe_from_orm(cls, data: Any) -> Any:
+        if not isinstance(data, dict) and hasattr(data, "__dict__"):
+            roles_val: list[str] = []
+            if "roles" in data.__dict__ and data.__dict__["roles"] is not None:
+                try:
+                    roles_val = [
+                        r.name if hasattr(r, "name") else str(r) for r in data.__dict__["roles"]
+                    ]
+                except Exception:
+                    roles_val = []
+            elif hasattr(data, "roles"):
+                try:
+                    roles_val = [r.name if hasattr(r, "name") else str(r) for r in data.roles]
+                except Exception:
+                    roles_val = []
+
+            return {
+                "id": getattr(data, "id", None),
+                "email": getattr(data, "email", ""),
+                "full_name": getattr(data, "full_name", ""),
+                "phone": getattr(data, "phone", None),
+                "profile_picture_url": getattr(data, "profile_picture_url", None),
+                "avatar_url": getattr(data, "profile_picture_url", None),
+                "date_of_birth": getattr(data, "date_of_birth", None),
+                "gender": getattr(data, "gender", None),
+                "address_line": getattr(data, "address_line", None),
+                "city": getattr(data, "city", None),
+                "state": getattr(data, "state", None),
+                "country": getattr(data, "country", None),
+                "postal_code": getattr(data, "postal_code", None),
+                "pin_code": getattr(data, "postal_code", None),
+                "zip_code": getattr(data, "postal_code", None),
+                "latitude": getattr(data, "latitude", None),
+                "longitude": getattr(data, "longitude", None),
+                "push_notifications_enabled": getattr(data, "push_notifications_enabled", True),
+                "push_notifications": getattr(data, "push_notifications_enabled", True),
+                "is_verified": getattr(data, "is_verified", True),
+                "mfa_enabled": getattr(data, "mfa_enabled", False),
+                "can_drive": getattr(data, "can_drive", False),
+                "managed_facility_id": getattr(data, "managed_facility_id", None),
+                "has_password": getattr(data, "has_password", True),
+                "auth_provider": getattr(data, "auth_provider", None),
+                "roles": roles_val,
+            }
+        return data
 
     @field_validator("roles", mode="before")
     @classmethod
