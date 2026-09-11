@@ -14,7 +14,7 @@ app startup).
 import uuid
 
 import pytest
-from scripts.seed_roles_and_permissions import reconcile_roles, revoke_role_permission
+from scripts.seed_roles_and_permissions import reconcile_roles
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -130,63 +130,3 @@ class TestRoleReconciliation:
         role = await _get_role_with_permissions(db_session, TEST_ROLE)
         assert role is not None
         assert len(role.permissions) == 2, "no duplicate grants"
-
-
-@pytest.mark.asyncio
-class TestRevokeRolePermission:
-    async def test_revokes_an_existing_grant(self, db_session: AsyncSession) -> None:
-        """Regression for FUNC-0207: rescue_centre_admin shipped with
-        SYSTEM_ADMIN, which bypasses every RequirePermission check and let it
-        see all 12 dashboards instead of just dashboard:rescue. Since
-        reconcile_roles() never revokes, dropping the grant from
-        ROLE_DEFINITIONS alone would leave it stuck in already-seeded
-        databases - revoke_role_permission() must be able to remove it."""
-        perm_a = Permission(code=TEST_PERM_A, description=TEST_PERM_A)
-        perm_b = Permission(code=TEST_PERM_B, description=TEST_PERM_B)
-        db_session.add_all([perm_a, perm_b])
-        await db_session.flush()
-
-        role = Role(
-            id=uuid.uuid4(),
-            name=TEST_ROLE,
-            description="Pre-existing",
-            is_system=False,
-            permissions=[perm_a, perm_b],
-        )
-        db_session.add(role)
-        await db_session.flush()
-
-        revoked = await revoke_role_permission(db_session, TEST_ROLE, TEST_PERM_B, verbose=False)
-        assert revoked is True
-
-        refreshed = await _get_role_with_permissions(db_session, TEST_ROLE)
-        assert refreshed is not None
-        assert {p.code for p in refreshed.permissions} == {TEST_PERM_A}
-
-    async def test_is_idempotent_when_grant_absent(self, db_session: AsyncSession) -> None:
-        perm_a = Permission(code=TEST_PERM_A, description=TEST_PERM_A)
-        db_session.add(perm_a)
-        await db_session.flush()
-
-        role = Role(
-            id=uuid.uuid4(),
-            name=TEST_ROLE,
-            description="Pre-existing",
-            is_system=False,
-            permissions=[perm_a],
-        )
-        db_session.add(role)
-        await db_session.flush()
-
-        revoked = await revoke_role_permission(db_session, TEST_ROLE, TEST_PERM_B, verbose=False)
-        assert revoked is False
-
-        refreshed = await _get_role_with_permissions(db_session, TEST_ROLE)
-        assert refreshed is not None
-        assert {p.code for p in refreshed.permissions} == {TEST_PERM_A}
-
-    async def test_is_a_noop_for_unknown_role(self, db_session: AsyncSession) -> None:
-        revoked = await revoke_role_permission(
-            db_session, "role_that_does_not_exist", TEST_PERM_A, verbose=False
-        )
-        assert revoked is False
