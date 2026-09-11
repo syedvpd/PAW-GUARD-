@@ -73,9 +73,9 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     allowed_hosts: str = "*,localhost,127.0.0.1"
     cors_origins: str = (
-        "http://localhost:3000,http://localhost:5173,http://localhost:4173,http://localhost:8080,"
+        "http://localhost:3000,http://localhost:5173,http://localhost:4173,http://localhost:8080,http://localhost:3001,"
         "https://pawguard-admin.vercel.app,https://pawguard-web-gamma.vercel.app,https://pawguard-web.vercel.app,"
-        "https://pawguard-public-web.vercel.app,https://pawguard-web-v2.vercel.app"
+        "https://pawguard-public-web.vercel.app,https://pawguard-web-v2.vercel.app,https://pawguard-backend-mqri.onrender.com"
     )
     max_request_body_size: int = 31_457_280  # 30 MB
 
@@ -119,7 +119,7 @@ class Settings(BaseSettings):
         description="Bypass MFA enforcement in dev/test environments",
     )
     require_email_verification: bool = Field(
-        default=True,
+        default=False,
         description="Enforce email verification before user sign in.",
     )
 

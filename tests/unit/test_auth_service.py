@@ -444,6 +444,7 @@ class TestEmailVerificationEnforcement:
         from pawguard.modules.auth.schemas import DeviceContext
 
         service = _make_service()
+        service._settings.require_email_verification = True
         user = _make_user()
         user.is_verified = False
         service._users.get_by_email.return_value = user
