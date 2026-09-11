@@ -130,6 +130,7 @@ async def _seed_roles() -> None:
         backfill_default_role,
         reconcile_roles,
         reconcile_standard_accounts,
+        revoke_role_permission,
     )
 
     from pawguard.db.session import AsyncSessionLocal
@@ -182,6 +183,11 @@ async def _seed_roles() -> None:
             logger.warning("schema_idempotent_patch_skipped", error=str(schema_exc))
 
         await reconcile_roles(session, verbose=False)
+        # rescue_centre_admin previously shipped with SYSTEM_ADMIN, which
+        # bypasses every RequirePermission check (see rbac.py) and let it see
+        # all 12 dashboards instead of just dashboard:rescue. reconcile_roles()
+        # never revokes, so drop the stale grant explicitly.
+        await revoke_role_permission(session, "rescue_centre_admin", "system:admin", verbose=False)
         # Self-heal legacy accounts that were created with no role: without a
         # role they pass auth but fail every permission guard (e.g.
         # companion_pet:read), so their "my pets" list 403s and the booking

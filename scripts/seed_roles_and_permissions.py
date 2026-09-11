@@ -188,7 +188,6 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
             pc.GRIEVANCE_UPDATE,
             pc.GRIEVANCE_ASSIGN,
             pc.GRIEVANCE_COMMENT,
-            pc.SYSTEM_ADMIN,
             pc.NOTIFICATION_READ,
             pc.DASHBOARD_RESCUE,
             pc.DASHBOARD_SHELTER,
@@ -583,6 +582,47 @@ async def reconcile_roles(
             print(f"  [OK] {role_name} (already in sync, {len(permission_codes)} permissions)")
 
     return created_roles, granted_total
+
+
+async def revoke_role_permission(
+    session: AsyncSession,
+    role_name: str,
+    permission_code: str,
+    *,
+    verbose: bool = True,
+) -> bool:
+    """Revoke one specific permission from one role, if granted.
+
+    reconcile_roles() is additive-only by design (won't strip an out-of-band
+    manual grant), so a bad grant that shipped *in* ROLE_DEFINITIONS - like
+    rescue_centre_admin briefly holding SYSTEM_ADMIN, which bypasses every
+    permission check per RequirePermission - stays in already-seeded
+    databases even after it's removed from the list here. Idempotent:
+    no-op if the role or the grant doesn't exist.
+    """
+    stmt = (
+        select(RolePermission)
+        .join(Role, Role.id == RolePermission.role_id)
+        .join(Permission, Permission.id == RolePermission.permission_id)
+        .where(Role.name == role_name, Permission.code == permission_code)
+    )
+    grant = (await session.execute(stmt)).scalar_one_or_none()
+    if grant is None:
+        if verbose:
+            print(f"  [OK] {role_name} does not hold '{permission_code}'")
+        return False
+
+    await session.delete(grant)
+    await session.flush()
+    # Same MissingGreenlet/staleness hazard as reconcile_roles(): if this
+    # role's `permissions` collection is already loaded in the session's
+    # identity map, deleting the association row directly leaves that
+    # in-memory collection stale for any later read in this transaction.
+    role = (await session.execute(select(Role).where(Role.name == role_name))).scalar_one()
+    await session.refresh(role, attribute_names=["permissions"])
+    if verbose:
+        print(f"  [FIX] revoked '{permission_code}' from {role_name}")
+    return True
 
 
 async def backfill_default_role(
