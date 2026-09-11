@@ -255,6 +255,7 @@ class VetClinicCreate(BaseModel):
     latitude: float | None = Field(None, ge=-90, le=90)
     longitude: float | None = Field(None, ge=-180, le=180)
     is_emergency: bool = False
+    is_active: bool = True
 
 
 class VetClinicUpdate(BaseModel):

@@ -110,9 +110,13 @@ async def list_clinics(
     page: PageParams = Depends(page_params),
     sort: SortParams = Depends(sort_params),
     search: str | None = Query(None, max_length=128),
+    is_active: bool | None = Query(None, description="Filter by active status"),
+    include_inactive: bool = Query(False, description="Include inactive clinics"),
     service: CompanionPetService = Depends(get_companion_pet_service),
 ) -> PaginatedResponse[VetClinicResponse]:
-    return await service.list_clinics(page, sort, search)
+    return await service.list_clinics(
+        page, sort, search, is_active=is_active, include_inactive=include_inactive
+    )
 
 
 @router.get(
@@ -613,7 +617,7 @@ async def scan_safety_tag(
     "/clinics",
     response_model=ApiResponse[VetClinicResponse],
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_permission("vet_clinic:manage"))],
+    dependencies=[Depends(require_permission("vet_clinic:manage", "system:admin"))],
     summary="Create a veterinary clinic directory entry",
 )
 async def create_clinic(
@@ -629,7 +633,7 @@ async def create_clinic(
 @router.patch(
     "/clinics/{clinic_id}",
     response_model=ApiResponse[VetClinicResponse],
-    dependencies=[Depends(require_permission("vet_clinic:manage"))],
+    dependencies=[Depends(require_permission("vet_clinic:manage", "system:admin"))],
     summary="Update a veterinary clinic directory entry",
 )
 async def update_clinic(
@@ -648,7 +652,7 @@ async def update_clinic(
 @router.delete(
     "/clinics/{clinic_id}",
     response_model=ApiResponse[None],
-    dependencies=[Depends(require_permission("vet_clinic:manage"))],
+    dependencies=[Depends(require_permission("vet_clinic:manage", "system:admin"))],
     summary="Soft-delete a veterinary clinic directory entry",
 )
 async def delete_clinic(
@@ -665,7 +669,7 @@ async def delete_clinic(
     "/clinics/{clinic_id}/memberships",
     response_model=ApiResponse[None],
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_permission("vet_clinic:manage"))],
+    dependencies=[Depends(require_permission("vet_clinic:manage", "system:admin"))],
     summary="Authorize a user for a veterinary clinic",
 )
 async def add_clinic_membership(

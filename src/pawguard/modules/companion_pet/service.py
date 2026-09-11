@@ -112,7 +112,24 @@ class CompanionPetService:
 
     @staticmethod
     def _is_admin(current_user: CurrentUser) -> bool:
-        return is_admin_role(current_user.claims)
+        if is_admin_role(current_user.claims):
+            return True
+        roles = getattr(current_user.claims, "roles", None)
+        if roles is None and isinstance(current_user.claims, dict):
+            roles = current_user.claims.get("roles", [])
+        if isinstance(roles, str):
+            roles = [roles]
+        admin_roles = {
+            "super_admin",
+            "super_administrator",
+            "superadmin",
+            "system:admin",
+            "admin",
+            "administrator",
+            "rescue_centre_admin",
+            "rescue_admin",
+        }
+        return any(str(r).strip().lower().replace("-", "_") in admin_roles for r in (roles or []))
 
     @staticmethod
     def _has_registry_access(current_user: CurrentUser) -> bool:
@@ -1009,9 +1026,16 @@ class CompanionPetService:
         return clinic
 
     async def list_clinics(
-        self, page: PageParams, sort: SortParams, search: str | None = None
+        self,
+        page: PageParams,
+        sort: SortParams,
+        search: str | None = None,
+        is_active: bool | None = None,
+        include_inactive: bool = False,
     ) -> PaginatedResponse[VetClinicResponse]:
-        rows, total = await self._repo.list_clinics(page, sort, search)
+        rows, total = await self._repo.list_clinics(
+            page, sort, search, is_active=is_active, include_inactive=include_inactive
+        )
         return PaginatedResponse(
             data=[VetClinicResponse.model_validate(row) for row in rows],
             meta=build_pagination_meta(total=total, params=page),

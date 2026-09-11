@@ -195,9 +195,19 @@ class CompanionPetRepository:
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def list_clinics(
-        self, page: PageParams, sort: SortParams, search: str | None = None
+        self,
+        page: PageParams,
+        sort: SortParams,
+        search: str | None = None,
+        is_active: bool | None = None,
+        include_inactive: bool = False,
     ) -> tuple[Sequence[VetClinic], int]:
-        filters = [VetClinic.deleted_at.is_(None), VetClinic.is_active.is_(True)]
+        filters = [VetClinic.deleted_at.is_(None)]
+        if is_active is not None:
+            filters.append(VetClinic.is_active.is_(is_active))
+        elif not include_inactive:
+            filters.append(VetClinic.is_active.is_(True))
+
         search_filter = build_search_filter(VetClinic, search, ("name", "address", "services"))
         if search_filter is not None:
             filters.append(search_filter)
