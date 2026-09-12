@@ -1689,3 +1689,207 @@ class TestDonationReceiptGeneration:
 
         assert resp.data.download_url.startswith("http") or resp.data.download_url.startswith("/")
         assert "documents" in resp.data.object_key or "receipt" in resp.data.object_key
+
+    @pytest.mark.asyncio
+    async def test_verify_recurring_donation_payment_advances_subscription_and_marks_success(
+        self, mock_repo, mock_dog_repo, mock_audit
+    ):
+        """Verify that recurring monthly donation payment verification transitions
+        the donation to SUCCESS and advances next_charge_date."""
+        from pawguard.core.payments import PaymentGateway as _PG
+        from pawguard.core.payments import PaymentVerificationResult
+
+        sub_id = uuid.uuid4()
+        donation_id = uuid.uuid4()
+        donor = DonorProfile(
+            id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            user=User(id=uuid.uuid4(), email="recurring@example.com", full_name="Monthly Donor"),
+        )
+        donation = Donation(
+            id=donation_id,
+            donor_id=donor.id,
+            donor=donor,
+            amount=4000.0,
+            currency="INR",
+            donation_type=DonationType.RECURRING,
+            status=DonationStatus.PENDING,
+            gateway_order_id="order_recurring_123",
+            recurring_subscription_id=sub_id,
+            created_at=datetime.now(UTC),
+        )
+        mock_repo.get_donation_by_id.return_value = donation
+        mock_repo._session = _async_session_mock()
+
+        def _update_gateway(d_id, **kwargs):
+            for k, v in kwargs.items():
+                setattr(donation, k, v)
+            return donation
+
+        mock_repo.update_gateway_fields.side_effect = _update_gateway
+
+        mock_gateway = MagicMock(spec=_PG)
+        mock_gateway.verify_payment_signature.return_value = PaymentVerificationResult(
+            verified=True, payment_id="pay_rec_abc", order_id="order_recurring_123"
+        )
+
+        mock_storage = self._configure_storage(MagicMock(spec=StorageService))
+        svc = DonationService(
+            mock_repo,
+            mock_dog_repo,
+            mock_gateway,
+            audit_service=mock_audit,
+            storage_service=mock_storage,
+        )
+
+        result = await svc.verify_donation_payment(
+            donation_id=donation_id,
+            gateway_order_id="order_recurring_123",
+            gateway_payment_id="pay_rec_abc",
+            gateway_signature="sig_valid_rec",
+            actor_id=donor.user_id,
+        )
+
+        assert result.status == DonationStatus.SUCCESS
+        assert result.gateway_payment_id == "pay_rec_abc"
+        assert result.gateway_signature == "sig_valid_rec"
+        assert result.transaction_id.startswith("TXN-")
+        mock_repo.update_gateway_fields.assert_awaited()
+        mock_audit.record.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_verify_donation_payment_idempotent_when_already_success(
+        self, mock_repo, mock_dog_repo, mock_audit
+    ):
+        """Calling verify twice on an already successful donation returns it immediately
+        without re-verifying or mutating."""
+        donation_id = uuid.uuid4()
+        donation = Donation(
+            id=donation_id,
+            donor_id=uuid.uuid4(),
+            amount=4000.0,
+            currency="INR",
+            donation_type=DonationType.RECURRING,
+            status=DonationStatus.SUCCESS,
+            gateway_order_id="order_rec_123",
+            gateway_payment_id="pay_rec_abc",
+            transaction_id="TXN-EXISTING",
+            created_at=datetime.now(UTC),
+        )
+        mock_repo.get_donation_by_id.return_value = donation
+
+        mock_gateway = MagicMock()
+        svc = DonationService(
+            mock_repo,
+            mock_dog_repo,
+            mock_gateway,
+            audit_service=mock_audit,
+        )
+
+        result = await svc.verify_donation_payment(
+            donation_id=donation_id,
+            gateway_order_id="order_rec_123",
+            gateway_payment_id="pay_rec_abc",
+            gateway_signature="sig_any",
+        )
+
+        assert result.status == DonationStatus.SUCCESS
+        assert result.transaction_id == "TXN-EXISTING"
+        mock_gateway.verify_payment_signature.assert_not_called()
+        mock_repo.update_gateway_fields.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_verify_donation_payment_invalid_signature_marks_failed(
+        self, mock_repo, mock_dog_repo, mock_audit
+    ):
+        """Invalid signature raises ValidationFailedError and updates status to FAILED."""
+        from pawguard.core.payments import PaymentGateway as _PG
+        from pawguard.core.payments import PaymentVerificationResult
+
+        donation_id = uuid.uuid4()
+        donation = Donation(
+            id=donation_id,
+            donor_id=uuid.uuid4(),
+            amount=1000.0,
+            currency="INR",
+            donation_type=DonationType.ONE_TIME,
+            status=DonationStatus.PENDING,
+            gateway_order_id="order_bad_123",
+            created_at=datetime.now(UTC),
+        )
+        mock_repo.get_donation_by_id.return_value = donation
+
+        mock_gateway = MagicMock(spec=_PG)
+        mock_gateway.verify_payment_signature.return_value = PaymentVerificationResult(
+            verified=False,
+            order_id="order_bad_123",
+            failure_reason="Signature verification failed",
+        )
+
+        svc = DonationService(
+            mock_repo,
+            mock_dog_repo,
+            mock_gateway,
+            audit_service=mock_audit,
+        )
+
+        with pytest.raises(ValidationFailedError, match="Signature verification failed"):
+            await svc.verify_donation_payment(
+                donation_id=donation_id,
+                gateway_order_id="order_bad_123",
+                gateway_payment_id="pay_fake",
+                gateway_signature="sig_invalid",
+            )
+
+        mock_repo.update_gateway_fields.assert_awaited_with(
+            donation_id,
+            status=DonationStatus.FAILED,
+            gateway_payment_id="pay_fake",
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_donation_receipt_rejects_pending_donation(
+        self, mock_repo, mock_dog_repo, mock_audit
+    ):
+        """Pending donation receipt requests must return 404 NotFoundError."""
+        from pawguard.modules.donation.router import get_donation_receipt
+
+        user_id = uuid.uuid4()
+        donation_id = uuid.uuid4()
+        donor_profile = DonorProfile(id=uuid.uuid4(), user_id=user_id)
+        donation = Donation(
+            id=donation_id,
+            donor_id=user_id,
+            amount=4000.0,
+            currency="INR",
+            status=DonationStatus.PENDING,
+            donation_type=DonationType.RECURRING,
+            created_at=datetime.now(UTC),
+            donor=donor_profile,
+        )
+        mock_repo.get_donation_by_id.return_value = donation
+
+        curr_user = MagicMock()
+        curr_user.user = User(id=user_id, email="donor@example.com")
+        curr_user.id = user_id
+
+        svc = DonationService(
+            mock_repo,
+            mock_dog_repo,
+            audit_service=mock_audit,
+        )
+
+        req = MagicMock()
+        req.headers = {}
+        req.query_params = {}
+
+        with pytest.raises(NotFoundError, match="Receipt is only available for successful donations"):
+            await get_donation_receipt(
+                donation_id=donation_id,
+                request=req,
+                current_user=curr_user,
+                service=svc,
+                db=AsyncMock(),
+                audit=mock_audit,
+            )
+

@@ -224,14 +224,12 @@ class DonationRepository:
     async def update_donation_status(
         self, donation_id: uuid.UUID, status: DonationStatus
     ) -> Donation | None:
-        stmt = (
-            update(Donation)
-            .where(Donation.id == donation_id)
-            .values(status=status)
-            .returning(Donation)
-        )
-        result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
+        current = await self.get_donation_by_id(donation_id)
+        if current is None:
+            return None
+        current.status = status
+        await self._session.flush()
+        return current
 
     async def update_gateway_fields(self, donation_id: uuid.UUID, **kwargs: Any) -> Donation | None:
         current = await self.get_donation_by_id(donation_id)
@@ -240,33 +238,46 @@ class DonationRepository:
 
         old_status = current.status
         sponsorship_id = current.sponsorship_id
+        recurring_sub_id = current.recurring_subscription_id
 
-        stmt = (
-            update(Donation).where(Donation.id == donation_id).values(**kwargs).returning(Donation)
-        )
-        result = await self._session.execute(stmt)
-        updated = result.scalar_one_or_none()
+        for key, value in kwargs.items():
+            setattr(current, key, value)
+
+        await self._session.flush()
 
         if (
-            updated
-            and updated.status == DonationStatus.SUCCESS
+            current.status == DonationStatus.SUCCESS
             and old_status != DonationStatus.SUCCESS
-            and sponsorship_id
         ):
-            from pawguard.modules.donation.models import DogSponsorship
+            if sponsorship_id:
+                from pawguard.modules.donation.models import DogSponsorship
 
-            sp = await self._session.get(DogSponsorship, sponsorship_id)
-            if sp and sp.next_charge_date:
-                month = sp.next_charge_date.month + 1
-                year = sp.next_charge_date.year
-                if month > 12:
-                    month = 1
-                    year += 1
-                day = min(sp.next_charge_date.day, calendar.monthrange(year, month)[1])
-                next_date = sp.next_charge_date.replace(year=year, month=month, day=day)
-                sp.next_charge_date = next_date
+                sp = await self._session.get(DogSponsorship, sponsorship_id)
+                if sp and sp.next_charge_date:
+                    month = sp.next_charge_date.month + 1
+                    year = sp.next_charge_date.year
+                    if month > 12:
+                        month = 1
+                        year += 1
+                    day = min(sp.next_charge_date.day, calendar.monthrange(year, month)[1])
+                    sp.next_charge_date = sp.next_charge_date.replace(year=year, month=month, day=day)
 
-        return updated
+            if recurring_sub_id:
+                from pawguard.modules.donation.models import RecurringSubscription
+
+                sub = await self._session.get(RecurringSubscription, recurring_sub_id)
+                if sub and sub.next_charge_date:
+                    month = sub.next_charge_date.month + 1
+                    year = sub.next_charge_date.year
+                    if month > 12:
+                        month = 1
+                        year += 1
+                    day = min(sub.next_charge_date.day, calendar.monthrange(year, month)[1])
+                    sub.next_charge_date = sub.next_charge_date.replace(year=year, month=month, day=day)
+
+            await self._session.flush()
+
+        return current
 
     async def list_donations_by_ids(self, ids: list[uuid.UUID]) -> Sequence[Donation]:
         stmt = select(Donation).where(Donation.id.in_(ids))
@@ -305,26 +316,23 @@ class DonationRepository:
     async def update_sponsorship_status(
         self, sponsorship_id: uuid.UUID, status: SponsorshipStatus
     ) -> DogSponsorship | None:
-        stmt = (
-            update(DogSponsorship)
-            .where(DogSponsorship.id == sponsorship_id)
-            .values(status=status)
-            .returning(DogSponsorship)
-        )
-        result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
+        sponsorship = await self.get_sponsorship_by_id(sponsorship_id)
+        if sponsorship is None:
+            return None
+        sponsorship.status = status
+        await self._session.flush()
+        return sponsorship
 
     async def cancel_sponsorship(
         self, sponsorship_id: uuid.UUID, cancelled_at: datetime
     ) -> DogSponsorship | None:
-        stmt = (
-            update(DogSponsorship)
-            .where(DogSponsorship.id == sponsorship_id)
-            .values(status=SponsorshipStatus.CANCELLED, cancelled_at=cancelled_at)
-            .returning(DogSponsorship)
-        )
-        result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
+        sponsorship = await self.get_sponsorship_by_id(sponsorship_id)
+        if sponsorship is None:
+            return None
+        sponsorship.status = SponsorshipStatus.CANCELLED
+        sponsorship.cancelled_at = cancelled_at
+        await self._session.flush()
+        return sponsorship
 
     async def get_sponsorship_by_id(self, sponsorship_id: uuid.UUID) -> DogSponsorship | None:
         stmt = (
@@ -365,14 +373,12 @@ class DonationRepository:
     async def advance_charge_date(
         self, sponsorship_id: uuid.UUID, new_date: date_type
     ) -> DogSponsorship | None:
-        stmt = (
-            update(DogSponsorship)
-            .where(DogSponsorship.id == sponsorship_id)
-            .values(next_charge_date=new_date)
-            .returning(DogSponsorship)
-        )
-        result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
+        sponsorship = await self.get_sponsorship_by_id(sponsorship_id)
+        if sponsorship is None:
+            return None
+        sponsorship.next_charge_date = new_date
+        await self._session.flush()
+        return sponsorship
 
     # ── Donation campaigns (PRR 3.1.7 / 3.11) ─────────────────────────────
 
@@ -392,29 +398,21 @@ class DonationRepository:
     async def update_campaign(
         self, campaign_id: uuid.UUID, **kwargs: Any
     ) -> DonationCampaign | None:
-        stmt = (
-            update(DonationCampaign)
-            .where(
-                DonationCampaign.id == campaign_id,
-                DonationCampaign.deleted_at.is_(None),
-            )
-            .values(**kwargs)
-            .returning(DonationCampaign)
-        )
-        result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
+        campaign = await self.get_campaign_by_id(campaign_id)
+        if campaign is None:
+            return None
+        for key, value in kwargs.items():
+            setattr(campaign, key, value)
+        await self._session.flush()
+        return campaign
 
     async def soft_delete_campaign(self, campaign_id: uuid.UUID) -> bool:
-        stmt = (
-            update(DonationCampaign)
-            .where(
-                DonationCampaign.id == campaign_id,
-                DonationCampaign.deleted_at.is_(None),
-            )
-            .values(deleted_at=datetime.now(UTC))
-        )
-        result = await self._session.execute(stmt)
-        return result.rowcount > 0  # type: ignore[attr-defined,no-any-return]
+        campaign = await self.get_campaign_by_id(campaign_id)
+        if campaign is None:
+            return False
+        campaign.deleted_at = datetime.now(UTC)
+        await self._session.flush()
+        return True
 
     async def paginate_campaigns(
         self,
@@ -499,17 +497,13 @@ class DonationRepository:
     async def cancel_recurring_subscription(
         self, subscription_id: uuid.UUID, cancelled_at: datetime
     ) -> RecurringSubscription | None:
-        stmt = (
-            update(RecurringSubscription)
-            .where(RecurringSubscription.id == subscription_id)
-            .values(
-                status=RecurringStatus.CANCELLED,
-                cancelled_at=cancelled_at,
-            )
-            .returning(RecurringSubscription)
-        )
-        result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
+        subscription = await self.get_recurring_subscription_by_id(subscription_id)
+        if subscription is None:
+            return None
+        subscription.status = RecurringStatus.CANCELLED
+        subscription.cancelled_at = cancelled_at
+        await self._session.flush()
+        return subscription
 
     async def get_due_recurring_subscriptions(
         self, as_of: date_type
@@ -535,14 +529,12 @@ class DonationRepository:
     async def advance_recurring_charge_date(
         self, subscription_id: uuid.UUID, new_date: date_type
     ) -> RecurringSubscription | None:
-        stmt = (
-            update(RecurringSubscription)
-            .where(RecurringSubscription.id == subscription_id)
-            .values(next_charge_date=new_date)
-            .returning(RecurringSubscription)
-        )
-        result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
+        subscription = await self.get_recurring_subscription_by_id(subscription_id)
+        if subscription is None:
+            return None
+        subscription.next_charge_date = new_date
+        await self._session.flush()
+        return subscription
 
     async def get_recurring_subscriptions_for_donor(
         self, donor_id: uuid.UUID
