@@ -93,7 +93,7 @@ async def list_tickets(
 @router.get(
     "/feedback",
     response_model=PaginatedResponse[ServiceFeedbackResponse],
-    dependencies=[Depends(require_permission("grievance:read"))],
+    dependencies=[Depends(require_permission("grievance:read", "volunteer:read", "public:read"))],
 )
 async def list_feedback(
     params: PageParams = Depends(page_params),

@@ -419,6 +419,12 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
         False,
         [
             pc.DASHBOARD_VOLUNTEER,
+            pc.VOLUNTEER_READ,
+            pc.GRIEVANCE_READ,
+            pc.GRIEVANCE_CREATE,
+            pc.PUBLIC_READ,
+            pc.PUBLIC_CREATE,
+            pc.COMPLAINTS_WRITE,
         ],
     ),
     (

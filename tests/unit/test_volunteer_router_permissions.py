@@ -54,14 +54,15 @@ class TestVolunteerRosterRouterPermissions:
     (Volunteer Coordinator, Rescue Centre Admin, Super Admin) hold.
     """
 
-    def test_list_profiles_requires_volunteer_update(self):
-        assert _required_codes("/volunteers", "GET") == ("volunteer:update",)
+    def test_list_profiles_permits_volunteer_read_or_update(self):
+        assert _required_codes("/volunteers", "GET") == ("volunteer:read", "volunteer:update")
 
     def test_list_applications_requires_volunteer_update(self):
         assert _required_codes("/volunteers/applications", "GET") == ("volunteer:update",)
 
-    def test_list_shift_attendance_requires_volunteer_update(self):
+    def test_list_shift_attendance_permits_volunteer_read_or_update(self):
         assert _required_codes("/volunteers/shifts/{shift_id}/attendance", "GET") == (
+            "volunteer:read",
             "volunteer:update",
         )
 

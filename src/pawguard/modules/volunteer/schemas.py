@@ -139,6 +139,25 @@ class VolunteerCheckOutRequest(BaseModel):
     )
 
 
+class VolunteerAttendanceActionRequest(BaseModel):
+    attendance_id: uuid.UUID | None = Field(
+        None, description="Specific attendance ID if checking in/out for a recorded attendance"
+    )
+    shift_id: uuid.UUID | None = Field(
+        None, description="Specific shift ID to resolve attendance for"
+    )
+    action: str = Field(
+        default="check_in",
+        description="Action to perform: 'check_in' / 'check-in' or 'check_out' / 'check-out'",
+    )
+    latitude: float | None = Field(
+        None, ge=-90.0, le=90.0, description="Volunteer's current GPS latitude"
+    )
+    longitude: float | None = Field(
+        None, ge=-180.0, le=180.0, description="Volunteer's current GPS longitude"
+    )
+
+
 class VolunteerShiftCreate(BaseModel):
     shelter_facility_id: uuid.UUID | None = None
     role_name: str = Field(..., min_length=1, max_length=64, examples=["Dog Walking"])

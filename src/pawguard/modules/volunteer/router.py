@@ -38,6 +38,7 @@ from pawguard.modules.volunteer.schemas import (
     VolunteerAdminIntakeRequest,
     VolunteerApplicationReject,
     VolunteerApplicationResponse,
+    VolunteerAttendanceActionRequest,
     VolunteerCheckInRequest,
     VolunteerCheckOutRequest,
     VolunteerLifecycleStatus,
@@ -149,6 +150,162 @@ async def get_my_attendance(
         return ApiResponse(data=[], message="No volunteer profile found.")
     records = await service.list_all_attendance_for_volunteer(profile.id)
     return ApiResponse(data=[ShiftAttendanceWithShiftResponse.model_validate(r) for r in records])
+
+
+@router.get(
+    "/attendance",
+    response_model=ApiResponse[list[ShiftAttendanceWithShiftResponse]],
+    dependencies=[Depends(get_current_user)],
+    summary="Get shift registration and attendance records for the authenticated volunteer",
+)
+async def get_volunteer_attendance_records(
+    current_user: CurrentUser = Depends(get_current_user),
+    service: VolunteerService = Depends(get_volunteer_service),
+) -> ApiResponse[list[ShiftAttendanceWithShiftResponse]]:
+    """Get the current volunteer's shift registration and attendance history."""
+    from pawguard.core.exceptions import NotFoundError
+
+    try:
+        profile = await service.get_profile_by_user(current_user.id)
+    except NotFoundError:
+        return ApiResponse(data=[], message="No volunteer profile found.")
+    records = await service.list_all_attendance_for_volunteer(profile.id)
+    return ApiResponse(data=[ShiftAttendanceWithShiftResponse.model_validate(r) for r in records])
+
+
+@router.post(
+    "/attendance",
+    response_model=ApiResponse[ShiftAttendanceResponse],
+    dependencies=[Depends(get_current_user)],
+    summary="Direct volunteer shift check-in/check-out action",
+)
+async def volunteer_attendance_action(
+    payload: VolunteerAttendanceActionRequest,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: VolunteerService = Depends(get_volunteer_service),
+) -> ApiResponse[ShiftAttendanceResponse]:
+    """Perform volunteer self-service check-in or check-out for a shift."""
+    from pawguard.core.exceptions import NotFoundError, ValidationFailedError
+
+    target_attendance_id = payload.attendance_id
+    if target_attendance_id is None:
+        if payload.shift_id is None:
+            raise ValidationFailedError("Either attendance_id or shift_id must be provided.")
+        profile = await service.get_profile_by_user(current_user.id)
+        existing = await service._repo.get_attendance_by_shift_and_volunteer(
+            payload.shift_id, profile.id
+        )
+        if existing is None:
+            raise NotFoundError("No attendance record found for this shift and volunteer.")
+        target_attendance_id = existing.id
+
+    ip = request.client.host if request.client else None
+    action_type = payload.action.strip().lower().replace("-", "_")
+    if action_type in ("check_out", "checkout"):
+        attendance = await service.check_out(
+            target_attendance_id,
+            current_user.user,
+            latitude=payload.latitude,
+            longitude=payload.longitude,
+            ip_address=ip,
+        )
+        return ApiResponse(
+            data=ShiftAttendanceResponse.model_validate(attendance),
+            message="Checked out from shift.",
+        )
+    else:
+        attendance = await service.check_in(
+            target_attendance_id,
+            current_user.user,
+            latitude=payload.latitude,
+            longitude=payload.longitude,
+            ip_address=ip,
+        )
+        return ApiResponse(
+            data=ShiftAttendanceResponse.model_validate(attendance),
+            message="Checked in for shift.",
+        )
+
+
+@router.post(
+    "/attendance/check-in",
+    response_model=ApiResponse[ShiftAttendanceResponse],
+    dependencies=[Depends(get_current_user)],
+    summary="Direct volunteer shift check-in",
+)
+async def volunteer_attendance_direct_check_in(
+    payload: VolunteerAttendanceActionRequest,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: VolunteerService = Depends(get_volunteer_service),
+) -> ApiResponse[ShiftAttendanceResponse]:
+    from pawguard.core.exceptions import NotFoundError, ValidationFailedError
+
+    target_attendance_id = payload.attendance_id
+    if target_attendance_id is None:
+        if payload.shift_id is None:
+            raise ValidationFailedError("Either attendance_id or shift_id must be provided.")
+        profile = await service.get_profile_by_user(current_user.id)
+        existing = await service._repo.get_attendance_by_shift_and_volunteer(
+            payload.shift_id, profile.id
+        )
+        if existing is None:
+            raise NotFoundError("No attendance record found for this shift and volunteer.")
+        target_attendance_id = existing.id
+
+    ip = request.client.host if request.client else None
+    attendance = await service.check_in(
+        target_attendance_id,
+        current_user.user,
+        latitude=payload.latitude,
+        longitude=payload.longitude,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=ShiftAttendanceResponse.model_validate(attendance),
+        message="Checked in for shift.",
+    )
+
+
+@router.post(
+    "/attendance/check-out",
+    response_model=ApiResponse[ShiftAttendanceResponse],
+    dependencies=[Depends(get_current_user)],
+    summary="Direct volunteer shift check-out",
+)
+async def volunteer_attendance_direct_check_out(
+    payload: VolunteerAttendanceActionRequest,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: VolunteerService = Depends(get_volunteer_service),
+) -> ApiResponse[ShiftAttendanceResponse]:
+    from pawguard.core.exceptions import NotFoundError, ValidationFailedError
+
+    target_attendance_id = payload.attendance_id
+    if target_attendance_id is None:
+        if payload.shift_id is None:
+            raise ValidationFailedError("Either attendance_id or shift_id must be provided.")
+        profile = await service.get_profile_by_user(current_user.id)
+        existing = await service._repo.get_attendance_by_shift_and_volunteer(
+            payload.shift_id, profile.id
+        )
+        if existing is None:
+            raise NotFoundError("No attendance record found for this shift and volunteer.")
+        target_attendance_id = existing.id
+
+    ip = request.client.host if request.client else None
+    attendance = await service.check_out(
+        target_attendance_id,
+        current_user.user,
+        latitude=payload.latitude,
+        longitude=payload.longitude,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=ShiftAttendanceResponse.model_validate(attendance),
+        message="Checked out from shift.",
+    )
 
 
 @router.get(
@@ -302,7 +459,7 @@ async def get_profile(
 ) -> ApiResponse[VolunteerProfileResponse]:
     profile = await service.get_profile(profile_id)
     is_owner = profile.user_id == current_user.user.id
-    if not is_owner and not has_permission(current_user.user, "volunteer:update"):
+    if not is_owner and not has_permission(current_user.user, "volunteer:update", "volunteer:read"):
         raise ForbiddenError("You do not have permission to view this volunteer profile.")
     return ApiResponse(data=VolunteerProfileResponse.model_validate(profile))
 
@@ -471,7 +628,7 @@ async def cancel_attendance(
 @router.get(
     "/shifts/{shift_id}/attendance",
     response_model=PaginatedResponse[ShiftAttendanceResponse],
-    dependencies=[Depends(require_permission("volunteer:update"))],
+    dependencies=[Depends(require_permission("volunteer:read", "volunteer:update"))],
 )
 async def list_shift_attendance(
     shift_id: uuid.UUID,
@@ -488,7 +645,7 @@ async def list_shift_attendance(
 @router.get(
     "",
     response_model=PaginatedResponse[VolunteerProfileResponse],
-    dependencies=[Depends(require_permission("volunteer:update"))],
+    dependencies=[Depends(require_permission("volunteer:read", "volunteer:update"))],
 )
 @cache_response(ttl_seconds=60, namespace="volunteer")
 async def list_profiles(

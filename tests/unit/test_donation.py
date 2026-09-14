@@ -1883,7 +1883,9 @@ class TestDonationReceiptGeneration:
         req.headers = {}
         req.query_params = {}
 
-        with pytest.raises(NotFoundError, match="Receipt is only available for successful donations"):
+        with pytest.raises(
+            NotFoundError, match="Receipt is only available for successful donations"
+        ):
             await get_donation_receipt(
                 donation_id=donation_id,
                 request=req,
@@ -1892,4 +1894,3 @@ class TestDonationReceiptGeneration:
                 db=AsyncMock(),
                 audit=mock_audit,
             )
-

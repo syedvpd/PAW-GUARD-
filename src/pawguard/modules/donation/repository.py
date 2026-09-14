@@ -245,10 +245,7 @@ class DonationRepository:
 
         await self._session.flush()
 
-        if (
-            current.status == DonationStatus.SUCCESS
-            and old_status != DonationStatus.SUCCESS
-        ):
+        if current.status == DonationStatus.SUCCESS and old_status != DonationStatus.SUCCESS:
             if sponsorship_id:
                 from pawguard.modules.donation.models import DogSponsorship
 
@@ -260,7 +257,9 @@ class DonationRepository:
                         month = 1
                         year += 1
                     day = min(sp.next_charge_date.day, calendar.monthrange(year, month)[1])
-                    sp.next_charge_date = sp.next_charge_date.replace(year=year, month=month, day=day)
+                    sp.next_charge_date = sp.next_charge_date.replace(
+                        year=year, month=month, day=day
+                    )
 
             if recurring_sub_id:
                 from pawguard.modules.donation.models import RecurringSubscription
@@ -273,7 +272,9 @@ class DonationRepository:
                         month = 1
                         year += 1
                     day = min(sub.next_charge_date.day, calendar.monthrange(year, month)[1])
-                    sub.next_charge_date = sub.next_charge_date.replace(year=year, month=month, day=day)
+                    sub.next_charge_date = sub.next_charge_date.replace(
+                        year=year, month=month, day=day
+                    )
 
             await self._session.flush()
 
