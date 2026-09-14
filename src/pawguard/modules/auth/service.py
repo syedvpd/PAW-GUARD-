@@ -14,7 +14,7 @@ import pyotp
 
 from pawguard.core.config import get_settings
 from pawguard.core.constants import ClientType, DeviceType
-from pawguard.core.exceptions import NotFoundError
+from pawguard.core.exceptions import ForbiddenError, NotFoundError
 from pawguard.core.logging import get_logger
 from pawguard.core.security import (
     TokenError,
@@ -1468,6 +1468,13 @@ class AdminService:
             await self._user_roles.set_roles(user_id, role_ids)
 
         if password is not None:
+            target_roles = {r.name.lower().replace("-", "_") for r in (user.roles or [])}
+            if role_names is not None:
+                target_roles.update(r.lower().replace("-", "_") for r in role_names)
+            if target_roles & {"general_public", "general_public_user"}:
+                raise ForbiddenError(
+                    "General public user passwords cannot be administratively changed."
+                )
             user.hashed_password = await asyncio.to_thread(hash_password, password)
 
         await self._users._session.flush()
@@ -1515,6 +1522,11 @@ class AdminService:
         user = await self._users.get_by_email_any(email.lower())
         if user is None:
             raise NotFoundError(f"No user with email {email} found.")
+        user_roles = {r.name.lower().replace("-", "_") for r in (user.roles or [])}
+        if user_roles & {"general_public", "general_public_user"}:
+            raise ForbiddenError(
+                "General public user passwords cannot be administratively changed."
+            )
         user.deleted_at = None
         user.is_active = True
         user.hashed_password = await asyncio.to_thread(hash_password, password)
