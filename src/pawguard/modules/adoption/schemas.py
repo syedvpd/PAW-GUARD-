@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from pawguard.modules.adoption.models import AdoptionStatus, FollowUpStatus
 from pawguard.modules.auth.schemas import UserProfile
@@ -77,6 +77,21 @@ class AdoptionStatusUpdate(BaseModel):
     )
 
 
+class AdoptionFollowUpResponse(BaseModel):
+    id: uuid.UUID
+    adoption_application_id: uuid.UUID
+    due_day: int
+    due_at: datetime
+    status: FollowUpStatus
+    submitted_at: datetime | None
+    media_keys: list[str] | None
+    notes: str | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class AdoptionApplicationResponse(BaseModel):
     id: uuid.UUID
     dog_id: uuid.UUID
@@ -98,6 +113,12 @@ class AdoptionApplicationResponse(BaseModel):
     existing_pets_medical_details: str | None
     pet_care_experience: str | None
     vetting_officer_notes: str | None
+    rejection_reason: str | None = Field(
+        None, description="Rejection reason if the application was rejected"
+    )
+    reason: str | None = Field(
+        None, description="Rejection or withdrawal reason if application is inactive"
+    )
     interview_scheduled_at: datetime | None
     interview_notes: str | None
     interview_completed_at: datetime | None
@@ -111,10 +132,45 @@ class AdoptionApplicationResponse(BaseModel):
     fee_amount: Decimal | None = Field(None, description="Adoption fee amount")
     completed_at: datetime | None
     created_at: datetime
+    submitted_at: datetime | None = Field(
+        None, description="Timestamp when application was submitted"
+    )
     updated_at: datetime
 
     dog: DogProfileResponse | None = None
     adopter: UserProfile | None = None
+    follow_ups: list[AdoptionFollowUpResponse] = Field(
+        default_factory=list, description="Post-adoption follow-up check-in records"
+    )
+    follow_up_records: list[AdoptionFollowUpResponse] = Field(
+        default_factory=list,
+        description="Alias for post-adoption follow-up check-in records",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _populate_derived_fields(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "submitted_at" not in data or data["submitted_at"] is None:
+                data["submitted_at"] = data.get("created_at")
+            if "follow_up_records" not in data or data["follow_up_records"] is None:
+                data["follow_up_records"] = data.get("follow_ups") or []
+            if "rejection_reason" not in data or data["rejection_reason"] is None:
+                notes = data.get("vetting_officer_notes") or ""
+                if data.get("status") == "rejected" and notes:
+                    for line in str(notes).splitlines():
+                        if "Rejection Reason:" in line:
+                            data["rejection_reason"] = line.split("Rejection Reason:", 1)[1].strip()
+                            break
+                    else:
+                        data["rejection_reason"] = str(notes).strip()
+            if "reason" not in data or data["reason"] is None:
+                data["reason"] = data.get("rejection_reason") or (
+                    data.get("vetting_officer_notes")
+                    if data.get("status") in ("rejected", "withdrawn")
+                    else None
+                )
+        return data
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -196,21 +252,6 @@ class FollowUpProofCreate(BaseModel):
     notes: str | None = Field(
         None, max_length=2000, examples=["Updated photos showing Buddy's progress."]
     )
-
-
-class AdoptionFollowUpResponse(BaseModel):
-    id: uuid.UUID
-    adoption_application_id: uuid.UUID
-    due_day: int
-    due_at: datetime
-    status: FollowUpStatus
-    submitted_at: datetime | None
-    media_keys: list[str] | None
-    notes: str | None
-    created_at: datetime
-    updated_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
 
 
 class AdoptionFollowUpCreate(BaseModel):

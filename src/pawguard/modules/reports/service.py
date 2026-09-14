@@ -5,12 +5,14 @@ from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from pawguard.core.pii import mask_report_data
 from pawguard.modules.adoption.models import (
     AdoptionApplication,
     AdoptionScore,
     AdoptionStatus,
+    FollowUpStatus,
 )
 from pawguard.modules.dog.models import DogProfile, DogStatus
 from pawguard.modules.donation.models import (
@@ -327,20 +329,50 @@ class ReportService:
                 stage = "submitted"
             rejection_counts[stage] = rejection_counts.get(stage, 0) + 1
 
+        # Post-adoption follow-up compliance analytics
+        all_followups = [fu for a in results for fu in (getattr(a, "follow_ups", None) or [])]
+        total_followups = len(all_followups)
+        submitted_followups = sum(
+            1 for fu in all_followups if fu.status == FollowUpStatus.SUBMITTED
+        )
+        overdue_followups = sum(1 for fu in all_followups if fu.status == FollowUpStatus.OVERDUE)
+        pending_followups = sum(1 for fu in all_followups if fu.status == FollowUpStatus.PENDING)
+        followup_compliance_pct = (
+            (submitted_followups / (submitted_followups + overdue_followups) * 100.0)
+            if (submitted_followups + overdue_followups) > 0
+            else (100.0 if submitted_followups > 0 else None)
+        )
+
+        pipeline_rows = [
+            ["Total Applications", str(total)],
+            ["Completed", str(completed)],
+            ["Conversion Rate", f"{conversion_rate:.1f}%"],
+            ["Avg Interview Score", f"{avg_score:.1f}" if avg_score is not None else "N/A"],
+            ["Avg Days to Complete", f"{avg_days:.1f}" if avg_days is not None else "N/A"],
+            ["Adoption Velocity Index", f"{velocity:.2f} adoptions / month"],
+        ]
+        if followup_compliance_pct is not None:
+            pipeline_rows.append(["Follow-Up Compliance", f"{followup_compliance_pct:.1f}%"])
+
         sections = [
             {
                 "title": "Vetting & Pipeline",
                 "headers": ["Metric", "Value"],
-                "rows": [
-                    ["Total Applications", str(total)],
-                    ["Completed", str(completed)],
-                    ["Conversion Rate", f"{conversion_rate:.1f}%"],
-                    ["Avg Interview Score", f"{avg_score:.1f}" if avg_score is not None else "N/A"],
-                    ["Avg Days to Complete", f"{avg_days:.1f}" if avg_days is not None else "N/A"],
-                    ["Adoption Velocity Index", f"{velocity:.2f} adoptions / month"],
-                ],
+                "rows": pipeline_rows,
             }
         ]
+        if total_followups > 0:
+            sections.append(
+                {
+                    "title": "Post-Adoption Follow-Up Milestones",
+                    "headers": ["Status", "Count"],
+                    "rows": [
+                        ["Submitted", str(submitted_followups)],
+                        ["Pending", str(pending_followups)],
+                        ["Overdue", str(overdue_followups)],
+                    ],
+                }
+            )
         if recommendation_counts:
             sections.append(
                 {
@@ -376,7 +408,7 @@ class ReportService:
     async def _fetch_adoption_apps(
         self, start: date | None, end: date | None, filters: dict[str, Any] | None
     ):
-        stmt = select(AdoptionApplication)
+        stmt = select(AdoptionApplication).options(selectinload(AdoptionApplication.follow_ups))
         if start:
             stmt = stmt.where(AdoptionApplication.created_at >= start)
         if end:

@@ -52,6 +52,7 @@ class AdoptionRepository:
             .options(
                 selectinload(AdoptionApplication.dog),
                 selectinload(AdoptionApplication.adopter).selectinload(User.roles),
+                selectinload(AdoptionApplication.follow_ups),
             )
             .where(AdoptionApplication.id == app_id, AdoptionApplication.deleted_at.is_(None))
         )
@@ -63,6 +64,7 @@ class AdoptionRepository:
             .options(
                 selectinload(AdoptionApplication.dog),
                 selectinload(AdoptionApplication.adopter).selectinload(User.roles),
+                selectinload(AdoptionApplication.follow_ups),
             )
             .where(AdoptionApplication.dog_id == dog_id, AdoptionApplication.deleted_at.is_(None))
         )
@@ -74,6 +76,7 @@ class AdoptionRepository:
             .options(
                 selectinload(AdoptionApplication.dog),
                 selectinload(AdoptionApplication.adopter).selectinload(User.roles),
+                selectinload(AdoptionApplication.follow_ups),
             )
             .where(
                 AdoptionApplication.adopter_id == adopter_id,
@@ -96,6 +99,7 @@ class AdoptionRepository:
             .options(
                 selectinload(AdoptionApplication.dog),
                 selectinload(AdoptionApplication.adopter).selectinload(User.roles),
+                selectinload(AdoptionApplication.follow_ups),
             )
             .where(AdoptionApplication.deleted_at.is_(None))
         )
@@ -129,6 +133,7 @@ class AdoptionRepository:
             .options(
                 selectinload(AdoptionApplication.dog),
                 selectinload(AdoptionApplication.adopter).selectinload(User.roles),
+                selectinload(AdoptionApplication.follow_ups),
             )
             .where(AdoptionApplication.id.in_(ids), AdoptionApplication.deleted_at.is_(None))
         )
@@ -251,9 +256,13 @@ class AdoptionRepository:
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def get_completed_applications(self) -> Sequence[AdoptionApplication]:
-        stmt = select(AdoptionApplication).where(
-            AdoptionApplication.status == AdoptionStatus.COMPLETED,
-            AdoptionApplication.deleted_at.is_(None),
+        stmt = (
+            select(AdoptionApplication)
+            .options(selectinload(AdoptionApplication.follow_ups))
+            .where(
+                AdoptionApplication.status == AdoptionStatus.COMPLETED,
+                AdoptionApplication.deleted_at.is_(None),
+            )
         )
         return (await self._session.execute(stmt)).scalars().all()
 

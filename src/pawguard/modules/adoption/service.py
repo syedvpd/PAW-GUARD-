@@ -601,8 +601,23 @@ class AdoptionService:
             if locked_dog is not None:
                 locked_dog.is_adoptable = False
                 locked_dog.status = DogStatus.ADOPTED
-            app.completed_at = datetime.now(UTC)
+            if app.completed_at is None:
+                app.completed_at = datetime.now(UTC)
             await self._invalidate_dog_cache()
+
+            if old_status != status:
+                existing_follow_ups = await self._repo.get_follow_ups_for_application(app_id)
+                existing_days = {fu.due_day for fu in existing_follow_ups}
+                for days in FOLLOW_UP_INTERVALS:
+                    if days not in existing_days:
+                        await self._repo.create_follow_up(
+                            AdoptionFollowUp(
+                                adoption_application_id=app_id,
+                                due_day=days,
+                                due_at=app.completed_at + timedelta(days=days),
+                                status=FollowUpStatus.PENDING,
+                            )
+                        )
 
         app.status = status
         await self._repo._session.flush()

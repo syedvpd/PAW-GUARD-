@@ -112,6 +112,32 @@ class AdoptionApplication(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMix
         "AdoptionFollowUp", back_populates="application", lazy="selectin"
     )
 
+    @property
+    def submitted_at(self) -> datetime | None:
+        return self.created_at
+
+    @property
+    def rejection_reason(self) -> str | None:
+        if self.status == AdoptionStatus.REJECTED and self.vetting_officer_notes:
+            for line in self.vetting_officer_notes.splitlines():
+                if "Rejection Reason:" in line:
+                    return line.split("Rejection Reason:", 1)[1].strip()
+            return self.vetting_officer_notes.strip()
+        return None
+
+    @property
+    def reason(self) -> str | None:
+        return self.rejection_reason or (
+            self.vetting_officer_notes.strip()
+            if self.status in (AdoptionStatus.REJECTED, AdoptionStatus.WITHDRAWN)
+            and self.vetting_officer_notes
+            else None
+        )
+
+    @property
+    def follow_up_records(self) -> list["AdoptionFollowUp"]:
+        return self.follow_ups if self.follow_ups is not None else []
+
 
 class AdoptionScore(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "adoption_scores"
