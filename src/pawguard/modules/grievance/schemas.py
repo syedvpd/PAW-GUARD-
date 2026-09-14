@@ -55,6 +55,24 @@ class GrievanceResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class UserGrievanceResponse(BaseModel):
+    id: uuid.UUID
+    reporter_name: str
+    reporter_phone: str
+    reporter_email: str | None = None
+    complaint_type: str
+    details: str
+    status: GrievanceStatus
+    resolution_notes: str | None = None
+    sla_due_at: datetime | None = None
+    first_responded_at: datetime | None = None
+    escalation_level: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class GrievanceEscalate(BaseModel):
     escalated_to_admin_id: uuid.UUID
     reason: str | None = Field(None, examples=["SLA breached, needs senior review."])

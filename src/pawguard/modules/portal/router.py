@@ -67,6 +67,7 @@ from pawguard.modules.portal.schemas import (
     UrgentAlertCreate,
     UrgentAlertResponse,
     UrgentAlertUpdate,
+    UserContactInquiryResponse,
     UserDashboardSummary,
     VeterinaryPartnerCreate,
     VeterinaryPartnerResponse,
@@ -440,6 +441,53 @@ async def get_user_dashboard(
 ) -> ApiResponse[UserDashboardSummary]:
     summary = await service.get_user_dashboard(current_user.id, current_user.user.email)
     return ApiResponse(data=summary)
+
+
+@router.get(
+    "/me/contact-inquiries",
+    response_model=PaginatedResponse[UserContactInquiryResponse],
+)
+async def list_my_contact_inquiries(
+    page: PageParams = Depends(page_params),
+    status_filter: ContactInquiryStatus | None = Query(default=None, alias="status"),
+    category: str | None = Query(default=None),
+    search: str | None = Query(default=None),
+    sort: SortParams = Depends(sort_params),
+    current_user: CurrentUser = Depends(get_current_user),
+    service: PortalService = Depends(get_portal_service),
+) -> PaginatedResponse[UserContactInquiryResponse]:
+    """List contact form inquiries submitted by the currently authenticated user."""
+    inquiries, meta = await service.list_user_contact_inquiries(
+        user_id=current_user.id,
+        user_email=current_user.user.email,
+        page_params=page,
+        status=status_filter,
+        category=category,
+        search=search,
+        sort=sort,
+    )
+    return PaginatedResponse(
+        data=[UserContactInquiryResponse.model_validate(i) for i in inquiries],
+        meta=meta,
+    )
+
+
+@router.get(
+    "/me/contact-inquiries/{inquiry_id}",
+    response_model=ApiResponse[UserContactInquiryResponse],
+)
+async def get_my_contact_inquiry(
+    inquiry_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: PortalService = Depends(get_portal_service),
+) -> ApiResponse[UserContactInquiryResponse]:
+    """Retrieve details of a single contact inquiry submitted by the authenticated user."""
+    inquiry = await service.get_user_contact_inquiry(
+        inquiry_id=inquiry_id,
+        user_id=current_user.id,
+        user_email=current_user.user.email,
+    )
+    return ApiResponse(data=UserContactInquiryResponse.model_validate(inquiry))
 
 
 # ── Admin CMS writes ─────────────────────────────────────────────────────────

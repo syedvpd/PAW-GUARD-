@@ -32,15 +32,30 @@ class GrievanceRepository:
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    async def get_user_ticket(
+        self, ticket_id: uuid.UUID, user_email: str
+    ) -> GrievanceTicket | None:
+        stmt = select(GrievanceTicket).where(
+            GrievanceTicket.id == ticket_id,
+            GrievanceTicket.deleted_at.is_(None),
+            func.lower(GrievanceTicket.reporter_email) == user_email.strip().lower(),
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
     async def count_tickets(
         self,
         *,
+        reporter_email: str | None = None,
         status: GrievanceStatus | None = None,
         complaint_type: str | None = None,
         assigned_to_admin_id: uuid.UUID | None = None,
         search: str | None = None,
     ) -> int:
         stmt = select(func.count(GrievanceTicket.id)).where(GrievanceTicket.deleted_at.is_(None))
+        if reporter_email:
+            stmt = stmt.where(
+                func.lower(GrievanceTicket.reporter_email) == reporter_email.strip().lower()
+            )
         if status:
             stmt = stmt.where(GrievanceTicket.status == status)
         if complaint_type:
@@ -63,6 +78,7 @@ class GrievanceRepository:
     async def list_tickets(
         self,
         *,
+        reporter_email: str | None = None,
         page_params: PageParams | None = None,
         status: GrievanceStatus | None = None,
         complaint_type: str | None = None,
@@ -70,6 +86,10 @@ class GrievanceRepository:
         search: str | None = None,
     ) -> Sequence[GrievanceTicket]:
         stmt = select(GrievanceTicket).where(GrievanceTicket.deleted_at.is_(None))
+        if reporter_email:
+            stmt = stmt.where(
+                func.lower(GrievanceTicket.reporter_email) == reporter_email.strip().lower()
+            )
         if status:
             stmt = stmt.where(GrievanceTicket.status == status)
         if complaint_type:
@@ -96,12 +116,13 @@ class GrievanceRepository:
         await self._session.flush()
         return comment
 
-    async def list_comments(self, ticket_id: uuid.UUID) -> Sequence[GrievanceComment]:
-        stmt = (
-            select(GrievanceComment)
-            .where(GrievanceComment.ticket_id == ticket_id)
-            .order_by(GrievanceComment.created_at.asc())
-        )
+    async def list_comments(
+        self, ticket_id: uuid.UUID, *, public_only: bool = False
+    ) -> Sequence[GrievanceComment]:
+        stmt = select(GrievanceComment).where(GrievanceComment.ticket_id == ticket_id)
+        if public_only:
+            stmt = stmt.where(GrievanceComment.is_internal.is_(False))
+        stmt = stmt.order_by(GrievanceComment.created_at.asc())
         return (await self._session.execute(stmt)).scalars().all()
 
     async def create_feedback(self, feedback: ServiceFeedback) -> ServiceFeedback:

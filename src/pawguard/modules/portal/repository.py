@@ -53,6 +53,8 @@ class PortalRepository:
         self,
         page_params: PageParams,
         *,
+        user_id: uuid.UUID | None = None,
+        user_email: str | None = None,
         status: ContactInquiryStatus | None = None,
         category: str | None = None,
         assigned_to_user_id: uuid.UUID | None = None,
@@ -64,6 +66,13 @@ class PortalRepository:
             selectinload(ContactMessage.assigned_to_user),
             selectinload(ContactMessage.responded_by_user),
         )
+        if user_id is not None or user_email is not None:
+            user_filters = []
+            if user_id is not None:
+                user_filters.append(ContactMessage.user_id == user_id)
+            if user_email:
+                user_filters.append(func.lower(ContactMessage.email) == user_email.strip().lower())
+            stmt = stmt.where(or_(*user_filters))
         if status is not None:
             stmt = stmt.where(ContactMessage.status == status)
         if category:
@@ -108,6 +117,23 @@ class PortalRepository:
             )
             .where(ContactMessage.id == inquiry_id)
         )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def get_user_contact_inquiry(
+        self,
+        inquiry_id: uuid.UUID,
+        *,
+        user_id: uuid.UUID | None = None,
+        user_email: str | None = None,
+    ) -> ContactMessage | None:
+        stmt = select(ContactMessage).where(ContactMessage.id == inquiry_id)
+        if user_id is not None or user_email is not None:
+            user_filters = []
+            if user_id is not None:
+                user_filters.append(ContactMessage.user_id == user_id)
+            if user_email:
+                user_filters.append(func.lower(ContactMessage.email) == user_email.strip().lower())
+            stmt = stmt.where(or_(*user_filters))
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def get_newsletter_subscription(

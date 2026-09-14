@@ -577,6 +577,23 @@ class ContactInquiryResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class UserContactInquiryResponse(BaseModel):
+    id: uuid.UUID
+    name: str | None = None
+    email: str
+    phone: str | None = None
+    category: str
+    subject: str
+    message: str
+    status: ContactInquiryStatus
+    staff_response: str | None = None
+    responded_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ContactInquiryStatusUpdate(BaseModel):
     status: ContactInquiryStatus
 
@@ -768,6 +785,8 @@ class UserDashboardSummary(BaseModel):
     foster_profile: dict[str, Any] | None
     donations: list[dict[str, Any]]
     lost_found_reports: list[dict[str, Any]]
+    contact_inquiries: list[dict[str, Any]] = Field(default_factory=list)
+    grievance_tickets: list[dict[str, Any]] = Field(default_factory=list)
 
 
 # ── Dynamic CMS Schemas ──────────────────────────────────────────────────────

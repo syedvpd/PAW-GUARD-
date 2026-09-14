@@ -33,6 +33,7 @@ from pawguard.modules.grievance.schemas import (
     GrievanceUpdate,
     ServiceFeedbackCreate,
     ServiceFeedbackResponse,
+    UserGrievanceResponse,
 )
 from pawguard.modules.grievance.service import GrievanceService
 from pawguard.services.audit_service import AuditService
@@ -104,6 +105,83 @@ async def list_feedback(
         data=[ServiceFeedbackResponse.model_validate(f) for f in feedback],
         meta=meta,
     )
+
+
+# ── User-facing My Grievance Endpoints (PRR §2.1 & §3.14) ────────────────────
+
+
+@router.get(
+    "/me",
+    response_model=PaginatedResponse[UserGrievanceResponse],
+)
+@router.get(
+    "/my",
+    response_model=PaginatedResponse[UserGrievanceResponse],
+    include_in_schema=False,
+)
+async def list_my_grievances(
+    params: PageParams = Depends(page_params),
+    status_filter: GrievanceStatus | None = Query(None, alias="status"),
+    complaint_type: str | None = Query(None),
+    search: str | None = Query(None),
+    current_user: CurrentUser = Depends(get_current_user),
+    service: GrievanceService = Depends(get_grievance_service),
+) -> PaginatedResponse[UserGrievanceResponse]:
+    """List grievance tickets submitted by the authenticated user."""
+    filter_params = GrievanceListFilter(
+        status=status_filter,
+        complaint_type=complaint_type,
+        search=search,
+    )
+    tickets, meta = await service.list_my_tickets(
+        user_email=current_user.user.email,
+        page_params=params,
+        filter_params=filter_params,
+    )
+    return PaginatedResponse(
+        data=[UserGrievanceResponse.model_validate(t) for t in tickets],
+        meta=meta,
+    )
+
+
+@router.get(
+    "/me/{ticket_id}",
+    response_model=ApiResponse[UserGrievanceResponse],
+)
+@router.get(
+    "/my/{ticket_id}",
+    response_model=ApiResponse[UserGrievanceResponse],
+    include_in_schema=False,
+)
+async def get_my_grievance(
+    ticket_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: GrievanceService = Depends(get_grievance_service),
+) -> ApiResponse[UserGrievanceResponse]:
+    """Retrieve details of a single grievance ticket owned by the authenticated user."""
+    ticket = await service.get_my_ticket(ticket_id, user_email=current_user.user.email)
+    return ApiResponse(data=UserGrievanceResponse.model_validate(ticket))
+
+
+@router.get(
+    "/me/{ticket_id}/comments",
+    response_model=ApiResponse[list[CommentResponse]],
+)
+@router.get(
+    "/my/{ticket_id}/comments",
+    response_model=ApiResponse[list[CommentResponse]],
+    include_in_schema=False,
+)
+async def list_my_grievance_comments(
+    ticket_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: GrievanceService = Depends(get_grievance_service),
+) -> ApiResponse[list[CommentResponse]]:
+    """List public comments on a grievance ticket owned by the authenticated user."""
+    comments = await service.list_my_ticket_comments(
+        ticket_id=ticket_id, user_email=current_user.user.email
+    )
+    return ApiResponse(data=[CommentResponse.model_validate(c) for c in comments])
 
 
 @router.get(

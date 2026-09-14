@@ -18,6 +18,7 @@ from pawguard.modules.auth.service import RequestContext
 from pawguard.modules.dog.models import DogProfile, DogStatus
 from pawguard.modules.donation.models import Donation, DonationStatus, DonorProfile
 from pawguard.modules.foster.models import FosterProfile, FosterStatus
+from pawguard.modules.grievance.models import GrievanceTicket
 from pawguard.modules.lost_found.models import FoundReport, LostReport
 from pawguard.modules.portal.models import (
     BlogPost,
@@ -179,8 +180,46 @@ class PortalService:
         meta = build_pagination_meta(total=total, params=page_params)
         return list(inquiries), meta
 
+    async def list_user_contact_inquiries(
+        self,
+        user_id: uuid.UUID,
+        user_email: str,
+        page_params: PageParams,
+        *,
+        status: ContactInquiryStatus | None = None,
+        category: str | None = None,
+        search: str | None = None,
+        sort: SortParams | None = None,
+    ) -> tuple[list[ContactMessage], PaginationMeta]:
+        inquiries, total = await self._repo.list_contact_inquiries_paginated(
+            page_params,
+            user_id=user_id,
+            user_email=user_email,
+            status=status,
+            category=category,
+            search=search,
+            sort=sort,
+        )
+        meta = build_pagination_meta(total=total, params=page_params)
+        return list(inquiries), meta
+
     async def get_contact_inquiry(self, inquiry_id: uuid.UUID) -> ContactMessage:
         inquiry = await self._repo.get_contact_inquiry(inquiry_id)
+        if inquiry is None:
+            raise NotFoundError("Contact inquiry not found.")
+        return inquiry
+
+    async def get_user_contact_inquiry(
+        self,
+        inquiry_id: uuid.UUID,
+        user_id: uuid.UUID,
+        user_email: str,
+    ) -> ContactMessage:
+        inquiry = await self._repo.get_user_contact_inquiry(
+            inquiry_id,
+            user_id=user_id,
+            user_email=user_email,
+        )
         if inquiry is None:
             raise NotFoundError("Contact inquiry not found.")
         return inquiry
@@ -1637,6 +1676,38 @@ class PortalService:
             .all()
         )
 
+        contact_inquiries = (
+            (
+                await self._session.execute(
+                    select(ContactMessage)
+                    .where(
+                        or_(
+                            ContactMessage.user_id == user_id,
+                            func.lower(ContactMessage.email) == user_email.lower(),
+                        )
+                    )
+                    .order_by(ContactMessage.created_at.desc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+        grievance_tickets = (
+            (
+                await self._session.execute(
+                    select(GrievanceTicket)
+                    .where(
+                        func.lower(GrievanceTicket.reporter_email) == user_email.lower(),
+                        GrievanceTicket.deleted_at.is_(None),
+                    )
+                    .order_by(GrievanceTicket.created_at.desc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+
         return UserDashboardSummary(
             rescue_cases=[self._serialize_rescue(r) for r in rescues],
             adoption_applications=[self._serialize_adoption(a) for a in adoptions],
@@ -1653,6 +1724,8 @@ class PortalService:
                 *[self._serialize_lost(lr) for lr in lost_reports],
                 *[self._serialize_found(f) for f in found_reports],
             ],
+            contact_inquiries=[self._serialize_contact_inquiry(m) for m in contact_inquiries],
+            grievance_tickets=[self._serialize_grievance_ticket(g) for g in grievance_tickets],
         )
 
     @staticmethod
@@ -1768,6 +1841,37 @@ class PortalService:
             "type": "found",
             "breed_observed": f.breed_observed,
             "status": f.status,
+        }
+
+    @staticmethod
+    def _serialize_contact_inquiry(m: ContactMessage) -> dict[str, Any]:
+        return {
+            "id": str(m.id),
+            "category": m.category,
+            "subject": m.subject,
+            "message": m.message,
+            "status": m.status.value if hasattr(m.status, "value") else str(m.status),
+            "staff_response": m.staff_response,
+            "responded_at": m.responded_at.isoformat() if m.responded_at else None,
+            "created_at": m.created_at.isoformat() if m.created_at else None,
+            "updated_at": m.updated_at.isoformat() if m.updated_at else None,
+        }
+
+    @staticmethod
+    def _serialize_grievance_ticket(g: GrievanceTicket) -> dict[str, Any]:
+        return {
+            "id": str(g.id),
+            "complaint_type": g.complaint_type,
+            "details": g.details,
+            "status": g.status.value if hasattr(g.status, "value") else str(g.status),
+            "resolution_notes": g.resolution_notes,
+            "sla_due_at": g.sla_due_at.isoformat() if g.sla_due_at else None,
+            "first_responded_at": g.first_responded_at.isoformat()
+            if g.first_responded_at
+            else None,
+            "escalation_level": g.escalation_level,
+            "created_at": g.created_at.isoformat() if g.created_at else None,
+            "updated_at": g.updated_at.isoformat() if g.updated_at else None,
         }
 
     # ── Dynamic CMS Pages ───────────────────────────────────────────────────

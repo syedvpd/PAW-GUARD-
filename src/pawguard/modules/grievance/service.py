@@ -57,7 +57,11 @@ class GrievanceService:
     async def submit_complaint(self, payload: GrievanceCreate) -> GrievanceTicket:
         sla_due_at = datetime.now(UTC) + timedelta(hours=DEFAULT_SLA_HOURS)
         ticket = await self._repo.create_ticket(
-            GrievanceTicket(**payload.model_dump(), sla_due_at=sla_due_at)
+            GrievanceTicket(
+                **payload.model_dump(),
+                sla_due_at=sla_due_at,
+                status=GrievanceStatus.OPEN,
+            )
         )
         try:
             from pawguard.modules.notifications.governance_service import (
@@ -68,8 +72,8 @@ class GrievanceService:
                 self._repo._session,
                 trigger_code="grievance_submitted",
                 module_name="grievance",
-                title=f"New Grievance Submitted: {ticket.subject[:30]}",
-                body=f"A new grievance ticket #{ticket.ticket_number or ticket.id} has been submitted.",
+                title=f"New Grievance Submitted: {getattr(ticket, 'complaint_type', 'Complaint')[:30]}",
+                body=f"A new grievance ticket #{ticket.id} has been submitted.",
                 action_url=f"/grievances/{ticket.id}",
             )
         except Exception as exc:
@@ -326,6 +330,39 @@ class GrievanceService:
         meta = build_pagination_meta(total=total, params=page_params or PageParams())
         return list(tickets), meta
 
+    async def list_my_tickets(
+        self,
+        user_email: str,
+        *,
+        page_params: PageParams | None = None,
+        filter_params: GrievanceListFilter | None = None,
+    ) -> tuple[list[GrievanceTicket], PaginationMeta]:
+        status = filter_params.status if filter_params else None
+        complaint_type = filter_params.complaint_type if filter_params else None
+        search = filter_params.search if filter_params else None
+
+        total = await self._repo.count_tickets(
+            reporter_email=user_email,
+            status=status,
+            complaint_type=complaint_type,
+            search=search,
+        )
+        tickets = await self._repo.list_tickets(
+            reporter_email=user_email,
+            page_params=page_params,
+            status=status,
+            complaint_type=complaint_type,
+            search=search,
+        )
+        meta = build_pagination_meta(total=total, params=page_params or PageParams())
+        return list(tickets), meta
+
+    async def get_my_ticket(self, ticket_id: uuid.UUID, user_email: str) -> GrievanceTicket:
+        ticket = await self._repo.get_user_ticket(ticket_id, user_email)
+        if ticket is None:
+            raise NotFoundError("Grievance ticket not found.")
+        return ticket
+
     async def add_comment(
         self,
         ticket_id: uuid.UUID,
@@ -356,6 +393,12 @@ class GrievanceService:
         if ticket is None:
             raise NotFoundError("Grievance ticket not found.")
         return list(await self._repo.list_comments(ticket_id))
+
+    async def list_my_ticket_comments(
+        self, ticket_id: uuid.UUID, user_email: str
+    ) -> list[GrievanceComment]:
+        await self.get_my_ticket(ticket_id, user_email)
+        return list(await self._repo.list_comments(ticket_id, public_only=True))
 
     async def submit_feedback(self, payload: ServiceFeedbackCreate) -> ServiceFeedback:
         return await self._repo.create_feedback(ServiceFeedback(**payload.model_dump()))
