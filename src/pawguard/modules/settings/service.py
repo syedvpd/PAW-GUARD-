@@ -1,5 +1,6 @@
 """SettingsService: owns configuration business behaviour (RULE-003)."""
 
+import contextlib
 import uuid
 from typing import Any
 
@@ -14,6 +15,8 @@ from pawguard.modules.settings.repository import (
 from pawguard.modules.settings.schemas import (
     BusinessRuleCreate,
     BusinessRuleUpdate,
+    EmailSettingsResponse,
+    EmailSettingsUpdate,
     GeneralSettingsResponse,
     PasswordPolicyUpdate,
     PublicContentResponse,
@@ -26,6 +29,7 @@ from pawguard.modules.settings.schemas import (
 class SystemSettingService:
     def __init__(self, repository: SystemSettingRepository) -> None:
         self._repo = repository
+        self._session = getattr(repository, "_session", None)
 
     async def get_setting(self, key: str) -> SystemSetting:
         setting = await self._repo.get_by_key(key)
@@ -52,6 +56,8 @@ class SystemSettingService:
             raise NotFoundError(f"Setting '{key}' not found.")
         for field, value in payload.model_dump(exclude_unset=True).items():
             setattr(setting, field, value)
+        if self._session is not None:
+            await self._session.flush()
         return setting
 
     async def delete_setting(self, setting_id: uuid.UUID) -> None:
@@ -60,11 +66,91 @@ class SystemSettingService:
             raise NotFoundError(f"Setting with id '{setting_id}' not found.")
         await self._repo.delete(setting_id)
 
+    async def get_general_settings(self) -> GeneralSettingsResponse:
+        base = AppConfigService().get_general_settings()
+        general_rows = await self._repo.list_by_category("general")
+        overrides: dict[str, Any] = {}
+        for row in general_rows:
+            clean_key = row.key.removeprefix("general_")
+            overrides[clean_key] = row.value
+
+        base_dict = base.model_dump()
+        for k, v in overrides.items():
+            if k in base_dict:
+                orig_type = type(base_dict[k])
+                if orig_type is bool:
+                    base_dict[k] = str(v).lower() in ("true", "1", "yes")
+                elif orig_type is int:
+                    with contextlib.suppress(ValueError):
+                        base_dict[k] = int(v)
+                else:
+                    base_dict[k] = v
+        return GeneralSettingsResponse(**base_dict)
+
+    async def update_general_settings(self, payload: dict[str, Any]) -> dict[str, Any]:
+        for key, val in payload.items():
+            db_key = key if key.startswith("general_") else f"general_{key}"
+            existing = await self._repo.get_by_key(db_key)
+            if existing is None:
+                await self._repo.create(
+                    SystemSetting(
+                        key=db_key,
+                        value=str(val),
+                        category="general",
+                        description=f"General setting for {key}",
+                    )
+                )
+            else:
+                existing.value = str(val)
+        if self._session is not None:
+            await self._session.flush()
+        return payload
+
+    async def get_email_settings(self) -> EmailSettingsResponse:
+        base_dict = AppConfigService().get_email_settings()
+        email_rows = await self._repo.list_by_category("email")
+        for row in email_rows:
+            clean_key = row.key.removeprefix("email_").removeprefix("mail_")
+            full_key = f"mail_{clean_key}"
+            if full_key in base_dict:
+                if full_key == "mail_port":
+                    with contextlib.suppress(ValueError):
+                        base_dict[full_key] = int(row.value)
+                elif full_key == "mail_use_tls":
+                    base_dict[full_key] = str(row.value).lower() in ("true", "1", "yes")
+                else:
+                    base_dict[full_key] = row.value
+        return EmailSettingsResponse(**base_dict)
+
+    async def update_email_settings(self, payload: EmailSettingsUpdate) -> EmailSettingsResponse:
+        updates = payload.model_dump(exclude_unset=True)
+        for key, val in updates.items():
+            if val is None:
+                continue
+            db_key = f"email_{key}"
+            existing = await self._repo.get_by_key(db_key)
+            val_str = str(val).lower() if isinstance(val, bool) else str(val)
+            if existing is None:
+                await self._repo.create(
+                    SystemSetting(
+                        key=db_key,
+                        value=val_str,
+                        category="email",
+                        description=f"Email configuration for {key}",
+                        is_encrypted=key in ("mail_password", "mail_username"),
+                    )
+                )
+            else:
+                existing.value = val_str
+        if self._session is not None:
+            await self._session.flush()
+        return await self.get_email_settings()
+
 
 class PasswordPolicyService:
     def __init__(self, repository: PasswordPolicyRepository) -> None:
         self._repo = repository
-        self._session = repository._session
+        self._session = getattr(repository, "_session", None)
 
     async def get_active(self) -> PasswordPolicy:
         policy = await self._repo.get_active()
@@ -81,12 +167,13 @@ class PasswordPolicyService:
         policy = await self._repo.get_active()
         if policy is None:
             policy = PasswordPolicy()
-            self._session.add(policy)
             for field, value in payload.model_dump(exclude_unset=True).items():
                 setattr(policy, field, value)
-            return policy
+            return await self._repo.create(policy)
         for field, value in payload.model_dump(exclude_unset=True).items():
             setattr(policy, field, value)
+        if self._session is not None:
+            await self._session.flush()
         return policy
 
     async def list_all(self) -> list[PasswordPolicy]:
@@ -96,6 +183,7 @@ class PasswordPolicyService:
 class BusinessRuleService:
     def __init__(self, repository: BusinessRuleRepository) -> None:
         self._repo = repository
+        self._session = getattr(repository, "_session", None)
 
     async def get_rule(self, rule_key: str) -> BusinessRule:
         rule = await self._repo.get_by_key(rule_key)
@@ -124,9 +212,18 @@ class BusinessRuleService:
     async def update_rule(self, rule_key: str, payload: BusinessRuleUpdate) -> BusinessRule:
         rule = await self._repo.get_by_key(rule_key)
         if rule is None:
-            raise NotFoundError(f"Business rule '{rule_key}' not found.")
+            rule = BusinessRule(
+                rule_key=rule_key,
+                rule_value=payload.rule_value or "",
+                description=payload.description,
+                module=payload.module or "general",
+                is_active=payload.is_active if payload.is_active is not None else True,
+            )
+            return await self._repo.create(rule)
         for field, value in payload.model_dump(exclude_unset=True).items():
             setattr(rule, field, value)
+        if self._session is not None:
+            await self._session.flush()
         return rule
 
     async def delete_rule(self, rule_id: uuid.UUID) -> None:
@@ -162,6 +259,7 @@ class PublicContentService:
 
     def __init__(self, repository: SystemSettingRepository) -> None:
         self._repo = repository
+        self._session = getattr(repository, "_session", None)
 
     async def get_content(self) -> PublicContentResponse:
         about = await self._repo.get_by_key(ABOUT_US_KEY)
@@ -201,6 +299,8 @@ class PublicContentService:
                 )
             else:
                 existing.value = value
+        if self._session is not None:
+            await self._session.flush()
         return await self.get_content()
 
 

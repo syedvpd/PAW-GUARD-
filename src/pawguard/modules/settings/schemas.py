@@ -5,6 +5,7 @@ import uuid
 from datetime import datetime
 
 from pydantic import (
+    AliasChoices,
     BaseModel,
     ConfigDict,
     Field,
@@ -77,7 +78,11 @@ class PasswordPolicyUpdate(BaseModel):
     require_uppercase: bool | None = Field(None, examples=[True])
     require_lowercase: bool | None = Field(None, examples=[True])
     require_digit: bool | None = Field(None, examples=[True])
-    require_special_char: bool | None = Field(None, examples=[False])
+    require_special_char: bool | None = Field(
+        None,
+        validation_alias=AliasChoices("require_special_char", "require_special"),
+        examples=[False],
+    )
     max_age_days: int | None = Field(None, ge=1, le=365, examples=[90])
     password_history_count: int | None = Field(None, ge=0, le=50, examples=[5])
     max_login_attempts: int | None = Field(None, ge=1, le=20, examples=[5])
@@ -107,12 +112,13 @@ class BusinessRuleCreate(BaseModel):
     rule_key: str = Field(..., min_length=1, max_length=255, examples=["adoption_lock_status"])
     rule_value: str = Field(..., min_length=0, examples=["home_check"])
     description: str | None = Field(None, examples=["Status at which a dog's profile locks."])
-    module: str = Field(..., max_length=64, examples=["adoption"])
+    module: str = Field(default="general", max_length=64, examples=["adoption"])
 
 
 class BusinessRuleUpdate(BaseModel):
     rule_value: str | None = Field(None, examples=["approved"])
     description: str | None = Field(None, examples=["Updated description."])
+    module: str | None = Field(None, max_length=64, examples=["adoption"])
     is_active: bool | None = Field(None, examples=[True])
 
 

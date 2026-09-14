@@ -1,6 +1,5 @@
 """API router for Settings & Configuration module (RULE-004)."""
 
-import contextlib
 import uuid
 from typing import Any
 
@@ -19,6 +18,8 @@ from pawguard.modules.settings.schemas import (
     BusinessRuleCreate,
     BusinessRuleResponse,
     BusinessRuleUpdate,
+    EmailSettingsResponse,
+    EmailSettingsUpdate,
     GeneralSettingsResponse,
     PasswordPolicyResponse,
     PasswordPolicyUpdate,
@@ -60,8 +61,10 @@ def get_public_content_service(db: AsyncSession = Depends(get_db)) -> PublicCont
     response_model=ApiResponse[GeneralSettingsResponse],
     dependencies=[Depends(require_permission("system:admin"))],
 )
-async def get_general_settings() -> ApiResponse[GeneralSettingsResponse]:
-    data = AppConfigService().get_general_settings()
+async def get_general_settings(
+    service: SystemSettingService = Depends(get_setting_service),
+) -> ApiResponse[GeneralSettingsResponse]:
+    data = await service.get_general_settings()
     return ApiResponse(data=data)
 
 
@@ -74,31 +77,33 @@ async def update_general_settings(
     payload: dict[str, Any],
     service: SystemSettingService = Depends(get_setting_service),
 ) -> ApiResponse[dict[str, Any]]:
-    for key, val in payload.items():
-        try:
-            await service.get_setting(f"general_{key}")
-            await service.update_setting(f"general_{key}", SystemSettingUpdate(value=str(val)))
-        except Exception:
-            with contextlib.suppress(Exception):
-                await service.create_setting(
-                    SystemSettingCreate(
-                        key=f"general_{key}",
-                        value=str(val),
-                        category="general",
-                        description=f"General setting for {key}",
-                    )
-                )
-    return ApiResponse(data=payload, message="General settings updated successfully.")
+    data = await service.update_general_settings(payload)
+    return ApiResponse(data=data, message="General settings updated successfully.")
 
 
 @router.get(
     "/email",
-    response_model=ApiResponse[dict[str, Any]],
+    response_model=ApiResponse[EmailSettingsResponse],
     dependencies=[Depends(require_permission("system:admin"))],
 )
-async def get_email_settings() -> ApiResponse[dict[str, Any]]:
-    data = AppConfigService().get_email_settings()
+async def get_email_settings(
+    service: SystemSettingService = Depends(get_setting_service),
+) -> ApiResponse[EmailSettingsResponse]:
+    data = await service.get_email_settings()
     return ApiResponse(data=data)
+
+
+@router.put(
+    "/email",
+    response_model=ApiResponse[EmailSettingsResponse],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def update_email_settings(
+    payload: EmailSettingsUpdate,
+    service: SystemSettingService = Depends(get_setting_service),
+) -> ApiResponse[EmailSettingsResponse]:
+    data = await service.update_email_settings(payload)
+    return ApiResponse(data=data, message="Email settings updated successfully.")
 
 
 @router.get(
