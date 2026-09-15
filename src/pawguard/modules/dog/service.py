@@ -715,7 +715,7 @@ class DogService:
                 event_type=DogActivityEventType.BULK_STATUS_UPDATED,
                 message=f"Status updated to '{status.value}' via bulk operation.",
                 actor_id=actor_id,
-                metadata_json={"status": status.value},
+                event_metadata={"status": status.value},
             )
             for dog in existing
         ]

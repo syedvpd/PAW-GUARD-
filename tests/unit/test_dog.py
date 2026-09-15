@@ -263,7 +263,8 @@ class TestDogService:
         count = await service.bulk_update_status(ids, DogStatus.ADOPTED, actor_id=uuid.uuid4())
         assert count == 2
         # One timeline entry per updated dog, keyed on their real ids.
-        logged_ids = [c[0][0].dog_id for c in mock_repo.create_activity.call_args_list]
+        logged_logs = mock_repo.create_activities.call_args[0][0]
+        logged_ids = [log.dog_id for log in logged_logs]
         assert sorted(str(i) for i in logged_ids) == sorted(str(i) for i in ids)
 
     @pytest.mark.asyncio
@@ -285,8 +286,8 @@ class TestDogService:
             ),
         ]
         await service.bulk_update_status([known, unknown], DogStatus.ADOPTED, actor_id=uuid.uuid4())
-        assert mock_repo.create_activity.await_count == 1
-        logged = mock_repo.create_activity.call_args[0][0]
+        assert mock_repo.create_activities.await_count == 1
+        logged = mock_repo.create_activities.call_args[0][0][0]
         assert logged.dog_id == known
 
     @pytest.mark.asyncio
@@ -315,7 +316,7 @@ class TestDogService:
         ]
         count = await service.bulk_soft_delete(ids, actor_id=uuid.uuid4())
         assert count == 2
-        assert mock_repo.create_activity.await_count == 2
+        assert mock_repo.create_activities.await_count == 1
 
     @pytest.mark.asyncio
     async def test_bulk_soft_delete_captures_dogs_before_delete(self, service, mock_repo):
@@ -342,7 +343,7 @@ class TestDogService:
         # in method_calls, so we can prove list_by_ids ran before the delete.
         call_names = [c[0] for c in mock_repo.method_calls]
         assert call_names.index("list_by_ids") < call_names.index("bulk_soft_delete")
-        assert mock_repo.create_activity.await_count == 1
+        assert mock_repo.create_activities.await_count == 1
 
     @pytest.mark.asyncio
     async def test_bulk_soft_delete_skips_unknown_ids(self, service, mock_repo):
@@ -361,8 +362,8 @@ class TestDogService:
             ),
         ]
         await service.bulk_soft_delete([known, unknown], actor_id=uuid.uuid4())
-        assert mock_repo.create_activity.await_count == 1
-        assert mock_repo.create_activity.call_args[0][0].dog_id == known
+        assert mock_repo.create_activities.await_count == 1
+        assert mock_repo.create_activities.call_args[0][0][0].dog_id == known
 
     # ── H-1: registration-number collision retry ──────────────────────────────
 

@@ -168,6 +168,7 @@ class TestShelterService:
             gender="male",
             status=DogStatus.RESCUED,
             is_adoptable=False,
+            is_quarantine_passed=True,
         )
         mock_repo.get_kennel_for_update.return_value = Kennel(
             id=kennel_id,
@@ -220,6 +221,7 @@ class TestShelterService:
             gender="male",
             status=DogStatus.RESCUED,
             is_adoptable=False,
+            is_quarantine_passed=True,
         )
         mock_repo.get_kennel_for_update.return_value = Kennel(
             id=kennel_id,
@@ -383,6 +385,7 @@ class TestShelterService:
             gender="male",
             status=DogStatus.SHELTER,
             is_adoptable=False,
+            is_quarantine_passed=True,
         )
         mock_repo.get_facility.side_effect = [
             ShelterFacility(
@@ -429,6 +432,7 @@ class TestShelterService:
             gender="male",
             status=DogStatus.SHELTER,
             is_adoptable=False,
+            is_quarantine_passed=True,
         )
         mock_dog_repo.get_by_id.return_value = dog
 
@@ -630,6 +634,7 @@ class TestShelterService:
             gender="male",
             status=DogStatus.RESCUED,
             is_adoptable=False,
+            is_quarantine_passed=True,
         )
         mock_repo.get_kennel_for_update.return_value = Kennel(
             id=kennel_id,
