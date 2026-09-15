@@ -46,6 +46,19 @@ from pawguard.redis.client import RedisClient
 from pawguard.services.audit_service import AuditService
 from pawguard.services.storage_service import StorageService
 
+VALID_DOG_TRANSITIONS: dict[DogStatus, set[DogStatus]] = {
+    DogStatus.RESCUED: {DogStatus.RESCUED, DogStatus.CLINIC, DogStatus.SHELTER},
+    DogStatus.CLINIC: {DogStatus.CLINIC, DogStatus.SHELTER, DogStatus.FOSTERED},
+    DogStatus.SHELTER: {DogStatus.SHELTER, DogStatus.CLINIC, DogStatus.FOSTERED, DogStatus.ADOPTED},
+    DogStatus.FOSTERED: {
+        DogStatus.FOSTERED,
+        DogStatus.CLINIC,
+        DogStatus.SHELTER,
+        DogStatus.ADOPTED,
+    },
+    DogStatus.ADOPTED: {DogStatus.ADOPTED},
+}
+
 # DOG-YYYY-NNNN leaves only 10,000 numbers per year, so collisions are
 # possible under concurrent intake; retry a bounded number of times before
 # giving up cleanly (mirrors the rescue module's ticket-number handling).
@@ -703,12 +716,26 @@ class DogService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> int:
-        updated = await self._repo.bulk_update_status(ids, status)
-
-        # Only record timeline entries for dogs that actually exist and weren't
-        # soft-deleted: list_by_ids filters deleted_at, and recording for a
-        # nonexistent id would flush a dangling dog_id FK (IntegrityError 500).
+        if not ids:
+            return 0
         existing = await self._repo.list_by_ids(ids)
+        if not existing:
+            raise NotFoundError("No dog profiles found for the given IDs.")
+
+        # Validate legal transition for each dog in batch
+        invalid_dogs = []
+        for d in existing:
+            allowed = VALID_DOG_TRANSITIONS.get(d.status, set())
+            if status not in allowed:
+                invalid_dogs.append(f"{d.registration_number} ({d.status.value} -> {status.value})")
+
+        if invalid_dogs:
+            raise ConflictError(
+                f"Cannot bulk update status to '{status.value}': illegal state transition for dog(s): "
+                + ", ".join(invalid_dogs)
+            )
+
+        updated = await self._repo.bulk_update_status(ids, status)
         logs = [
             DogActivityLog(
                 dog_id=dog.id,

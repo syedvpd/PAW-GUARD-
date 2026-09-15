@@ -1074,3 +1074,18 @@ class TestDogService:
         assert p.kennel_id is None
         assert p.image_urls == ["https://img.com/dog.png"]
         assert p.estimated_age == "2"
+
+    @pytest.mark.asyncio
+    async def test_dog_bulk_update_status_illegal_transition_rejected(self, service, mock_repo):
+        """Batch with one legal (RESCUED->CLINIC) and one illegal (ADOPTED->CLINIC) target status
+
+        asserts the whole batch is REJECTED and zero rows changed in DB.
+        """
+        dog1 = _make_dog(id=uuid.uuid4(), registration_number="DOG-001", status=DogStatus.RESCUED)
+        dog2 = _make_dog(id=uuid.uuid4(), registration_number="DOG-002", status=DogStatus.ADOPTED)
+        mock_repo.list_by_ids.return_value = [dog1, dog2]
+
+        with pytest.raises(ConflictError, match="illegal state transition"):
+            await service.bulk_update_status([dog1.id, dog2.id], DogStatus.CLINIC)
+
+        assert not mock_repo.bulk_update_status.called

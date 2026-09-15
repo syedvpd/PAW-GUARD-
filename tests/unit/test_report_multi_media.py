@@ -82,7 +82,7 @@ class TestReportMultiMediaValidation:
         with patch("pawguard.services.storage_service.boto3.client", return_value=mock_client):
             svc = StorageService()
 
-            with pytest.raises(ValidationFailedError, match="exceeds the maximum 50MB limit"):
+            with pytest.raises(ValidationFailedError, match="exceeds the maximum 10MB limit"):
                 svc.validate_report_media(photo_keys=["lost-found/huge.jpg"], video_key=None)
 
     def test_oversized_video_raises(self) -> None:

@@ -44,18 +44,28 @@ from pawguard.services.storage_service import StorageService as S3StorageService
 logger = get_logger(__name__)
 
 
-def _cleanup_s3_safe(s3_client: S3StorageService, object_key: str) -> None:
+def _cleanup_s3_safe(
+    s3_client: S3StorageService,
+    object_key: str,
+    actor_id: uuid.UUID | None = None,
+    ip_address: str | None = None,
+) -> None:
     """Best-effort S3 object deletion that never raises."""
     try:
-        s3_client.delete_object(object_key=object_key)
+        s3_client.delete_object(object_key=object_key, actor_id=actor_id, ip_address=ip_address)
     except Exception:
         logger.warning("s3_cleanup_failed", object_key=object_key, exc_info=True)
 
 
-async def _cleanup_s3_async(s3_client: S3StorageService, object_key: str) -> None:
+async def _cleanup_s3_async(
+    s3_client: S3StorageService,
+    object_key: str,
+    actor_id: uuid.UUID | None = None,
+    ip_address: str | None = None,
+) -> None:
     """Non-blocking best-effort S3 deletion."""
     try:
-        await asyncio.to_thread(_cleanup_s3_safe, s3_client, object_key)
+        await asyncio.to_thread(_cleanup_s3_safe, s3_client, object_key, actor_id, ip_address)
     except Exception:
         logger.warning("s3_cleanup_failed", object_key=object_key, exc_info=True)
 

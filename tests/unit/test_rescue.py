@@ -1869,15 +1869,20 @@ class TestEmergencyDuplicateAndMediaContract:
         from pawguard.services.storage_service import StorageService
 
         mock_s3 = MagicMock()
-        # 2 files each 30MB = 60MB > 50MB
-        mock_s3.head_object.return_value = {
-            "ContentType": "image/jpeg",
-            "ContentLength": 30 * 1024 * 1024,
-        }
+
+        # 1 video (20MB) + 4 photos (8MB each) = 52MB > 50MB batch limit (5 files <= 5 max files limit)
+        def _mock_head(Bucket, Key):
+            if Key.endswith(".mp4"):
+                return {"ContentType": "video/mp4", "ContentLength": 20 * 1024 * 1024}
+            return {"ContentType": "image/jpeg", "ContentLength": 8 * 1024 * 1024}
+
+        mock_s3.head_object.side_effect = _mock_head
         storage = StorageService()
         storage._client = mock_s3
-        with pytest.raises(ValidationFailedError, match="50MB limit"):
-            storage.validate_report_media(["rescue/p1.jpg", "rescue/p2.jpg"], None)
+        with pytest.raises(ValidationFailedError, match="30MB batch limit"):
+            storage.validate_report_media(
+                ["rescue/p1.jpg", "rescue/p2.jpg", "rescue/p3.jpg", "rescue/p4.jpg"], "rescue/v.mp4"
+            )
 
     def test_10_invalid_media_mime_type_rejected(self):
         from pawguard.services.storage_service import StorageService

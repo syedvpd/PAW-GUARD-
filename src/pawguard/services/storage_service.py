@@ -1,6 +1,7 @@
 """AWS S3 presigned URL generation for direct client uploads/downloads."""
 
 import uuid
+from typing import Any
 
 import boto3
 from botocore.client import Config
@@ -37,7 +38,8 @@ _s3_client = None
 
 
 class StorageService:
-    def __init__(self) -> None:
+    def __init__(self, audit_service: Any = None) -> None:
+        self._audit = audit_service
         global _s3_client
         settings = get_settings()
         self._bucket = settings.s3_bucket_name or "pawguard-media"
@@ -585,10 +587,19 @@ class StorageService:
             )
 
     @storage_breaker
-    def delete_object(self, *, object_key: str) -> None:
+    def delete_object(
+        self,
+        *,
+        object_key: str,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> None:
+        import asyncio
+        import inspect
         import time
 
         from pawguard.core.metrics import track_outbound_request
+        from pawguard.modules.auth.models import AuthAuditEventType
 
         start = time.perf_counter()
         try:
@@ -602,6 +613,20 @@ class StorageService:
                 duration_ms=duration_ms,
                 status="success",
             )
+            if self._audit and actor_id:
+                res = self._audit.record(
+                    event_type=AuthAuditEventType.STORAGE_FILE_DELETED,
+                    actor_id=actor_id,
+                    ip_address=ip_address or "",
+                    user_agent="",
+                    metadata={"object_key": object_key},
+                )
+                if inspect.isawaitable(res):
+                    try:
+                        loop = asyncio.get_running_loop()
+                        loop.create_task(res)
+                    except RuntimeError:
+                        pass
         except Exception:
             duration_ms = (time.perf_counter() - start) * 1000
             track_outbound_request(

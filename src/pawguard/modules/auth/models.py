@@ -145,6 +145,7 @@ class AuthAuditEventType(StrEnum):
     REGISTERED = "registered"
     ACCOUNT_LOCKED = "account_locked"
     PROFILE_UPDATED = "profile_updated"
+    STORAGE_FILE_DELETED = "storage_file_deleted"
     OAUTH_LOGIN = "oauth_login"
     OAUTH_LINKED = "oauth_linked"
     OAUTH_UNLINKED = "oauth_unlinked"

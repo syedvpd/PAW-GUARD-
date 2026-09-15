@@ -7,12 +7,14 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from pawguard.core.security import create_access_token, hash_password
 from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
 from pawguard.modules.auth.models import User, UserSession
 from pawguard.modules.dog.models import DogProfile, DogStatus
 from pawguard.modules.foster.models import FosterPlacement, FosterPlacementStatus, FosterProfile
+from pawguard.modules.volunteer.models import VolunteerShift
 
 
 @pytest.fixture
@@ -322,3 +324,17 @@ class TestRBACBoundarySweep:
             assert resp.status_code in (401, 403, 404), (
                 f"RBAC violated: volunteer accessed {endpoint} with code {resp.status_code}"
             )
+
+    async def test_volunteer_shift_capacity_db_check_constraint(self, db_session):
+        """Direct DB write setting capacity <= 0 is REJECTED by Postgres check constraint."""
+        shift = VolunteerShift(
+            role_name="Feeding",
+            start_at=datetime.now(UTC),
+            end_at=datetime.now(UTC),
+            capacity=0,
+        )
+        db_session.add(shift)
+        with pytest.raises(IntegrityError) as exc_info:
+            await db_session.flush()
+        assert "ck_volunteer_shifts_capacity_positive" in str(exc_info.value)
+        await db_session.rollback()

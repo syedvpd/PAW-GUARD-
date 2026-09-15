@@ -215,3 +215,41 @@ class TestS3PresignedUploadUrl:
             svc.generate_presigned_upload_url(
                 object_key="rescue/evidence.jpg", content_type="image/jpeg"
             )
+
+    def test_delete_object_audit_logged(self) -> None:
+        from pawguard.modules.auth.models import AuthAuditEventType
+        from pawguard.services.audit_service import AuditService
+
+        mock_client = MagicMock()
+        mock_audit = AsyncMock(spec=AuditService)
+        actor_id = uuid.uuid4()
+
+        with patch("pawguard.services.storage_service.boto3.client", return_value=mock_client):
+            svc = S3StorageService(audit_service=mock_audit)
+            svc.delete_object(object_key="dogs/abc.jpg", actor_id=actor_id, ip_address="127.0.0.1")
+
+        mock_client.delete_object.assert_called_once_with(
+            Bucket="pawguard-media", Key="dogs/abc.jpg"
+        )
+        mock_audit.record.assert_called_once_with(
+            event_type=AuthAuditEventType.STORAGE_FILE_DELETED,
+            actor_id=actor_id,
+            ip_address="127.0.0.1",
+            user_agent="",
+            metadata={"object_key": "dogs/abc.jpg"},
+        )
+
+    def test_storage_circuit_breaker_opens_after_5_failures(self) -> None:
+        from pawguard.core.resilience import CircuitBreakerOpenException
+
+        mock_client = MagicMock()
+        mock_client.delete_object.side_effect = RuntimeError("S3 connection error")
+
+        with patch("pawguard.services.storage_service.boto3.client", return_value=mock_client):
+            svc = S3StorageService()
+            for _ in range(5):
+                with pytest.raises(RuntimeError):
+                    svc.delete_object(object_key="test.jpg")
+
+            with pytest.raises(CircuitBreakerOpenException):
+                svc.delete_object(object_key="test.jpg")

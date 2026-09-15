@@ -877,3 +877,40 @@ class TestMedicalPrr35:
         result = await service.get_clearances_for_dog(dog_id)
         assert len(result) == 1
         assert result[0].status == "approved"
+
+    @pytest.mark.asyncio
+    async def test_certificate_persistence_issue_and_list_clearances(self, service, mock_repo, mock_dog_repo):
+        """POST certificate issues clearance -> GET clearances lists just-issued certificate."""
+        dog_id = uuid.uuid4()
+        vet_id = uuid.uuid4()
+        dog = self._dog(dog_id)
+        mock_dog_repo.get_by_id.return_value = dog
+
+        # 1. POST certificate / issue clearance
+        payload = MedicalClearanceCreate(
+            clearance_type="adoption_surgery",
+            status="approved",
+            decision_notes="Healthy and cleared for adoption."
+        )
+        issued_success = await service.authorize_adoption_clearance(
+            dog_id,
+            roles={"veterinarian"},
+            actor_id=vet_id,
+            payload=payload,
+        )
+        assert issued_success is True
+        mock_repo.create_clearance.assert_awaited_once()
+
+        # Capture the persisted clearance model created during issuance
+        created_clearance = mock_repo.create_clearance.await_args.args[0]
+        assert created_clearance.dog_id == dog_id
+        assert created_clearance.status == "approved"
+
+        # 2. GET /clearances/dogs/{dog_id}
+        mock_repo.get_clearances_by_dog.return_value = [created_clearance]
+        clearances = await service.get_clearances_for_dog(dog_id)
+        assert len(clearances) == 1
+        assert clearances[0].dog_id == dog_id
+        assert clearances[0].status == "approved"
+        assert clearances[0].decision_notes == "Healthy and cleared for adoption."
+

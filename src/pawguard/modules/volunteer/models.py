@@ -5,7 +5,16 @@ from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+)
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -134,6 +143,9 @@ class VolunteerProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin,
 
 class VolunteerShift(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "volunteer_shifts"
+    __table_args__ = (
+        CheckConstraint("capacity > 0", name="ck_volunteer_shifts_capacity_positive"),
+    )
 
     shelter_facility_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), nullable=True

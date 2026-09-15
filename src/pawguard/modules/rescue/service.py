@@ -1863,11 +1863,15 @@ class RescueService:
                     )
 
         if new_dispatches:
-            self._repo._session.add_all(new_dispatches)
+            if len(new_dispatches) == 1:
+                await self._repo.create_dispatch(new_dispatches[0])
+            else:
+                await self._repo.create_dispatches(new_dispatches)
         if new_reports:
-            self._repo._session.add_all(new_reports)
-
-        await self._repo._session.flush()
+            if len(new_reports) == 1:
+                await self._repo.create_report(new_reports[0])
+            else:
+                await self._repo.create_reports(new_reports)
 
         if self._audit and actor_id:
             await self._audit.record(
