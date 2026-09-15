@@ -31,7 +31,7 @@ from pawguard.core.logging import get_logger
 from pawguard.core.pagination import PageParams, page_params
 from pawguard.core.payments import PaymentGatewayError, get_payment_gateway
 from pawguard.core.pdf_generation import generate_tax_receipt
-from pawguard.core.pii import mask_email, mask_full_name, mask_phone
+from pawguard.core.pii import mask_address, mask_email, mask_full_name, mask_pan, mask_phone
 from pawguard.core.rate_limiter import rate_limit
 from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.core.search import SortParams, sort_params
@@ -111,6 +111,9 @@ def _mask_donor_pii(item: DonorProfileResponse, current_user: CurrentUser) -> Do
     return item.model_copy(
         update={
             "tax_identifier": "***MASKED***" if item.tax_identifier else None,
+            "pan_number": mask_pan(item.pan_number),
+            "full_name_for_80g": mask_full_name(item.full_name_for_80g),
+            "address_for_80g": mask_address(item.address_for_80g),
             "user": masked_user,
         }
     )

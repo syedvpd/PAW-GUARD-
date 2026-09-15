@@ -24,16 +24,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # PRR 3.6: prevent two dogs from occupying the same kennel.
-    # The kennel.capacity column is allowed to be > 1 (group housing)
-    # so we enforce uniqueness only on single-capacity kennels (the
-    # default in the Kennel model). Each dog must carry the kennel_id
-    # (NULL dogs are unaffected) and not be soft-deleted.
+    # PRR 3.6: Fast lookup for dogs in kennels.
+    # Kennel capacity (single vs. group housing) is concurrency-checked under
+    # SELECT ... FOR UPDATE row locks in shelter service.
     op.create_index(
-        "uq_dog_profiles_kennel_single",
+        "ix_dog_profiles_kennel_id",
         "dog_profiles",
         ["kennel_id"],
-        unique=True,
+        unique=False,
         postgresql_where=sa.text("kennel_id IS NOT NULL AND deleted_at IS NULL"),
     )
 
@@ -49,22 +47,18 @@ def upgrade() -> None:
     )
 
     # PRR 3.7: dog-level adoption approval lock. While any application is
-    # in the HOME_CHECK / APPROVED state for a dog, the dog's is_adoptable
-    # flag is forced to false. Since is_adoptable lives on dog_profiles and
-    # is not a partial-unique candidate, we instead index the dog_id of
-    # non-rejected applications to support the per-dog exclusivity check
-    # the application code already performs (now race-safe via
-    # SELECT ... FOR UPDATE; this index keeps the lookup fast).
+    # in the HOME_CHECK / APPROVED / COMPLETED state for a dog, the dog's is_adoptable
+    # flag is locked. Matches the ORM model predicate identically.
     op.create_index(
         "ix_adoption_applications_dog_lock_states",
         "adoption_applications",
         ["dog_id"],
         unique=True,
-        postgresql_where=sa.text("status IN ('home_check', 'approved') AND deleted_at IS NULL"),
+        postgresql_where=sa.text("status IN ('home_check', 'approved', 'completed') AND deleted_at IS NULL"),
     )
 
 
 def downgrade() -> None:
     op.drop_index("ix_adoption_applications_dog_lock_states", table_name="adoption_applications")
     op.drop_index("uq_foster_placements_active_dog", table_name="foster_placements")
-    op.drop_index("uq_dog_profiles_kennel_single", table_name="dog_profiles")
+    op.drop_index("ix_dog_profiles_kennel_id", table_name="dog_profiles")

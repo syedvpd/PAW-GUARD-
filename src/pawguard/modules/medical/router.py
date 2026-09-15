@@ -10,6 +10,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import Response
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.bulk import (
@@ -18,6 +19,7 @@ from pawguard.core.bulk import (
     BulkStatusUpdateRequest,
     BulkStatusUpdateResponse,
 )
+from pawguard.core.exceptions import NotFoundError, ValidationFailedError
 from pawguard.core.pagination import PageParams, page_params
 from pawguard.core.pdf_generation import generate_medical_report_pdf
 from pawguard.core.responses import ApiResponse, PaginatedResponse
@@ -25,7 +27,7 @@ from pawguard.core.search import SortParams, sort_params
 from pawguard.db.session import get_db
 from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
-from pawguard.modules.auth.models import AuthAuditEventType
+from pawguard.modules.auth.models import AuthAuditEventType, User
 from pawguard.modules.auth.rbac import require_permission, require_role
 from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.inventory.repository import InventoryRepository
@@ -645,33 +647,45 @@ async def export_medical_report(
     audit: AuditService = Depends(get_audit_service),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
-    dog_name = pet_name or "Bella (Labrador)"
-    vet_name = "Dr. Sarah Jenkins"
-    details = (
-        "Medically cleared for adoption. Vaccinations up to date, dewormed, "
-        "spayed/neutered, and in excellent overall physical condition."
-    )
+    dog_repo = DogRepository(db)
+    med_repo = MedicalRepository(db)
+
+    dog_name = pet_name
+    vet_name = current_user.user.full_name or "Authorized Veterinarian"
+    details = "Medical examination completed and recorded."
 
     if dog_id:
         try:
             parsed_id = uuid.UUID(dog_id)
-            dog_repo = DogRepository(db)
-            med_repo = MedicalRepository(db)
             dog = await dog_repo.get_by_id(parsed_id)
-            if dog:
-                dog_name = f"{dog.name} ({dog.breed or 'Canine'})"
-                latest_clearance = await med_repo.get_latest_approved_clearance(dog.id)
-                if latest_clearance:
-                    details = (
-                        latest_clearance.notes
-                        or f"Clearance purpose: {latest_clearance.purpose}. Status: Medically Approved."
+        except ValueError:
+            dog = await dog_repo.get_by_registration(dog_id)
+
+        if not dog:
+            raise NotFoundError("Dog profile not found.")
+
+        dog_name = f"{dog.name} ({dog.breed or 'Canine'})"
+        latest_clearance = await med_repo.get_latest_approved_clearance(dog.id)
+        if latest_clearance:
+            details = (
+                latest_clearance.decision_notes
+                or latest_clearance.clearance_type
+                or "Medically Cleared."
+            )
+            if latest_clearance.authorized_by_id:
+                vet = (
+                    await db.execute(
+                        select(User).where(User.id == latest_clearance.authorized_by_id)
                     )
-        except Exception:
-            pass
+                ).scalar_one_or_none()
+                if vet:
+                    vet_name = vet.full_name
+    elif not dog_name:
+        raise ValidationFailedError("dog_id is required to export medical report.")
 
     pdf_bytes = generate_medical_report_pdf(
         pet_name=dog_name,
-        dog_id=dog_id or "DOG-2026-0005",
+        dog_id=dog_id or "UNKNOWN",
         report_title="PawGuard Medical Clearance Summary",
         veterinarian_name=vet_name,
         details=details,
@@ -710,17 +724,33 @@ async def issue_health_clearance_cert(
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     audit: AuditService = Depends(get_audit_service),
+    db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[DigitalCertificateItem]:
+    dog_repo = DogRepository(db)
+    resolved_pet_name = payload.pet_name
+    resolved_pet_id = str(payload.dog_id) if payload.dog_id else None
+
+    if payload.dog_id:
+        dog = await dog_repo.get_by_id(payload.dog_id)
+        if not dog:
+            raise NotFoundError("Dog profile not found.")
+        resolved_pet_name = f"{dog.name} ({dog.breed or 'Canine'})"
+        resolved_pet_id = str(dog.id)
+    elif not resolved_pet_name:
+        raise ValidationFailedError("dog_id or pet_name is required.")
+
     cert_id = f"CERT-HC-{uuid.uuid4().hex[:8].upper()}"
     item = DigitalCertificateItem(
         id=uuid.uuid4(),
         certificate_id=cert_id,
         certificate_type="Health Clearance Certificate",
-        pet_name=payload.pet_name or "Bella (Labrador)",
-        pet_id=str(payload.dog_id) if payload.dog_id else "DOG-2026-0005",
+        pet_name=resolved_pet_name,
+        pet_id=resolved_pet_id or cert_id,
         recipient_name=None,
         clearance_purpose=payload.purpose or payload.remarks or "Cleared – Ready for Adoption",
-        authorized_by=payload.authorizing_veterinarian or "Dr. Sarah Jenkins",
+        authorized_by=payload.authorizing_veterinarian
+        or current_user.user.full_name
+        or "Authorized Veterinarian",
         issue_date=payload.clearance_date or datetime.now().strftime("%Y-%m-%d"),
         status="ACTIVE",
     )
@@ -750,15 +780,29 @@ async def generate_adoption_cert(
     request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     audit: AuditService = Depends(get_audit_service),
+    db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[DigitalCertificateItem]:
+    dog_repo = DogRepository(db)
+    resolved_pet_name = payload.dog_name
+    resolved_pet_id = str(payload.dog_id) if payload.dog_id else None
+
+    if payload.dog_id:
+        dog = await dog_repo.get_by_id(payload.dog_id)
+        if not dog:
+            raise NotFoundError("Dog profile not found.")
+        resolved_pet_name = f"{dog.name} ({dog.breed or 'Canine'})"
+        resolved_pet_id = str(dog.id)
+    elif not resolved_pet_name:
+        raise ValidationFailedError("dog_id or dog_name is required.")
+
     cert_id = f"CERT-AD-{uuid.uuid4().hex[:8].upper()}"
     recipient = payload.recipient_name or payload.adopter_name or "Adopter"
     item = DigitalCertificateItem(
         id=uuid.uuid4(),
         certificate_id=cert_id,
         certificate_type="Adoption Certificate",
-        pet_name=payload.dog_name or "Bella (Labrador)",
-        pet_id=str(payload.dog_id) if payload.dog_id else "DOG-2026-0005",
+        pet_name=resolved_pet_name,
+        pet_id=resolved_pet_id or cert_id,
         recipient_name=recipient,
         clearance_purpose=f"Formal Adoption Certificate for {recipient}",
         authorized_by="PawGuard Rescue Authority",
@@ -805,7 +849,7 @@ async def list_digital_certificates(
         clearances = (await db.execute(stmt)).scalars().all()
         for cl in clearances:
             dog = await dog_repo.get_by_id(cl.dog_id)
-            d_name = dog.name if dog else "Rescue Dog"
+            d_name = f"{dog.name} ({dog.breed or 'Canine'})" if dog else "Rescue Dog"
             items.append(
                 DigitalCertificateItem(
                     id=cl.id,
@@ -814,7 +858,7 @@ async def list_digital_certificates(
                     pet_name=d_name,
                     pet_id=str(cl.dog_id),
                     recipient_name=None,
-                    clearance_purpose=cl.purpose or "Medically Cleared",
+                    clearance_purpose=cl.clearance_type or "Medically Cleared",
                     authorized_by="PawGuard Medical Officer",
                     issue_date=(
                         cl.created_at.strftime("%Y-%m-%d")
@@ -827,31 +871,4 @@ async def list_digital_certificates(
     except Exception:
         pass
 
-    if not items:
-        items = [
-            DigitalCertificateItem(
-                id=uuid.uuid4(),
-                certificate_id="CERT-HC-2026-001",
-                certificate_type="Health Clearance Certificate",
-                pet_name="Bella (Labrador)",
-                pet_id="DOG-2026-0005",
-                recipient_name=None,
-                clearance_purpose="Cleared – Ready for Adoption",
-                authorized_by="Dr. Sarah Jenkins",
-                issue_date="2026-09-10",
-                status="ACTIVE",
-            ),
-            DigitalCertificateItem(
-                id=uuid.uuid4(),
-                certificate_id="CERT-AD-2026-002",
-                certificate_type="Adoption Certificate",
-                pet_name="Bella (Labrador)",
-                pet_id="DOG-2026-0005",
-                recipient_name="Nandha Bhai",
-                clearance_purpose="Formal Adoption Certificate",
-                authorized_by="PawGuard Rescue Authority",
-                issue_date="2026-09-10",
-                status="ACTIVE",
-            ),
-        ]
     return ApiResponse(data=items, message="Certificates retrieved.")

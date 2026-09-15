@@ -36,6 +36,7 @@ from pawguard.workers.jobs.scheduled_jobs import (
     check_vehicle_insurance_expiry,
     post_adoption_followups,
     process_sponsorship_charges,
+    send_post_rescue_feedback_surveys,
     send_post_service_feedback_surveys,
     send_volunteer_shift_reminders,
     sweep_overdue_invoices,
@@ -147,6 +148,7 @@ _notify_safety_tag_scan = _track_failures(notify_safety_tag_scan)
 
 _check_grievance_sla_escalation = _track_failures(check_grievance_sla_escalation)
 _send_post_service_feedback_surveys = _track_failures(send_post_service_feedback_surveys)
+_send_post_rescue_feedback_surveys = _track_failures(send_post_rescue_feedback_surveys)
 _check_fleet_maintenance_due = _track_failures(check_fleet_maintenance_due)
 _check_vehicle_insurance_expiry = _track_failures(check_vehicle_insurance_expiry)
 _check_equipment_checkout_expiry = _track_failures(check_equipment_checkout_expiry)
@@ -172,6 +174,7 @@ class WorkerSettings:
         _notify_safety_tag_scan,
         _check_grievance_sla_escalation,
         _send_post_service_feedback_surveys,
+        _send_post_rescue_feedback_surveys,
         _check_fleet_maintenance_due,
         _check_vehicle_insurance_expiry,
         _check_equipment_checkout_expiry,
@@ -190,6 +193,7 @@ class WorkerSettings:
         cron(_check_missed_daily_care_logs, hour={21}, minute={0}, max_tries=2),
         cron(_check_grievance_sla_escalation, minute={0, 15, 30, 45}, max_tries=2),
         cron(_send_post_service_feedback_surveys, hour={14}, minute={0}, max_tries=2),
+        cron(_send_post_rescue_feedback_surveys, hour={15}, minute={0}, max_tries=2),
         cron(_check_fleet_maintenance_due, hour={6}, minute={0}, max_tries=2),
         cron(_check_vehicle_insurance_expiry, hour={7}, minute={0}, max_tries=2),
         cron(_check_equipment_checkout_expiry, hour={18}, minute={0}, max_tries=2),

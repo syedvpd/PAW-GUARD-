@@ -110,6 +110,7 @@ class TestWebhookDeduplicationAndConcurrency:
         db_session.add(sp)
 
         # Create donation
+        sp_order_id = f"order_sp_{uuid.uuid4().hex[:8]}"
         donation = Donation(
             id=uuid.uuid4(),
             donor_id=donor.id,
@@ -118,20 +119,21 @@ class TestWebhookDeduplicationAndConcurrency:
             currency="USD",
             donation_type=DonationType.SPONSORSHIP,
             status=DonationStatus.PENDING,
-            gateway_order_id="order_sp_1",
+            gateway_order_id=sp_order_id,
         )
         db_session.add(donation)
         await db_session.flush()
 
         # Update donation to success atomically
+        sp_pay_id = f"pay_sp_{uuid.uuid4().hex[:8]}"
         _, transitioned1 = await repo.update_gateway_fields_atomic(
-            donation.id, status=DonationStatus.SUCCESS, gateway_payment_id="pay_sp_1"
+            donation.id, status=DonationStatus.SUCCESS, gateway_payment_id=sp_pay_id
         )
         assert transitioned1 is True
 
         # Second update for same donation
         _, transitioned2 = await repo.update_gateway_fields_atomic(
-            donation.id, status=DonationStatus.SUCCESS, gateway_payment_id="pay_sp_1"
+            donation.id, status=DonationStatus.SUCCESS, gateway_payment_id=sp_pay_id
         )
         assert transitioned2 is False
 
@@ -160,6 +162,8 @@ class TestWebhookDeduplicationAndConcurrency:
         donor = DonorProfile(id=uuid.uuid4(), user_id=user.id)
         db_session.add(donor)
 
+        wh_order_id = f"order_wh_{uuid.uuid4().hex[:8]}"
+        wh_pay_id = f"pay_wh_{uuid.uuid4().hex[:8]}"
         donation = Donation(
             id=uuid.uuid4(),
             donor_id=donor.id,
@@ -167,7 +171,7 @@ class TestWebhookDeduplicationAndConcurrency:
             currency="USD",
             donation_type=DonationType.ONE_TIME,
             status=DonationStatus.PENDING,
-            gateway_order_id="order_wh_123",
+            gateway_order_id=wh_order_id,
         )
         db_session.add(donation)
         await db_session.flush()
@@ -175,8 +179,8 @@ class TestWebhookDeduplicationAndConcurrency:
         event_id = f"evt_service_{uuid.uuid4().hex}"
         event = WebhookEvent(
             event_type="payment.captured",
-            order_id="order_wh_123",
-            payment_id="pay_wh_123",
+            order_id=wh_order_id,
+            payment_id=wh_pay_id,
             is_success=True,
             raw_payload={},
             event_id=event_id,

@@ -113,7 +113,7 @@ class Settings(BaseSettings):
     # deployments stay zero-config; set this in production so rotating the JWT
     # keypair does not orphan stored MFA secrets.
     mfa_encryption_key: str = ""
-    mfa_mandatory_for_admins: bool = False
+    mfa_mandatory_for_admins: bool = True
     mfa_bypass_for_dev: bool = Field(
         default=True,
         description="Bypass MFA enforcement in dev/test environments",

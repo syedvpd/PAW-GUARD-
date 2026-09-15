@@ -48,6 +48,24 @@ def mask_full_name(name: str | None) -> str | None:
     return parts[0] + (" " + " ".join(p[0] + "***" for p in parts[1:]) if len(parts) > 1 else "")
 
 
+def mask_pan(pan: str | None) -> str | None:
+    if pan is None:
+        return None
+    clean = pan.strip().upper()
+    if len(clean) <= 4:
+        return "******"
+    return clean[:2] + ("*" * (len(clean) - 4)) + clean[-2:]
+
+
+def mask_address(address: str | None) -> str | None:
+    if address is None:
+        return None
+    clean = address.strip()
+    if len(clean) <= 8:
+        return "******"
+    return clean[:4] + "***" + clean[-3:]
+
+
 def mask_report_data(
     rows: list[list[Any]], headers: list[str], pii_columns: set[str]
 ) -> list[list[Any]]:

@@ -87,6 +87,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
             f"{prefix}/donations/sponsorships",
             f"{prefix}/donations/recurring",
             f"{prefix}/donations/verify",
+            f"{prefix}/donations/webhook/razorpay",
             f"{prefix}/finance/refunds",
         }
 

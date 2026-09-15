@@ -3,6 +3,7 @@
 import uuid
 from datetime import date as date_type
 from datetime import datetime
+from decimal import Decimal
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
@@ -102,7 +103,7 @@ class DogSponsorship(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
         nullable=False,
         index=True,
     )
-    monthly_amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    monthly_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
     status: Mapped[SponsorshipStatus] = mapped_column(
         String(32), default=SponsorshipStatus.ACTIVE, nullable=False, index=True
@@ -131,7 +132,7 @@ class RecurringSubscription(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
         nullable=False,
         index=True,
     )
-    amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
     frequency: Mapped[RecurringFrequency] = mapped_column(
         String(32), default=RecurringFrequency.MONTHLY, nullable=False
@@ -185,7 +186,7 @@ class Donation(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
         index=True,
     )
 
-    amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
     donation_type: Mapped[DonationType] = mapped_column(
         String(32), default=DonationType.ONE_TIME, nullable=False
@@ -225,7 +226,7 @@ class DonationCampaign(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin,
 
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    target_amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    target_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
     campaign_type: Mapped[CampaignType] = mapped_column(
         String(32), default=CampaignType.GENERAL, nullable=False

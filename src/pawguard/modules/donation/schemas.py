@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import date, datetime
+from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -57,7 +58,7 @@ class DonorProfileResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-MAX_DONATION_AMOUNT: float = 500_000.0
+MAX_DONATION_AMOUNT: Decimal = Decimal("500000.0")
 
 
 class DonationCreate(BaseModel):
@@ -65,7 +66,9 @@ class DonationCreate(BaseModel):
     campaign_id: uuid.UUID | None = Field(
         None, description="Attach this donation to a fundraising campaign."
     )
-    amount: float = Field(..., ge=1.0, le=MAX_DONATION_AMOUNT, examples=[50.0])
+    amount: Decimal = Field(
+        ..., ge=Decimal("1.0"), le=MAX_DONATION_AMOUNT, examples=[Decimal("50.0")]
+    )
     currency: str = Field(
         default_factory=_default_currency, min_length=3, max_length=3, examples=["USD"]
     )
@@ -84,7 +87,7 @@ class DonationResponse(BaseModel):
     donor_id: uuid.UUID
     dog_id: uuid.UUID | None
     campaign_id: uuid.UUID | None
-    amount: float
+    amount: Decimal
     currency: str
     donation_type: DonationType
     status: DonationStatus
@@ -107,7 +110,7 @@ class DonationOrderResponse(BaseModel):
     donation_id: uuid.UUID
     provider: str
     order_id: str
-    amount: float
+    amount: Decimal
     currency: str
     checkout_key: str
 
@@ -121,7 +124,7 @@ class DonationVerifyRequest(BaseModel):
 
 class SponsorshipCreate(BaseModel):
     dog_id: uuid.UUID
-    monthly_amount: float = Field(..., ge=1.0, examples=[25.0])
+    monthly_amount: Decimal = Field(..., ge=Decimal("1.0"), examples=[Decimal("25.0")])
     currency: str = Field(
         default_factory=_default_currency, min_length=3, max_length=3, examples=["USD"]
     )
@@ -135,7 +138,7 @@ class SponsorshipResponse(BaseModel):
     id: uuid.UUID
     donor_id: uuid.UUID
     dog_id: uuid.UUID
-    monthly_amount: float
+    monthly_amount: Decimal
     currency: str
     status: SponsorshipStatus
     next_charge_date: date
@@ -149,7 +152,7 @@ class SponsorshipResponse(BaseModel):
 
 
 class RecurringSubscriptionCreate(BaseModel):
-    amount: float = Field(..., ge=1.0, examples=[50.0])
+    amount: Decimal = Field(..., ge=Decimal("1.0"), examples=[Decimal("50.0")])
     currency: str = Field(
         default_factory=_default_currency, min_length=3, max_length=3, examples=["USD"]
     )
@@ -159,7 +162,7 @@ class RecurringSubscriptionCreate(BaseModel):
 class RecurringSubscriptionResponse(BaseModel):
     id: uuid.UUID
     donor_id: uuid.UUID
-    amount: float
+    amount: Decimal
     currency: str
     frequency: RecurringFrequency
     status: RecurringStatus
@@ -175,7 +178,7 @@ class RecurringSubscriptionResponse(BaseModel):
 class DonationCampaignCreate(BaseModel):
     name: str = Field(..., min_length=3, max_length=128, examples=["Rescue the Pack"])
     description: str | None = Field(None, examples=["Funds emergency rescue equipment."])
-    target_amount: float = Field(..., ge=1.0, examples=[5000.0])
+    target_amount: Decimal = Field(..., ge=Decimal("1.0"), examples=[Decimal("5000.0")])
     currency: str = Field(
         default_factory=_default_currency, min_length=3, max_length=3, examples=["USD"]
     )
@@ -188,7 +191,7 @@ class DonationCampaignCreate(BaseModel):
 class DonationCampaignUpdate(BaseModel):
     name: str | None = Field(None, min_length=3, max_length=128)
     description: str | None = None
-    target_amount: float | None = Field(None, ge=1.0)
+    target_amount: Decimal | None = Field(None, ge=Decimal("1.0"))
     currency: str | None = Field(None, min_length=3, max_length=3)
     campaign_type: CampaignType | None = None
     status: CampaignStatus | None = None
@@ -200,13 +203,13 @@ class DonationCampaignResponse(BaseModel):
     id: uuid.UUID
     name: str
     description: str | None
-    target_amount: float
+    target_amount: Decimal
     currency: str
     campaign_type: CampaignType
     status: CampaignStatus
     start_date: date
     end_date: date | None
-    raised_amount: float
+    raised_amount: Decimal
     donor_count: int
     progress_percentage: float
     goal_reached_at: datetime | None

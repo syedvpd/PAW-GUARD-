@@ -553,9 +553,14 @@ async def resolve_match(
             actor_id=current_user.id,
             ip_address=request.client.host if request.client else None,
         )
-    else:
         status_val = MatchStatus.CONFIRMED if approve else MatchStatus.REJECTED
-        match = await service.update_match_status(match_id, status_val)
+        ip_address = request.client.host if request.client else None
+        match = await service.update_match_status(
+            match_id,
+            status_val,
+            actor_id=current_user.id,
+            ip_address=ip_address,
+        )
         if approve:
             ip_address = request.client.host if request.client else None
             await service.resolve_lost_report(

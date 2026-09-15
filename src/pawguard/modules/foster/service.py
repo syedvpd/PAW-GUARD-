@@ -910,6 +910,45 @@ class FosterService:
         dog.status = DogStatus.ADOPTED
         dog.is_adoptable = False
 
+        # Reject any other active sibling applications for this dog
+        siblings = await self._adoption_repo.get_active_siblings_for_dog(placement.dog_id, app.id)
+        for sibling in siblings:
+            sibling_old_status = AdoptionStatus(sibling.status)
+            sibling.status = AdoptionStatus.REJECTED
+            rejection_msg = (
+                "Dog no longer available - foster parent completed foster-to-adopt conversion."
+            )
+            sibling.vetting_officer_notes = (
+                f"{sibling.vetting_officer_notes}\nRejection Reason: {rejection_msg}".strip()
+                if sibling.vetting_officer_notes
+                else f"Rejection Reason: {rejection_msg}"
+            )
+            if self._audit:
+                await self._audit.record(
+                    event_type=AuthAuditEventType.ADOPTION_LOCK_REJECTED_SIBLING,
+                    actor_id=actor_id,
+                    ip_address=ip_address or "",
+                    user_agent="",
+                    metadata={
+                        "adoption_id": str(sibling.id),
+                        "dog_id": str(placement.dog_id),
+                        "locking_application_id": str(app.id),
+                        "source": "foster-to-adopt",
+                    },
+                    before_state={"status": sibling_old_status.value},
+                    after_state={"status": AdoptionStatus.REJECTED.value},
+                )
+            await self._send_push(
+                [sibling.adopter_id],
+                title="Update on your adoption application",
+                body=(
+                    "Thank you for your interest. The dog you applied for has been "
+                    "adopted by their foster caregiver, so we are unable to proceed "
+                    "with your application at this time. Please browse other dogs available for adoption."
+                ),
+                action_url="/adoptions/my-applications",
+            )
+
         # Generate official legal adoption agreement / lease document
         await self._generate_adoption_lease(
             app, dog, foster.user if hasattr(foster, "user") else None

@@ -3,11 +3,12 @@
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.responses import ApiResponse
 from pawguard.db.session import get_db
+from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.rbac import require_permission
 from pawguard.modules.settings.repository import (
     BusinessRuleRepository,
@@ -76,9 +77,15 @@ async def get_general_settings(
 )
 async def update_general_settings(
     payload: dict[str, Any],
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     service: SystemSettingService = Depends(get_setting_service),
 ) -> ApiResponse[dict[str, Any]]:
-    data = await service.update_general_settings(payload)
+    data = await service.update_general_settings(
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
     return ApiResponse(data=data, message="General settings updated successfully.")
 
 
@@ -101,9 +108,15 @@ async def get_email_settings(
 )
 async def update_email_settings(
     payload: EmailSettingsUpdate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     service: SystemSettingService = Depends(get_setting_service),
 ) -> ApiResponse[EmailSettingsResponse]:
-    data = await service.update_email_settings(payload)
+    data = await service.update_email_settings(
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
     return ApiResponse(data=data, message="Email settings updated successfully.")
 
 
@@ -181,9 +194,15 @@ async def get_setting(
 )
 async def create_setting(
     payload: SystemSettingCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     service: SystemSettingService = Depends(get_setting_service),
 ) -> ApiResponse[SystemSettingResponse]:
-    setting = await service.create_setting(payload)
+    setting = await service.create_setting(
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
     return ApiResponse(
         data=SystemSettingResponse.model_validate(setting),
         message="Setting created.",
@@ -198,9 +217,16 @@ async def create_setting(
 async def update_setting(
     key: str,
     payload: SystemSettingUpdate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     service: SystemSettingService = Depends(get_setting_service),
 ) -> ApiResponse[SystemSettingResponse]:
-    setting = await service.update_setting(key, payload)
+    setting = await service.update_setting(
+        key,
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
     return ApiResponse(
         data=SystemSettingResponse.model_validate(setting),
         message="Setting updated.",
@@ -214,9 +240,15 @@ async def update_setting(
 )
 async def delete_setting(
     setting_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     service: SystemSettingService = Depends(get_setting_service),
 ) -> None:
-    await service.delete_setting(setting_id)
+    await service.delete_setting(
+        setting_id,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
 
 
 @router.get(
@@ -238,9 +270,15 @@ async def get_password_policy(
 )
 async def update_password_policy(
     payload: PasswordPolicyUpdate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     service: PasswordPolicyService = Depends(get_password_policy_service),
 ) -> ApiResponse[PasswordPolicyResponse]:
-    policy = await service.update_policy(payload)
+    policy = await service.update_policy(
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
     return ApiResponse(
         data=PasswordPolicyResponse.model_validate(policy),
         message="Password policy updated.",
@@ -284,9 +322,15 @@ async def get_business_rule(
 )
 async def create_business_rule(
     payload: BusinessRuleCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     service: BusinessRuleService = Depends(get_business_rule_service),
 ) -> ApiResponse[BusinessRuleResponse]:
-    rule = await service.create_rule(payload)
+    rule = await service.create_rule(
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
     return ApiResponse(
         data=BusinessRuleResponse.model_validate(rule),
         message="Business rule created.",
@@ -301,9 +345,16 @@ async def create_business_rule(
 async def update_business_rule(
     rule_key: str,
     payload: BusinessRuleUpdate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     service: BusinessRuleService = Depends(get_business_rule_service),
 ) -> ApiResponse[BusinessRuleResponse]:
-    rule = await service.update_rule(rule_key, payload)
+    rule = await service.update_rule(
+        rule_key,
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
     return ApiResponse(
         data=BusinessRuleResponse.model_validate(rule),
         message="Business rule updated.",
@@ -317,6 +368,12 @@ async def update_business_rule(
 )
 async def delete_business_rule(
     rule_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
     service: BusinessRuleService = Depends(get_business_rule_service),
 ) -> None:
-    await service.delete_rule(rule_id)
+    await service.delete_rule(
+        rule_id,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )

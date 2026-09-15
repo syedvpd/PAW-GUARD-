@@ -264,6 +264,15 @@ class RescueRepository:
         await self._session.flush()
         return agent
 
+    async def create_dispatch_agents(
+        self, agents: list[RescueDispatchAgent]
+    ) -> list[RescueDispatchAgent]:
+        if not agents:
+            return []
+        self._session.add_all(agents)
+        await self._session.flush()
+        return agents
+
     async def get_dispatch_by_request_id(self, request_id: uuid.UUID) -> RescueDispatch | None:
         stmt = (
             select(RescueDispatch)

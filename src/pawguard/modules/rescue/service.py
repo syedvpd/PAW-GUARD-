@@ -2082,17 +2082,32 @@ class RescueService:
         )
         agents = (await session.execute(agents_stmt)).scalars().all()
 
+        # Batch Redis queries for locations and heartbeats using Redis pipeline / batch geopos
+        agent_locations: dict[uuid.UUID, tuple[float, float]] = {}
+        agent_heartbeats: dict[uuid.UUID, str] = {}
+        if self._redis is not None and agents:
+            with contextlib.suppress(Exception):
+                agent_ids_str = [str(a.id) for a in agents]
+                geo_list = await self._redis.geopos("rescue:agent_locations", *agent_ids_str)
+                if geo_list:
+                    for agent, geo in zip(agents, geo_list, strict=False):
+                        if geo and geo[0] is not None:
+                            agent_locations[agent.id] = (float(geo[1]), float(geo[0]))
+
+                pipe = self._redis.pipeline()
+                for a in agents:
+                    pipe.get(f"rescue:agent_active:{a.id}")
+                hb_results = await pipe.execute()
+                for agent, hb in zip(agents, hb_results, strict=False):
+                    if hb:
+                        agent_heartbeats[agent.id] = "active"
+
         result = []
         for agent in agents:
             is_busy = agent.id in busy_map
-            lat = lng = heartbeat = None
-            if self._redis is not None:
-                with contextlib.suppress(Exception):
-                    geo = await self._redis.geopos("rescue:agent_locations", str(agent.id))
-                    if geo and geo[0]:
-                        lng, lat = float(geo[0][0]), float(geo[0][1])
-                    hb = await self._redis.get(f"rescue:agent_active:{agent.id}")
-                    heartbeat = "active" if hb else None
+            coords = agent_locations.get(agent.id)
+            lat, lng = coords if coords else (None, None)
+            heartbeat = agent_heartbeats.get(agent.id)
             result.append(
                 {
                     "agent_id": agent.id,

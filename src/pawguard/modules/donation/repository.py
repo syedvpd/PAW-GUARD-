@@ -270,7 +270,7 @@ class DonationRepository:
         bind = self._session.bind
         dialect_name = bind.dialect.name if bind else ""
         if dialect_name != "sqlite":
-            stmt = stmt.with_for_update()
+            stmt = stmt.with_for_update(of=Donation)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def update_gateway_fields_atomic(
@@ -290,7 +290,8 @@ class DonationRepository:
         recurring_sub_id = current.recurring_subscription_id
 
         for key, value in kwargs.items():
-            setattr(current, key, value)
+            if hasattr(current, key):
+                setattr(current, key, value)
 
         await self._session.flush()
 
@@ -305,7 +306,7 @@ class DonationRepository:
             if sponsorship_id:
                 stmt_sp = select(DogSponsorship).where(DogSponsorship.id == sponsorship_id)
                 if dialect_name != "sqlite":
-                    stmt_sp = stmt_sp.with_for_update()
+                    stmt_sp = stmt_sp.with_for_update(of=DogSponsorship)
                 sp = (await self._session.execute(stmt_sp)).scalar_one_or_none()
                 if sp and sp.next_charge_date:
                     month = sp.next_charge_date.month + 1
@@ -323,7 +324,7 @@ class DonationRepository:
                     RecurringSubscription.id == recurring_sub_id
                 )
                 if dialect_name != "sqlite":
-                    stmt_sub = stmt_sub.with_for_update()
+                    stmt_sub = stmt_sub.with_for_update(of=RecurringSubscription)
                 sub = (await self._session.execute(stmt_sub)).scalar_one_or_none()
                 if sub and sub.next_charge_date:
                     month = sub.next_charge_date.month + 1

@@ -8,3 +8,5 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.13.0
+      - key: MFA_MANDATORY_FOR_ADMINS
+        value: "true"

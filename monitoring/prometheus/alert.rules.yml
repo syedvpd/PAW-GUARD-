@@ -1,0 +1,72 @@
+groups:
+  - name: pawguard_critical_alerts
+    rules:
+      - alert: PawGuardServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+          tier: backend
+        annotations:
+          summary: "PawGuard instance is unreachable"
+          description: "Instance {{ $labels.instance }} of job {{ $labels.job }} has been down for more than 1 minute."
+
+      - alert: HighHttpErrorRate5xx
+        expr: (sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m]))) * 100 > 5
+        for: 2m
+        labels:
+          severity: critical
+          tier: api
+        annotations:
+          summary: "High HTTP 5xx error rate detected"
+          description: "HTTP 5xx error rate is {{ $value | printf \"%.2f\" }}% over the last 5 minutes (threshold: >5%)."
+
+      - alert: HighApiLatencyP95
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 1.0
+        for: 3m
+        labels:
+          severity: warning
+          tier: api
+        annotations:
+          summary: "High API P95 latency detected"
+          description: "P95 request latency is {{ $value | printf \"%.2f\" }}s over the last 5 minutes (threshold: >1s)."
+
+      - alert: DatabaseConnectionFailure
+        expr: pawguard_db_connection_errors_total > 0 or db_is_alive == 0
+        for: 1m
+        labels:
+          severity: critical
+          tier: database
+        annotations:
+          summary: "Database connection failure detected"
+          description: "PawGuard backend cannot connect to PostgreSQL database pool."
+
+      - alert: RedisConnectionFailure
+        expr: pawguard_redis_connection_errors_total > 0 or redis_is_alive == 0
+        for: 1m
+        labels:
+          severity: critical
+          tier: cache
+        annotations:
+          summary: "Redis connection failure detected"
+          description: "PawGuard backend cannot connect to Redis instance for distributed locks/cache."
+
+      - alert: BackgroundWorkerFailureSpike
+        expr: rate(pawguard_worker_job_failures_total[5m]) > 5
+        for: 2m
+        labels:
+          severity: high
+          tier: worker
+        annotations:
+          summary: "Background worker failure spike"
+          description: "Background worker jobs are failing at {{ $value | printf \"%.2f\" }} jobs/sec over the last 5m."
+
+      - alert: HighKennelCapacityThreshold
+        expr: (sum(pawguard_kennels_occupied_count) / sum(pawguard_kennels_total_capacity)) * 100 > 90
+        for: 15m
+        labels:
+          severity: warning
+          tier: operations
+        annotations:
+          summary: "Shelter kennel capacity above 90%"
+          description: "Total kennel capacity utilization across active facilities has exceeded 90% for 15 minutes."

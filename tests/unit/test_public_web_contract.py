@@ -143,7 +143,7 @@ async def test_unified_lost_found_resolves_both_types(
     kind, masks reporter PII for anonymous callers, and returns 404 only when
     the id matches neither table."""
     user = User(
-        email="reporter-contract@example.com",
+        email=f"reporter-{uuid.uuid4().hex[:8]}@example.com",
         full_name="Reporter Contract",
         hashed_password="x",
         is_active=True,

@@ -592,15 +592,45 @@ class LostFoundService:
             )
         return count
 
-    async def update_match_status(self, match_id: uuid.UUID, status: MatchStatus) -> ReportMatch:
+    async def update_match_status(
+        self,
+        match_id: uuid.UUID,
+        status: MatchStatus,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> ReportMatch:
         match = await self._repo.get_match_by_id(match_id)
         if match is None:
             raise NotFoundError("Report match record not found.")
+        old_status = match.status
         match.status = status
+        now = datetime.now(UTC)
+        if actor_id:
+            match.claim_reviewed_by = actor_id
+            match.claim_reviewed_at = now
         if status == MatchStatus.CONFIRMED:
             # Workflow 6: release each party's contact to the other when the
             # match is confirmed directly (non-claim path).
             await self._release_contacts(match)
+        await self._repo._session.flush()
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.LOST_FOUND_CLAIM_REVIEWED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "match_id": str(match.id),
+                    "lost_report_id": str(match.lost_report_id),
+                    "found_report_id": str(match.found_report_id),
+                    "action": "direct_match_resolution",
+                },
+                before_state={
+                    "status": old_status.value if hasattr(old_status, "value") else str(old_status)
+                },
+                after_state={"status": status.value if hasattr(status, "value") else str(status)},
+            )
         return match
 
     async def get_match(self, match_id: uuid.UUID) -> ReportMatch:

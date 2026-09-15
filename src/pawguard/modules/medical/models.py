@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -13,6 +13,13 @@ from pawguard.db.mixins import AuditMixin, SoftDeleteMixin, TimestampMixin, UUID
 
 class ClinicalExam(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "clinical_exams"
+
+    __table_args__ = (
+        CheckConstraint(
+            "body_condition_score >= 1 AND body_condition_score <= 9",
+            name="ck_clinical_exams_bcs_1_9",
+        ),
+    )
 
     dog_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),

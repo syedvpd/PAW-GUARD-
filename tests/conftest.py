@@ -258,32 +258,30 @@ async def engine() -> AsyncGenerator[AsyncEngine]:
                 cursor.execute("PRAGMA busy_timeout=30000")
                 cursor.close()
 
-        from pawguard.db.base import Base
-        from pawguard.modules.adoption import models as _m4  # noqa: F401
+    from pawguard.db.base import Base
+    from pawguard.modules.adoption import models as _m4  # noqa: F401
+    from pawguard.modules.auth import models as _m1  # noqa: F401
+    from pawguard.modules.companion_pet import models as _m19  # noqa: F401
+    from pawguard.modules.dog import models as _m3  # noqa: F401
+    from pawguard.modules.donation import models as _m7  # noqa: F401
+    from pawguard.modules.finance import models as _m16  # noqa: F401
+    from pawguard.modules.fleet import models as _m12  # noqa: F401
+    from pawguard.modules.foster import models as _m6  # noqa: F401
+    from pawguard.modules.grievance import models as _m13  # noqa: F401
+    from pawguard.modules.inventory import models as _m11  # noqa: F401
+    from pawguard.modules.lost_found import models as _m8  # noqa: F401
+    from pawguard.modules.medical import models as _m9  # noqa: F401
+    from pawguard.modules.notifications import models as _m14  # noqa: F401
+    from pawguard.modules.outbox import models as _m20  # noqa: F401
+    from pawguard.modules.portal import models as _m15  # noqa: F401
+    from pawguard.modules.rescue import models as _m2  # noqa: F401
+    from pawguard.modules.settings import models as _m18  # noqa: F401
+    from pawguard.modules.shelter import models as _m10  # noqa: F401
+    from pawguard.modules.storage import models as _m17  # noqa: F401
+    from pawguard.modules.volunteer import models as _m5  # noqa: F401
 
-        # Register all models for Base.metadata
-        from pawguard.modules.auth import models as _m1  # noqa: F401
-        from pawguard.modules.companion_pet import models as _m19  # noqa: F401
-        from pawguard.modules.dog import models as _m3  # noqa: F401
-        from pawguard.modules.donation import models as _m7  # noqa: F401
-        from pawguard.modules.finance import models as _m16  # noqa: F401
-        from pawguard.modules.fleet import models as _m12  # noqa: F401
-        from pawguard.modules.foster import models as _m6  # noqa: F401
-        from pawguard.modules.grievance import models as _m13  # noqa: F401
-        from pawguard.modules.inventory import models as _m11  # noqa: F401
-        from pawguard.modules.lost_found import models as _m8  # noqa: F401
-        from pawguard.modules.medical import models as _m9  # noqa: F401
-        from pawguard.modules.notifications import models as _m14  # noqa: F401
-        from pawguard.modules.outbox import models as _m20  # noqa: F401
-        from pawguard.modules.portal import models as _m15  # noqa: F401
-        from pawguard.modules.rescue import models as _m2  # noqa: F401
-        from pawguard.modules.settings import models as _m18  # noqa: F401
-        from pawguard.modules.shelter import models as _m10  # noqa: F401
-        from pawguard.modules.storage import models as _m17  # noqa: F401
-        from pawguard.modules.volunteer import models as _m5  # noqa: F401
-
-        async with eng.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+    async with eng.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
     from scripts.seed_roles_and_permissions import reconcile_roles
     from sqlalchemy.ext.asyncio import async_sessionmaker

@@ -400,6 +400,11 @@ async def update_dog(
     current_user: CurrentUser = Depends(get_current_user),
     service: DogService = Depends(get_dog_service),
 ) -> ApiResponse[DogProfileResponse]:
+    user_roles = set(getattr(current_user.claims, "roles", [])) if current_user.claims else set()
+    is_vet = bool(
+        user_roles & {"veterinarian", "super_admin", "system:admin", "rescue_centre_admin"}
+    ) or has_permission(current_user.user, DOG_MEDICAL_UPDATE)
+
     if not (
         has_permission(current_user.user, "shelter:update") or is_admin_role(current_user.claims)
     ):
@@ -409,11 +414,20 @@ async def update_dog(
             raise ForbiddenError(
                 f"Clinical roles with '{DOG_MEDICAL_UPDATE}' cannot modify non-medical fields: {', '.join(sorted(disallowed))}."
             )
+
+    # Restrict is_quarantine_passed so only veterinary / clinical authorities can set it
+    if payload.is_quarantine_passed is not None and not is_vet:
+        raise ForbiddenError(
+            "is_quarantine_passed can only be granted via veterinary authorization "
+            "or medical clearance endpoint (POST /medical/clearance/{dog_id})."
+        )
+
     dog = await service.update_dog(
         dog_id,
         payload,
         actor_id=current_user.id,
         ip_address=resolve_client_ip(request),
+        veterinary_authorized=is_vet,
     )
     return ApiResponse(
         data=DogProfileResponse.model_validate(dog),
@@ -434,6 +448,14 @@ async def update_dog_adoptability(
     service: DogService = Depends(get_dog_service),
 ) -> ApiResponse[DogProfileResponse]:
     """Dedicated endpoint for veterinary adoption clearance (PRR 3.4)."""
+    user_roles = set(getattr(current_user.claims, "roles", [])) if current_user.claims else set()
+    is_vet = bool(
+        user_roles & {"veterinarian", "super_admin", "system:admin", "rescue_centre_admin"}
+    ) or has_permission(current_user.user, DOG_MEDICAL_UPDATE)
+
+    if not is_vet:
+        raise ForbiddenError("Veterinary authority required to update dog adoptability status.")
+
     dog = await service.update_dog(
         dog_id,
         DogProfileUpdate(
@@ -442,6 +464,7 @@ async def update_dog_adoptability(
         ),
         actor_id=current_user.id,
         ip_address=resolve_client_ip(request),
+        veterinary_authorized=True,
     )
     return ApiResponse(
         data=DogProfileResponse.model_validate(dog),

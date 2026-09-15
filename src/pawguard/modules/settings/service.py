@@ -50,14 +50,34 @@ class SystemSettingService:
     async def list_all(self) -> list[SystemSetting]:
         return list(await self._repo.list_all())
 
-    async def create_setting(self, payload: SystemSettingCreate) -> SystemSetting:
+    async def create_setting(
+        self,
+        payload: SystemSettingCreate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> SystemSetting:
         existing = await self._repo.get_by_key(payload.key)
         if existing is not None:
             raise ConflictError(f"Setting '{payload.key}' already exists.")
         setting = SystemSetting(**payload.model_dump())
-        return await self._repo.create(setting)
+        setting = await self._repo.create(setting)
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.SYSTEM_CONFIG_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"action": "setting_created", "key": payload.key},
+            )
+        return setting
 
-    async def update_setting(self, key: str, payload: SystemSettingUpdate) -> SystemSetting:
+    async def update_setting(
+        self,
+        key: str,
+        payload: SystemSettingUpdate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> SystemSetting:
         setting = await self._repo.get_by_key(key)
         if setting is None:
             raise NotFoundError(f"Setting '{key}' not found.")
@@ -65,13 +85,35 @@ class SystemSettingService:
             setattr(setting, field, value)
         if self._session is not None:
             await self._session.flush()
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.SYSTEM_CONFIG_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"action": "setting_updated", "key": key},
+            )
         return setting
 
-    async def delete_setting(self, setting_id: uuid.UUID) -> None:
+    async def delete_setting(
+        self,
+        setting_id: uuid.UUID,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> None:
         setting = await self._repo.get_by_id(setting_id)
         if setting is None:
             raise NotFoundError(f"Setting with id '{setting_id}' not found.")
+        key = setting.key
         await self._repo.delete(setting_id)
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.SYSTEM_CONFIG_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"action": "setting_deleted", "key": key, "setting_id": str(setting_id)},
+            )
 
     async def get_general_settings(self) -> GeneralSettingsResponse:
         base = AppConfigService().get_general_settings()
@@ -94,7 +136,12 @@ class SystemSettingService:
                     base_dict[k] = v
         return GeneralSettingsResponse(**base_dict)
 
-    async def update_general_settings(self, payload: dict[str, Any]) -> dict[str, Any]:
+    async def update_general_settings(
+        self,
+        payload: dict[str, Any],
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> dict[str, Any]:
         for key, val in payload.items():
             db_key = key if key.startswith("general_") else f"general_{key}"
             existing = await self._repo.get_by_key(db_key)
@@ -111,6 +158,14 @@ class SystemSettingService:
                 existing.value = str(val)
         if self._session is not None:
             await self._session.flush()
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.SYSTEM_CONFIG_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"action": "general_settings_updated", "keys": list(payload.keys())},
+            )
         return payload
 
     async def get_email_settings(self) -> EmailSettingsResponse:
@@ -129,7 +184,12 @@ class SystemSettingService:
                     base_dict[full_key] = row.value
         return EmailSettingsResponse(**base_dict)
 
-    async def update_email_settings(self, payload: EmailSettingsUpdate) -> EmailSettingsResponse:
+    async def update_email_settings(
+        self,
+        payload: EmailSettingsUpdate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> EmailSettingsResponse:
         updates = payload.model_dump(exclude_unset=True)
         for key, val in updates.items():
             if val is None:
@@ -151,6 +211,14 @@ class SystemSettingService:
                 existing.value = val_str
         if self._session is not None:
             await self._session.flush()
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.SYSTEM_CONFIG_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"action": "email_settings_updated", "keys": list(updates.keys())},
+            )
         return await self.get_email_settings()
 
 
@@ -229,7 +297,12 @@ class BusinessRuleService:
     async def list_all(self) -> list[BusinessRule]:
         return list(await self._repo.list_all())
 
-    async def create_rule(self, payload: BusinessRuleCreate) -> BusinessRule:
+    async def create_rule(
+        self,
+        payload: BusinessRuleCreate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> BusinessRule:
         existing = await self._repo.get_by_key(payload.rule_key)
         if existing is not None:
             raise ConflictError(f"Business rule '{payload.rule_key}' already exists.")
@@ -239,9 +312,24 @@ class BusinessRuleService:
             description=payload.description,
             module=payload.module,
         )
-        return await self._repo.create(rule)
+        rule = await self._repo.create(rule)
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.SETTINGS_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"action": "business_rule_created", "rule_key": payload.rule_key},
+            )
+        return rule
 
-    async def update_rule(self, rule_key: str, payload: BusinessRuleUpdate) -> BusinessRule:
+    async def update_rule(
+        self,
+        rule_key: str,
+        payload: BusinessRuleUpdate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> BusinessRule:
         rule = await self._repo.get_by_key(rule_key)
         if rule is None:
             rule = BusinessRule(
@@ -251,18 +339,45 @@ class BusinessRuleService:
                 module=payload.module or "general",
                 is_active=payload.is_active if payload.is_active is not None else True,
             )
-            return await self._repo.create(rule)
-        for field, value in payload.model_dump(exclude_unset=True).items():
-            setattr(rule, field, value)
-        if self._session is not None:
-            await self._session.flush()
+            rule = await self._repo.create(rule)
+        else:
+            for field, value in payload.model_dump(exclude_unset=True).items():
+                setattr(rule, field, value)
+            if self._session is not None:
+                await self._session.flush()
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.SETTINGS_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"action": "business_rule_updated", "rule_key": rule_key},
+            )
         return rule
 
-    async def delete_rule(self, rule_id: uuid.UUID) -> None:
+    async def delete_rule(
+        self,
+        rule_id: uuid.UUID,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> None:
         rule = await self._repo.get_by_id(rule_id)
         if rule is None:
             raise NotFoundError(f"Business rule with id '{rule_id}' not found.")
+        rule_key = rule.rule_key
         await self._repo.delete(rule_id)
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.SETTINGS_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "action": "business_rule_deleted",
+                    "rule_key": rule_key,
+                    "rule_id": str(rule_id),
+                },
+            )
 
 
 ABOUT_US_KEY = "public_about_us"

@@ -2,6 +2,7 @@
 sanitation tracking, and inter-facility transfers (RULE-003).
 """
 
+import inspect
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -110,6 +111,42 @@ class ShelterService:
             return set()
         return {r.name for r in actor.roles}
 
+    async def assert_facility_access(
+        self,
+        actor_id: uuid.UUID | None,
+        facility_id: uuid.UUID,
+        actor_roles: set[str] | None = None,
+    ) -> None:
+        """Enforces facility-level scoping to prevent IDOR (RULE-004, PRR 2.1).
+
+        Bypassed by:
+        - super_admin / super_administrator / system:admin
+        - rescue_centre_admin
+
+        For shelter_manager and other facility-scoped roles, validates that the
+        user's managed_facility_id matches the target facility_id.
+        """
+        if actor_id is None:
+            return
+
+        actor = await self._get_user_with_roles(actor_id)
+        if actor is None or not isinstance(actor, User):
+            return
+
+        roles = actor_roles or {r.name for r in getattr(actor, "roles", []) if hasattr(r, "name")}
+        if bool(
+            roles & {"super_admin", "super_administrator", "system:admin", "rescue_centre_admin"}
+        ):
+            return
+
+        managed_facility = getattr(actor, "managed_facility_id", None)
+        if managed_facility is not None and not inspect.iscoroutine(managed_facility):
+            if managed_facility != facility_id:
+                raise ForbiddenError(
+                    f"Access denied. User's managed facility ({managed_facility}) "
+                    f"does not match target facility ({facility_id})."
+                )
+
     async def create_facility(
         self,
         payload: ShelterFacilityCreate,
@@ -151,6 +188,7 @@ class ShelterService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> ShelterSection:
+        await self.assert_facility_access(actor_id, facility_id)
         facility = await self._repo.get_facility(facility_id)
         if facility is None:
             raise NotFoundError("Shelter facility not found.")
@@ -185,6 +223,7 @@ class ShelterService:
         section = await self._repo.get_section(section_id)
         if section is None:
             raise NotFoundError("Shelter section not found.")
+        await self.assert_facility_access(actor_id, section.facility_id)
 
         # Business Rule check: ensure adding this kennel doesn't exceed section capacity cap
         existing = await self._repo.list_kennels_by_section(section_id)
@@ -234,6 +273,19 @@ class ShelterService:
         if kennel is None:
             raise NotFoundError("Kennel not found.")
 
+        section = await self._repo.get_section(kennel.section_id)
+        if section is None:
+            raise NotFoundError("Associated shelter section not found.")
+        await self.assert_facility_access(actor_id, section.facility_id)
+
+        # Quarantine Enforcement: Dogs that have not passed quarantine cannot be moved
+        # into the adoption section.
+        if section.section_type == SectionType.ADOPTION and not dog.is_quarantine_passed:
+            raise ConflictError(
+                f"Cannot assign dog '{dog.name}' to adoption section '{section.name}'. "
+                "Dog has not completed mandatory quarantine."
+            )
+
         # Business Validation: check sanitation state & availability
         bad_states = (
             KennelSanitationState.NEEDS_CLEANING,
@@ -251,10 +303,6 @@ class ShelterService:
                 f"Cannot assign dog. Kennel {kennel.identifier} is at capacity "
                 f"({occupancy}/{kennel.capacity})."
             )
-
-        section = await self._repo.get_section(kennel.section_id)
-        if section is None:
-            raise NotFoundError("Associated shelter section not found.")
 
         # Over-capacity gate: once a section is at (or would exceed) its
         # capacity, no further assignment into it is allowed until a kennel
@@ -384,6 +432,9 @@ class ShelterService:
         kennel = await self._repo.get_kennel(kennel_id)
         if kennel is None:
             raise NotFoundError("Kennel not found.")
+        section = await self._repo.get_section(kennel.section_id)
+        if section:
+            await self.assert_facility_access(actor_id, section.facility_id)
         prior_status = kennel.sanitation_state
 
         kennel.sanitation_state = status
@@ -421,6 +472,9 @@ class ShelterService:
         kennel = await self._repo.get_kennel_for_update(kennel_id)
         if kennel is None:
             raise NotFoundError("Kennel not found.")
+        section = await self._repo.get_section(kennel.section_id)
+        if section:
+            await self.assert_facility_access(actor_id, section.facility_id)
         prior_status = kennel.sanitation_state
 
         log = KennelCleaningLog(
@@ -462,6 +516,14 @@ class ShelterService:
         dog = await self._dog_repo.get_by_id(payload.dog_id)
         if dog is None:
             raise NotFoundError("Dog profile not found.")
+
+        await self.assert_facility_access(actor_id or user_id, payload.from_facility_id)
+
+        # Quarantine Enforcement: Dogs in clinic quarantine cannot be transferred
+        if not dog.is_quarantine_passed and dog.status == DogStatus.CLINIC:
+            raise ConflictError(
+                f"Dog '{dog.name}' has not completed mandatory quarantine. Inter-facility transfer is prohibited."
+            )
 
         from_fac = await self._repo.get_facility(payload.from_facility_id)
         to_fac = await self._repo.get_facility(payload.to_facility_id)
@@ -536,6 +598,14 @@ class ShelterService:
         if transfer.status not in (TransferStatus.PENDING, TransferStatus.IN_TRANSIT):
             raise ConflictError("Transfer request has already been processed.")
 
+        dog = await self._dog_repo.get_by_id(transfer.dog_id)
+        if dog is None:
+            raise NotFoundError("Dog profile not found.")
+        if not dog.is_quarantine_passed and dog.status == DogStatus.CLINIC:
+            raise ConflictError(
+                f"Dog '{dog.name}' has not completed mandatory quarantine. Cannot transfer."
+            )
+
         other_side = "receiver" if side == "sender" else "sender"
         if getattr(transfer, f"{side}_confirmed_at") is not None:
             raise ConflictError(f"The {side} facility has already confirmed this transfer.")
@@ -592,9 +662,6 @@ class ShelterService:
             )
 
         if transfer.sender_confirmed_at is not None and transfer.receiver_confirmed_at is not None:
-            dog = await self._dog_repo.get_by_id(transfer.dog_id)
-            if dog is None:
-                raise NotFoundError("Dog profile not found.")
             if transfer.destination_kennel_id is not None:
                 # Re-validate the reservation at completion time: it may have
                 # gone dirty or been taken out of service since it was requested.
@@ -687,14 +754,49 @@ class ShelterService:
             return None
         return kennel, section
 
-    async def get_transfer(self, transfer_id: uuid.UUID) -> FacilityTransfer:
+    async def get_transfer(
+        self, transfer_id: uuid.UUID, actor_id: uuid.UUID | None = None
+    ) -> FacilityTransfer:
         transfer = await self._repo.get_transfer(transfer_id)
         if transfer is None:
             raise NotFoundError("Facility transfer request not found.")
+        if actor_id is not None:
+            actor = await self._get_user_with_roles(actor_id)
+            if actor:
+                roles = {r.name for r in getattr(actor, "roles", []) if hasattr(r, "name")}
+                if not bool(
+                    roles
+                    & {"super_admin", "super_administrator", "system:admin", "rescue_centre_admin"}
+                ):
+                    if actor.managed_facility_id and actor.managed_facility_id not in (
+                        transfer.from_facility_id,
+                        transfer.to_facility_id,
+                    ):
+                        raise ForbiddenError(
+                            "You do not have permission to view transfers for another facility."
+                        )
         return transfer
 
-    async def list_transfers(self) -> Sequence[FacilityTransfer]:
-        return await self._repo.list_transfers()
+    async def list_transfers(self, actor_id: uuid.UUID | None = None) -> Sequence[FacilityTransfer]:
+        transfers = await self._repo.list_transfers()
+        if actor_id is None:
+            return transfers
+        actor = await self._get_user_with_roles(actor_id)
+        if actor is None:
+            return transfers
+        roles = {r.name for r in getattr(actor, "roles", []) if hasattr(r, "name")}
+        if bool(
+            roles & {"super_admin", "super_administrator", "system:admin", "rescue_centre_admin"}
+        ):
+            return transfers
+        if actor.managed_facility_id:
+            return [
+                t
+                for t in transfers
+                if t.from_facility_id == actor.managed_facility_id
+                or t.to_facility_id == actor.managed_facility_id
+            ]
+        return []
 
     async def submit_daily_care_log(
         self,
@@ -1130,8 +1232,17 @@ class ShelterService:
     async def _get_user_with_roles(self, user_id: uuid.UUID) -> User | None:
         from sqlalchemy.orm import selectinload as _sel
 
-        stmt = select(User).options(_sel(User.roles)).where(User.id == user_id)
-        return (await self._repo._session.execute(stmt)).scalar_one_or_none()
+        try:
+            stmt = select(User).options(_sel(User.roles)).where(User.id == user_id)
+            res = await self._repo._session.execute(stmt)
+            if hasattr(res, "scalar_one_or_none"):
+                val = res.scalar_one_or_none()
+                if inspect.iscoroutine(val):
+                    val = await val
+                return val if isinstance(val, User) else None
+            return None
+        except Exception:
+            return None
 
     async def _notify_vet_check_requested(
         self,

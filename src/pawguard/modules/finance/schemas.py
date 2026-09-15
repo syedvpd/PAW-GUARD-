@@ -257,6 +257,8 @@ class FinanceExpenseCreate(BaseModel):
     payment_reference: str | None = Field(None, examples=["NEFT/2026/000123"])
     invoice_number: str | None = Field(None, max_length=128, examples=["INV-2026-0042"])
     account_id: uuid.UUID | None = None
+    rescue_case_id: uuid.UUID | None = None
+    shelter_facility_id: uuid.UUID | None = None
     notes: str | None = Field(None, examples=["Approved by shelter manager."])
 
 
@@ -274,6 +276,8 @@ class FinanceExpenseUpdate(BaseModel):
     payment_reference: str | None = None
     invoice_number: str | None = Field(None, max_length=128)
     account_id: uuid.UUID | None = None
+    rescue_case_id: uuid.UUID | None = None
+    shelter_facility_id: uuid.UUID | None = None
     notes: str | None = None
     status: ExpenseStatus | None = None
     rejection_reason: str | None = None
@@ -300,6 +304,8 @@ class FinanceExpenseResponse(BaseModel):
     rejection_reason: str | None
     account_id: uuid.UUID | None
     transaction_id: uuid.UUID | None
+    rescue_case_id: uuid.UUID | None = None
+    shelter_facility_id: uuid.UUID | None = None
     notes: str | None
     created_at: datetime
     updated_at: datetime

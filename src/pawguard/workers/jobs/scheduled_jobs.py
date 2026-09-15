@@ -664,6 +664,106 @@ def _extract_adoption_id_from_action_url(url: str) -> uuid.UUID | None:
         return None
 
 
+def _extract_rescue_id_from_action_url(url: str) -> uuid.UUID | None:
+    prefix = "rescue_case_id="
+    if not url or prefix not in url:
+        return None
+    raw = url.split(prefix, 1)[1].split("&", 1)[0]
+    try:
+        return uuid.UUID(raw)
+    except (ValueError, TypeError):
+        return None
+
+
+async def send_post_rescue_feedback_surveys(ctx: dict[str, object]) -> None:
+    """Send automated post-service feedback survey notifications to rescue reporters.
+
+    Completed rescues (RESCUED or ADMITTED) 3-10 days old whose reporters have neither
+    submitted feedback nor already received a survey prompt are notified once.
+    """
+    from pawguard.modules.rescue.models import RescueRequest, RescueStatus
+
+    now = datetime.now(UTC)
+    window_end = now - timedelta(days=3)
+    window_start = window_end - timedelta(days=7)
+
+    async with AsyncSessionLocal() as session:
+        notification_svc = _notification_service(session, ctx)
+
+        result = await session.execute(
+            select(RescueRequest).where(
+                and_(
+                    RescueRequest.deleted_at.is_(None),
+                    RescueRequest.status.in_([RescueStatus.RESCUED, RescueStatus.ADMITTED]),
+                    RescueRequest.updated_at >= window_start,
+                    RescueRequest.updated_at < window_end,
+                )
+            )
+        )
+        rescues = result.scalars().all()
+        if not rescues:
+            return
+
+        rescue_ids = [r.id for r in rescues]
+
+        feedback_ids = set(
+            (
+                await session.execute(
+                    select(ServiceFeedback.rescue_case_id).where(
+                        ServiceFeedback.rescue_case_id.in_(rescue_ids)
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+        prior_urls = list(
+            (
+                await session.execute(
+                    select(Notification.action_url).where(
+                        and_(
+                            Notification.notification_type == "rescue_feedback_survey",
+                            Notification.action_url.isnot(None),
+                        )
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        surveyed_ids = {
+            prior_id
+            for url in prior_urls
+            if (prior_id := _extract_rescue_id_from_action_url(url)) is not None
+        }
+
+        for rescue in rescues:
+            if rescue.id in feedback_ids or rescue.id in surveyed_ids:
+                continue
+            if not rescue.reporter_user_id and not rescue.reporter_email:
+                continue
+
+            target_user_id = rescue.reporter_user_id or uuid.uuid4()
+            payload = NotificationSend(
+                user_id=target_user_id,
+                title="We'd Love Your Rescue Service Feedback",
+                body=(
+                    f"Your emergency rescue request (Ticket #{rescue.ticket_number}) "
+                    "has been successfully attended and resolved. Please rate the service provided."
+                ),
+                notification_type="rescue_feedback_survey",
+                action_url=f"/api/v1/grievance/feedback?rescue_case_id={rescue.id}",
+                send_email=bool(rescue.reporter_email),
+            )
+            await notification_svc.send_notification(
+                payload=payload,
+                user_email=rescue.reporter_email,
+            )
+
+        await session.commit()
+
+
 async def send_volunteer_shift_reminders(ctx: dict[str, object]) -> int:
     """Remind volunteers of shifts they've claimed and starting within 24h.
 

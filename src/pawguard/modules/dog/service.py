@@ -484,16 +484,30 @@ class DogService:
         *,
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
+        veterinary_authorized: bool = False,
     ) -> DogProfile:
         dog = await self._repo.get_by_id(dog_id)
         if dog is None:
             raise NotFoundError("Dog profile not found.")
 
         update_data = payload.model_dump(exclude_unset=True)
-        if update_data.get("is_adoptable") is True and not dog.is_adoptable:
+        if (
+            update_data.get("is_adoptable") is True
+            and not dog.is_adoptable
+            and not veterinary_authorized
+        ):
             raise ForbiddenError(
                 "is_adoptable can only be granted via the veterinarian-authorized "
-                "medical clearance endpoint (POST /medical/clearance/{dog_id})."
+                "medical clearance endpoint (POST /medical/clearance/{dog_id}) or PATCH /dogs/{dog_id}/adoptability."
+            )
+        if (
+            update_data.get("is_quarantine_passed") is True
+            and not dog.is_quarantine_passed
+            and not veterinary_authorized
+        ):
+            raise ForbiddenError(
+                "is_quarantine_passed can only be granted via the veterinarian-authorized "
+                "medical clearance endpoint (POST /medical/clearance/{dog_id}) or PATCH /dogs/{dog_id}/adoptability."
             )
         # Microchip is UNIQUE: re-assigning it to another dog is a conflict,
         # not a 500 from the constraint violation.

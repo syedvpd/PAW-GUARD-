@@ -333,6 +333,18 @@ class FinanceExpense(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, B
         ForeignKey("financial_transactions.id", ondelete="SET NULL"),
         nullable=True,
     )
+    rescue_case_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("rescue_requests.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    shelter_facility_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("shelter_facilities.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     account: Mapped["ChartOfAccounts | None"] = relationship("ChartOfAccounts", lazy="joined")

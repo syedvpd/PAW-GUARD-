@@ -478,9 +478,10 @@ async def request_transfer(
     dependencies=[Depends(require_permission("shelter:read"))],
 )
 async def list_transfers(
+    current_user: CurrentUser = Depends(get_current_user),
     service: ShelterService = Depends(get_shelter_service),
 ) -> ApiResponse[list[FacilityTransferResponse]]:
-    transfers = await service.list_transfers()
+    transfers = await service.list_transfers(actor_id=current_user.id)
     return ApiResponse(
         data=[FacilityTransferResponse.model_validate(t) for t in transfers],
     )
@@ -493,9 +494,10 @@ async def list_transfers(
 )
 async def get_transfer(
     transfer_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
     service: ShelterService = Depends(get_shelter_service),
 ) -> ApiResponse[FacilityTransferResponse]:
-    transfer = await service.get_transfer(transfer_id)
+    transfer = await service.get_transfer(transfer_id, actor_id=current_user.id)
     return ApiResponse(
         data=FacilityTransferResponse.model_validate(transfer),
     )

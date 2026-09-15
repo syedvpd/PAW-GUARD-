@@ -427,6 +427,10 @@ class TestAdoptionDashboardSoftDelete:
     async def test_soft_deleted_applications_excluded_from_kpi_counts(
         self, db_session: AsyncSession
     ) -> None:
+        baseline = await adoption_dashboard(db_session)
+        init_pending = baseline["pending"]
+        init_total = baseline["total_applications"]
+
         for _ in range(7):
             await self._make_application(db_session, "submitted", deleted=False)
         for _ in range(3):
@@ -435,5 +439,5 @@ class TestAdoptionDashboardSoftDelete:
 
         result = await adoption_dashboard(db_session)
 
-        assert result["pending"] == 7
-        assert result["total_applications"] == 7
+        assert result["pending"] == init_pending + 7
+        assert result["total_applications"] == init_total + 7
