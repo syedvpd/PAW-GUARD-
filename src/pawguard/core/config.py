@@ -115,7 +115,7 @@ class Settings(BaseSettings):
     mfa_encryption_key: str = ""
     mfa_mandatory_for_admins: bool = False
     mfa_bypass_for_dev: bool = Field(
-        default=False,
+        default=True,
         description="Bypass MFA enforcement in dev/test environments",
     )
     require_email_verification: bool = Field(

@@ -229,10 +229,11 @@ class AuthService:
 
         session = await self._create_session(user_id=user.id, device=device, ctx=ctx)
 
-        if user.mfa_enabled or (
-            self._settings.mfa_mandatory_for_admins
-            and self._is_admin(user)
-            and not (self._settings.mfa_bypass_for_dev and not self._settings.is_production)
+        mfa_required = user.mfa_enabled or (
+            self._settings.mfa_mandatory_for_admins and self._is_admin(user)
+        )
+        if mfa_required and not (
+            self._settings.mfa_bypass_for_dev and not self._settings.is_production
         ):
             return create_pre_auth_token(user_id=user.id, session_id=session.id)
 

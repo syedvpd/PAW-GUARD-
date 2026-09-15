@@ -33,6 +33,7 @@ def _make_service(**overrides: object) -> AuthService:
     kwargs.update(overrides)
     svc = AuthService(**kwargs)  # type: ignore[arg-type]
     svc._settings.mfa_mandatory_for_admins = True
+    svc._settings.mfa_bypass_for_dev = False
     return svc
 
 
