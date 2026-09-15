@@ -15,19 +15,21 @@ PERMISSIONS_CACHE_TTL_SECONDS = 300
 
 # Roles that bypass all permission checks (unrestricted access).
 # PRR 2.1 least-privilege: ONLY super_admin bypasses. Every other role
-# (including rescue_centre_admin, rescue_admin, shelter_admin, admin)
-# authenticates against the seeded permission set; adding them here would
-# grant unrestricted super-admin access regardless of what the seed
-# script grants, which violates PRR 2.1.
+# (including rescue_centre_admin, rescue_admin, shelter_admin, and any
+# custom role an operator creates via the RBAC management UI) authenticates
+# against the seeded/assigned permission set; adding generic names like
+# "admin" or "administrator" here would let anyone who creates or renames a
+# role to that string grant it unrestricted super-admin access regardless of
+# what permissions were actually assigned to it, which violates PRR 2.1.
+# "system:admin" is a *permission code*, not a role name - it's already
+# checked separately as a permission grant in RequirePermission below, so it
+# does not belong in this role-name set either.
 ADMIN_ROLES = {
     "super_admin",
     "super_administrator",
     "superadmin",
-    "system:admin",
     "super administrator",
     "super admin",
-    "admin",
-    "administrator",
 }
 
 

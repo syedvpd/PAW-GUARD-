@@ -64,6 +64,67 @@ class TestGrievanceService:
         assert created_kwargs.sla_due_at is not None
 
     @pytest.mark.asyncio
+    async def test_submit_complaint_routes_to_facility_admin(self, service, mock_repo):
+        """PRR §3.14: a complaint naming a shelter/zone is routed on arrival
+        to the Rescue Centre Admin responsible for THAT facility, rather
+        than landing in one shared unassigned queue for all admins."""
+        facility_id = uuid.uuid4()
+        responsible_admin_id = uuid.uuid4()
+        mock_repo.get_facility_admin_id.return_value = responsible_admin_id
+        mock_repo.create_ticket.side_effect = lambda ticket: ticket
+
+        await service.submit_complaint(
+            GrievanceCreate(
+                reporter_name="John",
+                reporter_phone="+1234567890",
+                complaint_type="service",
+                details="Bad experience",
+                facility_id=facility_id,
+            )
+        )
+
+        mock_repo.get_facility_admin_id.assert_awaited_once_with(facility_id)
+        created = mock_repo.create_ticket.call_args[0][0]
+        assert created.assigned_to_admin_id == responsible_admin_id
+        assert created.facility_id == facility_id
+
+    @pytest.mark.asyncio
+    async def test_submit_complaint_without_facility_stays_unassigned(self, service, mock_repo):
+        """No facility named (public intake often can't say) - leave it for
+        manual triage instead of routing it to an arbitrary admin."""
+        mock_repo.create_ticket.side_effect = lambda ticket: ticket
+
+        await service.submit_complaint(
+            GrievanceCreate(
+                reporter_name="John",
+                reporter_phone="+1234567890",
+                complaint_type="service",
+                details="Bad experience",
+            )
+        )
+
+        mock_repo.get_facility_admin_id.assert_not_awaited()
+        assert mock_repo.create_ticket.call_args[0][0].assigned_to_admin_id is None
+
+    @pytest.mark.asyncio
+    async def test_submit_complaint_unmanaged_facility_stays_unassigned(self, service, mock_repo):
+        """Facility named but nobody manages it - still no guessing."""
+        mock_repo.get_facility_admin_id.return_value = None
+        mock_repo.create_ticket.side_effect = lambda ticket: ticket
+
+        await service.submit_complaint(
+            GrievanceCreate(
+                reporter_name="John",
+                reporter_phone="+1234567890",
+                complaint_type="service",
+                details="Bad experience",
+                facility_id=uuid.uuid4(),
+            )
+        )
+
+        assert mock_repo.create_ticket.call_args[0][0].assigned_to_admin_id is None
+
+    @pytest.mark.asyncio
     async def test_submit_complaint_invalid_phone(self, service, mock_repo):
         from pydantic import ValidationError
 

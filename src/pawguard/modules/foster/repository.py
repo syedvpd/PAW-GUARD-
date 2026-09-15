@@ -15,6 +15,8 @@ from pawguard.core.pagination import PageParams
 from pawguard.core.search import SortParams, apply_sorting, build_search_filter
 from pawguard.modules.auth.models import User
 from pawguard.modules.foster.models import (
+    FosterVetMessage,
+    FosterVetSenderType,
     FosterPlacement,
     FosterPlacementStatus,
     FosterProfile,
@@ -333,5 +335,33 @@ class FosterRepository:
             .where(FosterProgressLog.placement_id == placement_id)
             .order_by(FosterProgressLog.logged_at.desc())
             .limit(limit)
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def create_vet_message(
+        self,
+        placement_id: uuid.UUID,
+        sender_id: uuid.UUID,
+        sender_type: str,
+        body: str,
+    ) -> FosterVetMessage:
+        message = FosterVetMessage(
+            placement_id=placement_id,
+            sender_id=sender_id,
+            sender_type=sender_type,
+            body=body,
+        )
+        self._session.add(message)
+        await self._session.flush()
+        await self._session.refresh(message)
+        return message
+
+    async def list_vet_messages(
+        self, placement_id: uuid.UUID
+    ) -> Sequence[FosterVetMessage]:
+        stmt = (
+            select(FosterVetMessage)
+            .where(FosterVetMessage.placement_id == placement_id)
+            .order_by(FosterVetMessage.created_at.asc())
         )
         return (await self._session.execute(stmt)).scalars().all()

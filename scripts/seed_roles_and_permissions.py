@@ -188,7 +188,14 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
             pc.GRIEVANCE_UPDATE,
             pc.GRIEVANCE_ASSIGN,
             pc.GRIEVANCE_COMMENT,
-            pc.SYSTEM_ADMIN,
+            # NOT pc.SYSTEM_ADMIN — RequirePermission treats that code as a
+            # wildcard ("system:admin" in role_codes short-circuits EVERY
+            # permission check, see rbac.py), so granting it here silently
+            # gave this role unrestricted access and made the explicit list
+            # above inert. That collapses the scoped/global boundary PRR
+            # §2.1 draws between Rescue Centre Admin and Super Administrator.
+            # Mandatory MFA no longer depends on this grant either — see
+            # MFA_MANDATORY_ROLE_NAMES in auth/service.py.
             pc.NOTIFICATION_READ,
             pc.DASHBOARD_RESCUE,
             pc.DASHBOARD_SHELTER,
@@ -585,6 +592,58 @@ async def reconcile_roles(
     return created_roles, granted_total
 
 
+# Seed accounts whose role is facility-bound (mirrors
+# auth.scoping.FACILITY_SCOPED_ROLE_NAMES). super_admin is absent on purpose:
+# it is the one globally-unrestricted role per PRR §2.1 and must never be
+# pinned to a facility.
+FACILITY_SCOPED_SEED_ROLES = frozenset({"rescue_centre_admin", "shelter_manager"})
+
+
+async def revoke_wildcard_admin_grants(
+    session: AsyncSession,
+    role_definitions: list[tuple[str, str, bool, list[str]]] = ROLE_DEFINITIONS,
+    *,
+    verbose: bool = True,
+) -> int:
+    """Revoke `system:admin` from seeded roles whose definition omits it.
+
+    A deliberate, narrowly-scoped exception to this script's additive-only
+    rule. `RequirePermission` treats `system:admin` as a wildcard that
+    short-circuits every permission check (rbac.py), so a role holding it
+    has unrestricted access no matter what else it was granted. The seed
+    used to give it to `rescue_centre_admin`, collapsing the scoped/global
+    boundary PRR §2.1 draws between that role and Super Administrator.
+
+    Removing the code from the definition above only fixes fresh databases —
+    reconcile_roles never revokes — so deployed environments need this to
+    actually close the hole.
+
+    Scoped to seeded roles this script owns: a custom operator-created role
+    is left alone even if it holds `system:admin`, since that may be a
+    deliberate grant. Returns the number of grants revoked.
+    """
+    revoked = 0
+    for role_name, _description, _is_system, permission_codes in role_definitions:
+        if pc.SYSTEM_ADMIN in permission_codes:
+            continue
+        result = await session.execute(
+            select(RolePermission)
+            .join(Role, Role.id == RolePermission.role_id)
+            .join(Permission, Permission.id == RolePermission.permission_id)
+            .where(Role.name == role_name, Permission.code == pc.SYSTEM_ADMIN)
+        )
+        for row in result.scalars().all():
+            await session.delete(row)
+            revoked += 1
+            if verbose:
+                print(
+                    f"  [REVOKED] {role_name}: system:admin "
+                    "(wildcard grant - would bypass every permission check)"
+                )
+    await session.flush()
+    return revoked
+
+
 async def backfill_default_role(
     session: AsyncSession,
     *,
@@ -744,6 +803,67 @@ async def reconcile_standard_accounts(
                 if verbose:
                     print(f"  [SYNCED] {full_name} ({normalized_email})")
 
+        # PRR §2.1 facility scoping is derived from `managed_facility_id`
+        # (auth/scoping.py) and deliberately fails OPEN when it's unset, so a
+        # facility-bound seed account with no facility would silently keep
+        # seeing everything - i.e. scoping would look implemented but never
+        # actually apply in a seeded environment. Attach the first available
+        # facility so the scoping path is live and testable out of the box.
+        # Only fills a NULL: a real assignment is never overwritten.
+        if role_name in FACILITY_SCOPED_SEED_ROLES and user.managed_facility_id is None:
+            from pawguard.modules.shelter.models import ShelterFacility
+
+            facility_id = (
+                await session.execute(
+                    select(ShelterFacility.id)
+                    .where(ShelterFacility.deleted_at.is_(None))
+                    .order_by(ShelterFacility.created_at.asc())
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            if facility_id is not None:
+                user.managed_facility_id = facility_id
+                if verbose:
+                    print(f"  [SCOPED] {normalized_email} -> facility {facility_id}")
+
+        if role_name == "volunteer":
+            from pawguard.modules.volunteer.models import VolunteerProfile, VolunteerStatus
+            prof = (await session.execute(select(VolunteerProfile).where(VolunteerProfile.user_id == user.id))).scalar_one_or_none()
+            if not prof:
+                prof = VolunteerProfile(
+                    user_id=user.id,
+                    status=VolunteerStatus.ACTIVE,
+                    emergency_contact_name="Emergency Contact",
+                    emergency_contact_phone="+919876543210",
+                    applied_role="Shelter Volunteer",
+                    skills="Animal Care, Dog Walking",
+                )
+                session.add(prof)
+        elif role_name == "foster_family":
+            from pawguard.modules.foster.models import FosterProfile, FosterStatus
+            prof = (await session.execute(select(FosterProfile).where(FosterProfile.user_id == user.id))).scalar_one_or_none()
+            if not prof:
+                prof = FosterProfile(
+                    user_id=user.id,
+                    status=FosterStatus.APPROVED,
+                    max_capacity=2,
+                    is_available=True,
+                    preferences="Puppies, Medical Recovery",
+                )
+                session.add(prof)
+        elif role_name == "donor":
+            from pawguard.modules.donation.models import DonorProfile
+            prof = (await session.execute(select(DonorProfile).where(DonorProfile.user_id == user.id))).scalar_one_or_none()
+            if not prof:
+                prof = DonorProfile(
+                    user_id=user.id,
+                    is_80g_eligible=True,
+                    full_name_for_80g=full_name,
+                    pan_number="ABCDE1234F",
+                    address_for_80g="100 Shelter Road, PawGuard Center",
+                )
+                session.add(prof)
+
     await session.flush()
     return {"count": updated_count, "accounts": [e[0] for e in STANDARD_OPERATIONAL_ACCOUNTS]}
 
@@ -759,10 +879,12 @@ async def seed_db(label: str, database_url: str) -> None:
 
     async with session_factory() as session:
         created_roles, granted_total = await reconcile_roles(session)
+        revoked_total = await revoke_wildcard_admin_grants(session)
         await session.commit()
         print(
             f"DONE [{label}]: {created_roles} role(s) created, "
-            f"{granted_total} permission grant(s) added.\n"
+            f"{granted_total} permission grant(s) added, "
+            f"{revoked_total} wildcard grant(s) revoked.\n"
         )
 
     await engine.dispose()

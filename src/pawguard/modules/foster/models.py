@@ -168,3 +168,33 @@ class FosterProgressLog(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     logged_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     placement: Mapped["FosterPlacement"] = relationship(back_populates="progress_logs")
+
+
+class FosterVetSenderType(StrEnum):
+    FOSTER = "foster"
+    VET = "vet"
+    SYSTEM = "system"
+
+
+class FosterVetMessage(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
+    __tablename__ = "foster_vet_messages"
+
+    placement_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("foster_placements.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    sender_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    sender_type: Mapped[FosterVetSenderType] = mapped_column(
+        String(32), default=FosterVetSenderType.FOSTER, nullable=False, index=True
+    )
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+
+    sender: Mapped["User"] = relationship("User", foreign_keys=[sender_id], lazy="joined")
+    placement: Mapped["FosterPlacement"] = relationship("FosterPlacement", lazy="joined")

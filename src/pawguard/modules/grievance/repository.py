@@ -8,6 +8,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.pagination import PageParams
+from pawguard.modules.auth.models import Role, User, UserManagedFacility, UserRole
 from pawguard.modules.grievance.models import (
     GrievanceComment,
     GrievanceStatus,
@@ -25,6 +26,40 @@ class GrievanceRepository:
         await self._session.flush()
         return ticket
 
+    async def get_facility_admin_id(self, facility_id: uuid.UUID) -> uuid.UUID | None:
+        """The active rescue_centre_admin managing this facility (PRR §3.14).
+
+        Returns None when nobody manages it, so the caller leaves the ticket
+        unassigned rather than routing it to an arbitrary admin. If several
+        admins manage the same facility the oldest account wins, purely so
+        routing is deterministic.
+        """
+        # Matches either assignment mechanism (PRR §2.1): the legacy singular
+        # column, or the many-to-many join table that supports an admin
+        # covering several facilities.
+        manages_facility = or_(
+            User.managed_facility_id == facility_id,
+            User.id.in_(
+                select(UserManagedFacility.user_id).where(
+                    UserManagedFacility.facility_id == facility_id
+                )
+            ),
+        )
+        stmt = (
+            select(User.id)
+            .join(UserRole, UserRole.user_id == User.id)
+            .join(Role, Role.id == UserRole.role_id)
+            .where(
+                manages_facility,
+                User.is_active.is_(True),
+                User.deleted_at.is_(None),
+                Role.name == "rescue_centre_admin",
+            )
+            .order_by(User.created_at.asc())
+            .limit(1)
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
     async def get_ticket(self, ticket_id: uuid.UUID) -> GrievanceTicket | None:
         stmt = select(GrievanceTicket).where(
             GrievanceTicket.id == ticket_id,
@@ -39,8 +74,18 @@ class GrievanceRepository:
         complaint_type: str | None = None,
         assigned_to_admin_id: uuid.UUID | None = None,
         search: str | None = None,
+        facility_ids: Sequence[uuid.UUID] | None = None,
     ) -> int:
         stmt = select(func.count(GrievanceTicket.id)).where(GrievanceTicket.deleted_at.is_(None))
+        if facility_ids is not None:
+            # Must mirror list_tickets' scoping or the pagination total
+            # would count tickets the caller isn't allowed to see.
+            stmt = stmt.where(
+                or_(
+                    GrievanceTicket.facility_id.in_(facility_ids),
+                    GrievanceTicket.facility_id.is_(None),
+                )
+            )
         if status:
             stmt = stmt.where(GrievanceTicket.status == status)
         if complaint_type:
@@ -68,8 +113,20 @@ class GrievanceRepository:
         complaint_type: str | None = None,
         assigned_to_admin_id: uuid.UUID | None = None,
         search: str | None = None,
+        facility_ids: Sequence[uuid.UUID] | None = None,
     ) -> Sequence[GrievanceTicket]:
         stmt = select(GrievanceTicket).where(GrievanceTicket.deleted_at.is_(None))
+        if facility_ids is not None:
+            # PRR §2.1 location scoping, derived server-side from the caller
+            # (auth/scoping.py) - never from a client-supplied parameter.
+            # Tickets with no facility stay visible so a complaint that
+            # arrived without one can still be triaged and routed.
+            stmt = stmt.where(
+                or_(
+                    GrievanceTicket.facility_id.in_(facility_ids),
+                    GrievanceTicket.facility_id.is_(None),
+                )
+            )
         if status:
             stmt = stmt.where(GrievanceTicket.status == status)
         if complaint_type:

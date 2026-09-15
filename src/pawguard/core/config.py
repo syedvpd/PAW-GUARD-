@@ -107,13 +107,20 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = 30
     pre_auth_token_expire_minutes: int = 5
 
+    # --- Session governance (PRR §6.1) ---
+    # A session with no activity for longer than this is revoked on its next
+    # use, independent of the access/refresh token's own absolute expiry.
+    session_idle_timeout_minutes: int = 30
+
     # --- MFA ---
     # Optional independent key used to encrypt TOTP secrets at rest (Fernet).
     # When unset, the key is derived from the JWT private key so existing
     # deployments stay zero-config; set this in production so rotating the JWT
     # keypair does not orphan stored MFA secrets.
     mfa_encryption_key: str = ""
-    mfa_mandatory_for_admins: bool = False
+    # PRR §6.1 requires MFA for administrative logins unconditionally, so this
+    # defaults on; only disable it for a local/dev deployment via env var.
+    mfa_mandatory_for_admins: bool = True
     mfa_bypass_for_dev: bool = Field(
         default=False,
         description="Bypass MFA enforcement in dev/test environments",

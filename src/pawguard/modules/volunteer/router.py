@@ -31,6 +31,8 @@ from pawguard.modules.storage.schemas import DownloadUrlResponse
 from pawguard.modules.volunteer.models import ApplicationStatus, VolunteerStatus
 from pawguard.modules.volunteer.repository import VolunteerRepository
 from pawguard.modules.volunteer.schemas import (
+    VolunteerFeedbackCreate,
+    VolunteerFeedbackResponse,
     ShiftAttendanceCancel,
     ShiftAttendanceNoShow,
     ShiftAttendanceResponse,
@@ -627,4 +629,47 @@ async def bulk_update_profile_status(
     return BulkStatusUpdateResponse(
         message=f"{updated} volunteer profile(s) updated.",
         updated_count=updated,
+    )
+
+
+@router.post(
+    "/me/feedback",
+    response_model=ApiResponse[VolunteerFeedbackResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def submit_volunteer_feedback(
+    payload: VolunteerFeedbackCreate,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: VolunteerService = Depends(get_volunteer_service),
+) -> ApiResponse[VolunteerFeedbackResponse]:
+    """Submit volunteer feedback for a shift or general shelter operations."""
+    feedback = await service.submit_feedback(
+        user_id=current_user.id,
+        rating=payload.rating,
+        comment=payload.comment,
+        shift_id=payload.shift_id,
+    )
+    return ApiResponse(
+        data=VolunteerFeedbackResponse.model_validate(feedback),
+        message="Feedback submitted successfully.",
+    )
+
+
+@router.get(
+    "/me/feedback",
+    response_model=ApiResponse[list[VolunteerFeedbackResponse]],
+)
+async def get_my_feedback(
+    current_user: CurrentUser = Depends(get_current_user),
+    service: VolunteerService = Depends(get_volunteer_service),
+) -> ApiResponse[list[VolunteerFeedbackResponse]]:
+    """Get all feedback submitted by the current volunteer."""
+    from pawguard.core.exceptions import NotFoundError
+
+    try:
+        feedback_list = await service.list_feedback_for_user(current_user.id)
+    except NotFoundError:
+        return ApiResponse(data=[])
+    return ApiResponse(
+        data=[VolunteerFeedbackResponse.model_validate(f) for f in feedback_list]
     )

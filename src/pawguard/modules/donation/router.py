@@ -35,13 +35,14 @@ from pawguard.core.pii import mask_email, mask_full_name, mask_phone
 from pawguard.core.rate_limiter import rate_limit
 from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.core.search import SortParams, sort_params
-from pawguard.db.session import get_db
+from pawguard.db.session import get_db, get_master_db
 from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import (
     CurrentUser,
     get_current_user,
     get_optional_current_user,
 )
+from pawguard.modules.auth.models import AuthAuditEventType
 from pawguard.modules.auth.rbac import has_permission, require_permission
 from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.donation.models import (
@@ -359,6 +360,7 @@ async def list_all_donations(
     dependencies=[Depends(require_permission("donation:read"))],
 )
 async def list_donors(
+    http_request: Request,
     page: PageParams = Depends(page_params),
     sort: SortParams = Depends(sort_params),
     search: str | None = Query(None, description="Search donor profiles"),
@@ -370,7 +372,21 @@ async def list_donors(
         sort=sort,
         search_term=search,
     )
+    user_permissions = {p.code for r in current_user.user.roles for p in r.permissions}
+    sees_unmasked = bool(_UNMASKED_DONOR_PII_PERMISSIONS & user_permissions)
     data = [_mask_donor_pii(d, current_user) for d in result.data]
+    if sees_unmasked and data:
+        # PRR §6.1: unmasking donor PII for a privileged viewer is itself an
+        # audit-worthy event. `current_user.db` is already a writable
+        # (master) session here since this endpoint depends on
+        # get_current_user, not get_optional_current_user.
+        await AuditService(current_user.db).record(
+            event_type=AuthAuditEventType.PII_UNMASKED,
+            actor_id=current_user.id,
+            ip_address=http_request.client.host if http_request.client else None,
+            user_agent=http_request.headers.get("user-agent"),
+            metadata={"resource": "donor_list", "count": len(data)},
+        )
     return PaginatedResponse(data=data, meta=result.meta)
 
 
@@ -1025,4 +1041,89 @@ async def cancel_recurring_subscription(
     return ApiResponse(
         data=RecurringSubscriptionResponse.model_validate(updated),
         message="Recurring subscription cancelled successfully.",
+    )
+
+
+@router.get(
+    "/{donation_id}/80g-certificate",
+)
+async def download_donor_80g_certificate(
+    donation_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: DonationService = Depends(get_donation_service),
+    db: AsyncSession = Depends(get_db),
+    audit: AuditService = Depends(get_audit_service),
+) -> Response:
+    """Download official 80G Tax Exemption Certificate for a donation."""
+    import asyncio
+    from datetime import UTC, datetime
+    from fastapi.responses import Response
+    from pawguard.core.config import get_settings
+    from pawguard.core.pdf_generation import generate_80g_certificate
+
+    donation = await service.get_donation(donation_id)
+    is_owner = False
+    if (
+        donation.donor is not None
+        and getattr(donation.donor, "user_id", None) == current_user.user.id
+    ) or getattr(donation, "donor_id", None) == current_user.user.id:
+        is_owner = True
+    elif has_permission(current_user.user, "donation:read") or has_permission(current_user.user, "finance:read"):
+        is_owner = True
+
+    if not is_owner:
+        raise ForbiddenError("You do not have permission to view this 80G certificate.")
+
+    status_str = (
+        donation.status.value if hasattr(donation.status, "value") else str(donation.status)
+    ).lower()
+    if status_str not in ("success", "completed", "paid"):
+        raise ValidationFailedError("80G certificates can only be generated for successful donations.")
+
+    donor = donation.donor
+    donor_name = getattr(donor, "full_name_for_80g", None) or (
+        current_user.user.full_name if hasattr(current_user.user, "full_name") else "Valued Donor"
+    )
+    pan_number = getattr(donor, "pan_number", None) or "PAN-PENDING"
+
+    settings = get_settings()
+    donation_date = donation.created_at or datetime.now(UTC)
+    receipt_number = f"80G-{donation.id.hex[:12].upper()}"
+
+    pdf_bytes = await asyncio.to_thread(
+        generate_80g_certificate,
+        donor_name=donor_name,
+        pan_number=pan_number,
+        amount=float(donation.amount),
+        currency=donation.currency or "INR",
+        donation_date=donation_date,
+        receipt_number=receipt_number,
+        org_name=settings.org_name or "PawGuard Rescue & Care",
+        org_address=settings.org_address or "PawGuard Animal Shelter",
+        address=getattr(donor, "address_for_80g", None),
+    )
+
+    format_param = (request.query_params.get("format") or "").lower()
+    if format_param == "json":
+        storage = StorageService()
+        object_key = f"documents/80g_{donation.id}.pdf"
+        download_url = storage.generate_presigned_download_url(object_key=object_key)
+        if not download_url or "token=" in download_url:
+            download_url = f"/api/v1/donations/{donation.id}/80g-certificate"
+        return ApiResponse(
+            data=DownloadUrlResponse(
+                download_url=download_url,
+                object_key=object_key,
+                file_id=donation.id,
+            )
+        )
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="80g_certificate_{donation.id}.pdf"',
+            "Content-Type": "application/pdf",
+        },
     )

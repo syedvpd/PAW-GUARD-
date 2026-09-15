@@ -58,7 +58,66 @@ class TestRescueService:
         return RescueService(mock_repo, mock_audit, dog_repo=mock_dog_repo)
 
     @pytest.mark.asyncio
-    async def test_report_incident(self, service, mock_repo, mock_audit):
+    async def test_list_requests_paginated_forwards_facility_scope(self, service, mock_repo):
+        """PRR §2.1: the caller's scope (derived from the authenticated user
+        in the router) must reach the query. Locks the service->repository
+        wiring so scoping can't be silently dropped on the way down."""
+        scope = [uuid.uuid4()]
+        mock_repo.list_paginated.return_value = ([], 0)
+
+        await service.list_requests_paginated(
+            page=PageParams(), sort=SortParams(), facility_ids=scope
+        )
+
+        assert mock_repo.list_paginated.call_args.kwargs["facility_ids"] == scope
+
+    @pytest.mark.asyncio
+    async def test_assign_coordinator_binds_case_to_that_facility(self, service, mock_repo):
+        """A rescue is a geographic incident with no owning facility until
+        someone takes it; the coordinator's own facility becomes accountable
+        (PRR §2.1). Without this the scope column would stay NULL forever and
+        rescue scoping would be permanently inert."""
+        facility_id = uuid.uuid4()
+        request = RescueRequest(
+            id=uuid.uuid4(),
+            ticket_number="RSQ-1",
+            reporter_name="R",
+            reporter_phone="+1",
+            location_address="Addr",
+            status=RescueStatus.REPORTED,
+        )
+        request.facility_id = None
+        mock_repo.get_request_by_id.return_value = request
+        # First scalar() validates the coordinator, second reads their facility.
+        mock_repo._session.scalar.side_effect = [uuid.uuid4(), facility_id]
+
+        await service.assign_coordinator(request.id, uuid.uuid4(), actor_id=uuid.uuid4())
+
+        assert request.facility_id == facility_id
+
+    @pytest.mark.asyncio
+    async def test_assign_coordinator_does_not_move_an_owned_case(self, service, mock_repo):
+        """Reassigning a coordinator must not silently move an in-progress
+        case out of the facility already accountable for it."""
+        original_facility_id = uuid.uuid4()
+        request = RescueRequest(
+            id=uuid.uuid4(),
+            ticket_number="RSQ-2",
+            reporter_name="R",
+            reporter_phone="+1",
+            location_address="Addr",
+            status=RescueStatus.REPORTED,
+        )
+        request.facility_id = original_facility_id
+        mock_repo.get_request_by_id.return_value = request
+        mock_repo._session.scalar.side_effect = [uuid.uuid4(), uuid.uuid4()]
+
+        await service.assign_coordinator(request.id, uuid.uuid4(), actor_id=uuid.uuid4())
+
+        assert request.facility_id == original_facility_id
+
+    @pytest.mark.asyncio
+    async def test_report_incident(self, service, mock_audit, mock_repo):
         request_id = uuid.uuid4()
         mock_repo.create_request.return_value = None
         mock_repo.get_request_by_id.return_value = RescueRequest(

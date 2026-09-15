@@ -271,8 +271,17 @@ class ShelterRepository:
         search_term: str | None = None,
         status: FacilityStatus | None = None,
         facility_type: FacilityType | None = None,
+        facility_ids: Sequence[uuid.UUID] | None = None,
     ) -> tuple[Sequence[ShelterFacility], int]:
         filters = [ShelterFacility.deleted_at.is_(None)]
+
+        if facility_ids is not None:
+            # PRR §2.1 location scoping, derived server-side from the caller
+            # (auth/scoping.py) - never from a request parameter. Applied to
+            # `filters`, which backs both the page query and the count, so a
+            # pagination total can't leak the existence of out-of-scope
+            # facilities.
+            filters.append(ShelterFacility.id.in_(facility_ids))
 
         search_filter = build_search_filter(ShelterFacility, search_term, ("name", "address"))
         if search_filter is not None:

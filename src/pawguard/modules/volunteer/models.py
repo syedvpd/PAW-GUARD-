@@ -208,3 +208,27 @@ class ShiftAttendance(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
         back_populates="attendances", lazy="joined"
     )
     shift: Mapped["VolunteerShift"] = relationship(back_populates="attendances", lazy="joined")
+
+
+class VolunteerFeedback(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
+    """Tracks feedback submitted by volunteers about shifts and shelter operations."""
+
+    __tablename__ = "volunteer_feedback"
+
+    profile_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("volunteer_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    shift_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("volunteer_shifts.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    rating: Mapped[int] = mapped_column(Integer, nullable=False)
+    comment: Mapped[str] = mapped_column(Text, nullable=False)
+
+    volunteer: Mapped["VolunteerProfile"] = relationship(foreign_keys=[profile_id], lazy="joined")
+    shift: Mapped["VolunteerShift | None"] = relationship(foreign_keys=[shift_id], lazy="joined")

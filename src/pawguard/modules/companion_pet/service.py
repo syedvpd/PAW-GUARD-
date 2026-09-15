@@ -480,19 +480,21 @@ class CompanionPetService:
             ):
                 user_roles.update(r.name for r in current_user.user.roles if hasattr(r, "name"))
             if "shelter_manager" in user_roles:
-                manager_facility_id = (
-                    getattr(current_user.user, "managed_facility_id", None)
+                # PRR §2.1 is plural: membership across every assigned
+                # facility, not equality against a single one.
+                manager_facility_ids = (
+                    getattr(current_user.user, "managed_facility_ids", [])
                     if hasattr(current_user, "user")
-                    else None
+                    else []
                 )
                 if (
-                    manager_facility_id is not None
+                    manager_facility_ids
                     and dog.shelter_facility_id is not None
-                    and manager_facility_id != dog.shelter_facility_id
+                    and dog.shelter_facility_id not in manager_facility_ids
                 ):
                     raise ForbiddenError(
                         f"Shelter manager is not authorized for dog in facility '{dog.shelter_facility_id}' "
-                        f"(assigned: '{manager_facility_id}')."
+                        f"(assigned: '{manager_facility_ids}')."
                     )
 
         existing_tag = await self._repo.get_active_tag_for_dog(dog.id)

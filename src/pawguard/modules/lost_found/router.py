@@ -15,13 +15,14 @@ from pawguard.core.pii import mask_email, mask_full_name, mask_phone
 from pawguard.core.rate_limiter import rate_limit
 from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.core.search import SortParams, sort_params
-from pawguard.db.session import get_db
+from pawguard.db.session import get_db, get_master_db
 from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import (
     CurrentUser,
     get_current_user,
     get_optional_current_user,
 )
+from pawguard.modules.auth.models import AuthAuditEventType
 from pawguard.modules.auth.rbac import is_admin_role, require_permission
 from pawguard.modules.lost_found.models import MatchStatus, ReportStatus, Species
 from pawguard.modules.lost_found.repository import LostFoundRepository
@@ -60,6 +61,42 @@ _LOST_FOUND_PHOTO_MAX_BYTES = 50 * 1024 * 1024  # 50 MB
 _LOST_FOUND_VIDEO_MIME_TYPES = frozenset({"video/mp4", "video/webm", "video/quicktime"})
 _LOST_FOUND_VIDEO_MAX_BYTES = 100 * 1024 * 1024  # 100 MB
 _LOST_FOUND_PHOTO_FOLDER = "lost-found"
+
+
+def _lost_found_pii_unmasked_for(
+    item: LostReportResponse | FoundReportResponse, current_user: CurrentUser | None
+) -> bool:
+    """True when this caller is seeing this report's reporter PII unmasked
+    because of admin/staff privilege - NOT because they're the report's own
+    owner (viewing your own submission isn't a privacy-control event worth
+    auditing)."""
+    if item.user is None or current_user is None:
+        return False
+    if item.user_id == current_user.id:
+        return False
+    user_permissions = {p.code for r in current_user.user.roles for p in r.permissions}
+    return "system:admin" in user_permissions
+
+
+async def _audit_pii_unmasked(
+    *,
+    master_db: AsyncSession,
+    current_user: CurrentUser,
+    http_request: Request,
+    resource: str,
+    resource_id: uuid.UUID,
+) -> None:
+    """PRR §6.1: unmasking reporter PII for a privileged viewer is itself an
+    audit-worthy event. ``master_db`` must be a writable (non-replica)
+    session - the calling GET endpoint's own `service` session is a replica
+    and can't take the INSERT."""
+    await AuditService(master_db).record(
+        event_type=AuthAuditEventType.PII_UNMASKED,
+        actor_id=current_user.id,
+        ip_address=http_request.client.host if http_request.client else None,
+        user_agent=http_request.headers.get("user-agent"),
+        metadata={"resource": resource, "resource_id": str(resource_id)},
+    )
 
 
 def _mask_reporter_identity(
@@ -360,14 +397,25 @@ async def get_reunion_stories(
 )
 async def get_lost_report(
     report_id: uuid.UUID,
+    http_request: Request,
     current_user: CurrentUser | None = Depends(get_optional_current_user),
     service: LostFoundService = Depends(get_lost_found_service),
+    master_db: AsyncSession = Depends(get_master_db),
 ) -> ApiResponse[LostReportResponse]:
     report = await service._repo.get_lost_report_by_id(report_id)
     if report is None:
         raise NotFoundError("Lost report not found.")
     item = LostReportResponse.model_validate(report)
+    was_unmasked = _lost_found_pii_unmasked_for(item, current_user)
     _mask_reporter_identity(item, current_user)
+    if was_unmasked:
+        await _audit_pii_unmasked(
+            master_db=master_db,
+            current_user=current_user,
+            http_request=http_request,
+            resource="lost_report",
+            resource_id=report_id,
+        )
     return ApiResponse(data=item)
 
 
@@ -377,14 +425,25 @@ async def get_lost_report(
 )
 async def get_found_report(
     report_id: uuid.UUID,
+    http_request: Request,
     current_user: CurrentUser | None = Depends(get_optional_current_user),
     service: LostFoundService = Depends(get_lost_found_service),
+    master_db: AsyncSession = Depends(get_master_db),
 ) -> ApiResponse[FoundReportResponse]:
     report = await service._repo.get_found_report_by_id(report_id)
     if report is None:
         raise NotFoundError("Found report not found.")
     item = FoundReportResponse.model_validate(report)
+    was_unmasked = _lost_found_pii_unmasked_for(item, current_user)
     _mask_reporter_identity(item, current_user)
+    if was_unmasked:
+        await _audit_pii_unmasked(
+            master_db=master_db,
+            current_user=current_user,
+            http_request=http_request,
+            resource="found_report",
+            resource_id=report_id,
+        )
     return ApiResponse(data=item)
 
 
@@ -398,21 +457,47 @@ async def get_unified_report(
     report_id: uuid.UUID,
     current_user: CurrentUser | None = Depends(get_optional_current_user),
     service: LostFoundService = Depends(get_lost_found_service),
+    master_db: AsyncSession = Depends(get_master_db),
 ) -> ApiResponse[UnifiedReportResponse]:
     """Resolve a lost OR found report by id through a single endpoint.
 
     Preserves the existing per-type authorization (public read with optional
     auth) and PII masking. Returns 404 only when the id matches neither table.
+
+    Note: this endpoint is response-cached (`@cache_response`), so a PII
+    unmask is only audited on a cache miss - a cached hit skips this body
+    entirely. Acceptable here since the cache key is already partitioned by
+    user/role (see cache_decorator.py), so the same viewer's masked-vs-
+    unmasked view can't leak across sessions; it just means an audit trail
+    won't have one entry per repeated view within the 120s TTL.
     """
     lost_report = await service._repo.get_lost_report_by_id(report_id)
     if lost_report is not None:
         item = LostReportResponse.model_validate(lost_report)
+        was_unmasked = _lost_found_pii_unmasked_for(item, current_user)
         _mask_reporter_identity(item, current_user)
+        if was_unmasked:
+            await _audit_pii_unmasked(
+                master_db=master_db,
+                current_user=current_user,
+                http_request=request,
+                resource="lost_report",
+                resource_id=report_id,
+            )
         return ApiResponse(data=UnifiedReportResponse(kind="lost", report=item))
     found_report = await service._repo.get_found_report_by_id(report_id)
     if found_report is not None:
         item = FoundReportResponse.model_validate(found_report)
+        was_unmasked = _lost_found_pii_unmasked_for(item, current_user)
         _mask_reporter_identity(item, current_user)
+        if was_unmasked:
+            await _audit_pii_unmasked(
+                master_db=master_db,
+                current_user=current_user,
+                http_request=request,
+                resource="found_report",
+                resource_id=report_id,
+            )
         return ApiResponse(data=UnifiedReportResponse(kind="found", report=item))
     raise NotFoundError("Report not found.")
 

@@ -565,6 +565,20 @@ class StorageService:
                 "Combined media evidence size exceeds the maximum permitted 50MB limit."
             )
 
+    def list_objects(self, *, prefix: str) -> list[dict]:
+        """List objects under a prefix, newest first. Returns [{key, size, last_modified}]."""
+        response = self._client.list_objects_v2(Bucket=self._bucket, Prefix=prefix)
+        objects = [
+            {
+                "key": obj["Key"],
+                "size": obj["Size"],
+                "last_modified": obj["LastModified"],
+            }
+            for obj in response.get("Contents", [])
+        ]
+        objects.sort(key=lambda o: o["last_modified"], reverse=True)
+        return objects
+
     def delete_object(self, *, object_key: str) -> None:
         import time
 

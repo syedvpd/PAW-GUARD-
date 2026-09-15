@@ -20,6 +20,7 @@ from pawguard.db.session import get_db
 from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.rbac import require_permission
+from pawguard.modules.auth.scoping import facility_scope_for
 from pawguard.modules.grievance.models import GrievanceStatus
 from pawguard.modules.grievance.repository import GrievanceRepository
 from pawguard.modules.grievance.schemas import (
@@ -76,6 +77,7 @@ async def list_tickets(
     assigned_to: uuid.UUID | None = Query(None, alias="assigned_to"),
     search: str | None = Query(None),
     service: GrievanceService = Depends(get_grievance_service),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> PaginatedResponse[GrievanceResponse]:
     filter_params = GrievanceListFilter(
         status=status_filter,
@@ -83,7 +85,13 @@ async def list_tickets(
         assigned_to_admin_id=assigned_to,
         search=search,
     )
-    tickets, meta = await service.list_tickets(page_params=params, filter_params=filter_params)
+    # PRR §2.1: scope is derived from the authenticated user, never from a
+    # request parameter - a client cannot widen its own visibility.
+    tickets, meta = await service.list_tickets(
+        page_params=params,
+        filter_params=filter_params,
+        facility_ids=facility_scope_for(current_user.user),
+    )
     return PaginatedResponse(
         data=[GrievanceResponse.model_validate(t) for t in tickets],
         meta=meta,

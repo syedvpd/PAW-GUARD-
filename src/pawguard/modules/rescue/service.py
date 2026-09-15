@@ -796,6 +796,7 @@ class RescueService:
             except Exception as eq_exc:
                 logger.warning("Equipment auto-checkout warning: %s", eq_exc)
 
+        status_before_dispatch = request.status
         request.status = RescueStatus.DISPATCHED
         await self._repo._session.flush()
         res = await self._repo.get_request_by_id(actual_request_id)
@@ -817,6 +818,16 @@ class RescueService:
                     "vehicle_id": vehicle_code_display,
                     "assigned_vehicle_id": (str(actual_vehicle_id) if actual_vehicle_id else None),
                     "escalation_type": escalation_type.value if escalation_type else None,
+                },
+                # PRR §6.1 Pre/Post State Data: dispatch commits people and a
+                # vehicle to a live case, so the transition it made and the
+                # resources it consumed both belong on the record.
+                before_state={"status": status_before_dispatch},
+                after_state={
+                    "status": request.status,
+                    "assigned_driver_id": effective_driver_id,
+                    "assigned_vehicle_id": actual_vehicle_id,
+                    "assigned_agent_ids": [str(i) for i in agent_ids],
                 },
             )
 
@@ -1067,6 +1078,13 @@ class RescueService:
         if dispatch is None:
             raise NotFoundError("Dispatch record not found for this request.")
 
+        # PRR §6.1 Pre/Post State Data — this is an escalation action, which
+        # §6.1 names explicitly alongside high-level approvals.
+        before_state = {
+            "escalation_type": dispatch.escalation_type,
+            "escalation_notes": dispatch.escalation_notes,
+            "escalation_status": dispatch.escalation_status,
+        }
         dispatch.escalation_type = escalation_type
         dispatch.escalation_notes = escalation_notes
         # Auto-transition escalation lifecycle to RAISED on first escalation.
@@ -1083,6 +1101,12 @@ class RescueService:
                     "rescue_id": str(actual_request_id),
                     "escalation_type": escalation_type.value,
                     "escalation_notes": escalation_notes,
+                },
+                before_state=before_state,
+                after_state={
+                    "escalation_type": dispatch.escalation_type,
+                    "escalation_notes": dispatch.escalation_notes,
+                    "escalation_status": dispatch.escalation_status,
                 },
             )
 
@@ -1666,7 +1690,26 @@ class RescueService:
         if user is None:
             raise NotFoundError("Coordinator user not found or inactive.")
 
+        before_state = {
+            "coordinator_id": request.coordinator_id,
+            "facility_id": request.facility_id,
+        }
         request.coordinator_id = coordinator_id
+        # PRR §2.1: taking the case is what binds it to a rescue centre - a
+        # rescue is a geographic incident with no owning facility before
+        # that. Only fills a NULL, so reassigning a coordinator later can't
+        # silently move an in-progress case out of the facility already
+        # accountable for it.
+        if request.facility_id is None:
+            coordinator = await self._repo._session.get(User, coordinator_id)
+            # A coordinator may manage several facilities (PRR §2.1); their
+            # primary one owns the case. managed_facility_ids puts the
+            # primary first, so this is deterministic rather than arbitrary.
+            coordinator_facility_ids = (
+                coordinator.managed_facility_ids if coordinator is not None else []
+            )
+            if coordinator_facility_ids:
+                request.facility_id = coordinator_facility_ids[0]
         await self._repo._session.flush()
         await self._repo._session.refresh(request, attribute_names=["updated_at"])
 
@@ -1680,6 +1723,15 @@ class RescueService:
                     "rescue_id": str(actual_request_id),
                     "coordinator_id": str(coordinator_id),
                     "notes": notes,
+                },
+                # PRR §6.1 Pre/Post State Data. Assignment also transfers
+                # facility ownership of the case (above), which decides who
+                # can see it afterwards - an audit row that omitted it
+                # couldn't explain a later change in visibility.
+                before_state=before_state,
+                after_state={
+                    "coordinator_id": request.coordinator_id,
+                    "facility_id": request.facility_id,
                 },
             )
 
@@ -1741,6 +1793,7 @@ class RescueService:
         severity: RescueSeverity | None = None,
         urgent_only: bool | None = None,
         assigned_to_me: uuid.UUID | None = None,
+        facility_ids: Sequence[uuid.UUID] | None = None,
     ) -> PaginatedResponse[RescueRequestResponse]:
         results, total = await self._repo.list_paginated(
             page=page,
@@ -1750,6 +1803,7 @@ class RescueService:
             severity=severity,
             urgent_only=urgent_only,
             assigned_to_me=assigned_to_me,
+            facility_ids=facility_ids,
         )
         return PaginatedResponse(
             data=[RescueRequestResponse.model_validate(r) for r in results],

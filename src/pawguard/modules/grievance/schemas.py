@@ -24,6 +24,11 @@ class GrievanceCreate(BaseModel):
         min_length=1,
         examples=["Reported an injured dog at 9am but the team arrived after 6 hours."],
     )
+    # PRR §3.14: the shelter/zone this complaint concerns, used to route the
+    # ticket to that facility's Rescue Centre Admin on submission. Optional -
+    # a member of the public may not know which facility is involved, and
+    # such a ticket stays unassigned for manual triage.
+    facility_id: uuid.UUID | None = Field(None, examples=[None])
 
 
 class GrievanceUpdate(BaseModel):
@@ -43,6 +48,7 @@ class GrievanceResponse(BaseModel):
     details: str
     status: GrievanceStatus
     assigned_to_admin_id: uuid.UUID | None
+    facility_id: uuid.UUID | None
     resolution_notes: str | None
     sla_due_at: datetime | None
     first_responded_at: datetime | None

@@ -189,6 +189,11 @@ class AuthAuditEventType(StrEnum):
     INVOICE_UPDATED = "invoice_updated"
     INVOICE_CANCELLED = "invoice_cancelled"
     ADOPTION_APPLICATION_SUBMITTED = "adoption_application_submitted"
+    PII_UNMASKED = "pii_unmasked"
+    BACKUP_CREATED = "backup_created"
+    # Distinct from GRIEVANCE_UPDATED so an escalation (PRR §3.14) is
+    # queryable as its own action code rather than hiding in generic updates.
+    GRIEVANCE_ESCALATED = "grievance_escalated"
 
 
 class Role(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
@@ -234,6 +239,31 @@ class UserRole(Base):
     )
     role_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True
+    )
+
+
+class UserManagedFacility(Base):
+    """A user's assigned shelter locations / rescue zones (PRR §2.1).
+
+    §2.1 scopes an administrator to "assigned shelter locations and rescue
+    zones" — plural — which the single `users.managed_facility_id` column
+    could not express. This is the many-to-many that can.
+
+    `users.managed_facility_id` is deliberately kept as the user's primary
+    facility during the transition: several authorization checks and the
+    admin UI still write it, and `User.managed_facility_ids` unions the two
+    so an account assigned only the legacy way keeps working untouched.
+    """
+
+    __tablename__ = "user_managed_facilities"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    facility_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("shelter_facilities.id", ondelete="CASCADE"),
+        primary_key=True,
     )
 
 
@@ -302,6 +332,37 @@ class User(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
         default=None,
         index=True,
     )
+
+    # Related to the association object rather than ShelterFacility itself:
+    # only the ids are needed, and pointing at the shelter model from here
+    # would drag a cross-module import (and a circular one) into auth.
+    # Eager (selectin) because every authorization check reads it - an async
+    # session raises MissingGreenlet on an implicit lazy load, so it must
+    # already be populated by the time a service touches it.
+    managed_facility_links: Mapped[list["UserManagedFacility"]] = relationship(
+        "UserManagedFacility",
+        primaryjoin="User.id == UserManagedFacility.user_id",
+        lazy="selectin",
+        viewonly=True,
+    )
+
+    @property
+    def managed_facility_ids(self) -> list[uuid.UUID]:
+        """Every facility this user is assigned to (PRR §2.1, plural).
+
+        Unions the `user_managed_facilities` join table with the legacy
+        singular `managed_facility_id`, so an account assigned either way
+        resolves correctly and neither has to be migrated before the other.
+        Order is stable (primary facility first) purely so audit snapshots
+        and API responses don't churn.
+        """
+        ids: list[uuid.UUID] = []
+        if self.managed_facility_id:
+            ids.append(self.managed_facility_id)
+        for link in self.managed_facility_links:
+            if link.facility_id not in ids:
+                ids.append(link.facility_id)
+        return ids
 
     roles: Mapped[list["Role"]] = relationship(
         secondary="user_roles", back_populates="users", lazy="selectin"

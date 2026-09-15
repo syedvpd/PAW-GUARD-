@@ -4,6 +4,7 @@ Every endpoint enforces ``require_permission("system:admin")`` so only
 Super Administrators can access these.
 """
 
+import asyncio
 import uuid
 from typing import Any
 
@@ -14,11 +15,13 @@ from pawguard.core.cache_decorator import cache_response
 from pawguard.core.rate_limiter import resolve_client_ip
 from pawguard.core.responses import ApiResponse
 from pawguard.db.session import get_db
+from pawguard.modules.admin.backup_service import BackupService
 from pawguard.modules.auth.admin_schemas import (
     AdminRestorePasswordRequest,
     AdminUserCreateRequest,
     AdminUserResponse,
     AdminUserUpdateRequest,
+    BackupResponse,
     PermissionResponse,
     RoleCreateRequest,
     RoleResponse,
@@ -356,3 +359,43 @@ async def revoke_user_direct_permission(
     return ApiResponse(
         data=revoked, message="Permission revoked." if revoked else "Permission not found."
     )
+
+
+# ── Data backups (PRR §2.1) ──────────────────────────────────────────────────
+# Export-only: creates and lists full-database dumps in the media bucket.
+# There is deliberately no restore endpoint here - see backup_service.py.
+
+
+def _get_backup_service(db: AsyncSession = Depends(get_db)) -> BackupService:
+    return BackupService(AuditService(db))
+
+
+@admin_router.post(
+    "/backups",
+    response_model=ApiResponse[BackupResponse],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def create_backup(
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: BackupService = Depends(_get_backup_service),
+) -> ApiResponse[BackupResponse]:
+    result = await service.create_backup(
+        actor_id=current_user.id,
+        ip_address=resolve_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    return ApiResponse(data=BackupResponse(**result), message="Backup created.")
+
+
+@admin_router.get(
+    "/backups",
+    response_model=ApiResponse[list[BackupResponse]],
+    dependencies=[Depends(require_permission("system:admin"))],
+)
+async def list_backups(
+    service: BackupService = Depends(_get_backup_service),
+) -> ApiResponse[list[BackupResponse]]:
+    backups = await asyncio.to_thread(service.list_backups)
+    return ApiResponse(data=[BackupResponse(**b) for b in backups])

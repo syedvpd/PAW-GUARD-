@@ -193,6 +193,13 @@ class MFAVerifyRequest(BaseModel):
     code: str = Field(min_length=6, max_length=6, examples=["482913"])
 
 
+class MFAEnrollBootstrapRequest(BaseModel):
+    """First-run enrollment for an account held at the mandatory-MFA gate:
+    it holds a pre-auth token but cannot obtain an access token yet."""
+
+    pre_auth_token: str = Field(..., examples=["a1b2c3d4e5f6-pre-auth"])
+
+
 class MFALoginVerifyRequest(BaseModel):
     pre_auth_token: str = Field(..., examples=["a1b2c3d4e5f6-pre-auth"])
     code: str = Field(min_length=6, max_length=6, examples=["482913"])
@@ -341,6 +348,11 @@ class UserProfile(BaseModel):
     mfa_enabled: bool
     can_drive: bool | None = False
     managed_facility_id: uuid.UUID | None = None
+    # PRR §2.1 scopes admins to shelter locations and rescue zones (plural).
+    # Derived from the singular column today (see User.managed_facility_ids)
+    # so clients can code against the final shape now; widening the column
+    # to a true many-to-many won't change this contract.
+    managed_facility_ids: list[uuid.UUID] = []
     has_password: bool = True
     roles: list[str] = []
 
@@ -386,6 +398,7 @@ class UserProfile(BaseModel):
                 "mfa_enabled": getattr(data, "mfa_enabled", False),
                 "can_drive": getattr(data, "can_drive", False),
                 "managed_facility_id": getattr(data, "managed_facility_id", None),
+                "managed_facility_ids": getattr(data, "managed_facility_ids", []),
                 "has_password": getattr(data, "has_password", True),
                 "auth_provider": getattr(data, "auth_provider", None),
                 "roles": roles_val,

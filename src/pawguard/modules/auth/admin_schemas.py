@@ -6,6 +6,16 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
+# ── Backup ───────────────────────────────────────────────────────────────────
+
+
+class BackupResponse(BaseModel):
+    key: str
+    size_bytes: int
+    created_at: str | datetime
+    download_url: str | None = None
+
+
 # ── Role ─────────────────────────────────────────────────────────────────────
 
 
@@ -121,6 +131,9 @@ class AdminUserResponse(BaseModel):
     mfa_enabled: bool
     can_drive: bool = False
     managed_facility_id: uuid.UUID | None = None
+    # Plural form per PRR §2.1 (see UserResponse.managed_facility_ids). Lets
+    # an admin UI scope a staff list to the caller's own facility.
+    managed_facility_ids: list[uuid.UUID] = []
     roles: list[str]
     direct_permissions: list[str] = []
     created_at: datetime

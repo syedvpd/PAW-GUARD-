@@ -28,6 +28,8 @@ from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.foster.models import FosterPlacementStatus, FosterStatus
 from pawguard.modules.foster.repository import FosterRepository
 from pawguard.modules.foster.schemas import (
+    FosterVetMessageCreate,
+    FosterVetMessageResponse,
     FosterBackgroundCheckInitiate,
     FosterBackgroundCheckOutcome,
     FosterBehaviorLogCreate,
@@ -1334,3 +1336,88 @@ async def record_home_inspection_outcome(
         data=FosterProfileResponse.model_validate(profile),
         message="Home inspection outcome recorded successfully.",
     )
+
+
+@router.get(
+    "/{placement_id}/vet-chat",
+    response_model=ApiResponse[list[FosterVetMessageResponse]],
+)
+async def get_vet_chat_messages(
+    placement_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FosterService = Depends(get_foster_service),
+) -> ApiResponse[list[FosterVetMessageResponse]]:
+    """Retrieve veterinary chat thread for a foster placement."""
+    placement = await service.get_placement(placement_id)
+    is_owner = (
+        placement.foster.user_id == current_user.user.id
+        if (placement.foster and hasattr(placement.foster, "user_id"))
+        else False
+    )
+    is_staff = (
+        has_permission(current_user.user, "foster:read")
+        or has_permission(current_user.user, "medical:read")
+        or has_permission(current_user.user, "medical:write")
+    )
+    if not is_owner and not is_staff:
+        raise ForbiddenError("You do not have permission to view vet messages for this placement.")
+
+    messages = await service.get_vet_messages(placement_id)
+    response_data = []
+    for msg in messages:
+        res = FosterVetMessageResponse(
+            id=msg.id,
+            placement_id=msg.placement_id,
+            sender_id=msg.sender_id,
+            sender_type=str(msg.sender_type.value if hasattr(msg.sender_type, "value") else msg.sender_type),
+            sender_name=getattr(msg.sender, "full_name", None),
+            body=msg.body,
+            created_at=msg.created_at,
+        )
+        response_data.append(res)
+    return ApiResponse(data=response_data)
+
+
+@router.post(
+    "/{placement_id}/vet-chat",
+    response_model=ApiResponse[FosterVetMessageResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def send_vet_chat_message(
+    placement_id: uuid.UUID,
+    payload: FosterVetMessageCreate,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FosterService = Depends(get_foster_service),
+) -> ApiResponse[FosterVetMessageResponse]:
+    """Send a veterinary chat message for a foster placement."""
+    placement = await service.get_placement(placement_id)
+    is_owner = (
+        placement.foster.user_id == current_user.user.id
+        if (placement.foster and hasattr(placement.foster, "user_id"))
+        else False
+    )
+    is_staff = (
+        has_permission(current_user.user, "foster:read")
+        or has_permission(current_user.user, "medical:read")
+        or has_permission(current_user.user, "medical:write")
+    )
+    if not is_owner and not is_staff:
+        raise ForbiddenError("You do not have permission to send vet messages for this placement.")
+
+    sender_type = "foster" if is_owner else "vet"
+    msg = await service.send_vet_message(
+        placement_id=placement_id,
+        sender_id=current_user.id,
+        sender_type=sender_type,
+        body=payload.body,
+    )
+    res = FosterVetMessageResponse(
+        id=msg.id,
+        placement_id=msg.placement_id,
+        sender_id=msg.sender_id,
+        sender_type=str(msg.sender_type.value if hasattr(msg.sender_type, "value") else msg.sender_type),
+        sender_name=getattr(current_user.user, "full_name", None),
+        body=msg.body,
+        created_at=msg.created_at,
+    )
+    return ApiResponse(data=res, message="Message sent.")

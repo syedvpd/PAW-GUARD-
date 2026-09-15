@@ -3,6 +3,7 @@
 import asyncio
 import math
 import uuid
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from logging import getLogger
 from typing import Any
@@ -29,6 +30,7 @@ from pawguard.modules.volunteer.models import (
     AttendanceStatus,
     ShiftAttendance,
     VolunteerApplication,
+    VolunteerFeedback,
     VolunteerProfile,
     VolunteerShift,
     VolunteerStatus,
@@ -1433,3 +1435,22 @@ class VolunteerService:
             object_key=profile.certificate_object_key,
             file_id=profile_id,
         )
+
+    async def submit_feedback(
+        self,
+        user_id: uuid.UUID,
+        rating: int,
+        comment: str,
+        shift_id: uuid.UUID | None = None,
+    ) -> VolunteerFeedback:
+        profile = await self.get_profile_by_user(user_id)
+        return await self._repo.create_feedback(
+            profile_id=profile.id,
+            rating=rating,
+            comment=comment,
+            shift_id=shift_id,
+        )
+
+    async def list_feedback_for_user(self, user_id: uuid.UUID) -> Sequence[VolunteerFeedback]:
+        profile = await self.get_profile_by_user(user_id)
+        return await self._repo.list_feedback_for_profile(profile.id)

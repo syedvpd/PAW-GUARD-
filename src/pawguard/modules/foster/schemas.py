@@ -626,3 +626,19 @@ class FosterSupplyDispatchResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class FosterVetMessageCreate(BaseModel):
+    body: str = Field(..., min_length=1, max_length=2000, description="Message body")
+
+
+class FosterVetMessageResponse(BaseModel):
+    id: uuid.UUID
+    placement_id: uuid.UUID
+    sender_id: uuid.UUID
+    sender_type: str
+    sender_name: str | None = None
+    body: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

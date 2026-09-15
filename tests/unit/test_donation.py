@@ -1893,3 +1893,81 @@ class TestDonationReceiptGeneration:
                 audit=mock_audit,
             )
 
+
+
+class TestDonor80GCertificate:
+    @pytest.mark.asyncio
+    async def test_download_donor_80g_certificate_success(self):
+        from pawguard.modules.donation.router import download_donor_80g_certificate
+        from pawguard.modules.donation.models import DonationStatus
+        from unittest.mock import AsyncMock, MagicMock
+        from datetime import datetime, UTC
+
+        donation_id = uuid.uuid4()
+        user_id = uuid.uuid4()
+        curr_user = MagicMock()
+        curr_user.user.id = user_id
+        curr_user.id = user_id
+        curr_user.user.full_name = "Amit Sharma"
+
+        mock_svc = AsyncMock()
+        donation = MagicMock()
+        donation.id = donation_id
+        donation.amount = 5000
+        donation.currency = "INR"
+        donation.status = DonationStatus.SUCCESS
+        donation.created_at = datetime.now(UTC)
+        donation.donor = MagicMock()
+        donation.donor.user_id = user_id
+        donation.donor.full_name_for_80g = "Amit Sharma"
+        donation.donor.pan_number = "ABCDE1234F"
+        donation.donor.address_for_80g = "123 MG Road, Bangalore"
+        donation.donor_id = user_id
+        mock_svc.get_donation.return_value = donation
+
+        req = MagicMock()
+        req.query_params = {}
+
+        resp = await download_donor_80g_certificate(
+            donation_id=donation_id,
+            request=req,
+            current_user=curr_user,
+            service=mock_svc,
+            db=AsyncMock(),
+            audit=AsyncMock(),
+        )
+        assert resp.status_code == 200
+        assert resp.media_type == "application/pdf"
+        assert len(resp.body) > 0
+
+    @pytest.mark.asyncio
+    async def test_download_donor_80g_certificate_forbidden_for_non_owner(self):
+        from pawguard.modules.donation.router import download_donor_80g_certificate
+        from pawguard.core.exceptions import ForbiddenError
+        from unittest.mock import AsyncMock, MagicMock
+
+        donation_id = uuid.uuid4()
+        curr_user = MagicMock()
+        curr_user.user.id = uuid.uuid4()
+        curr_user.user.roles = []
+        curr_user.user.permissions = []
+
+        mock_svc = AsyncMock()
+        donation = MagicMock()
+        donation.donor = MagicMock()
+        donation.donor.user_id = uuid.uuid4()  # different owner
+        donation.donor_id = uuid.uuid4()
+        mock_svc.get_donation.return_value = donation
+
+        req = MagicMock()
+        req.query_params = {}
+
+        with pytest.raises(ForbiddenError):
+            await download_donor_80g_certificate(
+                donation_id=donation_id,
+                request=req,
+                current_user=curr_user,
+                service=mock_svc,
+                db=AsyncMock(),
+                audit=AsyncMock(),
+            )

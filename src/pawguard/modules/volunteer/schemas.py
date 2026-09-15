@@ -355,3 +355,20 @@ class VolunteerAdminIntakeRequest(BaseModel):
             self.animal_handling = self.animal_handling_experience
 
         return self
+
+
+class VolunteerFeedbackCreate(BaseModel):
+    shift_id: uuid.UUID | None = None
+    rating: int = Field(..., ge=1, le=5, description="Rating from 1 to 5")
+    comment: str = Field(..., min_length=1, description="Feedback comment")
+
+
+class VolunteerFeedbackResponse(BaseModel):
+    id: uuid.UUID
+    profile_id: uuid.UUID
+    shift_id: uuid.UUID | None = None
+    rating: int
+    comment: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

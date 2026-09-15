@@ -957,3 +957,69 @@ class TestFosterReturnToShelter:
         res = await service.get_foster_stats()
         assert res["total_placements"] == 5
         assert res["active_placements"] == 2
+
+
+class TestFosterVetChat:
+    @pytest.mark.asyncio
+    async def test_get_vet_chat_messages_owner_success(self):
+        from pawguard.modules.foster.router import get_vet_chat_messages
+        from pawguard.modules.foster.models import FosterVetMessage, FosterVetSenderType
+        from unittest.mock import AsyncMock, MagicMock
+        from datetime import datetime, UTC
+
+        placement_id = uuid.uuid4()
+        user_id = uuid.uuid4()
+        curr_user = MagicMock()
+        curr_user.user.id = user_id
+        curr_user.id = user_id
+
+        mock_svc = AsyncMock()
+        placement = MagicMock()
+        placement.foster.user_id = user_id
+        mock_svc.get_placement.return_value = placement
+
+        now = datetime.now(UTC)
+        msg = FosterVetMessage(
+            id=uuid.uuid4(),
+            placement_id=placement_id,
+            sender_id=user_id,
+            sender_type=FosterVetSenderType.FOSTER,
+            body="Dog is recovering well, slight limp on left paw.",
+            created_at=now,
+            updated_at=now,
+        )
+        msg.sender = MagicMock(full_name="Jane Foster")
+        mock_svc.get_vet_messages.return_value = [msg]
+
+        res = await get_vet_chat_messages(
+            placement_id=placement_id,
+            current_user=curr_user,
+            service=mock_svc,
+        )
+        assert len(res.data) == 1
+        assert res.data[0].body == "Dog is recovering well, slight limp on left paw."
+        assert res.data[0].sender_type == "foster"
+
+    @pytest.mark.asyncio
+    async def test_vet_chat_forbidden_for_non_owner(self):
+        from pawguard.modules.foster.router import get_vet_chat_messages
+        from pawguard.core.exceptions import ForbiddenError
+        from unittest.mock import AsyncMock, MagicMock
+
+        placement_id = uuid.uuid4()
+        curr_user = MagicMock()
+        curr_user.user.id = uuid.uuid4()
+        curr_user.user.roles = []
+        curr_user.user.permissions = []
+
+        mock_svc = AsyncMock()
+        placement = MagicMock()
+        placement.foster.user_id = uuid.uuid4()  # different owner
+        mock_svc.get_placement.return_value = placement
+
+        with pytest.raises(ForbiddenError):
+            await get_vet_chat_messages(
+                placement_id=placement_id,
+                current_user=curr_user,
+                service=mock_svc,
+            )

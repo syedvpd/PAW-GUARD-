@@ -189,6 +189,19 @@ class RescueRequest(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Ba
         nullable=True,
         index=True,
     )
+    # The rescue centre accountable for this case (PRR §2.1 location
+    # scoping). A rescue is a geographic incident, not a facility-owned
+    # record, so this is NULL until a facility actually takes ownership -
+    # set from the coordinator's own facility when one is assigned. Cases
+    # with no facility stay visible to every responder on purpose: a new
+    # incident nobody has picked up yet must not be hidden from the people
+    # who could respond to it.
+    facility_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("shelter_facilities.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     dispatch: Mapped["RescueDispatch | None"] = relationship(
         back_populates="rescue_request", uselist=False, cascade="all, delete-orphan"

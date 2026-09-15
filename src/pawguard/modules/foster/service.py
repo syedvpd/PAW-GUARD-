@@ -2,6 +2,7 @@
 
 import asyncio
 import uuid
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -23,6 +24,8 @@ from pawguard.modules.foster.models import (
     FosterProgressLog,
     FosterStatus,
     FosterSupplyDispatch,
+    FosterVetMessage,
+    FosterVetSenderType,
 )
 from pawguard.modules.foster.repository import FosterRepository
 from pawguard.modules.foster.schemas import (
@@ -1317,3 +1320,23 @@ class FosterService:
                 metadata={"profile_ids": [str(i) for i in ids], "count": count},
             )
         return count
+
+    async def send_vet_message(
+        self,
+        placement_id: uuid.UUID,
+        sender_id: uuid.UUID,
+        sender_type: str,
+        body: str,
+    ) -> FosterVetMessage:
+        placement = await self.get_placement(placement_id)
+        return await self._repo.create_vet_message(
+            placement_id=placement.id,
+            sender_id=sender_id,
+            sender_type=sender_type,
+            body=body,
+        )
+
+    async def get_vet_messages(
+        self, placement_id: uuid.UUID
+    ) -> Sequence[FosterVetMessage]:
+        return await self._repo.list_vet_messages(placement_id)

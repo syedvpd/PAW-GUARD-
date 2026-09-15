@@ -15,6 +15,7 @@ from pawguard.core.pagination import PageParams
 from pawguard.core.search import SortParams, apply_sorting
 from pawguard.modules.auth.models import User
 from pawguard.modules.volunteer.models import (
+    VolunteerFeedback,
     ApplicationStatus,
     AttendanceStatus,
     ShiftAttendance,
@@ -324,3 +325,27 @@ class VolunteerRepository:
         for p in profiles:
             p.status = status
         return len(profiles)
+
+    async def create_feedback(
+        self, profile_id: uuid.UUID, rating: int, comment: str, shift_id: uuid.UUID | None = None
+    ) -> VolunteerFeedback:
+        feedback = VolunteerFeedback(
+            profile_id=profile_id,
+            shift_id=shift_id,
+            rating=rating,
+            comment=comment,
+        )
+        self._session.add(feedback)
+        await self._session.flush()
+        await self._session.refresh(feedback)
+        return feedback
+
+    async def list_feedback_for_profile(
+        self, profile_id: uuid.UUID
+    ) -> Sequence[VolunteerFeedback]:
+        stmt = (
+            select(VolunteerFeedback)
+            .where(VolunteerFeedback.profile_id == profile_id)
+            .order_by(VolunteerFeedback.created_at.desc())
+        )
+        return (await self._session.execute(stmt)).scalars().all()

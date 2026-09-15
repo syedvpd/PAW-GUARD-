@@ -1,6 +1,7 @@
 """GrievanceService: owns complaint and feedback business behaviour (RULE-003)."""
 
 import uuid
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 
 from pawguard.core.exceptions import NotFoundError, ValidationFailedError
@@ -54,10 +55,28 @@ class GrievanceService:
         self._repo = repository
         self._audit = audit_service
 
+    async def _resolve_responsible_admin_id(self, facility_id: uuid.UUID | None) -> uuid.UUID | None:
+        """The Rescue Centre Admin accountable for a facility (PRR §3.14).
+
+        §3.14 requires a grievance to reach "the appropriate Rescue Centre
+        Administrator (i.e. the one tied to the relevant shelter/zone, not
+        all admins)". Returns None when the ticket names no facility or no
+        admin manages it, leaving the ticket unassigned for manual triage
+        rather than guessing.
+        """
+        if facility_id is None:
+            return None
+        return await self._repo.get_facility_admin_id(facility_id)
+
     async def submit_complaint(self, payload: GrievanceCreate) -> GrievanceTicket:
         sla_due_at = datetime.now(UTC) + timedelta(hours=DEFAULT_SLA_HOURS)
+        data = payload.model_dump()
+        # PRR §3.14 internal resolution workflow: route on arrival to the
+        # admin responsible for the named shelter/zone instead of dropping
+        # every public complaint into one shared unassigned queue.
+        assigned_to = await self._resolve_responsible_admin_id(data.get("facility_id"))
         ticket = await self._repo.create_ticket(
-            GrievanceTicket(**payload.model_dump(), sla_due_at=sla_due_at)
+            GrievanceTicket(**data, sla_due_at=sla_due_at, assigned_to_admin_id=assigned_to)
         )
         try:
             from pawguard.modules.notifications.governance_service import (
@@ -182,6 +201,7 @@ class GrievanceService:
         ticket = await self._repo.get_ticket(ticket_id)
         if ticket is None:
             raise NotFoundError("Grievance ticket not found.")
+        previous_admin_id = ticket.assigned_to_admin_id
         ticket.assigned_to_admin_id = admin_id
         await self._repo._session.flush()
         await self._repo._session.refresh(ticket)
@@ -214,6 +234,9 @@ class GrievanceService:
                 ip_address=ip_address or "",
                 user_agent="",
                 metadata={"ticket_id": str(ticket_id), "assigned_to": str(admin_id)},
+                # PRR §6.1 requires Pre/Post State Data, not just metadata.
+                before_state={"assigned_to_admin_id": previous_admin_id},
+                after_state={"assigned_to_admin_id": admin_id},
             )
 
         return ticket
@@ -232,6 +255,11 @@ class GrievanceService:
         if ticket.status == GrievanceStatus.CLOSED:
             raise ValidationFailedError("Cannot escalate a closed ticket.")
 
+        before_state = {
+            "escalation_level": ticket.escalation_level,
+            "escalated_at": ticket.escalated_at,
+            "escalated_to_admin_id": ticket.escalated_to_admin_id,
+        }
         ticket.escalation_level += 1
         ticket.escalated_at = datetime.now(UTC)
         ticket.escalated_to_admin_id = payload.escalated_to_admin_id
@@ -279,7 +307,9 @@ class GrievanceService:
 
         if self._audit and actor_id:
             await self._audit.record(
-                event_type=AuthAuditEventType.GRIEVANCE_UPDATED,
+                # Its own action code, not the generic GRIEVANCE_UPDATED, so
+                # PRR §3.14 escalations are queryable as escalations.
+                event_type=AuthAuditEventType.GRIEVANCE_ESCALATED,
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
@@ -288,6 +318,12 @@ class GrievanceService:
                     "escalation_level": ticket.escalation_level,
                     "escalated_to_admin_id": str(payload.escalated_to_admin_id),
                     "reason": payload.reason,
+                },
+                before_state=before_state,
+                after_state={
+                    "escalation_level": ticket.escalation_level,
+                    "escalated_at": ticket.escalated_at,
+                    "escalated_to_admin_id": ticket.escalated_to_admin_id,
                 },
             )
 
@@ -304,6 +340,7 @@ class GrievanceService:
         *,
         page_params: PageParams | None = None,
         filter_params: GrievanceListFilter | None = None,
+        facility_ids: Sequence[uuid.UUID] | None = None,
     ) -> tuple[list[GrievanceTicket], PaginationMeta]:
         status = filter_params.status if filter_params else None
         complaint_type = filter_params.complaint_type if filter_params else None
@@ -315,6 +352,7 @@ class GrievanceService:
             complaint_type=complaint_type,
             assigned_to_admin_id=assigned_to,
             search=search,
+            facility_ids=facility_ids,
         )
         tickets = await self._repo.list_tickets(
             page_params=page_params,
@@ -322,6 +360,7 @@ class GrievanceService:
             complaint_type=complaint_type,
             assigned_to_admin_id=assigned_to,
             search=search,
+            facility_ids=facility_ids,
         )
         meta = build_pagination_meta(total=total, params=page_params or PageParams())
         return list(tickets), meta

@@ -592,6 +592,30 @@ class TestShelterService:
         assert result.meta.total == 1
 
     @pytest.mark.asyncio
+    async def test_list_facilities_paginated_forwards_facility_scope(self, service, mock_repo):
+        """PRR §2.1: a facility-bound caller's scope must reach the query.
+        The router derives it from the authenticated user (auth/scoping.py);
+        this locks the service->repository wiring so scoping can't be
+        silently dropped on the way down."""
+        scope = [uuid.uuid4()]
+        mock_repo.list_facilities_paginated.return_value = ([], 0)
+
+        await service.list_facilities_paginated(PageParams(), SortParams(), facility_ids=scope)
+
+        assert mock_repo.list_facilities_paginated.call_args.kwargs["facility_ids"] == scope
+
+    @pytest.mark.asyncio
+    async def test_list_facilities_paginated_unscoped_passes_none(self, service, mock_repo):
+        """An unrestricted caller (super_admin, or an unassigned account
+        under the fail-open rule) must pass None, not an empty list - an
+        empty list would filter everything out."""
+        mock_repo.list_facilities_paginated.return_value = ([], 0)
+
+        await service.list_facilities_paginated(PageParams(), SortParams())
+
+        assert mock_repo.list_facilities_paginated.call_args.kwargs["facility_ids"] is None
+
+    @pytest.mark.asyncio
     async def test_soft_delete_facility(self, service, mock_repo):
         facility_id = uuid.uuid4()
         mock_repo.soft_delete_facility.return_value = True

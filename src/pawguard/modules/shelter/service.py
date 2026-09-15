@@ -561,14 +561,14 @@ class ShelterService:
                     required_facility_id = (
                         transfer.from_facility_id if side == "sender" else transfer.to_facility_id
                     )
-                    if (
-                        actor.managed_facility_id is None
-                        or actor.managed_facility_id != required_facility_id
-                    ):
+                    # PRR §2.1: a user may manage several facilities, so this
+                    # is a membership test, not equality against one id.
+                    actor_facility_ids = actor.managed_facility_ids
+                    if required_facility_id not in actor_facility_ids:
                         facility_label = "sending" if side == "sender" else "receiving"
                         raise ForbiddenError(
                             f"User is not authorized to confirm {side} for this transfer. "
-                            f"Caller's managed facility ({actor.managed_facility_id}) does not match the {facility_label} facility ({required_facility_id})."
+                            f"Caller's managed facilities ({actor_facility_ids}) do not include the {facility_label} facility ({required_facility_id})."
                         )
 
         if side == "receiver" and transfer.sender_confirmed_at is None:
@@ -756,6 +756,7 @@ class ShelterService:
         search_term: str | None = None,
         status: FacilityStatus | None = None,
         facility_type: str | None = None,
+        facility_ids: Sequence[uuid.UUID] | None = None,
     ) -> PaginatedResponse[ShelterFacilityResponse]:
         facilities, total = await self._repo.list_facilities_paginated(
             page_params,
@@ -765,6 +766,7 @@ class ShelterService:
             facility_type=FacilityType(facility_type)
             if isinstance(facility_type, str)
             else facility_type,
+            facility_ids=facility_ids,
         )
         return PaginatedResponse(
             data=list(facilities),
@@ -934,7 +936,9 @@ class ShelterService:
             # For shelter_manager: verify the user manages this facility
             if "shelter_manager" in actor_roles or "rescue_centre_admin" in actor_roles:
                 user = await self._get_user_with_roles(actor_id)
-                if user is None or user.managed_facility_id != dog.shelter_facility_id:
+                # Membership test, not equality: PRR §2.1 allows several
+                # assigned facilities per user.
+                if user is None or dog.shelter_facility_id not in user.managed_facility_ids:
                     raise ForbiddenError(
                         "You do not have access to request a vet check for a dog "
                         "at a different shelter facility."
@@ -1062,7 +1066,8 @@ class ShelterService:
                     "You do not have permission to update the status of this request."
                 )
             actor = await self._get_user_with_roles(actor_id)
-            if actor is None or actor.managed_facility_id != request.shelter_facility_id:
+            # Membership test, not equality (PRR §2.1 multi-facility).
+            if actor is None or request.shelter_facility_id not in actor.managed_facility_ids:
                 raise ForbiddenError("You can only update requests for your shelter facility.")
             if new_status != request.status and new_status != ShelterVetRequestStatus.CANCELLED:
                 raise ForbiddenError("Shelter staff may only cancel requests.")

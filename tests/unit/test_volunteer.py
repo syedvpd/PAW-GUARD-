@@ -1678,3 +1678,49 @@ class TestVolunteerShiftAssignmentRouter:
             assert data["id"] == str(att_id)
             assert data["shift_id"] == str(shift_id)
             assert data["volunteer_id"] == str(profile_id)
+
+
+class TestVolunteerFeedback:
+    @pytest.mark.asyncio
+    async def test_submit_volunteer_feedback_success(self):
+        from pawguard.modules.volunteer.router import submit_volunteer_feedback, get_my_feedback
+        from pawguard.modules.volunteer.schemas import VolunteerFeedbackCreate
+        from pawguard.modules.volunteer.models import VolunteerFeedback
+        from datetime import datetime, UTC
+        from unittest.mock import AsyncMock, MagicMock
+
+        user_id = uuid.uuid4()
+        profile_id = uuid.uuid4()
+        mock_user = MagicMock()
+        mock_user.id = user_id
+        mock_user.user.id = user_id
+
+        mock_svc = AsyncMock()
+        now = datetime.now(UTC)
+        feedback = VolunteerFeedback(
+            id=uuid.uuid4(),
+            profile_id=profile_id,
+            shift_id=None,
+            rating=5,
+            comment="Great shelter environment and helpful team!",
+            created_at=now,
+            updated_at=now,
+        )
+        mock_svc.submit_feedback.return_value = feedback
+        mock_svc.list_feedback_for_user.return_value = [feedback]
+
+        payload = VolunteerFeedbackCreate(rating=5, comment="Great shelter environment and helpful team!")
+        res = await submit_volunteer_feedback(
+            payload=payload,
+            current_user=mock_user,
+            service=mock_svc,
+        )
+        assert res.data.rating == 5
+        assert res.data.comment == "Great shelter environment and helpful team!"
+
+        list_res = await get_my_feedback(
+            current_user=mock_user,
+            service=mock_svc,
+        )
+        assert len(list_res.data) == 1
+        assert list_res.data[0].rating == 5

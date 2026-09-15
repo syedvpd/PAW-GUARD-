@@ -102,6 +102,21 @@ MAX_FAILED_LOGIN_ATTEMPTS = 5
 ACCOUNT_LOCKOUT_MINUTES = 15
 _UNSET: Any = object()
 
+# Role names that are administrative accounts for PRR §6.1 purposes and so
+# must carry mandatory MFA. Deliberately separate from rbac.ADMIN_ROLES
+# (which grants unrestricted ACCESS): rescue_centre_admin is an admin
+# account for MFA purposes while remaining scoped for authorization.
+#
+# rescue_coordinator is included to mirror the admin client
+# (_mfaMandatoryRoles in auth_provider.dart). It holds dispatch authority
+# over live rescues and reporter PII, so treating it as an ordinary account
+# for session governance was the weaker half of the split. Safe to enforce
+# only because enroll_mfa_with_pre_auth exists - before that, adding a role
+# here would have locked every one of its accounts out permanently.
+MFA_MANDATORY_ROLE_NAMES = frozenset(
+    {"super_admin", "rescue_centre_admin", "rescue_coordinator"}
+)
+
 
 class RequestContext:
     """Transport-agnostic metadata about the calling client, set by the router."""
@@ -263,18 +278,27 @@ class AuthService:
 
         device_record = await self._mfa.get_for_user(user.id)
 
-        if self._is_admin(user) and not user.mfa_enabled:
-            # Mandatory MFA for admins: an admin without an enrolled device
+        if self._is_admin(user) and device_record is None:
+            # Mandatory MFA for admins: an admin with no MFA device at all
             # cannot complete login - they must enroll first (PRR security).
             # Note: mfa_bypass_for_dev only applies at the login() gate above;
             # if the user reaches verify_mfa_login, bypass is not applicable.
+            #
+            # Gated on the DEVICE, not on user.mfa_enabled: enrollment sets
+            # mfa_enabled only once a code is confirmed, so keying off the
+            # flag rejected the very code that would have completed a
+            # bootstrap enrollment (see enroll_mfa_with_pre_auth) and left
+            # the account permanently locked out.
             await self._audit.record(
                 event_type=AuthAuditEventType.MFA_FAILED,
                 actor_id=user.id,
                 ip_address=ctx.ip_address,
                 user_agent=ctx.user_agent,
             )
-            raise MFARequiredError("Admin accounts must enroll in MFA before completing login.")
+            raise MFARequiredError(
+                "Admin accounts must enroll in MFA before completing login. "
+                "Enroll via /auth/mfa/enroll/bootstrap using this pre-auth token."
+            )
 
         if device_record is None or not self._verify_totp(device_record, code):
             await self._audit.record(
@@ -284,6 +308,20 @@ class AuthService:
                 user_agent=ctx.user_agent,
             )
             raise InvalidMFACodeError("Invalid MFA code.")
+
+        if not device_record.is_verified or not user.mfa_enabled:
+            # Completes a bootstrap enrollment (enroll_mfa_with_pre_auth):
+            # the first valid code both proves the authenticator is set up
+            # and finishes enrollment, so the user does not need a separate
+            # confirm call they have no access token to make.
+            device_record.is_verified = True
+            user.mfa_enabled = True
+            await self._audit.record(
+                event_type=AuthAuditEventType.MFA_ENROLLED,
+                actor_id=user.id,
+                ip_address=ctx.ip_address,
+                user_agent=ctx.user_agent,
+            )
 
         tokens = await self._issue_tokens(user=user, session=session)
         await self._audit.record(
@@ -603,6 +641,35 @@ class AuthService:
         uri = pyotp.totp.TOTP(secret).provisioning_uri(name=user.email, issuer_name="PawGuard")
         return secret, uri
 
+    async def enroll_mfa_with_pre_auth(self, *, pre_auth_token: str) -> tuple[str, str]:
+        """First-run MFA enrollment for an account that cannot log in yet.
+
+        Mandatory-MFA admins (see `_is_admin`) are stopped at
+        `verify_mfa_login` until they have an MFA device, but `/mfa/enroll`
+        requires a full access token they can never obtain while stopped —
+        a deadlock with no recovery path. This bootstrap accepts instead the
+        short-lived pre-auth token issued after a *successful password
+        check*.
+
+        Safe because `enroll_mfa` refuses once MFA is actually enabled: an
+        attacker holding a stolen pre-auth token cannot re-enroll a device
+        over an existing one (the account-takeover case). While MFA is not
+        yet enabled the caller has already proven the password and the
+        account has no second factor to bypass, so this is exactly the
+        standard first-run enrollment.
+        """
+        try:
+            payload = decode_token(pre_auth_token, expected_type=TokenType.PRE_AUTH)
+        except TokenError as exc:
+            raise InvalidTokenError("Pre-authentication token is invalid or expired.") from exc
+
+        user = await self._users.get_by_id(uuid.UUID(payload["sub"]))
+        session = await self._sessions.get_by_id(uuid.UUID(payload["sid"]))
+        if user is None or session is None or not session.is_active:
+            raise InvalidSessionError("Session is no longer valid.")
+
+        return await self.enroll_mfa(user=user)
+
     async def confirm_mfa_enrollment(self, *, user: User, code: str, ctx: RequestContext) -> None:
         device = await self._mfa.get_for_user(user.id)
         if device is None or not self._verify_totp(device, code):
@@ -714,11 +781,20 @@ class AuthService:
 
     @staticmethod
     def _is_admin(user: User) -> bool:
-        """True when the user holds the `system:admin` permission via any role.
+        """True for an administrative account under PRR §6.1.
 
         Used to enforce mandatory MFA for admin accounts: admins always hit
         the MFA challenge at login and can never disable MFA.
+
+        Matches either the `system:admin` permission or an administrative
+        role NAME. The role-name arm exists so this stays correct
+        independently of the permission grant: `rescue_centre_admin` is an
+        administrative account per PRR §2.1 and must keep mandatory MFA even
+        though it should NOT hold `system:admin` (which RequirePermission
+        treats as a wildcard — see rbac.py).
         """
+        if any(role.name in MFA_MANDATORY_ROLE_NAMES for role in user.roles):
+            return True
         for role in user.roles:
             for permission in role.permissions:
                 if permission.code == pc.SYSTEM_ADMIN:
@@ -1279,6 +1355,11 @@ class AdminService:
             ip_address=ip_address,
             user_agent=user_agent,
             metadata={"role_name": name, "permission_codes": permission_codes},
+            # PRR §6.1 Pre/Post State Data. Defining a role IS a privilege
+            # grant, so the permission set it was born with has to be on the
+            # record - see GAP-0 for what an unnoticed grant can do.
+            before_state=None,
+            after_state={"name": name, "permission_codes": sorted(permission_codes)},
         )
         await self._invalidate_rbac_cache()
         # Re-fetch with permissions eager-loaded: set_permissions() writes
@@ -1308,6 +1389,16 @@ class AdminService:
         # endpoint already enforces require_permission("system:admin"),
         # so any caller here is authenticated as super_admin.
 
+        # PRR §6.1 Pre/Post State Data: capture the permission set BEFORE it
+        # is replaced. This is the single highest-value audit row in the
+        # system - it is exactly the mutation that would silently widen a
+        # role's privileges (see GAP-0), and "role X was updated" alone
+        # cannot tell you which permission appeared.
+        before_state = {
+            "description": role.description,
+            "permission_codes": sorted(p.code for p in role.permissions),
+        }
+
         if description is not None:
             role.description = description
         if permission_codes is not None:
@@ -1327,6 +1418,13 @@ class AdminService:
             ip_address=ip_address,
             user_agent=user_agent,
             metadata={"role_id": str(role_id), "role_name": role.name},
+            before_state=before_state,
+            after_state={
+                "description": role.description,
+                "permission_codes": sorted(permission_codes)
+                if permission_codes is not None
+                else before_state["permission_codes"],
+            },
         )
         await self._invalidate_rbac_cache()
         if permission_codes is not None:
@@ -1351,6 +1449,14 @@ class AdminService:
             raise NotFoundError(f"Role {role_id} not found.")
         # PRR 2.1: Only super_admin may delete roles.  The endpoint
         # already enforces require_permission("system:admin").
+        # PRR §6.1: snapshot before the row is gone - after deletion there is
+        # no other record of what the role could do, which is what a
+        # post-incident review needs.
+        before_state = {
+            "name": role.name,
+            "description": role.description,
+            "permission_codes": sorted(p.code for p in role.permissions),
+        }
         await self._roles.delete(role_id)
         await self._audit.record(
             event_type=AuthAuditEventType.ADMIN_ROLE_DELETED,
@@ -1358,6 +1464,8 @@ class AdminService:
             ip_address=ip_address,
             user_agent=user_agent,
             metadata={"role_id": str(role_id), "role_name": role.name},
+            before_state=before_state,
+            after_state=None,
         )
         await self._invalidate_rbac_cache()
 
@@ -1448,6 +1556,16 @@ class AdminService:
         if user is None:
             raise NotFoundError(f"User {user_id} not found.")
 
+        # PRR §6.1 Pre/Post State Data: snapshot the security-relevant fields
+        # BEFORE mutating. Role assignment in particular is a high-level
+        # action - an audit row saying only "user X was updated" can't answer
+        # who granted whom which role.
+        before_state = {
+            "is_active": user.is_active,
+            "managed_facility_id": user.managed_facility_id,
+            "roles": sorted(role.name for role in user.roles),
+        }
+
         if full_name is not None:
             user.full_name = full_name
         if phone is not None:
@@ -1473,12 +1591,19 @@ class AdminService:
         await self._users._session.flush()
         await self._users._session.refresh(user)
         fresh = await self._users.get_by_id(user_id)
+        after = fresh or user
         await self._audit.record(
             event_type=AuthAuditEventType.ADMIN_USER_UPDATED,
             actor_id=actor_id,
             ip_address=ip_address,
             user_agent=user_agent,
             metadata={"user_id": str(user_id)},
+            before_state=before_state,
+            after_state={
+                "is_active": after.is_active,
+                "managed_facility_id": after.managed_facility_id,
+                "roles": sorted(role.name for role in after.roles),
+            },
         )
         return fresh or user
 
@@ -1558,6 +1683,11 @@ class AdminService:
             )
         up_repo = self._user_permissions
         assert up_repo is not None
+        # PRR §6.1 Pre/Post State Data. A DIRECT per-user grant is the most
+        # sensitive privilege mutation there is: it bypasses roles entirely,
+        # so it is invisible to any role-based review. The before/after sets
+        # are what make such a grant reviewable after the fact.
+        before_codes = sorted(await up_repo.get_user_permission_codes(user_id))
         for p in perms:
             await up_repo.grant_permission(user_id, p.id, granted_by=actor_id)
         await self._invalidate_rbac_cache()
@@ -1571,6 +1701,12 @@ class AdminService:
                     "user_id": str(user_id),
                     "action": "grant_permissions",
                     "permission_codes": permission_codes,
+                },
+                before_state={"direct_permission_codes": before_codes},
+                after_state={
+                    "direct_permission_codes": sorted(
+                        await up_repo.get_user_permission_codes(user_id)
+                    )
                 },
             )
         return sorted(found_codes)
@@ -1592,6 +1728,10 @@ class AdminService:
             raise NotFoundError(f"Permission '{permission_code}' not found.")
         up_repo = self._user_permissions
         assert up_repo is not None
+        # PRR §6.1: see grant_user_permissions above - a direct per-user
+        # override is invisible to role-based review, so its removal needs
+        # the same before/after record.
+        before_codes = sorted(await up_repo.get_user_permission_codes(user_id))
         revoked = await up_repo.revoke_permission(user_id, perm.id)
         await self._invalidate_rbac_cache()
         if self._audit and actor_id:
@@ -1604,6 +1744,12 @@ class AdminService:
                     "user_id": str(user_id),
                     "action": "revoke_permission",
                     "permission_code": permission_code,
+                },
+                before_state={"direct_permission_codes": before_codes},
+                after_state={
+                    "direct_permission_codes": sorted(
+                        await up_repo.get_user_permission_codes(user_id)
+                    )
                 },
             )
         return revoked

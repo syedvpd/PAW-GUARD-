@@ -22,14 +22,16 @@ from pawguard.core.pii import mask_email, mask_full_name, mask_phone
 from pawguard.core.rate_limiter import rate_limit
 from pawguard.core.responses import ApiResponse, PaginatedResponse
 from pawguard.core.search import SortParams, sort_params
-from pawguard.db.session import get_db
+from pawguard.db.session import get_db, get_master_db
 from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import (
     CurrentUser,
     get_current_user,
     get_optional_current_user,
 )
+from pawguard.modules.auth.models import AuthAuditEventType
 from pawguard.modules.auth.rbac import require_permission
+from pawguard.modules.auth.scoping import facility_scope_for
 from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.rescue.models import RescueRequest, RescueSeverity, RescueStatus
 from pawguard.modules.rescue.repository import RescueRepository
@@ -110,15 +112,22 @@ def _enforce_agent_assignment(request_obj: RescueRequest, current_user: CurrentU
             )
 
 
+def _rescue_pii_unmasked_for(current_user: CurrentUser | None) -> bool:
+    """True when this caller's role/permissions entitle them to unmasked
+    reporter PII on rescue cases (mirrors _mask_reporter_pii's own check)."""
+    if current_user is None:
+        return False
+    user_permissions = {p.code for r in current_user.user.roles for p in r.permissions}
+    return bool(_UNMASKED_RESCUE_PII_PERMISSIONS & user_permissions)
+
+
 def _mask_reporter_pii(
     item: RescueRequestResponse, current_user: CurrentUser | None
 ) -> RescueRequestResponse:
     """Return a copy of the response with reporter PII masked unless the
     caller holds coordinator/admin permissions."""
-    if current_user is not None:
-        user_permissions = {p.code for r in current_user.user.roles for p in r.permissions}
-        if _UNMASKED_RESCUE_PII_PERMISSIONS & user_permissions:
-            return item
+    if _rescue_pii_unmasked_for(current_user):
+        return item
     return item.model_copy(
         update={
             "reporter_name": mask_full_name(item.reporter_name),
@@ -845,12 +854,25 @@ async def list_dispatches(
 )
 async def get_request(
     request_id: str,
+    http_request: Request,
     current_user: CurrentUser | None = Depends(get_optional_current_user),
     service: RescueService = Depends(get_rescue_service),
+    master_db: AsyncSession = Depends(get_master_db),
 ) -> ApiResponse[RescueRequestResponse]:
     request = await service.get_request(request_id)
     _enforce_agent_assignment(request, current_user)
     data = _mask_reporter_pii(RescueRequestResponse.model_validate(request), current_user)
+    if _rescue_pii_unmasked_for(current_user):
+        # PRR §6.1: unmasking reporter PII for a privileged viewer is itself an
+        # audit-worthy event. Written via the master session, not the GET
+        # endpoint's replica session, so it actually persists.
+        await AuditService(master_db).record(
+            event_type=AuthAuditEventType.PII_UNMASKED,
+            actor_id=current_user.id,
+            ip_address=http_request.client.host if http_request.client else None,
+            user_agent=http_request.headers.get("user-agent"),
+            metadata={"resource": "rescue_request", "resource_id": request_id},
+        )
     return ApiResponse(data=data)
 
 
@@ -883,6 +905,12 @@ async def list_requests(
         severity=severity,
         urgent_only=urgent_only,
         assigned_to_me=current_user.id if (assigned_to_me and current_user) else None,
+        # PRR §2.1: scope comes from the authenticated user, never from a
+        # request parameter. This also closes the second half of the §6.1
+        # PII requirement - _mask_reporter_pii below already gives this tier
+        # unmasked reporter contact details, and now it only ever sees them
+        # for cases its own facility owns.
+        facility_ids=facility_scope_for(current_user.user if current_user else None),
     )
     data = [_mask_reporter_pii(item, current_user) for item in result.data]
     return PaginatedResponse(data=data, meta=result.meta)

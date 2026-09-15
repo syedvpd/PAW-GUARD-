@@ -11,6 +11,7 @@ from datetime import UTC, datetime, timedelta
 from fastapi import Cookie, Depends, Header, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from pawguard.core.config import get_settings
 from pawguard.core.constants import ACCESS_TOKEN_COOKIE_NAME
 from pawguard.core.security import AccessTokenClaims, TokenError, parse_access_token_claims
 from pawguard.db.audit import set_actor
@@ -19,9 +20,6 @@ from pawguard.modules.auth.exceptions import AccountInactiveError, InvalidSessio
 from pawguard.modules.auth.models import User, UserSession
 from pawguard.modules.auth.repository import SessionRepository, UserRepository
 from pawguard.redis.client import RedisClient, get_redis
-
-# Sessions inactive longer than this are automatically revoked.
-SESSION_INACTIVITY_TIMEOUT_DAYS = 30
 
 
 @dataclass(slots=True)
@@ -104,12 +102,28 @@ async def get_current_user(
     if session_expires_at < datetime.now(UTC):
         raise InvalidSessionError("Session has expired.")
 
+    # PRR §6.1 session governance: terminate sessions idle longer than the
+    # configured window, independent of the token's own absolute expiry.
+    # Checked here (not only in the little-used get_current_session) because
+    # get_current_user is the dependency every permission-gated endpoint
+    # actually goes through.
+    session_repo = SessionRepository(db)
+    last_used = session.last_used_at
+    if last_used is not None:
+        if last_used.tzinfo is None:
+            last_used = last_used.replace(tzinfo=UTC)
+        idle_timeout = timedelta(minutes=get_settings().session_idle_timeout_minutes)
+        if datetime.now(UTC) - last_used > idle_timeout:
+            await session_repo.revoke(session.id, reason="inactivity_timeout")
+            raise InvalidSessionError("Session has expired due to inactivity.")
+
     user = session.user
     if user is None or not user.is_active:
         raise AccountInactiveError("Account is inactive or no longer exists.")
 
     request.state.user_id = user.id
     set_actor(user.id)
+    await session_repo.touch_last_used(session.id)
     current_user = CurrentUser(user=user, claims=claims, db=db, redis=redis, session=session)
     request.state.current_user_obj = current_user
     return current_user
@@ -159,21 +173,14 @@ async def get_optional_current_user(
 async def get_current_session(
     current: CurrentUser = Depends(get_current_user),
 ) -> UserSession:
+    # Idle-timeout enforcement already happened in get_current_user above -
+    # this only needs to fetch the row when the caller's session wasn't
+    # cached on CurrentUser.
     session = current.session
     if session is None:
         session_repo = SessionRepository(current.db)
         session = await session_repo.get_by_id(current.claims.session_id)
     if session is None or not session.is_active:
         raise InvalidSessionError("Session has been revoked or has expired.")
-
-    last_used = session.last_used_at
-    if last_used is not None:
-        if last_used.tzinfo is None:
-            last_used = last_used.replace(tzinfo=UTC)
-        idle = datetime.now(UTC) - last_used
-        if idle > timedelta(days=SESSION_INACTIVITY_TIMEOUT_DAYS):
-            session_repo = SessionRepository(current.db)
-            await session_repo.revoke(session.id, reason="inactivity_timeout")
-            raise InvalidSessionError("Session has expired due to inactivity.")
 
     return session

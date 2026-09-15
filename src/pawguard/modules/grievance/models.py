@@ -40,6 +40,17 @@ class GrievanceTicket(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, 
         nullable=True,
         index=True,
     )
+    # The shelter/rescue zone this complaint relates to (PRR §3.14). Drives
+    # routing to the Rescue Centre Admin responsible for that facility
+    # instead of leaving every ticket to a manual assignment, and scopes the
+    # ticket list for facility-bound roles (auth/scoping.py). Nullable: the
+    # public intake form may not know which facility is involved.
+    facility_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("shelter_facilities.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     resolution_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # SLA / escalation tracking (PRR 3.14).

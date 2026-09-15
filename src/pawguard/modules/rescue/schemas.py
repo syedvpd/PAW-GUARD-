@@ -564,6 +564,9 @@ class RescueRequestResponse(BaseModel):
     status: RescueStatus
     rejection_rationale: str | None
     coordinator_id: uuid.UUID | None = None
+    # The rescue centre accountable for this case (PRR §2.1). NULL until a
+    # coordinator takes it - see RescueRequest.facility_id.
+    facility_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
     dispatch: RescueDispatchResponse | None = None
@@ -663,6 +666,7 @@ class RescueRequestResponse(BaseModel):
                 "status": data.status,
                 "rejection_rationale": data.rejection_rationale,
                 "coordinator_id": getattr(data, "coordinator_id", None),
+                "facility_id": getattr(data, "facility_id", None),
                 "created_at": data.created_at,
                 "updated_at": data.updated_at,
                 "dispatch": dispatch_val,

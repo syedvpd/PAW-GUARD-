@@ -41,6 +41,7 @@ from pawguard.modules.auth.schemas import (
     LoginRequest,
     LoginResponse,
     MFADisableRequest,
+    MFAEnrollBootstrapRequest,
     MFAEnrollResponse,
     MFALoginVerifyRequest,
     MFARequiredResponse,
@@ -661,6 +662,28 @@ async def enroll_mfa(
     auth_service: AuthService = Depends(get_auth_service),
 ) -> ApiResponse[MFAEnrollResponse]:
     secret, uri = await auth_service.enroll_mfa(user=current.user)
+    return ApiResponse(data=MFAEnrollResponse(secret=secret, provisioning_uri=uri))
+
+
+@router.post(
+    "/mfa/enroll/bootstrap",
+    response_model=ApiResponse[MFAEnrollResponse],
+    dependencies=[Depends(mfa_enroll_confirm_rate_limiter)],
+)
+async def enroll_mfa_bootstrap(
+    payload: MFAEnrollBootstrapRequest,
+    auth_service: AuthService = Depends(get_auth_service),
+) -> ApiResponse[MFAEnrollResponse]:
+    """Enroll MFA using a pre-auth token instead of an access token.
+
+    The recovery path for mandatory-MFA admins: they are held at
+    `/mfa/verify` until a device exists, but `/mfa/enroll` needs an access
+    token they cannot obtain while held. Refuses once MFA is already
+    enabled, so it cannot be used to re-enroll over an existing device.
+    Confirm by calling `/mfa/verify` with the same pre-auth token and a
+    code from the authenticator.
+    """
+    secret, uri = await auth_service.enroll_mfa_with_pre_auth(pre_auth_token=payload.pre_auth_token)
     return ApiResponse(data=MFAEnrollResponse(secret=secret, provisioning_uri=uri))
 
 

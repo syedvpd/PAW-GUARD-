@@ -173,9 +173,25 @@ class RescueRepository:
         severity: RescueSeverity | None = None,
         urgent_only: bool | None = None,
         assigned_to_me: uuid.UUID | None = None,
+        facility_ids: Sequence[uuid.UUID] | None = None,
     ) -> tuple[Sequence[RescueRequest], int]:
         # Filter conditions
         filters = [RescueRequest.deleted_at.is_(None)]
+
+        if facility_ids is not None:
+            # PRR §2.1 location scoping, derived server-side from the caller
+            # (auth/scoping.py) - never from a request parameter. Cases with
+            # no facility remain visible: a rescue only gains an owning
+            # facility when a coordinator takes it, and an unclaimed
+            # incident must stay actionable by anyone who could respond.
+            # Added to `filters`, which backs both the count and the page
+            # query below, so the total can't disagree with the rows.
+            filters.append(
+                or_(
+                    RescueRequest.facility_id.in_(facility_ids),
+                    RescueRequest.facility_id.is_(None),
+                )
+            )
 
         search_filter = build_search_filter(RescueRequest, search_term, self.SEARCH_FIELDS)
         if search_filter is not None:

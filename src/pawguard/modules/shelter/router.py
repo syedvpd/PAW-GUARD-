@@ -24,6 +24,7 @@ from pawguard.db.session import get_db
 from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.rbac import require_permission
+from pawguard.modules.auth.scoping import facility_scope_for
 from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.inventory.repository import InventoryRepository
 from pawguard.modules.inventory.service import InventoryService
@@ -127,13 +128,20 @@ async def list_facilities(
     status: FacilityStatus | None = None,
     facility_type: FacilityType | None = None,
     service: ShelterService = Depends(get_shelter_service),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> PaginatedResponse[ShelterFacilityResponse]:
+    # PRR §2.1: a facility-bound role sees only the facilities it manages.
+    # Scope comes from the authenticated user, never from a request
+    # parameter. Safe alongside @cache_response: that decorator partitions
+    # its key by user identity, so one caller's scoped page is never served
+    # to another.
     result = await service.list_facilities_paginated(
         page,
         sort,
         search_term=search,
         status=status,
         facility_type=facility_type,
+        facility_ids=facility_scope_for(current_user.user),
     )
     return PaginatedResponse(
         data=[ShelterFacilityResponse.model_validate(f) for f in result.data],
@@ -772,16 +780,25 @@ async def list_shelter_medical_requests(
             data=[ShelterVetRequestListResponse(**item) for item in enriched],
         )
 
-    # Facility-scoped users see requests for their facility
+    # Facility-scoped users see requests for every facility they manage
+    # (PRR §2.1 is plural - a user assigned two shelters must see both).
     user = current_user.user
-    if user.managed_facility_id and (
+    managed_facility_ids = user.managed_facility_ids
+    if managed_facility_ids and (
         "shelter_manager" in actor_roles or "rescue_centre_admin" in actor_roles
     ):
-        enriched = await service.list_vet_requests_for_facility(
-            user.managed_facility_id, status=parsed_status
-        )
+        merged: list[dict[str, Any]] = []
+        seen: set[Any] = set()
+        for facility_id in managed_facility_ids:
+            for item in await service.list_vet_requests_for_facility(
+                facility_id, status=parsed_status
+            ):
+                if item["id"] in seen:
+                    continue
+                seen.add(item["id"])
+                merged.append(item)
         return ApiResponse(
-            data=[ShelterVetRequestListResponse(**item) for item in enriched],
+            data=[ShelterVetRequestListResponse(**item) for item in merged],
         )
 
     # Super admins see all
