@@ -51,7 +51,13 @@ class StorageService:
                 endpoint_url=settings.s3_endpoint_url or None,
                 aws_access_key_id=access_key,
                 aws_secret_access_key=secret_key,
-                config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
+                config=Config(
+                    signature_version="s3v4",
+                    s3={"addressing_style": "path"},
+                    connect_timeout=5,
+                    read_timeout=10,
+                    retries={"max_attempts": 3, "mode": "standard"},
+                ),
             )
             return
 
@@ -67,7 +73,13 @@ class StorageService:
                 endpoint_url=settings.s3_endpoint_url or None,
                 aws_access_key_id=access_key,
                 aws_secret_access_key=secret_key,
-                config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
+                config=Config(
+                    signature_version="s3v4",
+                    s3={"addressing_style": "path"},
+                    connect_timeout=5,
+                    read_timeout=10,
+                    retries={"max_attempts": 3, "mode": "standard"},
+                ),
             )
         self._client = _s3_client
 

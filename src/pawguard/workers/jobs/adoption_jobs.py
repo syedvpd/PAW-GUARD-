@@ -11,6 +11,7 @@ from pawguard.modules.adoption.models import (
     AdoptionStatus,
     FollowUpStatus,
 )
+from pawguard.modules.notifications.models import Notification
 from pawguard.modules.notifications.repository import NotificationRepository
 from pawguard.modules.notifications.schemas import NotificationCreate
 from pawguard.modules.notifications.service import NotificationService
@@ -61,20 +62,29 @@ async def post_adoption_followups(ctx: dict[str, object]) -> None:
             for days in FOLLOW_UP_INTERVALS:
                 due_at = app.completed_at + timedelta(days=days)
                 if due_at <= now:
-                    await notification_svc.create_notification(
-                        payload=NotificationCreate(
-                            user_id=app.adopter_id,
-                            title=f"{days}-Day Post-Adoption Follow-Up",
-                            body=(
-                                f"Your adoption of dog {app.dog_id} "
-                                f"was completed {days} days ago. "
-                                f"Please submit a photo or video update "
-                                f"of your dog to complete your required "
-                                f"follow-up report."
-                            ),
-                            notification_type="follow_up",
-                            action_url=(f"/api/v1/adoptions/{app.id}/follow-ups"),
+                    title_text = f"{days}-Day Post-Adoption Follow-Up"
+                    existing_notif = await session.execute(
+                        select(Notification).where(
+                            Notification.user_id == app.adopter_id,
+                            Notification.notification_type == "follow_up",
+                            Notification.title == title_text,
                         )
                     )
+                    if existing_notif.scalar_one_or_none() is None:
+                        await notification_svc.create_notification(
+                            payload=NotificationCreate(
+                                user_id=app.adopter_id,
+                                title=title_text,
+                                body=(
+                                    f"Your adoption of dog {app.dog_id} "
+                                    f"was completed {days} days ago. "
+                                    f"Please submit a photo or video update "
+                                    f"of your dog to complete your required "
+                                    f"follow-up report."
+                                ),
+                                notification_type="follow_up",
+                                action_url=(f"/api/v1/adoptions/{app.id}/follow-ups"),
+                            )
+                        )
 
         await session.commit()
