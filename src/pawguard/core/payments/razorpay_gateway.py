@@ -236,6 +236,7 @@ class RazorpayGateway(PaymentGateway):
             raise PaymentGatewayError("Invalid Razorpay webhook signature.")
 
         body = json.loads(payload)
+        event_id = body.get("id") or body.get("event_id")
         event_type = body.get("event", "")
         payload_data = body.get("payload", {})
         payment_entity = payload_data.get("payment", {}).get("entity", {})
@@ -260,4 +261,5 @@ class RazorpayGateway(PaymentGateway):
             is_success=is_success,
             raw_payload=body,
             payment_link_id=payment_link_id,
+            event_id=str(event_id) if event_id else None,
         )

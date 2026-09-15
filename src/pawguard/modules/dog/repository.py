@@ -62,11 +62,10 @@ class DogRepository:
         """Locks the dog row (SELECT ... FOR UPDATE) for the rest of the
         transaction - used to serialize concurrent adoption approvals on the
         same dog so the exclusivity check-then-act isn't a race condition."""
-        from pawguard.core.config import get_settings
-        from pawguard.core.constants import Environment
-
         stmt = select(DogProfile).where(DogProfile.id == dog_id, DogProfile.deleted_at.is_(None))
-        if get_settings().environment != Environment.TEST:
+        bind = self._session.bind
+        dialect_name = bind.dialect.name if bind else ""
+        if dialect_name != "sqlite":
             stmt = stmt.with_for_update()
 
         return (await self._session.execute(stmt)).scalar_one_or_none()

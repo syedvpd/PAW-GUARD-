@@ -231,10 +231,59 @@ class DonationRepository:
         await self._session.flush()
         return current
 
-    async def update_gateway_fields(self, donation_id: uuid.UUID, **kwargs: Any) -> Donation | None:
-        current = await self.get_donation_by_id(donation_id)
+    async def record_webhook_event(
+        self,
+        *,
+        gateway: str,
+        event_id: str,
+        event_type: str,
+        order_id: str | None = None,
+        payment_id: str | None = None,
+        payload_hash: str | None = None,
+    ) -> bool:
+        """Atomically records a webhook event ID. Returns True if first time processed, False if duplicate."""
+        from pawguard.modules.donation.models import PaymentWebhookEvent
+
+        stmt = select(PaymentWebhookEvent).where(PaymentWebhookEvent.event_id == event_id)
+        existing = (await self._session.execute(stmt)).scalar_one_or_none()
+        if existing is not None:
+            return False
+
+        try:
+            record = PaymentWebhookEvent(
+                gateway=gateway,
+                event_id=event_id,
+                event_type=event_type,
+                order_id=order_id,
+                payment_id=payment_id,
+                payload_hash=payload_hash,
+                processed_at=datetime.now(UTC),
+            )
+            self._session.add(record)
+            await self._session.flush()
+            return True
+        except Exception:
+            return False
+
+    async def get_donation_by_id_for_update(self, donation_id: uuid.UUID) -> Donation | None:
+        stmt = select(Donation).where(Donation.id == donation_id)
+        bind = self._session.bind
+        dialect_name = bind.dialect.name if bind else ""
+        if dialect_name != "sqlite":
+            stmt = stmt.with_for_update()
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def update_gateway_fields_atomic(
+        self, donation_id: uuid.UUID, **kwargs: Any
+    ) -> tuple[Donation | None, bool]:
+        """Row-locked atomic gateway field update and status transition.
+
+        Returns:
+            tuple[Donation | None, bool]: (updated_donation, transitioned_to_success)
+        """
+        current = await self.get_donation_by_id_for_update(donation_id)
         if current is None:
-            return None
+            return None, False
 
         old_status = current.status
         sponsorship_id = current.sponsorship_id
@@ -245,11 +294,19 @@ class DonationRepository:
 
         await self._session.flush()
 
-        if current.status == DonationStatus.SUCCESS and old_status != DonationStatus.SUCCESS:
-            if sponsorship_id:
-                from pawguard.modules.donation.models import DogSponsorship
+        transitioned_to_success = (
+            current.status == DonationStatus.SUCCESS and old_status != DonationStatus.SUCCESS
+        )
 
-                sp = await self._session.get(DogSponsorship, sponsorship_id)
+        if transitioned_to_success:
+            bind = self._session.bind
+            dialect_name = bind.dialect.name if bind else ""
+
+            if sponsorship_id:
+                stmt_sp = select(DogSponsorship).where(DogSponsorship.id == sponsorship_id)
+                if dialect_name != "sqlite":
+                    stmt_sp = stmt_sp.with_for_update()
+                sp = (await self._session.execute(stmt_sp)).scalar_one_or_none()
                 if sp and sp.next_charge_date:
                     month = sp.next_charge_date.month + 1
                     year = sp.next_charge_date.year
@@ -262,9 +319,12 @@ class DonationRepository:
                     )
 
             if recurring_sub_id:
-                from pawguard.modules.donation.models import RecurringSubscription
-
-                sub = await self._session.get(RecurringSubscription, recurring_sub_id)
+                stmt_sub = select(RecurringSubscription).where(
+                    RecurringSubscription.id == recurring_sub_id
+                )
+                if dialect_name != "sqlite":
+                    stmt_sub = stmt_sub.with_for_update()
+                sub = (await self._session.execute(stmt_sub)).scalar_one_or_none()
                 if sub and sub.next_charge_date:
                     month = sub.next_charge_date.month + 1
                     year = sub.next_charge_date.year
@@ -278,7 +338,11 @@ class DonationRepository:
 
             await self._session.flush()
 
-        return current
+        return current, transitioned_to_success
+
+    async def update_gateway_fields(self, donation_id: uuid.UUID, **kwargs: Any) -> Donation | None:
+        donation, _ = await self.update_gateway_fields_atomic(donation_id, **kwargs)
+        return donation
 
     async def list_donations_by_ids(self, ids: list[uuid.UUID]) -> Sequence[Donation]:
         stmt = select(Donation).where(Donation.id.in_(ids))

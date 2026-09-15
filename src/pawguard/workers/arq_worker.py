@@ -26,13 +26,19 @@ from pawguard.workers.jobs.email_jobs import (
 )
 from pawguard.workers.jobs.lost_found_jobs import broadcast_lost_pet_alert
 from pawguard.workers.jobs.scheduled_jobs import (
+    check_equipment_checkout_expiry,
+    check_fleet_maintenance_due,
+    check_grievance_sla_escalation,
     check_inventory_expiry,
     check_inventory_low_stock,
     check_missed_daily_care_logs,
     check_vaccination_renewals,
+    check_vehicle_insurance_expiry,
     post_adoption_followups,
     process_sponsorship_charges,
+    send_post_service_feedback_surveys,
     send_volunteer_shift_reminders,
+    sweep_overdue_invoices,
 )
 
 logger = get_logger(__name__)
@@ -139,6 +145,13 @@ _broadcast_lost_pet_alert = _track_failures(broadcast_lost_pet_alert)
 _send_volunteer_shift_reminders = _track_failures(send_volunteer_shift_reminders)
 _notify_safety_tag_scan = _track_failures(notify_safety_tag_scan)
 
+_check_grievance_sla_escalation = _track_failures(check_grievance_sla_escalation)
+_send_post_service_feedback_surveys = _track_failures(send_post_service_feedback_surveys)
+_check_fleet_maintenance_due = _track_failures(check_fleet_maintenance_due)
+_check_vehicle_insurance_expiry = _track_failures(check_vehicle_insurance_expiry)
+_check_equipment_checkout_expiry = _track_failures(check_equipment_checkout_expiry)
+_sweep_overdue_invoices = _track_failures(sweep_overdue_invoices)
+
 
 class WorkerSettings:
     # Async email jobs are retried up to 5 times with backoff (see email_jobs.py).
@@ -157,6 +170,12 @@ class WorkerSettings:
         _broadcast_lost_pet_alert,
         _send_volunteer_shift_reminders,
         _notify_safety_tag_scan,
+        _check_grievance_sla_escalation,
+        _send_post_service_feedback_surveys,
+        _check_fleet_maintenance_due,
+        _check_vehicle_insurance_expiry,
+        _check_equipment_checkout_expiry,
+        _sweep_overdue_invoices,
     ]
     cron_jobs = [
         # Scheduled cron jobs: 2 tries is enough — a missed run just fires again
@@ -169,6 +188,12 @@ class WorkerSettings:
         cron(_send_companion_pet_reminders, hour={9}, minute={45}, max_tries=2),
         cron(_send_volunteer_shift_reminders, hour={11}, minute={0}, max_tries=2),
         cron(_check_missed_daily_care_logs, hour={21}, minute={0}, max_tries=2),
+        cron(_check_grievance_sla_escalation, minute={0, 15, 30, 45}, max_tries=2),
+        cron(_send_post_service_feedback_surveys, hour={14}, minute={0}, max_tries=2),
+        cron(_check_fleet_maintenance_due, hour={6}, minute={0}, max_tries=2),
+        cron(_check_vehicle_insurance_expiry, hour={7}, minute={0}, max_tries=2),
+        cron(_check_equipment_checkout_expiry, hour={18}, minute={0}, max_tries=2),
+        cron(_sweep_overdue_invoices, hour={1}, minute={0}, max_tries=2),
     ]
     on_startup = startup
     on_shutdown = shutdown

@@ -39,6 +39,15 @@ class InventoryRepository:
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    async def get_item_for_update(self, item_id: uuid.UUID) -> InventoryItem | None:
+        stmt = select(InventoryItem).where(
+            InventoryItem.id == item_id,
+            InventoryItem.deleted_at.is_(None),
+        )
+        if self._session.bind and self._session.bind.dialect.name != "sqlite":
+            stmt = stmt.with_for_update()
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
     async def get_items_by_ids(
         self, item_ids: list[uuid.UUID]
     ) -> dict[uuid.UUID, InventoryItem | None]:

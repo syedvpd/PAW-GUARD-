@@ -244,3 +244,17 @@ class DonationCampaign(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin,
     goal_reached_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     donations: Mapped[list["Donation"]] = relationship(back_populates="campaign", lazy="selectin")
+
+
+class PaymentWebhookEvent(UUIDPkMixin, TimestampMixin, Base):
+    """Stores received payment gateway event IDs for strictly idempotent webhook processing (PRR P0-1/P1-1)."""
+
+    __tablename__ = "payment_webhook_events"
+
+    gateway: Mapped[str] = mapped_column(String(32), nullable=False)
+    event_id: Mapped[str] = mapped_column(String(128), unique=True, index=True, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    order_id: Mapped[str | None] = mapped_column(String(128), index=True, nullable=True)
+    payment_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    payload_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

@@ -271,6 +271,7 @@ class TestLostFoundService:
 
         mock_repo.create_lost_report.return_value = None
         mock_repo.get_lost_report_by_id.side_effect = reload_side_effect
+        mock_repo.list_candidate_found_reports.side_effect = match_side_effect
         mock_repo.list_found_reports.side_effect = match_side_effect
         mock_repo._session.flush.return_value = None
 
@@ -319,6 +320,7 @@ class TestLostFoundService:
 
         mock_repo.create_found_report.return_value = None
         mock_repo.get_found_report_by_id.side_effect = reload_side_effect
+        mock_repo.list_candidate_lost_reports.side_effect = match_side_effect
         mock_repo.list_lost_reports.side_effect = match_side_effect
         mock_repo._session.flush.return_value = None
 

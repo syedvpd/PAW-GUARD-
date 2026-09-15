@@ -735,3 +735,126 @@ async def sweep_overdue_invoices(ctx: dict[str, object]) -> int:
 
     logger.info("Overdue invoices sweep completed; %d invoices updated.", count)
     return count
+
+
+async def check_fleet_maintenance_due(ctx: dict[str, object]) -> int:
+    """Check vehicles with upcoming or overdue maintenance and alert fleet managers."""
+    from pawguard.modules.fleet.models import FleetMaintenance, Vehicle
+
+    today = date.today()
+    lookahead = today + timedelta(days=7)
+    alerted = 0
+
+    async with AsyncSessionLocal() as session:
+        stmt = (
+            select(FleetMaintenance, Vehicle)
+            .join(Vehicle, FleetMaintenance.vehicle_id == Vehicle.id)
+            .where(
+                FleetMaintenance.next_due_date.isnot(None),
+                FleetMaintenance.next_due_date <= lookahead,
+                Vehicle.deleted_at.is_(None),
+            )
+        )
+        results = (await session.execute(stmt)).all()
+        if not results:
+            return 0
+
+        notification_svc = _notification_service(session, ctx)
+        for maint, vehicle in results:
+            due_str = str(maint.next_due_date)
+            await notification_svc.broadcast(
+                payload=BroadcastCreate(
+                    title=f"Vehicle Maintenance Due: {vehicle.license_plate}",
+                    body=(
+                        f"Maintenance for vehicle '{vehicle.make_model}' ({vehicle.license_plate}) "
+                        f"is due on {due_str}. Description: {maint.description}"
+                    ),
+                    notification_type="fleet_maintenance_due",
+                    action_url=f"/fleet/vehicles/{vehicle.id}",
+                    target_roles=["fleet_manager", "super_admin"],
+                ),
+                user_ids=[],
+            )
+            alerted += 1
+
+        await session.commit()
+    return alerted
+
+
+async def check_vehicle_insurance_expiry(ctx: dict[str, object]) -> int:
+    """Check vehicles with insurance expiring in the next 14 days and alert fleet managers."""
+    from pawguard.modules.fleet.models import Vehicle
+
+    today = date.today()
+    lookahead = today + timedelta(days=14)
+    alerted = 0
+
+    async with AsyncSessionLocal() as session:
+        stmt = select(Vehicle).where(
+            Vehicle.insurance_expiry_date.isnot(None),
+            Vehicle.insurance_expiry_date <= lookahead,
+            Vehicle.deleted_at.is_(None),
+        )
+        vehicles = (await session.execute(stmt)).scalars().all()
+        if not vehicles:
+            return 0
+
+        notification_svc = _notification_service(session, ctx)
+        for v in vehicles:
+            exp_str = str(v.insurance_expiry_date)
+            await notification_svc.broadcast(
+                payload=BroadcastCreate(
+                    title=f"Vehicle Insurance Expiring: {v.license_plate}",
+                    body=(
+                        f"Insurance policy ({v.insurance_policy_number or 'N/A'}) for vehicle "
+                        f"'{v.make_model}' ({v.license_plate}) expires on {exp_str}."
+                    ),
+                    notification_type="vehicle_insurance_expiry",
+                    action_url=f"/fleet/vehicles/{v.id}",
+                    target_roles=["fleet_manager", "super_admin"],
+                ),
+                user_ids=[],
+            )
+            alerted += 1
+
+        await session.commit()
+    return alerted
+
+
+async def check_equipment_checkout_expiry(ctx: dict[str, object]) -> int:
+    """Check overdue equipment checkouts and alert fleet managers."""
+    from pawguard.modules.fleet.models import EquipmentCheckout
+
+    now = datetime.now(UTC)
+    alerted = 0
+
+    async with AsyncSessionLocal() as session:
+        stmt = select(EquipmentCheckout).where(
+            EquipmentCheckout.returned_at.is_(None),
+            EquipmentCheckout.expected_return_at.isnot(None),
+            EquipmentCheckout.expected_return_at < now,
+            EquipmentCheckout.deleted_at.is_(None),
+        )
+        checkouts = (await session.execute(stmt)).scalars().all()
+        if not checkouts:
+            return 0
+
+        notification_svc = _notification_service(session, ctx)
+        for c in checkouts:
+            await notification_svc.broadcast(
+                payload=BroadcastCreate(
+                    title=f"Equipment Overdue: {c.equipment_name}",
+                    body=(
+                        f"Equipment '{c.equipment_name}' checked out at {c.checked_out_at.strftime('%Y-%m-%d')} "
+                        f"was expected back by {c.expected_return_at.strftime('%Y-%m-%d %H:%M UTC') if c.expected_return_at else 'now'}."
+                    ),
+                    notification_type="equipment_checkout_overdue",
+                    action_url="/fleet/equipment",
+                    target_roles=["fleet_manager", "super_admin"],
+                ),
+                user_ids=[],
+            )
+            alerted += 1
+
+        await session.commit()
+    return alerted

@@ -63,6 +63,12 @@ class FleetRepository:
         stmt = select(Vehicle).where(Vehicle.id == vehicle_id, Vehicle.deleted_at.is_(None))
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    async def get_vehicle_for_update(self, vehicle_id: uuid.UUID) -> Vehicle | None:
+        stmt = select(Vehicle).where(Vehicle.id == vehicle_id, Vehicle.deleted_at.is_(None))
+        if self._session.bind and self._session.bind.dialect.name != "sqlite":
+            stmt = stmt.with_for_update()
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
     async def get_vehicle_by_plate(self, license_plate: str) -> Vehicle | None:
         stmt = select(Vehicle).where(
             Vehicle.license_plate == license_plate, Vehicle.deleted_at.is_(None)

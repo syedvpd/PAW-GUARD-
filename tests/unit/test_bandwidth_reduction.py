@@ -185,13 +185,13 @@ async def test_reports_s3_upload_and_download_redirect(
     # Create fake authenticated user
     mock_user = User(
         id=uuid.uuid4(),
-        email="test_reporter@example.com",
+        email=f"test_reporter_{uuid.uuid4().hex[:8]}@example.com",
         full_name="Reporter Tester",
         hashed_password="hashed_password",
         is_active=True,
     )
     db_session.add(mock_user)
-    await db_session.commit()
+    await db_session.flush()
 
     from datetime import UTC, datetime, timedelta
 
@@ -209,8 +209,11 @@ async def test_reports_s3_upload_and_download_redirect(
         redis=fake_redis,
     )
 
+    from pawguard.db.session import get_db
+
     # Override dependencies
     app.dependency_overrides[get_current_user] = lambda: mock_current
+    app.dependency_overrides[get_db] = lambda: db_session
     app.dependency_overrides[require_permission("reports:create")] = lambda: None
     app.dependency_overrides[require_permission("reports:read")] = lambda: None
 

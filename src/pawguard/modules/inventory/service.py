@@ -103,7 +103,9 @@ class InventoryService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> InventoryMovement:
-        item = await self._repo.get_item(payload.item_id)
+        item = await self._repo.get_item_for_update(payload.item_id)
+        if item is None:
+            item = await self._repo.get_item(payload.item_id)
         if item is None:
             raise NotFoundError("Inventory item not found.")
 

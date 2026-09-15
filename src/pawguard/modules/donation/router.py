@@ -1014,8 +1014,17 @@ async def cancel_recurring_subscription(
     )
     if subscription is None:
         raise NotFoundError("Recurring subscription not found.")
+    caller_roles = set(current_user.claims.roles)
+    if hasattr(current_user.user, "roles") and current_user.user.roles:
+        caller_roles.update(r.name for r in current_user.user.roles)
+    is_admin = bool(caller_roles.intersection({"super_admin", "admin", "finance_manager"}))
     is_owner = subscription.donor is not None and subscription.donor.user_id == current_user.user.id
-    if not is_owner and not has_permission(current_user.user, "donation:manage"):
+    if (
+        not is_owner
+        and not is_admin
+        and not has_permission(current_user.user, "donation:manage")
+        and not has_permission(current_user.user, "system:admin")
+    ):
         raise ForbiddenError("You do not have permission to cancel this subscription.")
     updated = await service.cancel_recurring_subscription(
         subscription_id,

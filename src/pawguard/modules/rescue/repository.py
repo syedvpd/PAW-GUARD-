@@ -300,6 +300,8 @@ class RescueRepository:
                 RescueRequest.deleted_at.is_(None),
             )
         )
+        if self._session.bind and self._session.bind.dialect.name != "sqlite":
+            stmt = stmt.with_for_update(of=RescueDispatch)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def list_dispatches_paginated(

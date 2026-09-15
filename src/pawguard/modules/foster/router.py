@@ -964,6 +964,16 @@ async def request_supplies(
     response_model=ApiResponse[dict[str, Any]],
     status_code=status.HTTP_201_CREATED,
 )
+@router.post(
+    "/{placement_id}/convert-to-adoption",
+    response_model=ApiResponse[dict[str, Any]],
+    status_code=status.HTTP_201_CREATED,
+)
+@router.post(
+    "/placements/{placement_id}/convert-to-adoption",
+    response_model=ApiResponse[dict[str, Any]],
+    status_code=status.HTTP_201_CREATED,
+)
 async def convert_to_adopt(
     placement_id: uuid.UUID,
     request: Request,
@@ -983,8 +993,17 @@ async def convert_to_adopt(
         if user_foster_profile and user_foster_profile.id == placement.foster_id:
             is_owner = True
 
+    caller_roles = set(current_user.claims.roles)
+    if hasattr(current_user.user, "roles") and current_user.user.roles:
+        caller_roles.update(r.name for r in current_user.user.roles)
+
     is_authorized = (
         is_owner
+        or bool(
+            caller_roles.intersection(
+                {"super_admin", "admin", "foster_coordinator", "adoption_coordinator"}
+            )
+        )
         or has_permission(current_user.user, "foster:approve")
         or has_permission(current_user.user, "foster:update")
         or has_permission(current_user.user, "foster:manage")

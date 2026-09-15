@@ -87,12 +87,13 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
+    async_sessionmaker,
     create_async_engine,
 )
 from sqlalchemy.pool import NullPool
 
 from pawguard.core.config import get_settings
-from pawguard.db.session import get_db
+from pawguard.db.session import get_db, get_master_db
 from pawguard.main import create_app
 from pawguard.redis.client import get_redis
 from pawguard.workers.pool import get_arq_pool
@@ -108,8 +109,21 @@ class FakeRedis:
     async def get(self, key: str) -> Any | None:
         return self._store.get(key)
 
-    async def set(self, key: str, value: Any, ex: int | None = None) -> None:  # noqa: A002
+    async def set(
+        self,
+        key: str,
+        value: Any,
+        ex: int | None = None,
+        px: int | None = None,
+        nx: bool = False,
+        xx: bool = False,
+    ) -> bool:
+        if nx and key in self._store:
+            return False
+        if xx and key not in self._store:
+            return False
         self._store[key] = value
+        return True
 
     async def incr(self, key: str) -> int:
         val = int(self._store.get(key, 0))
@@ -135,6 +149,39 @@ class FakeRedis:
 
     async def ping(self) -> bool:
         return True
+
+    async def publish(self, channel: str, message: Any) -> int:
+        return 1
+
+    async def sadd(self, key: str, *values: Any) -> int:
+        s = self._store.setdefault(key, set())
+        if not isinstance(s, set):
+            s = set()
+            self._store[key] = s
+        added = 0
+        for v in values:
+            if v not in s:
+                s.add(v)
+                added += 1
+        return added
+
+    async def smembers(self, key: str) -> set:
+        s = self._store.get(key, set())
+        return s if isinstance(s, set) else set()
+
+    async def eval(self, script: str, numkeys: int, *keys_and_args: Any) -> Any:
+        if "redis.call" in script and "del" in script:
+            key = str(keys_and_args[0]) if len(keys_and_args) > 0 else ""
+            arg = str(keys_and_args[1]) if len(keys_and_args) > 1 else ""
+            if self._store.get(key) == arg:
+                self._store.pop(key, None)
+                return 1
+            return 0
+        return 1
+
+    async def flushdb(self) -> None:
+        self._store.clear()
+        self._expiry.clear()
 
 
 class FakeArqPool:
@@ -171,8 +218,8 @@ async def engine() -> AsyncGenerator[AsyncEngine]:
     # Check if local postgres is available, otherwise fall back to local test sqlite
     is_sqlite = "sqlite" in test_url
     if not is_sqlite:
-        ensure_local_test_db(test_url)
         try:
+            ensure_local_test_db(test_url)
             eng = create_async_engine(
                 test_url,
                 echo=False,
@@ -198,6 +245,19 @@ async def engine() -> AsyncGenerator[AsyncEngine]:
         )
 
     if is_sqlite:
+        import sqlite3
+
+        from sqlalchemy import event
+
+        @event.listens_for(eng.sync_engine, "connect")
+        def set_sqlite_pragma(dbapi_connection, connection_record):
+            if isinstance(dbapi_connection, sqlite3.Connection):
+                cursor = dbapi_connection.cursor()
+                cursor.execute("PRAGMA journal_mode=WAL")
+                cursor.execute("PRAGMA synchronous=NORMAL")
+                cursor.execute("PRAGMA busy_timeout=30000")
+                cursor.close()
+
         from pawguard.db.base import Base
         from pawguard.modules.adoption import models as _m4  # noqa: F401
 
@@ -252,16 +312,13 @@ async def engine() -> AsyncGenerator[AsyncEngine]:
 async def db_session(
     engine: AsyncEngine,
 ) -> AsyncGenerator[AsyncSession]:
-    connection = await engine.connect()
-    transaction = await connection.begin()
-    session = AsyncSession(bind=connection, expire_on_commit=False)
-
-    yield session
-
-    await session.close()
-    if transaction.is_active:
-        await transaction.rollback()
-    await connection.close()
+    async_session = async_sessionmaker(
+        bind=engine, class_=AsyncSession, expire_on_commit=False, autoflush=True
+    )
+    async with async_session() as session:
+        yield session
+        if session.in_transaction():
+            await session.commit()
 
 
 @pytest_asyncio.fixture
@@ -271,12 +328,28 @@ async def fake_redis() -> FakeRedis:
 
 @pytest_asyncio.fixture
 async def client(
-    db_session: AsyncSession,
+    engine: AsyncEngine,
     fake_redis: FakeRedis,
 ) -> AsyncGenerator[AsyncClient]:
     app = create_app()
 
-    app.dependency_overrides[get_db] = lambda: db_session
+    async_session = async_sessionmaker(
+        bind=engine, class_=AsyncSession, expire_on_commit=False, autoflush=True
+    )
+
+    async def _override_get_db() -> AsyncGenerator[AsyncSession]:
+        async with async_session() as session:
+            try:
+                yield session
+                if session.in_transaction():
+                    await session.commit()
+            except Exception:
+                if session.in_transaction():
+                    await session.rollback()
+                raise
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_master_db] = _override_get_db
     app.dependency_overrides[get_redis] = lambda: fake_redis
     app.dependency_overrides[get_arq_pool] = lambda: FakeArqPool()
 

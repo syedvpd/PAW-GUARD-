@@ -851,8 +851,8 @@ class LostFoundService:
         return score, round(dist, 2), temporal_gap_days, reasons
 
     async def _run_matching_for_lost(self, lost: LostReport) -> None:
-        active_founds = await self._repo.list_found_reports(status=ReportStatus.ACTIVE)
-        for found in active_founds:
+        candidate_founds = await self._repo.list_candidate_found_reports(lost)
+        for found in candidate_founds:
             score, dist_km, gap_days, reasons = self._evaluate_match_score(lost, found)
             if score >= 50.0:
                 match = ReportMatch(
@@ -868,8 +868,8 @@ class LostFoundService:
                 await self._notify_match(match, lost=lost, found=found)
 
     async def _run_matching_for_found(self, found: FoundReport) -> None:
-        active_losts = await self._repo.list_lost_reports(status=ReportStatus.ACTIVE)
-        for lost in active_losts:
+        candidate_losts = await self._repo.list_candidate_lost_reports(found)
+        for lost in candidate_losts:
             score, dist_km, gap_days, reasons = self._evaluate_match_score(lost, found)
             if score >= 50.0:
                 match = ReportMatch(

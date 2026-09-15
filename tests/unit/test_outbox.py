@@ -1,7 +1,7 @@
 """Unit tests for the Transactional Outbox Pattern."""
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.modules.outbox.models import OutboxEvent
@@ -43,6 +43,9 @@ async def test_outbox_enqueue_job(db_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_outbox_process_pending_events_success(db_session: AsyncSession):
     """Pending events must be enqueued to ARQ Redis and marked completed with a processed timestamp."""
+    await db_session.execute(delete(OutboxEvent))
+    await db_session.commit()
+
     job_name = "test_verification"
     payload = {"to": "user@example.com"}
 

@@ -6,6 +6,7 @@ from typing import Any
 
 from pawguard.core.config import get_settings
 from pawguard.core.exceptions import ConflictError, NotFoundError
+from pawguard.modules.auth.models import AuthAuditEventType
 from pawguard.modules.settings.models import BusinessRule, PasswordPolicy, SystemSetting
 from pawguard.modules.settings.repository import (
     BusinessRuleRepository,
@@ -24,12 +25,18 @@ from pawguard.modules.settings.schemas import (
     SystemSettingCreate,
     SystemSettingUpdate,
 )
+from pawguard.services.audit_service import AuditService
 
 
 class SystemSettingService:
-    def __init__(self, repository: SystemSettingRepository) -> None:
+    def __init__(
+        self,
+        repository: SystemSettingRepository,
+        audit_service: AuditService | None = None,
+    ) -> None:
         self._repo = repository
         self._session = getattr(repository, "_session", None)
+        self._audit = audit_service
 
     async def get_setting(self, key: str) -> SystemSetting:
         setting = await self._repo.get_by_key(key)
@@ -148,9 +155,14 @@ class SystemSettingService:
 
 
 class PasswordPolicyService:
-    def __init__(self, repository: PasswordPolicyRepository) -> None:
+    def __init__(
+        self,
+        repository: PasswordPolicyRepository,
+        audit_service: AuditService | None = None,
+    ) -> None:
         self._repo = repository
         self._session = getattr(repository, "_session", None)
+        self._audit = audit_service
 
     async def get_active(self) -> PasswordPolicy:
         policy = await self._repo.get_active()
@@ -163,27 +175,47 @@ class PasswordPolicyService:
             policy = await self._repo.create(PasswordPolicy())
         return policy
 
-    async def update_policy(self, payload: PasswordPolicyUpdate) -> PasswordPolicy:
+    async def update_policy(
+        self,
+        payload: PasswordPolicyUpdate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> PasswordPolicy:
         policy = await self._repo.get_active()
         if policy is None:
             policy = PasswordPolicy()
             for field, value in payload.model_dump(exclude_unset=True).items():
                 setattr(policy, field, value)
-            return await self._repo.create(policy)
-        for field, value in payload.model_dump(exclude_unset=True).items():
-            setattr(policy, field, value)
+            res = await self._repo.create(policy)
+        else:
+            for field, value in payload.model_dump(exclude_unset=True).items():
+                setattr(policy, field, value)
+            res = policy
         if self._session is not None:
             await self._session.flush()
-        return policy
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.SETTINGS_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"action": "password_policy_updated"},
+            )
+        return res
 
     async def list_all(self) -> list[PasswordPolicy]:
         return list(await self._repo.list_all())
 
 
 class BusinessRuleService:
-    def __init__(self, repository: BusinessRuleRepository) -> None:
+    def __init__(
+        self,
+        repository: BusinessRuleRepository,
+        audit_service: AuditService | None = None,
+    ) -> None:
         self._repo = repository
         self._session = getattr(repository, "_session", None)
+        self._audit = audit_service
 
     async def get_rule(self, rule_key: str) -> BusinessRule:
         rule = await self._repo.get_by_key(rule_key)

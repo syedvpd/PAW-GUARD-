@@ -527,7 +527,7 @@ class DonationService:
             raise NotFoundError("Donation record not found.")
         res = await self._repo.get_donation_by_id(updated.id)
         if res is None:
-            raise NotFoundError("Donation record not found.")
+            res = updated
 
         if self._audit:
             await self._audit.record(
@@ -543,11 +543,6 @@ class DonationService:
                     "verified_online": True,
                 },
             )
-        # The payment is already verified and persisted as SUCCESS above — a
-        # receipt PDF/storage failure must not fail this call and strand the
-        # client on an error after money was captured. Best-effort here,
-        # same as the webhook path; the GET /receipt(/download) endpoints
-        # already regenerate the PDF on demand if receipt_file_key is None.
         await self._generate_receipt(res, raise_on_failure=False)
         await self._refresh_campaign_progress(res.campaign_id)
         await self._post_donation_to_ledger(res)
@@ -582,35 +577,49 @@ class DonationService:
         if event.order_id is None:
             return
 
+        # Deduplicate at webhook event level if gateway event_id is available
+        if event.event_id:
+            is_new = await self._repo.record_webhook_event(
+                gateway=self._gateway.provider_name,
+                event_id=event.event_id,
+                event_type=event.event_type,
+                order_id=event.order_id,
+                payment_id=event.payment_id,
+            )
+            if not is_new:
+                logger.info("Ignoring duplicate webhook event delivery: %s", event.event_id)
+                return
+
         donation = await self._repo.get_donation_by_gateway_order_id(event.order_id)
         if donation is None or donation.status == DonationStatus.SUCCESS:
             return
 
         if event.is_success:
             tx_id = f"TXN-{uuid.uuid4().hex[:12].upper()}"
-            await self._repo.update_gateway_fields(
+            updated = await self._repo.update_gateway_fields(
                 donation.id,
                 status=DonationStatus.SUCCESS,
                 gateway_payment_id=event.payment_id,
                 transaction_id=tx_id,
             )
-            if self._audit:
-                await self._audit.record(
-                    event_type=AuthAuditEventType.DONATION_RECEIVED,
-                    actor_id=None,
-                    ip_address="",
-                    user_agent="",
-                    metadata={
-                        "donation_id": str(donation.id),
-                        "gateway_payment_id": event.payment_id,
-                        "source": "webhook",
-                    },
-                )
-            refreshed = await self._repo.get_donation_by_id(donation.id)
-            if refreshed is not None:
-                await self._generate_receipt(refreshed, raise_on_failure=False)
-                await self._refresh_campaign_progress(refreshed.campaign_id)
-                await self._post_donation_to_ledger(refreshed)
+            if updated is not None:
+                if self._audit:
+                    await self._audit.record(
+                        event_type=AuthAuditEventType.DONATION_RECEIVED,
+                        actor_id=None,
+                        ip_address="",
+                        user_agent="",
+                        metadata={
+                            "donation_id": str(donation.id),
+                            "gateway_payment_id": event.payment_id,
+                            "source": "webhook",
+                        },
+                    )
+                refreshed = await self._repo.get_donation_by_id(donation.id)
+                if refreshed is not None:
+                    await self._generate_receipt(refreshed, raise_on_failure=False)
+                    await self._refresh_campaign_progress(refreshed.campaign_id)
+                    await self._post_donation_to_ledger(refreshed)
         elif event.event_type == "payment.failed":
             await self._repo.update_gateway_fields(donation.id, status=DonationStatus.FAILED)
             if self._audit:

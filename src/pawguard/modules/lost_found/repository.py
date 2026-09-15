@@ -215,6 +215,60 @@ class LostFoundRepository:
             stmt = stmt.where(FoundReport.status == status)
         return (await self._session.execute(stmt)).scalars().all()
 
+    async def list_candidate_found_reports(
+        self,
+        lost: LostReport,
+        max_days: int = 45,
+        limit: int = 200,
+    ) -> Sequence[FoundReport]:
+        """Query active found reports pre-filtered by species and temporal window for efficient matching."""
+        stmt = (
+            select(FoundReport)
+            .options(
+                selectinload(FoundReport.user).selectinload(User.roles),
+                selectinload(FoundReport.media),
+            )
+            .where(
+                FoundReport.status == ReportStatus.ACTIVE,
+                FoundReport.deleted_at.is_(None),
+                FoundReport.species == lost.species,
+            )
+        )
+        if lost.lost_at is not None:
+            min_date = lost.lost_at - timedelta(days=max_days)
+            max_date = lost.lost_at + timedelta(days=max_days)
+            stmt = stmt.where(FoundReport.found_at >= min_date, FoundReport.found_at <= max_date)
+
+        stmt = stmt.order_by(FoundReport.found_at.desc()).limit(limit)
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def list_candidate_lost_reports(
+        self,
+        found: FoundReport,
+        max_days: int = 45,
+        limit: int = 200,
+    ) -> Sequence[LostReport]:
+        """Query active lost reports pre-filtered by species and temporal window for efficient matching."""
+        stmt = (
+            select(LostReport)
+            .options(
+                selectinload(LostReport.user).selectinload(User.roles),
+                selectinload(LostReport.media),
+            )
+            .where(
+                LostReport.status == ReportStatus.ACTIVE,
+                LostReport.deleted_at.is_(None),
+                LostReport.species == found.species,
+            )
+        )
+        if found.found_at is not None:
+            min_date = found.found_at - timedelta(days=max_days)
+            max_date = found.found_at + timedelta(days=max_days)
+            stmt = stmt.where(LostReport.lost_at >= min_date, LostReport.lost_at <= max_date)
+
+        stmt = stmt.order_by(LostReport.lost_at.desc()).limit(limit)
+        return (await self._session.execute(stmt)).scalars().all()
+
     async def create_match(self, match: ReportMatch) -> ReportMatch:
         self._session.add(match)
         await self._session.flush()

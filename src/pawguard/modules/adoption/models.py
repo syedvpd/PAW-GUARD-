@@ -6,7 +6,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -47,6 +47,20 @@ class FollowUpStatus(StrEnum):
 
 class AdoptionApplication(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
     __tablename__ = "adoption_applications"
+
+    __table_args__ = (
+        Index(
+            "ix_adoption_applications_dog_lock_states",
+            "dog_id",
+            unique=True,
+            postgresql_where=text(
+                "status IN ('home_check', 'approved', 'completed') AND deleted_at IS NULL"
+            ),
+            sqlite_where=text(
+                "status IN ('home_check', 'approved', 'completed') AND deleted_at IS NULL"
+            ),
+        ),
+    )
 
     dog_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),

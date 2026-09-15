@@ -279,6 +279,11 @@ async def update_application(
     response_model=ApiResponse[AdoptionApplicationResponse],
     dependencies=[Depends(require_permission("adoption:process"))],
 )
+@router.put(
+    "/{app_id}/status",
+    response_model=ApiResponse[AdoptionApplicationResponse],
+    dependencies=[Depends(require_permission("adoption:process"))],
+)
 async def update_application_status(
     app_id: uuid.UUID,
     payload: AdoptionStatusUpdate,

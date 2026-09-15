@@ -32,6 +32,7 @@ class TestInventoryService:
     def mock_repo(self):
         repo = AsyncMock(spec=InventoryRepository)
         repo._session = AsyncMock()
+        repo.get_item_for_update = repo.get_item
         return repo
 
     @pytest.fixture

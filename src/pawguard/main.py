@@ -11,6 +11,7 @@ from sqlalchemy import text
 
 from pawguard.api.v1.router import api_v1_router
 from pawguard.core.config import get_settings
+from pawguard.core.constants import Environment
 from pawguard.core.exceptions import register_exception_handlers
 from pawguard.core.idempotency import IdempotencyMiddleware
 from pawguard.core.logging import configure_logging, get_logger
@@ -86,32 +87,35 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     # Registers all domain models on Base.metadata and configures relationship mappers.
     import pawguard.db.models  # noqa: F401
 
-    logger.info("application_startup")
-    try:
-        await asyncio.wait_for(asyncio.to_thread(_run_migrations), timeout=15.0)
-    except TimeoutError:
-        logger.warning("alembic_migration_timed_out_skipping")
-    except Exception as exc:
-        logger.warning("alembic_migration_auto_run_skipped_or_failed", error=str(exc))
+    settings = get_settings()
+    outbox_task = None
+    if settings.environment != Environment.TEST:
+        try:
+            await asyncio.wait_for(asyncio.to_thread(_run_migrations), timeout=15.0)
+        except TimeoutError:
+            logger.warning("alembic_migration_timed_out_skipping")
+        except Exception as exc:
+            logger.warning("alembic_migration_auto_run_skipped_or_failed", error=str(exc))
 
-    try:
-        await asyncio.wait_for(_seed_roles(), timeout=60.0)
-    except TimeoutError:
-        logger.warning("seed_roles_timed_out_skipping")
-    except Exception as exc:
-        logger.warning("seed_roles_failed_skipping", error=str(exc))
+        try:
+            await asyncio.wait_for(_seed_roles(), timeout=60.0)
+        except TimeoutError:
+            logger.warning("seed_roles_timed_out_skipping")
+        except Exception as exc:
+            logger.warning("seed_roles_failed_skipping", error=str(exc))
 
-    # Start in-process outbox poller so transactional email/notification jobs
-    # are dispatched immediately even when running directly under uvicorn.
-    from pawguard.workers.arq_worker import outbox_poller_loop
+        # Start in-process outbox poller so transactional email/notification jobs
+        # are dispatched immediately even when running directly under uvicorn.
+        from pawguard.workers.arq_worker import outbox_poller_loop
 
-    outbox_task = asyncio.create_task(outbox_poller_loop({}))
+        outbox_task = asyncio.create_task(outbox_poller_loop({}))
 
     yield
 
-    outbox_task.cancel()
-    with contextlib.suppress(asyncio.CancelledError):
-        await outbox_task
+    if outbox_task is not None:
+        outbox_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await outbox_task
 
     await engine.dispose()
     logger.info("application_shutdown")

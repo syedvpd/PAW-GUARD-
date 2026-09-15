@@ -86,6 +86,8 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
             f"{prefix}/donations/checkout",
             f"{prefix}/donations/sponsorships",
             f"{prefix}/donations/recurring",
+            f"{prefix}/donations/verify",
+            f"{prefix}/finance/refunds",
         }
 
         is_financial_route = request.method == "POST" and request.url.path in financial_paths

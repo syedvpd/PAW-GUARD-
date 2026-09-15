@@ -5,7 +5,18 @@ from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -72,6 +83,16 @@ class FosterProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Ba
 
 class FosterPlacement(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "foster_placements"
+
+    __table_args__ = (
+        Index(
+            "uq_foster_placements_active_dog",
+            "dog_id",
+            unique=True,
+            postgresql_where=text("is_active = true"),
+            sqlite_where=text("is_active = 1"),
+        ),
+    )
 
     foster_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),

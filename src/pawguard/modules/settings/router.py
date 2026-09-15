@@ -36,20 +36,21 @@ from pawguard.modules.settings.service import (
     PublicContentService,
     SystemSettingService,
 )
+from pawguard.services.audit_service import AuditService
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
 
 def get_setting_service(db: AsyncSession = Depends(get_db)) -> SystemSettingService:
-    return SystemSettingService(SystemSettingRepository(db))
+    return SystemSettingService(SystemSettingRepository(db), audit_service=AuditService(db))
 
 
 def get_password_policy_service(db: AsyncSession = Depends(get_db)) -> PasswordPolicyService:
-    return PasswordPolicyService(PasswordPolicyRepository(db))
+    return PasswordPolicyService(PasswordPolicyRepository(db), audit_service=AuditService(db))
 
 
 def get_business_rule_service(db: AsyncSession = Depends(get_db)) -> BusinessRuleService:
-    return BusinessRuleService(BusinessRuleRepository(db))
+    return BusinessRuleService(BusinessRuleRepository(db), audit_service=AuditService(db))
 
 
 def get_public_content_service(db: AsyncSession = Depends(get_db)) -> PublicContentService:

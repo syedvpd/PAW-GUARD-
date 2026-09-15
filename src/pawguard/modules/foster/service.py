@@ -324,6 +324,9 @@ class FosterService:
             raise NotFoundError("Foster profile not found.")
         return profile
 
+    async def get_profile_by_user_id(self, user_id: uuid.UUID) -> FosterProfile | None:
+        return await self._repo.get_profile_by_user_id(user_id)
+
     async def get_my_profile(self, user_id: uuid.UUID) -> FosterProfile:
         profile = await self._repo.get_profile_by_user_id(user_id)
         if profile is None:
