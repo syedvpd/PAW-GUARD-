@@ -279,10 +279,10 @@ class ShelterService:
         await self.assert_facility_access(actor_id, section.facility_id)
 
         # Quarantine Enforcement: Dogs that have not passed quarantine cannot be moved
-        # into the adoption section.
-        if section.section_type == SectionType.ADOPTION and not dog.is_quarantine_passed:
+        # into any non-quarantine section.
+        if section.section_type != SectionType.QUARANTINE and not dog.is_quarantine_passed:
             raise ConflictError(
-                f"Cannot assign dog '{dog.name}' to adoption section '{section.name}'. "
+                f"Cannot assign dog '{dog.name}' to non-quarantine section '{section.name}'. "
                 "Dog has not completed mandatory quarantine."
             )
 
@@ -519,8 +519,8 @@ class ShelterService:
 
         await self.assert_facility_access(actor_id or user_id, payload.from_facility_id)
 
-        # Quarantine Enforcement: Dogs in clinic quarantine cannot be transferred
-        if not dog.is_quarantine_passed and dog.status == DogStatus.CLINIC:
+        # Quarantine Enforcement: Dogs that have not passed quarantine cannot be transferred
+        if not dog.is_quarantine_passed:
             raise ConflictError(
                 f"Dog '{dog.name}' has not completed mandatory quarantine. Inter-facility transfer is prohibited."
             )
@@ -601,7 +601,7 @@ class ShelterService:
         dog = await self._dog_repo.get_by_id(transfer.dog_id)
         if dog is None:
             raise NotFoundError("Dog profile not found.")
-        if not dog.is_quarantine_passed and dog.status == DogStatus.CLINIC:
+        if not dog.is_quarantine_passed:
             raise ConflictError(
                 f"Dog '{dog.name}' has not completed mandatory quarantine. Cannot transfer."
             )

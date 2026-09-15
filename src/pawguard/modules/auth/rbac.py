@@ -26,8 +26,6 @@ ADMIN_ROLES = {
     "system:admin",
     "super administrator",
     "super admin",
-    "admin",
-    "administrator",
 }
 
 

@@ -316,6 +316,13 @@ class FinanceRepository:
         stmt = select(Donation).where(Donation.id == donation_id)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    async def get_donation_by_id_for_update(self, donation_id: uuid.UUID) -> Donation | None:
+        bind = self._session.get_bind()
+        stmt = select(Donation).where(Donation.id == donation_id)
+        if bind and bind.dialect.name != "sqlite":
+            stmt = stmt.with_for_update(of=Donation)
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
     async def is_donation_reconciled(self, donation_id: uuid.UUID) -> bool:
         stmt = select(func.count(FinancialTransaction.id)).where(
             FinancialTransaction.donation_id == donation_id,

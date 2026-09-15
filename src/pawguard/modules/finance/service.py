@@ -83,7 +83,7 @@ class FinanceService:
             current_balance=payload.opening_balance,
         )
         await self._repo.create_account(account)
-        if self._audit and actor_id:
+        if self._audit:
             await self._audit.record(
                 event_type=AuthAuditEventType.FINANCE_ACCOUNT_CREATED,
                 actor_id=actor_id,
@@ -118,7 +118,7 @@ class FinanceService:
             setattr(account, key, value)
         await self._repo._session.flush()
         await self._repo._session.refresh(account)
-        if self._audit and actor_id:
+        if self._audit:
             await self._audit.record(
                 event_type=AuthAuditEventType.FINANCE_ACCOUNT_UPDATED,
                 actor_id=actor_id,
@@ -196,7 +196,7 @@ class FinanceService:
             description=payload.description,
         )
         await self._repo.create_ledger_entry(entry2)
-        if self._audit and actor_id:
+        if self._audit:
             await self._audit.record(
                 event_type=AuthAuditEventType.FINANCE_TRANSACTION_CREATED,
                 actor_id=actor_id,
@@ -233,7 +233,7 @@ class FinanceService:
             tx.reconciled_at = datetime.now(UTC)
         await self._repo._session.flush()
         await self._repo._session.refresh(tx)
-        if self._audit and actor_id:
+        if self._audit:
             await self._audit.record(
                 event_type=AuthAuditEventType.FINANCE_TRANSACTION_STATUS_UPDATED,
                 actor_id=actor_id,
@@ -290,7 +290,7 @@ class FinanceService:
         await self._reconcile_one_donation(
             donation, income_account=income_account, cash_account=cash_account
         )
-        if self._audit and actor_id:
+        if self._audit:
             await self._audit.record(
                 event_type=AuthAuditEventType.FINANCE_DONATIONS_RECONCILED,
                 actor_id=actor_id,
@@ -382,7 +382,7 @@ class FinanceService:
         count = len(unreconciled)
         total_amount = sum(d.amount for d in unreconciled)
 
-        if self._audit and actor_id:
+        if self._audit:
             await self._audit.record(
                 event_type=AuthAuditEventType.FINANCE_DONATIONS_RECONCILED,
                 actor_id=actor_id,
@@ -417,7 +417,7 @@ class FinanceService:
             donation, income_account=income_account, cash_account=cash_account
         )
 
-        if self._audit and actor_id:
+        if self._audit:
             await self._audit.record(
                 event_type=AuthAuditEventType.FINANCE_DONATIONS_RECONCILED,
                 actor_id=actor_id,
@@ -515,7 +515,7 @@ class FinanceService:
             raise NotFoundError("Account not found.")
         account.deleted_at = datetime.now(UTC)
         await self._repo._session.flush()
-        if self._audit and actor_id:
+        if self._audit:
             await self._audit.record(
                 event_type=AuthAuditEventType.FINANCE_ACCOUNT_DELETED,
                 actor_id=actor_id,
@@ -536,7 +536,7 @@ class FinanceService:
             raise NotFoundError("Transaction not found.")
         tx.deleted_at = datetime.now(UTC)
         await self._repo._session.flush()
-        if self._audit and actor_id:
+        if self._audit:
             await self._audit.record(
                 event_type=AuthAuditEventType.FINANCE_TRANSACTION_DELETED,
                 actor_id=actor_id,
@@ -565,7 +565,7 @@ class FinanceService:
         saved_budget = await self._repo.get_budget_by_id(budget.id)
         if not saved_budget:
             raise NotFoundError("Budget not found.")
-        if self._audit and actor_id:
+        if self._audit:
             await self._audit.record(
                 event_type=AuthAuditEventType.FINANCE_BUDGET_CREATED,
                 actor_id=actor_id,
@@ -608,7 +608,7 @@ class FinanceService:
         saved_budget = await self._repo.get_budget_by_id(budget_id)
         if not saved_budget:
             raise NotFoundError("Budget not found.")
-        if self._audit and actor_id:
+        if self._audit:
             await self._audit.record(
                 event_type=AuthAuditEventType.FINANCE_BUDGET_ITEM_ADDED,
                 actor_id=actor_id,
@@ -652,7 +652,7 @@ class FinanceService:
             raise NotFoundError("Credit account not found.")
         rtx = RecurringTransaction(**payload.model_dump())
         await self._repo.create_recurring(rtx)
-        if self._audit and actor_id:
+        if self._audit:
             await self._audit.record(
                 event_type=AuthAuditEventType.FINANCE_RECURRING_CREATED,
                 actor_id=actor_id,
@@ -757,7 +757,7 @@ class FinanceService:
             notes=payload.notes,
         )
         await self._repo.create_expense(expense)
-        if self._audit and actor_id:
+        if self._audit:
             await self._audit.record(
                 event_type=AuthAuditEventType.FINANCE_TRANSACTION_CREATED,
                 actor_id=actor_id,
@@ -800,7 +800,7 @@ class FinanceService:
             setattr(expense, key, value)
         await self._repo._session.flush()
         await self._repo._session.refresh(expense)
-        if self._audit and actor_id:
+        if self._audit:
             await self._audit.record(
                 event_type=AuthAuditEventType.FINANCE_TRANSACTION_STATUS_UPDATED,
                 actor_id=actor_id,
@@ -848,7 +848,7 @@ class FinanceService:
         expense.approved_at = datetime.now(UTC)
         await self._repo._session.flush()
         await self._repo._session.refresh(expense)
-        if self._audit and actor_id:
+        if self._audit:
             await self._audit.record(
                 event_type=AuthAuditEventType.FINANCE_TRANSACTION_STATUS_UPDATED,
                 actor_id=actor_id,
@@ -878,7 +878,7 @@ class FinanceService:
         expense.rejection_reason = reason
         await self._repo._session.flush()
         await self._repo._session.refresh(expense)
-        if self._audit and actor_id:
+        if self._audit:
             await self._audit.record(
                 event_type=AuthAuditEventType.FINANCE_TRANSACTION_STATUS_UPDATED,
                 actor_id=actor_id,
@@ -907,7 +907,7 @@ class FinanceService:
         expense.status = ExpenseStatus.SUBMITTED
         await self._repo._session.flush()
         await self._repo._session.refresh(expense)
-        if self._audit and actor_id:
+        if self._audit:
             await self._audit.record(
                 event_type=AuthAuditEventType.FINANCE_TRANSACTION_STATUS_UPDATED,
                 actor_id=actor_id,
@@ -982,7 +982,7 @@ class FinanceService:
         expense.status = ExpenseStatus.PAID
         await self._repo._session.flush()
         await self._repo._session.refresh(expense)
-        if self._audit and actor_id:
+        if self._audit:
             await self._audit.record(
                 event_type=AuthAuditEventType.FINANCE_TRANSACTION_STATUS_UPDATED,
                 actor_id=actor_id,
@@ -1012,7 +1012,7 @@ class FinanceService:
             raise ValidationFailedError("Paid expenses cannot be deleted.")
         expense.deleted_at = datetime.now(UTC)
         await self._repo._session.flush()
-        if self._audit and actor_id:
+        if self._audit:
             await self._audit.record(
                 event_type=AuthAuditEventType.FINANCE_TRANSACTION_DELETED,
                 actor_id=actor_id,
@@ -1030,7 +1030,7 @@ class FinanceService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> RefundResponse:
-        donation = await self._repo.get_donation_by_id(donation_id)
+        donation = await self._repo.get_donation_by_id_for_update(donation_id)
         if not donation:
             raise NotFoundError("Donation not found.")
         if donation.status == DonationStatus.REFUNDED:
@@ -1085,7 +1085,7 @@ class FinanceService:
                 (donation.notes or "") + f"\nPartial refund of {actual_refund} processed: {reason}"
             ).strip()
         await self._repo._session.flush()
-        if self._audit and actor_id:
+        if self._audit:
             await self._audit.record(
                 event_type=AuthAuditEventType.DONATION_REFUNDED,
                 actor_id=actor_id,
@@ -1174,7 +1174,7 @@ class FinanceService:
         except Exception:
             certificate_url = None
 
-        if self._audit and actor_id:
+        if self._audit:
             await self._audit.record(
                 event_type=AuthAuditEventType.DONATION_RECEIPT_ISSUED,
                 actor_id=actor_id,

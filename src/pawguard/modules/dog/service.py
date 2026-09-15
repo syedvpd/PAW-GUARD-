@@ -709,14 +709,18 @@ class DogService:
         # soft-deleted: list_by_ids filters deleted_at, and recording for a
         # nonexistent id would flush a dangling dog_id FK (IntegrityError 500).
         existing = await self._repo.list_by_ids(ids)
-        for dog in existing:
-            await self._record_activity(
+        logs = [
+            DogActivityLog(
                 dog_id=dog.id,
                 event_type=DogActivityEventType.BULK_STATUS_UPDATED,
                 message=f"Status updated to '{status.value}' via bulk operation.",
                 actor_id=actor_id,
-                metadata={"status": status.value},
+                metadata_json={"status": status.value},
             )
+            for dog in existing
+        ]
+        if logs:
+            await self._repo.create_activities(logs)
 
         increment_counter(
             "pawguard_dogs_status_changed_total", {"status": status.value}, value=updated
@@ -753,13 +757,17 @@ class DogService:
         count = await self._repo.bulk_soft_delete(ids)
         await self._repo._session.flush()
 
-        for dog in existing:
-            await self._record_activity(
+        delete_logs = [
+            DogActivityLog(
                 dog_id=dog.id,
                 event_type=DogActivityEventType.BULK_DELETED,
                 message="Dog soft-deleted via bulk operation.",
                 actor_id=actor_id,
             )
+            for dog in existing
+        ]
+        if delete_logs:
+            await self._repo.create_activities(delete_logs)
 
         increment_counter("pawguard_dogs_deleted_total", value=count)
         await self._invalidate_caches()

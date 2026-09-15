@@ -266,6 +266,13 @@ class DogRepository:
         await self._session.flush()
         return log
 
+    async def create_activities(self, logs: Sequence[DogActivityLog]) -> Sequence[DogActivityLog]:
+        if not logs:
+            return []
+        self._session.add_all(logs)
+        await self._session.flush()
+        return logs
+
     async def list_activity_by_dog(self, dog_id: uuid.UUID) -> Sequence[DogActivityLog]:
         stmt = (
             select(DogActivityLog)
