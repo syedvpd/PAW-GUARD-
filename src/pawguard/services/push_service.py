@@ -36,14 +36,35 @@ def _get_firebase_app() -> Any:
         from firebase_admin import credentials  # type: ignore[import-untyped]
 
         if fcm_credentials_json:
-            cred_dict = (
-                json.loads(fcm_credentials_json)
-                if isinstance(fcm_credentials_json, str)
-                else fcm_credentials_json
-            )
+            raw = fcm_credentials_json
+            if isinstance(raw, str):
+                stripped = raw.strip()
+                # Handle single-quoted or double-quoted wrapping
+                # (common mistake when pasting JSON into env-var fields).
+                if (stripped.startswith("'") and stripped.endswith("'")) or (
+                    stripped.startswith('"') and stripped.endswith('"')
+                ):
+                    stripped = stripped[1:-1]
+                cred_dict = json.loads(stripped)
+            else:
+                cred_dict = raw
             cred = credentials.Certificate(cred_dict)
         else:
-            cred = credentials.Certificate(fcm_credentials_path)
+            # The path field may also receive inline JSON via env-var aliases
+            # (e.g. FIREBASE_CREDENTIALS set to raw JSON on Render).
+            candidate = fcm_credentials_path
+            if isinstance(candidate, str):
+                stripped = candidate.strip()
+                if (stripped.startswith("'") and stripped.endswith("'")) or (
+                    stripped.startswith('"') and stripped.endswith('"')
+                ):
+                    stripped = stripped[1:-1]
+                if stripped.startswith("{"):
+                    cred = credentials.Certificate(json.loads(stripped))
+                else:
+                    cred = credentials.Certificate(stripped)
+            else:
+                cred = credentials.Certificate(candidate)
 
         _firebase_app = firebase_admin.initialize_app(cred)
         _firebase_initialized = True

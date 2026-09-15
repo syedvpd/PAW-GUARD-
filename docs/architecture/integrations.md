@@ -85,8 +85,11 @@ def _get_firebase_app() -> Any:
 
 | Variable | Purpose |
 |----------|---------|
-| `FCM_CREDENTIALS_PATH` | Path to Firebase service account JSON file |
-| `FCM_CREDENTIALS_JSON` | Raw JSON string of Firebase credentials (alternative) |
+| `FCM_CREDENTIALS_PATH` | Path to Firebase service account JSON file (canonical) |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Alias for path (GCP convention) |
+| `FIREBASE_CREDENTIALS` | Alias for path or inline JSON (Render / Heroku convention) |
+| `FCM_CREDENTIALS_JSON` | Raw JSON string of Firebase credentials (canonical) |
+| `FIREBASE_CREDENTIALS_JSON` | Alias for raw JSON string |
 
 When both are unset, push notifications silently degrade to in-app only.
 

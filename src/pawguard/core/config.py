@@ -168,8 +168,22 @@ class Settings(BaseSettings):
     # --- Firebase Cloud Messaging (FCM) ---
     # Path or raw JSON string of the Firebase service account credentials.
     # When unset, push notifications silently degrade to in-app only.
-    fcm_credentials_path: str = ""
-    fcm_credentials_json: str = ""
+    # Accepts multiple env-var names so deployments (Render, Docker, GCP, etc.)
+    # can use whichever naming convention they prefer.
+    fcm_credentials_path: str = Field(
+        default="",
+        description="Path to a Firebase service account JSON file.",
+        validation_alias=AliasChoices(
+            "FCM_CREDENTIALS_PATH",
+            "GOOGLE_APPLICATION_CREDENTIALS",
+            "FIREBASE_CREDENTIALS",
+        ),
+    )
+    fcm_credentials_json: str = Field(
+        default="",
+        description="Raw JSON string of the Firebase service account credentials.",
+        validation_alias=AliasChoices("FCM_CREDENTIALS_JSON", "FIREBASE_CREDENTIALS_JSON"),
+    )
 
     @computed_field  # type: ignore[prop-decorator]
     @property

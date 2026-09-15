@@ -50,6 +50,13 @@ def get_preference_service(db: AsyncSession = Depends(get_db)) -> NotificationPr
     return NotificationPreferenceService(NotificationPreferenceRepository(db))
 
 
+# ---------------------------------------------------------------------------
+# Static paths MUST be declared before parameterised paths ({notification_id})
+# to prevent FastAPI from matching e.g. "/fcm-status" as a UUID and returning
+# 422 Validation Error.
+# ---------------------------------------------------------------------------
+
+
 @router.get("", response_model=PaginatedResponse[NotificationResponse])
 async def list_notifications(
     current_user: CurrentUser = Depends(get_current_user),
@@ -79,29 +86,89 @@ async def unread_count(
     return ApiResponse(data=UnreadCountResponse(count=count))
 
 
-@router.get("/{notification_id}", response_model=ApiResponse[NotificationResponse])
-async def get_notification_detail(
-    notification_id: uuid.UUID,
+@router.get("/preferences", response_model=ApiResponse[NotificationPreferenceResponse])
+async def get_preferences(
     current_user: CurrentUser = Depends(get_current_user),
-    service: NotificationService = Depends(get_notification_service),
-) -> ApiResponse[NotificationResponse]:
-    from pawguard.modules.auth.rbac import is_admin_role
-
-    user_id = None if is_admin_role(current_user.claims) else current_user.id
-    notification = await service.get_notification(notification_id, user_id=user_id)
-    return ApiResponse(data=NotificationResponse.model_validate(notification))
+    service: NotificationPreferenceService = Depends(get_preference_service),
+) -> ApiResponse[NotificationPreferenceResponse]:
+    prefs = await service.get_preferences(current_user.id)
+    return ApiResponse(data=NotificationPreferenceResponse.model_validate(prefs))
 
 
-@router.put("/{notification_id}/read", response_model=ApiResponse[NotificationResponse])
-async def mark_read(
-    notification_id: uuid.UUID,
+@router.put("/preferences", response_model=ApiResponse[NotificationPreferenceResponse])
+async def update_preferences(
+    payload: NotificationPreferenceUpdate,
     current_user: CurrentUser = Depends(get_current_user),
-    service: NotificationService = Depends(get_notification_service),
-) -> ApiResponse[NotificationResponse]:
-    notification = await service.mark_read(notification_id, current_user.id)
+    service: NotificationPreferenceService = Depends(get_preference_service),
+) -> ApiResponse[NotificationPreferenceResponse]:
+    kwargs = payload.model_dump(exclude_unset=True)
+    prefs = await service.update_preferences(current_user.id, **kwargs)
     return ApiResponse(
-        data=NotificationResponse.model_validate(notification),
-        message="Notification marked as read.",
+        data=NotificationPreferenceResponse.model_validate(prefs),
+        message="Preferences updated.",
+    )
+
+
+@router.get("/fcm-status", response_model=ApiResponse[dict[str, Any]])
+async def fcm_status(
+    current_user: CurrentUser = Depends(get_current_user),
+) -> ApiResponse[dict[str, Any]]:
+    """Check FCM configuration status for the current user."""
+    from pawguard.core.config import get_settings
+    from pawguard.services.push_service import _get_firebase_app
+
+    settings = get_settings()
+    app = _get_firebase_app()
+
+    return ApiResponse(
+        data={
+            "firebase_initialized": app is not None,
+            "project_id": app.project_id if app else None,
+            "credentials_configured": bool(
+                settings.fcm_credentials_path or settings.fcm_credentials_json
+            ),
+            "user_has_token": bool(current_user.user.fcm_token),
+            "user_push_enabled": current_user.user.push_notifications_enabled,
+            "token_preview": current_user.user.fcm_token[:20] + "..."
+            if current_user.user.fcm_token
+            else None,
+        }
+    )
+
+
+@router.post("/test-push", response_model=ApiResponse[dict[str, Any]])
+async def test_push_notification(
+    current_user: CurrentUser = Depends(get_current_user),
+) -> ApiResponse[dict[str, Any]]:
+    """Send a test push notification to the current user's device.
+
+    Useful for verifying FCM configuration and token registration.
+    """
+    from pawguard.services.push_service import send_push_notification
+
+    if not current_user.user.fcm_token:
+        return ApiResponse(
+            data={"sent": False, "reason": "no_fcm_token"},
+            message="No FCM token registered. Update your profile with an fcm_token first.",
+        )
+
+    if not current_user.user.push_notifications_enabled:
+        return ApiResponse(
+            data={"sent": False, "reason": "push_disabled"},
+            message="Push notifications are disabled in your preferences.",
+        )
+
+    sent = await send_push_notification(
+        current_user.user.fcm_token,
+        title="PawGuard Test Push",
+        body="If you see this, push notifications are working!",
+        data={"action_url": "/test", "type": "test_push"},
+        user_id=current_user.id,
+    )
+
+    return ApiResponse(
+        data={"sent": sent, "token_preview": current_user.user.fcm_token[:20] + "..."},
+        message="Test push sent." if sent else "Push failed. Check FCM credentials on the server.",
     )
 
 
@@ -112,22 +179,6 @@ async def mark_all_read(
 ) -> ApiResponse[None]:
     await service.mark_all_read(current_user.id)
     return ApiResponse(message="All notifications marked as read.")
-
-
-@router.delete("/{notification_id}", response_model=ApiResponse[None])
-async def delete_notification(
-    notification_id: uuid.UUID,
-    request: Request,
-    current_user: CurrentUser = Depends(get_current_user),
-    service: NotificationService = Depends(get_notification_service),
-) -> ApiResponse[None]:
-    await service.delete_notification(
-        notification_id,
-        user_id=current_user.id,
-        actor_id=current_user.id,
-        ip_address=request.client.host if request.client else None,
-    )
-    return ApiResponse(message="Notification deleted.")
 
 
 @router.post(
@@ -204,29 +255,6 @@ async def send_notification(
         raise
 
 
-@router.get("/preferences", response_model=ApiResponse[NotificationPreferenceResponse])
-async def get_preferences(
-    current_user: CurrentUser = Depends(get_current_user),
-    service: NotificationPreferenceService = Depends(get_preference_service),
-) -> ApiResponse[NotificationPreferenceResponse]:
-    prefs = await service.get_preferences(current_user.id)
-    return ApiResponse(data=NotificationPreferenceResponse.model_validate(prefs))
-
-
-@router.put("/preferences", response_model=ApiResponse[NotificationPreferenceResponse])
-async def update_preferences(
-    payload: NotificationPreferenceUpdate,
-    current_user: CurrentUser = Depends(get_current_user),
-    service: NotificationPreferenceService = Depends(get_preference_service),
-) -> ApiResponse[NotificationPreferenceResponse]:
-    kwargs = payload.model_dump(exclude_unset=True)
-    prefs = await service.update_preferences(current_user.id, **kwargs)
-    return ApiResponse(
-        data=NotificationPreferenceResponse.model_validate(prefs),
-        message="Preferences updated.",
-    )
-
-
 @router.post(
     "/broadcast",
     response_model=ApiResponse[list[NotificationResponse]],
@@ -252,64 +280,48 @@ async def broadcast_notification(
     )
 
 
-@router.post("/test-push", response_model=ApiResponse[dict[str, Any]])
-async def test_push_notification(
+# ---------------------------------------------------------------------------
+# Parameterised paths — declared AFTER all static paths to avoid shadowing.
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{notification_id}", response_model=ApiResponse[NotificationResponse])
+async def get_notification_detail(
+    notification_id: uuid.UUID,
     current_user: CurrentUser = Depends(get_current_user),
-) -> ApiResponse[dict[str, Any]]:
-    """Send a test push notification to the current user's device.
+    service: NotificationService = Depends(get_notification_service),
+) -> ApiResponse[NotificationResponse]:
+    from pawguard.modules.auth.rbac import is_admin_role
 
-    Useful for verifying FCM configuration and token registration.
-    """
-    from pawguard.services.push_service import send_push_notification
+    user_id = None if is_admin_role(current_user.claims) else current_user.id
+    notification = await service.get_notification(notification_id, user_id=user_id)
+    return ApiResponse(data=NotificationResponse.model_validate(notification))
 
-    if not current_user.user.fcm_token:
-        return ApiResponse(
-            data={"sent": False, "reason": "no_fcm_token"},
-            message="No FCM token registered. Update your profile with an fcm_token first.",
-        )
 
-    if not current_user.user.push_notifications_enabled:
-        return ApiResponse(
-            data={"sent": False, "reason": "push_disabled"},
-            message="Push notifications are disabled in your preferences.",
-        )
+@router.put("/{notification_id}/read", response_model=ApiResponse[NotificationResponse])
+async def mark_read(
+    notification_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: NotificationService = Depends(get_notification_service),
+) -> ApiResponse[NotificationResponse]:
+    notification = await service.mark_read(notification_id, current_user.id)
+    return ApiResponse(
+        data=NotificationResponse.model_validate(notification),
+        message="Notification marked as read.",
+    )
 
-    sent = await send_push_notification(
-        current_user.user.fcm_token,
-        title="PawGuard Test Push",
-        body="If you see this, push notifications are working!",
-        data={"action_url": "/test", "type": "test_push"},
+
+@router.delete("/{notification_id}", response_model=ApiResponse[None])
+async def delete_notification(
+    notification_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: NotificationService = Depends(get_notification_service),
+) -> ApiResponse[None]:
+    await service.delete_notification(
+        notification_id,
         user_id=current_user.id,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
     )
-
-    return ApiResponse(
-        data={"sent": sent, "token_preview": current_user.user.fcm_token[:20] + "..."},
-        message="Test push sent." if sent else "Push failed. Check FCM credentials on the server.",
-    )
-
-
-@router.get("/fcm-status", response_model=ApiResponse[dict[str, Any]])
-async def fcm_status(
-    current_user: CurrentUser = Depends(get_current_user),
-) -> ApiResponse[dict[str, Any]]:
-    """Check FCM configuration status for the current user."""
-    from pawguard.core.config import get_settings
-    from pawguard.services.push_service import _get_firebase_app
-
-    settings = get_settings()
-    app = _get_firebase_app()
-
-    return ApiResponse(
-        data={
-            "firebase_initialized": app is not None,
-            "project_id": app.project_id if app else None,
-            "credentials_configured": bool(
-                settings.fcm_credentials_path or settings.fcm_credentials_json
-            ),
-            "user_has_token": bool(current_user.user.fcm_token),
-            "user_push_enabled": current_user.user.push_notifications_enabled,
-            "token_preview": current_user.user.fcm_token[:20] + "..."
-            if current_user.user.fcm_token
-            else None,
-        }
-    )
+    return ApiResponse(message="Notification deleted.")

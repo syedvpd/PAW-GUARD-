@@ -130,3 +130,20 @@ class TestNotificationAPI:
         data = resp.json()["data"]
         assert data["enable_sms"] is True
         assert data["enable_push"] is False
+
+    async def test_fcm_status_endpoint(self, client: AsyncClient, db_session: AsyncSession) -> None:
+        """Regression: /fcm-status must not be shadowed by /{notification_id} (BUG-14)."""
+        headers = await self._auth(client, db_session)
+        resp = await client.get("/api/v1/notifications/fcm-status", headers=headers)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert "firebase_initialized" in body["data"]
+
+    async def test_preferences_not_shadowed_by_notification_id(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        """Regression: /preferences must not be matched as /{notification_id} (BUG-14)."""
+        headers = await self._auth(client, db_session)
+        resp = await client.get("/api/v1/notifications/preferences", headers=headers)
+        assert resp.status_code == 200
+        assert "enable_push" in resp.json()["data"]
