@@ -108,7 +108,16 @@ async def send_push_notification(
             notification=messaging.Notification(title=title, body=body),
             data=data or {},
             token=fcm_token,
-            android=messaging.AndroidConfig(priority="high"),
+            android=messaging.AndroidConfig(
+                priority="high",
+                notification=messaging.AndroidNotification(
+                    channel_id="pawguard_high_importance",
+                    sound="default",
+                    default_sound=True,
+                    default_vibrate_timings=True,
+                    click_action="FLUTTER_NOTIFICATION_CLICK",
+                ),
+            ),
             apns=messaging.APNSConfig(
                 payload=messaging.APNSPayload(aps=messaging.Aps(sound="default", badge=1))
             ),
@@ -196,7 +205,16 @@ async def send_push_notification_to_users(
             notification=messaging.Notification(title=title, body=body),
             data=data or {},
             tokens=tokens_only,
-            android=messaging.AndroidConfig(priority="high"),
+            android=messaging.AndroidConfig(
+                priority="high",
+                notification=messaging.AndroidNotification(
+                    channel_id="pawguard_high_importance",
+                    sound="default",
+                    default_sound=True,
+                    default_vibrate_timings=True,
+                    click_action="FLUTTER_NOTIFICATION_CLICK",
+                ),
+            ),
             apns=messaging.APNSConfig(
                 payload=messaging.APNSPayload(aps=messaging.Aps(sound="default", badge=1))
             ),
