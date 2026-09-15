@@ -178,3 +178,22 @@ curl https://your-app.onrender.com/health
 - Upgrade service plan
 - Check database query performance
 - Monitor Redis hit rate
+
+## Rollback & Emergency Recovery
+
+### Application Rollback
+1. Open Render Dashboard -> Select Web Service -> **Events**.
+2. Find the last known stable deploy commit hash and click **Rollback to this deploy**.
+3. Verify web service health status at `GET /health` (`200 OK`).
+
+### Database Migration Downgrade Procedure
+1. Access the Shell tab on the Render Web Service or connect via SSH tunnel.
+2. Run database migration downgrade targeting the prior Alembic revision:
+   ```bash
+   uv run alembic downgrade -1
+   ```
+3. To inspect current migration revision:
+   ```bash
+   uv run alembic current
+   ```
+4. Verify database health and check API logs for any unhandled schema errors.

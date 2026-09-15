@@ -8,10 +8,17 @@ from botocore.client import Config
 from pawguard.core.config import get_settings
 from pawguard.core.exceptions import AppException
 from pawguard.core.logging import get_logger
+from pawguard.core.resilience import CircuitBreaker
+from pawguard.core.upload import (
+    MAX_BATCH_SIZE_BYTES,
+    MAX_IMAGE_SIZE_BYTES,
+    MAX_VIDEO_SIZE_BYTES,
+)
 
 PRESIGNED_URL_EXPIRY_SECONDS = 900
 
 logger = get_logger(__name__)
+storage_breaker = CircuitBreaker(failure_threshold=5, recovery_timeout=30.0)
 
 
 class StorageError(AppException):
@@ -527,8 +534,8 @@ class StorageService:
                     raise ValidationFailedError(
                         f"Unsupported image type '{content_type}' for {key}."
                     )
-                if size > 52428800:
-                    raise ValidationFailedError(f"Image {key} exceeds the maximum 50MB limit.")
+                if size > MAX_IMAGE_SIZE_BYTES:
+                    raise ValidationFailedError(f"Image {key} exceeds the maximum 10MB limit.")
                 total_media_size += size
             except ValidationFailedError:
                 raise
@@ -558,8 +565,8 @@ class StorageService:
                     raise ValidationFailedError(
                         f"Unsupported video type '{content_type}' for {key}."
                     )
-                if size > 52428800:
-                    raise ValidationFailedError(f"Video {key} exceeds the maximum 50MB limit.")
+                if size > MAX_VIDEO_SIZE_BYTES:
+                    raise ValidationFailedError(f"Video {key} exceeds the maximum 30MB limit.")
                 total_media_size += size
             except ValidationFailedError:
                 raise
@@ -572,11 +579,12 @@ class StorageService:
             except Exception as e:
                 logger.warning("storage_head_failed_unexpected", object_key=key, error=str(e))
 
-        if total_media_size > 52428800:
+        if total_media_size > MAX_BATCH_SIZE_BYTES:
             raise ValidationFailedError(
-                "Combined media evidence size exceeds the maximum permitted 50MB limit."
+                "Combined media evidence size exceeds the maximum permitted 30MB batch limit."
             )
 
+    @storage_breaker
     def delete_object(self, *, object_key: str) -> None:
         import time
 

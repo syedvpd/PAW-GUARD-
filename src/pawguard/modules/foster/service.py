@@ -1,6 +1,7 @@
 """FosterService: owns foster applications, home availability, and placements (RULE-003)."""
 
 import asyncio
+import contextlib
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -1049,6 +1050,13 @@ class FosterService:
             await self._repo._session.flush()
         except Exception as exc:
             logger.warning("Failed to generate adoption lease for %s: %s", application.id, exc)
+            with contextlib.suppress(Exception):
+                await self._send_push(
+                    [application.adopter_id],
+                    title="Adoption Agreement Pending",
+                    body=f"Your adoption lease PDF generation encountered a delay. Staff has been alerted for Application #{application.id}.",
+                    action_url=f"/adoptions/{application.id}",
+                )
 
     async def request_vet_check(
         self,

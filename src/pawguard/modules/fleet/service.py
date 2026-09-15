@@ -221,6 +221,23 @@ class FleetService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> int:
+        if not ids:
+            return 0
+        vehicles = await self._repo.list_vehicles_by_ids(ids)
+        if not vehicles:
+            raise NotFoundError("No vehicles found for the provided IDs.")
+
+        # State machine transition rules: OUT_OF_SERVICE vehicles must enter IN_MAINTENANCE before ACTIVE
+        if status == VehicleStatus.ACTIVE:
+            invalid = [
+                v.license_plate for v in vehicles if v.status == VehicleStatus.OUT_OF_SERVICE
+            ]
+            if invalid:
+                raise ConflictError(
+                    f"Cannot transition vehicle(s) {', '.join(invalid)} directly from "
+                    "out_of_service to active without passing through in_maintenance."
+                )
+
         count = await self._repo.bulk_update_vehicle_status(ids, status)
         if self._audit and actor_id:
             await self._audit.record(

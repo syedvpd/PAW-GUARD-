@@ -228,8 +228,16 @@ async def engine() -> AsyncGenerator[AsyncEngine]:
             )
             async with eng.connect() as conn:
                 await conn.execute(text("SELECT 1"))
-        except Exception:
-            # Fallback to local SQLite for isolated test execution
+        except Exception as exc:
+            import os
+
+            is_ci = os.environ.get("CI") == "true" or os.environ.get("GITHUB_ACTIONS") == "true"
+            if is_ci:
+                raise RuntimeError(
+                    f"PostgreSQL service is unreachable in CI environment ({test_url}): {exc}. "
+                    "Silent fallback to SQLite is prohibited in CI to ensure concurrency tests execute against PostgreSQL."
+                ) from exc
+            # Fallback to local SQLite for isolated developer test execution
             test_url = "sqlite+aiosqlite:///./test_unit.db"
             is_sqlite = True
             eng = create_async_engine(

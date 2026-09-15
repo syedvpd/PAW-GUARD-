@@ -1572,6 +1572,7 @@ class RescueService:
         now: datetime,
         actor_id: uuid.UUID | None,
         ip_address: str | None,
+        flush: bool = True,
     ) -> None:
         """Auto-create the internal Dog Profile when a rescue is ADMITTED
         (PRR 3.2). Shared by the single-request admit path and the bulk path
@@ -1590,7 +1591,7 @@ class RescueService:
             status=DogStatus.RESCUED,
             is_adoptable=False,
         )
-        await self._dog_repo.create(dog)
+        await self._dog_repo.create(dog, flush=flush)
         await invalidate_route_cache("dog")
         # Attach the newly created profile to the in-session request so the
         # admit response can surface its id. The `dog_profile` relationship is
@@ -1827,6 +1828,9 @@ class RescueService:
             )
 
         now = datetime.now(UTC)
+        new_dispatches: list[RescueDispatch] = []
+        new_reports: list[RescueReport] = []
+
         for request in requests:
             request.status = status
 
@@ -1836,9 +1840,9 @@ class RescueService:
             elif status == RescueStatus.DISPATCHED:
                 existing = request.dispatch
                 if existing is None:
-                    await self._repo.create_dispatch(
-                        RescueDispatch(rescue_request_id=request.id, dispatched_at=now)
-                    )
+                    disp = RescueDispatch(rescue_request_id=request.id, dispatched_at=now)
+                    new_dispatches.append(disp)
+                    request.dispatch = disp
             elif status in (RescueStatus.LOCATED, RescueStatus.RESCUED, RescueStatus.ADMITTED):
                 dispatch = request.dispatch
                 if dispatch is None:
@@ -1852,11 +1856,16 @@ class RescueService:
                 elif status == RescueStatus.ADMITTED:
                     dispatch.admitted_at = now
                     report = RescueReport(rescue_request_id=request.id, agent_id=actor_id)
-                    await self._repo.create_report(report)
+                    new_reports.append(report)
                     request.reports.append(report)
                     await self._create_dog_profile_for_admitted(
-                        request, now=now, actor_id=actor_id, ip_address=ip_address
+                        request, now=now, actor_id=actor_id, ip_address=ip_address, flush=False
                     )
+
+        if new_dispatches:
+            self._repo._session.add_all(new_dispatches)
+        if new_reports:
+            self._repo._session.add_all(new_reports)
 
         await self._repo._session.flush()
 

@@ -404,7 +404,21 @@ class RescueRepository:
         await self._session.delete(dispatch)
         await self._session.flush()
 
+    async def create_dispatches(self, dispatches: list[RescueDispatch]) -> list[RescueDispatch]:
+        if not dispatches:
+            return []
+        self._session.add_all(dispatches)
+        await self._session.flush()
+        return dispatches
+
     async def create_report(self, report: RescueReport) -> RescueReport:
         self._session.add(report)
         await self._session.flush()
         return report
+
+    async def create_reports(self, reports: list[RescueReport]) -> list[RescueReport]:
+        if not reports:
+            return []
+        self._session.add_all(reports)
+        await self._session.flush()
+        return reports

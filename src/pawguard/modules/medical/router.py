@@ -4,7 +4,7 @@ Routers only validate and call services.
 """
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request, status
@@ -32,6 +32,7 @@ from pawguard.modules.auth.rbac import require_permission, require_role
 from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.inventory.repository import InventoryRepository
 from pawguard.modules.inventory.service import InventoryService
+from pawguard.modules.medical.models import MedicalClearance
 from pawguard.modules.medical.repository import MedicalRepository
 from pawguard.modules.medical.schemas import (
     ClinicalExamCreate,
@@ -754,6 +755,18 @@ async def issue_health_clearance_cert(
         issue_date=payload.clearance_date or datetime.now().strftime("%Y-%m-%d"),
         status="ACTIVE",
     )
+    if payload.dog_id:
+        clearance_record = MedicalClearance(
+            dog_id=payload.dog_id,
+            authorized_by_id=current_user.id,
+            clearance_type=item.clearance_purpose or "Health Clearance Certificate",
+            status="approved",
+            decision_notes=f"Certificate {cert_id} issued by {item.authorized_by}",
+            authorized_at=datetime.now(UTC),
+        )
+        db.add(clearance_record)
+        await db.flush()
+
     if audit:
         await audit.record(
             event_type=AuthAuditEventType.MEDICAL_RECORD_UPDATED,
@@ -809,6 +822,18 @@ async def generate_adoption_cert(
         issue_date=payload.adoption_date or datetime.now().strftime("%Y-%m-%d"),
         status="ACTIVE",
     )
+    if payload.dog_id:
+        clearance_record = MedicalClearance(
+            dog_id=payload.dog_id,
+            authorized_by_id=current_user.id,
+            clearance_type="Adoption Certificate",
+            status="approved",
+            decision_notes=f"Adoption Certificate {cert_id} issued for {recipient}",
+            authorized_at=datetime.now(UTC),
+        )
+        db.add(clearance_record)
+        await db.flush()
+
     if audit:
         await audit.record(
             event_type=AuthAuditEventType.ADOPTION_APPLICATION_SUBMITTED,

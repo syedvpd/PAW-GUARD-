@@ -38,10 +38,11 @@ class DogRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def create(self, dog: DogProfile) -> DogProfile:
+    async def create(self, dog: DogProfile, flush: bool = True) -> DogProfile:
         self._session.add(dog)
-        await self._session.flush()
-        await self._session.refresh(dog)
+        if flush:
+            await self._session.flush()
+            await self._session.refresh(dog)
         return dog
 
     async def get_by_id(self, dog_id: uuid.UUID) -> DogProfile | None:
