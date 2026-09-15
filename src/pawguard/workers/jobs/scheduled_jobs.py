@@ -675,9 +675,6 @@ def _extract_rescue_id_from_action_url(url: str) -> uuid.UUID | None:
         return None
 
 
-
-
-
 async def send_post_rescue_feedback_surveys(ctx: dict[str, object]) -> None:
     """Send automated post-service feedback survey notifications to rescue reporters.
 
