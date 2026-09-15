@@ -690,12 +690,15 @@ class TestFleetFuelLogs:
             await service.log_fuel(uuid.uuid4(), payload)
 
     @pytest.mark.asyncio
-    async def test_bulk_update_vehicle_status_illegal_transition_raises_conflict(self, service, mock_repo):
+    async def test_bulk_update_vehicle_status_illegal_transition_raises_conflict(
+        self, service, mock_repo
+    ):
         """Transition OUT_OF_SERVICE directly to ACTIVE without IN_MAINTENANCE raises ConflictError."""
         v_id = uuid.uuid4()
-        vehicle = _make_vehicle(id=v_id, license_plate="KAA-001A", status=VehicleStatus.OUT_OF_SERVICE)
+        vehicle = _make_vehicle(
+            id=v_id, license_plate="KAA-001A", status=VehicleStatus.OUT_OF_SERVICE
+        )
         mock_repo.list_vehicles_by_ids.return_value = [vehicle]
 
         with pytest.raises(ConflictError, match="out_of_service to active"):
             await service.bulk_update_status([v_id], VehicleStatus.ACTIVE)
-

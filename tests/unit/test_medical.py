@@ -879,7 +879,9 @@ class TestMedicalPrr35:
         assert result[0].status == "approved"
 
     @pytest.mark.asyncio
-    async def test_certificate_persistence_issue_and_list_clearances(self, service, mock_repo, mock_dog_repo):
+    async def test_certificate_persistence_issue_and_list_clearances(
+        self, service, mock_repo, mock_dog_repo
+    ):
         """POST certificate issues clearance -> GET clearances lists just-issued certificate."""
         dog_id = uuid.uuid4()
         vet_id = uuid.uuid4()
@@ -890,7 +892,7 @@ class TestMedicalPrr35:
         payload = MedicalClearanceCreate(
             clearance_type="adoption_surgery",
             status="approved",
-            decision_notes="Healthy and cleared for adoption."
+            decision_notes="Healthy and cleared for adoption.",
         )
         issued_success = await service.authorize_adoption_clearance(
             dog_id,
@@ -913,4 +915,3 @@ class TestMedicalPrr35:
         assert clearances[0].dog_id == dog_id
         assert clearances[0].status == "approved"
         assert clearances[0].decision_notes == "Healthy and cleared for adoption."
-
