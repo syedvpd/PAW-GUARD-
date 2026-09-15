@@ -158,7 +158,7 @@ async def test_push_notification(
             message="Push notifications are disabled in your preferences.",
         )
 
-    sent = await send_push_notification(
+    sent, error = await send_push_notification(
         current_user.user.fcm_token,
         title="PawGuard Test Push",
         body="If you see this, push notifications are working!",
@@ -166,9 +166,19 @@ async def test_push_notification(
         user_id=current_user.id,
     )
 
+    if sent:
+        return ApiResponse(
+            data={"sent": True, "token_preview": current_user.user.fcm_token[:20] + "..."},
+            message="Test push sent.",
+        )
+
     return ApiResponse(
-        data={"sent": sent, "token_preview": current_user.user.fcm_token[:20] + "..."},
-        message="Test push sent." if sent else "Push failed. Check FCM credentials on the server.",
+        data={
+            "sent": False,
+            "error": error,
+            "token_preview": current_user.user.fcm_token[:20] + "...",
+        },
+        message=f"Push failed: {error}",
     )
 
 

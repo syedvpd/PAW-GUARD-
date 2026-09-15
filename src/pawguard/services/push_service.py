@@ -83,16 +83,16 @@ async def send_push_notification(
     body: str,
     data: dict[str, str] | None = None,
     user_id: uuid.UUID | None = None,
-) -> bool:
+) -> tuple[bool, str | None]:
     """Send a push notification to a single device via FCM.
 
-    Returns True if the message was accepted by FCM, False otherwise.
+    Returns (True, None) on success, (False, error_reason) otherwise.
     Never raises - push delivery failures must not block the notification
     pipeline (in-app + email).
     """
     app = _get_firebase_app()
     if app is None:
-        return False
+        return False, "fcm_not_initialized"
 
     import time
 
@@ -133,7 +133,7 @@ async def send_push_notification(
             message_id=response,
             user_id=str(user_id) if user_id else None,
         )
-        return True
+        return True, None
     except Exception as exc:
         duration_ms = (time.perf_counter() - start) * 1000
         track_outbound_request(
@@ -144,12 +144,15 @@ async def send_push_notification(
             duration_ms=duration_ms,
             status="failed",
         )
+        error_type = type(exc).__name__
+        error_msg = str(exc)
         logger.warning(
             "push_send_failed",
-            error=str(exc),
+            error=error_msg,
+            error_type=error_type,
             user_id=str(user_id) if user_id else None,
         )
-        return False
+        return False, f"{error_type}: {error_msg}"
 
 
 async def send_push_notification_to_users(
