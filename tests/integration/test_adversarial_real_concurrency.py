@@ -391,3 +391,104 @@ async def test_report_bola_real_http_endpoints(
     assert status_admin.status_code == 200, (
         f"Expected 200 for Admin status, got {status_admin.status_code}"
     )
+
+
+@pytest.mark.asyncio
+async def test_report_job_http_end_to_end_lifecycle(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Item 1: End-to-end HTTP test exercising POST /reports/jobs -> background execution -> GET status -> GET download."""
+    email = f"e2e_tester_{uuid.uuid4().hex[:8]}@example.com"
+    headers = await register_and_auth(client, db_session, email=email, role="super_admin")
+
+    # 1. POST /reports/jobs
+    create_res = await client.post(
+        "/api/v1/reports/jobs",
+        json={"report_type": "adoption", "format": "pdf"},
+        headers=headers,
+    )
+    assert create_res.status_code == 202, f"Creation failed: {create_res.text}"
+    job_id = create_res.json()["data"]["job_id"]
+
+    # 2. Poll GET /reports/jobs/{job_id} until completed or timeout
+    for _ in range(20):
+        status_res = await client.get(f"/api/v1/reports/jobs/{job_id}", headers=headers)
+        assert status_res.status_code == 200
+        st = status_res.json()["data"]["status"]
+        if st == "done":
+            break
+        await asyncio.sleep(0.5)
+
+    final_status_res = await client.get(f"/api/v1/reports/jobs/{job_id}", headers=headers)
+    assert final_status_res.status_code == 200
+    assert final_status_res.json()["data"]["status"] == "done"
+
+    # 3. GET /reports/jobs/{job_id}/download
+    download_res = await client.get(f"/api/v1/reports/jobs/{job_id}/download", headers=headers)
+    assert download_res.status_code in (200, 307), f"Download failed: {download_res.status_code}"
+
+
+@pytest.mark.asyncio
+async def test_report_job_path_traversal_attacks(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Item 2: Adversarial path traversal and invalid job ID attacks against report download endpoints."""
+    email = f"traversal_tester_{uuid.uuid4().hex[:8]}@example.com"
+    headers = await register_and_auth(client, db_session, email=email, role="super_admin")
+
+    # 1. Malformed non-UUID job ID
+    bad_id_res = await client.get("/api/v1/reports/jobs/invalid-uuid-123/download", headers=headers)
+    assert bad_id_res.status_code in (400, 422, 404)
+
+    # 2. Non-existent random UUID
+    missing_id_res = await client.get(
+        f"/api/v1/reports/jobs/{uuid.uuid4()}/download", headers=headers
+    )
+    assert missing_id_res.status_code == 404
+
+    # 3. Encoded path traversal string in URL
+    traversal_res = await client.get(
+        "/api/v1/reports/jobs/..%2F..%2Fetc%2Fpasswd/download", headers=headers
+    )
+    assert traversal_res.status_code in (400, 404, 422)
+
+
+@pytest.mark.asyncio
+async def test_report_concurrency_50_workers(engine) -> None:
+    """Item 9: 50 concurrent workers against a single ReportJob row in real PostgreSQL."""
+    async_session = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+
+    job_id = uuid.uuid4()
+    async with async_session() as setup_session:
+        user = User(
+            id=uuid.uuid4(),
+            email=f"w50_tester_{uuid.uuid4().hex[:8]}@example.com",
+            hashed_password="hash",
+            full_name="50 Worker Tester",
+            is_active=True,
+            is_verified=True,
+        )
+        setup_session.add(user)
+        job = ReportJob(
+            id=job_id,
+            report_type="inventory",
+            format="csv",
+            status=JobStatus.PENDING.value,
+            requester_id=user.id,
+            created_at=datetime.now(UTC),
+        )
+        setup_session.add(job)
+        await setup_session.commit()
+
+    async def worker_task(w_idx: int):
+        async with async_session() as session:
+            return await execute_report_job(job_id, session)
+
+    tasks = [worker_task(i) for i in range(50)]
+    results = await asyncio.gather(*tasks)
+
+    assert len(results) == 50
+    async with async_session() as verify_session:
+        stmt = select(ReportJob).where(ReportJob.id == job_id)
+        final_job = (await verify_session.execute(stmt)).scalar_one()
+        assert final_job.status == JobStatus.DONE.value

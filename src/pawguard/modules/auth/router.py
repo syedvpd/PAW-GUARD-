@@ -14,7 +14,7 @@ from pawguard.core.constants import (
     REFRESH_TOKEN_COOKIE_NAME,
     ClientType,
 )
-from pawguard.core.exceptions import NotFoundError
+from pawguard.core.exceptions import ForbiddenError, NotFoundError
 from pawguard.core.rate_limiter import rate_limit, resolve_client_ip
 from pawguard.core.responses import ApiResponse
 from pawguard.db.session import get_db
@@ -782,8 +782,14 @@ async def unlink_oauth_account(
 )
 async def reconcile_accounts_endpoint(
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> ApiResponse[dict[str, Any]]:
     from scripts.seed.seed_roles_and_permissions import reconcile_standard_accounts
+
+    from pawguard.modules.auth.rbac import is_admin_role
+
+    if not is_admin_role(current_user.claims):
+        raise ForbiddenError("Only administrators can reconcile standard accounts.")
 
     res = await reconcile_standard_accounts(db, verbose=False)
     await db.commit()

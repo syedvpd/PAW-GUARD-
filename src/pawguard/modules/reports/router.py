@@ -4,10 +4,11 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from pawguard.core.exceptions import (
     ForbiddenError,
@@ -35,6 +36,8 @@ from pawguard.modules.reports.service import ReportService
 from pawguard.services.audit_service import AuditService
 from pawguard.workers.pool import get_arq_pool
 
+logger = structlog.get_logger(__name__)
+
 router = APIRouter(prefix="/reports", tags=["reports"])
 
 
@@ -58,16 +61,38 @@ def get_report_service(
     return ReportService(db)
 
 
-async def _run_report_job_background(job_id: uuid.UUID) -> None:
-    """Background task runner for report jobs using a fresh dedicated AsyncSession."""
-    async with AsyncSessionLocal() as session:
+async def _run_report_job_background(
+    job_id: uuid.UUID,
+    session_factory: async_sessionmaker[AsyncSession] | None = None,
+) -> None:
+    """Background task runner for report jobs using a dedicated AsyncSession."""
+    factory = session_factory or AsyncSessionLocal
+    async with factory() as session:
         try:
             await execute_report_job(job_id, session)
             if session.in_transaction():
                 await session.commit()
-        except Exception:
-            if session.in_transaction():
-                await session.rollback()
+            return
+        except Exception as exc:
+            logger.warning(
+                "background_report_job_primary_session_failed_retrying",
+                job_id=str(job_id),
+                error=str(exc),
+            )
+
+    # Retry on a fresh session connection in case the pooled connection was stale/closed
+    try:
+        async with factory() as retry_session:
+            await execute_report_job(job_id, retry_session)
+            if retry_session.in_transaction():
+                await retry_session.commit()
+    except Exception as exc_retry:
+        logger.error(
+            "background_report_job_failed_persistently",
+            job_id=str(job_id),
+            error=str(exc_retry),
+            exc_info=True,
+        )
 
 
 @router.get(

@@ -1,6 +1,7 @@
 """FastAPI application factory: lifespan, middleware, exception handlers, health checks."""
 
 import contextlib
+import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -193,8 +194,11 @@ async def _seed_roles() -> None:
         # screen shows an empty state. Grant the lowest-privilege public role.
         await backfill_default_role(session, verbose=False)
         # Reconcile and guarantee all 15 operational & standard role accounts exist
-        # with the standard password PawGuard@2026.
-        await reconcile_standard_accounts(session, verbose=False)
+        # with the standard password PawGuard@2026. This is gated behind the
+        # ALLOW_ACCOUNT_RECONCILIATION env flag so it does not auto-run in
+        # production; it is intended only for explicit test/dev seeding.
+        if os.environ.get("ALLOW_ACCOUNT_RECONCILIATION") == "1":
+            await reconcile_standard_accounts(session, verbose=False)
         await session.commit()
 
 
