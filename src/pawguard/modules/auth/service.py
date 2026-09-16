@@ -415,13 +415,12 @@ class AuthService:
     async def logout_all(
         self, *, user_id: uuid.UUID, current_session_id: uuid.UUID | None, ctx: RequestContext
     ) -> None:
-        sessions = await self._sessions.list_active_for_user(user_id)
         await self._sessions.revoke_all_for_user(
             user_id, reason="user_logout_all", except_session_id=current_session_id
         )
-        for s in sessions:
-            if s.id != current_session_id:
-                await self._refresh_tokens.revoke_all_for_session(s.id, reason="user_logout_all")
+        await self._refresh_tokens.revoke_all_for_user(
+            user_id, reason="user_logout_all", except_session_id=current_session_id
+        )
         await self._audit.record(
             event_type=AuthAuditEventType.LOGOUT_ALL,
             actor_id=user_id,

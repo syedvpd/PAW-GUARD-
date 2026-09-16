@@ -160,7 +160,9 @@ async def delete_role(
     response_model=ApiResponse[list[PermissionResponse]],
     dependencies=[Depends(require_permission("system:admin"))],
 )
+@cache_response(ttl_seconds=300, namespace="admin")
 async def list_permissions(
+    request: Request,
     service: AdminService = Depends(_get_admin_service),
 ) -> ApiResponse[list[PermissionResponse]]:
     perms = await service.list_permissions()

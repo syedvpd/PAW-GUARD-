@@ -231,8 +231,12 @@ class RefreshTokenRepository:
         )
         await self._session.execute(stmt)
 
-    async def revoke_all_for_user(self, user_id: uuid.UUID, *, reason: str) -> None:
+    async def revoke_all_for_user(
+        self, user_id: uuid.UUID, *, reason: str, except_session_id: uuid.UUID | None = None
+    ) -> None:
         user_session_ids = select(UserSession.id).where(UserSession.user_id == user_id)
+        if except_session_id is not None:
+            user_session_ids = user_session_ids.where(UserSession.id != except_session_id)
         stmt = (
             update(RefreshToken)
             .where(RefreshToken.session_id.in_(user_session_ids), RefreshToken.revoked_at.is_(None))

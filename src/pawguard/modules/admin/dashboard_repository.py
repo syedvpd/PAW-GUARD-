@@ -449,83 +449,117 @@ class DashboardRepository:
         }
 
     async def get_summary(self) -> dict[str, Any]:
+        """Single-query aggregate for admin summary dashboard metrics (RULE-002, RULE-003)."""
+        import json
+
         stmt = text("""
             SELECT
+                -- users
                 (SELECT COUNT(*) FROM users WHERE deleted_at IS NULL) AS total_users,
                 (SELECT COUNT(*) FROM users WHERE is_active = true AND deleted_at IS NULL) AS active_users,
                 (SELECT COUNT(*) FROM users WHERE is_verified = true AND deleted_at IS NULL) AS verified_users,
+                -- dogs
                 (SELECT COUNT(*) FROM dog_profiles WHERE deleted_at IS NULL) AS total_dogs,
                 (SELECT COUNT(*) FROM dog_profiles WHERE is_adoptable = true AND deleted_at IS NULL) AS adoptable_dogs,
+                (SELECT COALESCE(json_object_agg(status, cnt), '{}'::json) FROM (SELECT status, COUNT(*) AS cnt FROM dog_profiles WHERE deleted_at IS NULL GROUP BY status) s) AS dogs_by_status,
+                -- rescues
                 (SELECT COUNT(*) FROM rescue_requests WHERE deleted_at IS NULL) AS total_rescues,
-                (SELECT COUNT(*) FROM adoption_applications WHERE status = 'submitted') AS pending_adoptions,
-                (SELECT COUNT(*) FROM volunteer_profiles) AS total_volunteers,
+                (SELECT COALESCE(json_object_agg(status, cnt), '{}'::json) FROM (SELECT status, COUNT(*) AS cnt FROM rescue_requests WHERE deleted_at IS NULL GROUP BY status) s) AS rescues_by_status,
+                -- adoptions
+                (SELECT COUNT(*) FROM adoption_applications WHERE status = 'submitted' AND deleted_at IS NULL) AS pending_adoptions,
+                (SELECT COALESCE(json_object_agg(status, cnt), '{}'::json) FROM (SELECT status, COUNT(*) AS cnt FROM adoption_applications WHERE deleted_at IS NULL GROUP BY status) s) AS adoptions_by_status,
+                COALESCE(ROUND(100.0 * (SELECT COUNT(*) FROM dog_profiles WHERE status = 'adopted' AND deleted_at IS NULL) / NULLIF((SELECT COUNT(*) FROM dog_profiles WHERE deleted_at IS NULL), 0), 1), 0.0) AS adoption_rate_pct,
+                -- donations
+                (SELECT COUNT(*) FROM donations) AS total_donations,
+                (SELECT COALESCE(SUM(amount), 0) FROM donations WHERE status = 'success') AS total_raised,
+                -- shelters
+                (SELECT COALESCE(SUM(total_capacity), 0) FROM shelter_facilities) AS shelter_capacity,
+                (SELECT COUNT(*) FROM dog_profiles WHERE status IN ('shelter', 'clinic') AND deleted_at IS NULL) AS dogs_in_shelter,
+                -- volunteers
+                (SELECT COUNT(*) FROM volunteer_profiles WHERE deleted_at IS NULL) AS total_volunteers,
+                (SELECT COALESCE(json_object_agg(status, cnt), '{}'::json) FROM (SELECT status, COUNT(*) AS cnt FROM volunteer_profiles WHERE deleted_at IS NULL GROUP BY status) s) AS volunteers_by_status,
+                (SELECT COALESCE(SUM(hours_logged), 0) FROM shift_attendances) AS volunteer_hours,
+                -- grievances
                 (SELECT COUNT(*) FROM grievance_tickets WHERE status != 'resolved' AND deleted_at IS NULL) AS open_grievances,
+                (SELECT COALESCE(json_object_agg(status, cnt), '{}'::json) FROM (SELECT status, COUNT(*) AS cnt FROM grievance_tickets WHERE deleted_at IS NULL GROUP BY status) s) AS grievances_by_status,
+                -- lost / found
+                (SELECT COUNT(*) FROM lost_reports WHERE status = 'active' AND deleted_at IS NULL) AS active_lost,
+                (SELECT COUNT(*) FROM found_reports WHERE status = 'active' AND deleted_at IS NULL) AS active_found,
+                -- notifications
                 (SELECT COUNT(*) FROM notifications WHERE is_read = false) AS unread_notifications,
-                (SELECT COUNT(*) FROM notifications) AS total_notifications
+                (SELECT COUNT(*) FROM notifications) AS total_notifications,
+                -- fosters
+                (SELECT COUNT(*) FROM foster_profiles WHERE deleted_at IS NULL) AS total_fosters,
+                (SELECT COUNT(*) FROM foster_profiles WHERE is_available = true AND deleted_at IS NULL) AS available_fosters,
+                (SELECT COUNT(*) FROM foster_placements WHERE is_active = true) AS active_placements
         """)
-        row = (await self._session.execute(stmt)).one()
-        (
-            total_users,
-            active_users,
-            verified_users,
-            total_dogs,
-            adoptable_dogs,
-            total_rescues,
-            pending_adoptions,
-            total_volunteers,
-            open_grievances,
-            unread_notifications,
-            total_notifications,
-        ) = row
+        row = (await self._session.execute(stmt)).mappings().one()
 
-        dogs_by_status = await self.count_dogs_by_status()
-        rescues_by_status = await self.count_rescues_by_status()
-        adoptions_by_status = await self.count_adoptions_by_status()
-        adoption_rate = await self.get_adoption_rate()
-        donations = await self.get_donation_totals()
-        shelters = await self.get_shelter_occupancy()
-        volunteers_by_status = await self.count_volunteers_by_status()
-        volunteer_hours = await self.get_volunteer_hours()
-        grievances_by_status = await self.count_grievances_by_status()
-        lost_found = await self.get_active_lost_found()
-        fosters = await self.get_foster_stats()
+        shelter_cap = row["shelter_capacity"] or 0
+        dogs_in_sh = row["dogs_in_shelter"] or 0
+        occupancy_pct = round(dogs_in_sh / shelter_cap * 100, 1) if shelter_cap else 0.0
+
+        def _to_dict(val: Any) -> dict[str, Any]:
+            if isinstance(val, dict):
+                return val
+            if isinstance(val, str):
+                try:
+                    return json.loads(val)
+                except Exception:
+                    return {}
+            return {}
+
         return {
             "users": {
-                "total_users": total_users,
-                "active_users": active_users,
-                "verified_users": verified_users,
+                "total_users": row["total_users"],
+                "active_users": row["active_users"],
+                "verified_users": row["verified_users"],
             },
             "dogs": {
-                "total_dogs": total_dogs,
-                "adoptable_dogs": adoptable_dogs,
-                "by_status": dogs_by_status,
+                "total_dogs": row["total_dogs"],
+                "adoptable_dogs": row["adoptable_dogs"],
+                "by_status": _to_dict(row["dogs_by_status"]),
             },
             "rescues": {
-                "total": total_rescues,
-                "by_status": rescues_by_status,
+                "total": row["total_rescues"],
+                "by_status": _to_dict(row["rescues_by_status"]),
             },
             "adoptions": {
-                "by_status": adoptions_by_status,
-                "adoption_rate_pct": adoption_rate,
-                "pending": pending_adoptions,
+                "by_status": _to_dict(row["adoptions_by_status"]),
+                "adoption_rate_pct": float(row["adoption_rate_pct"] or 0.0),
+                "pending": row["pending_adoptions"],
             },
-            "donations": donations,
-            "shelters": shelters,
+            "donations": {
+                "total_donations": row["total_donations"],
+                "total_raised": float(row["total_raised"] or 0.0),
+            },
+            "shelters": {
+                "capacity": shelter_cap,
+                "occupied": dogs_in_sh,
+                "occupancy_pct": occupancy_pct,
+            },
             "volunteers": {
-                "total": total_volunteers,
-                "by_status": volunteers_by_status,
-                "hours_logged": volunteer_hours,
+                "total": row["total_volunteers"],
+                "by_status": _to_dict(row["volunteers_by_status"]),
+                "hours_logged": float(row["volunteer_hours"] or 0.0),
             },
             "grievances": {
-                "open": open_grievances,
-                "by_status": grievances_by_status,
+                "open": row["open_grievances"],
+                "by_status": _to_dict(row["grievances_by_status"]),
             },
-            "lost_found": lost_found,
+            "lost_found": {
+                "active_lost": row["active_lost"],
+                "active_found": row["active_found"],
+            },
             "notifications": {
-                "unread": unread_notifications,
-                "total": total_notifications,
+                "unread": row["unread_notifications"],
+                "total": row["total_notifications"],
             },
-            "fosters": fosters,
+            "fosters": {
+                "total_fosters": row["total_fosters"],
+                "available": row["available_fosters"],
+                "active_placements": row["active_placements"],
+            },
         }
 
     async def get_kpis(self) -> dict[str, Any]:

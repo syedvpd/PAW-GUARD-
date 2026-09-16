@@ -12,6 +12,7 @@ from pawguard.core.bulk import (
     BulkStatusUpdateRequest,
     BulkStatusUpdateResponse,
 )
+from pawguard.core.cache_decorator import cache_response
 from pawguard.core.exceptions import parse_enum
 from pawguard.core.pagination import PageParams, page_params
 from pawguard.core.rate_limiter import rate_limit
@@ -70,7 +71,9 @@ async def submit_complaint(
     response_model=PaginatedResponse[GrievanceResponse],
     dependencies=[Depends(require_permission("grievance:read"))],
 )
+@cache_response(ttl_seconds=30, namespace="grievance")
 async def list_tickets(
+    request: Request,
     params: PageParams = Depends(page_params),
     status_filter: GrievanceStatus | None = Query(None, alias="status"),
     complaint_type: str | None = Query(None),
@@ -96,7 +99,9 @@ async def list_tickets(
     response_model=PaginatedResponse[ServiceFeedbackResponse],
     dependencies=[Depends(require_permission("grievance:read", "volunteer:read", "public:read"))],
 )
+@cache_response(ttl_seconds=30, namespace="grievance")
 async def list_feedback(
+    request: Request,
     params: PageParams = Depends(page_params),
     service: GrievanceService = Depends(get_grievance_service),
 ) -> PaginatedResponse[ServiceFeedbackResponse]:
@@ -119,7 +124,9 @@ async def list_feedback(
     response_model=PaginatedResponse[UserGrievanceResponse],
     include_in_schema=False,
 )
+@cache_response(ttl_seconds=30, namespace="grievance")
 async def list_my_grievances(
+    request: Request,
     params: PageParams = Depends(page_params),
     status_filter: GrievanceStatus | None = Query(None, alias="status"),
     complaint_type: str | None = Query(None),

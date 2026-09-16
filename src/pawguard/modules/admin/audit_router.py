@@ -80,15 +80,36 @@ async def export_audit_logs(
     format: str = Query("csv", description="Export format: 'csv' or 'json'"),
     event_type: str | None = Query(None),
     user_id: uuid.UUID | None = Query(None),
+    limit: int = Query(500, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),
 ):
     import csv
     import io
 
-    from fastapi.responses import StreamingResponse
+    from fastapi.responses import Response
+    from sqlalchemy import select
 
-    repo = AuthAuditLogRepository(db)
-    entries = await repo.list(skip=0, limit=1000, event_type=event_type, user_id=user_id)
+    from pawguard.modules.auth.models import AuthAuditLog, User
+
+    stmt = select(
+        AuthAuditLog.id,
+        AuthAuditLog.user_id,
+        User.email.label("user_name"),
+        User.full_name,
+        AuthAuditLog.event_type,
+        AuthAuditLog.ip_address,
+        AuthAuditLog.user_agent,
+        AuthAuditLog.event_metadata,
+        AuthAuditLog.created_at,
+    ).outerjoin(User, User.id == AuthAuditLog.user_id)
+
+    if event_type:
+        stmt = stmt.where(AuthAuditLog.event_type == event_type)
+    if user_id:
+        stmt = stmt.where(AuthAuditLog.user_id == user_id)
+    stmt = stmt.order_by(AuthAuditLog.created_at.desc()).limit(limit)
+
+    rows = (await db.execute(stmt)).all()
 
     if format.lower() == "csv":
         output = io.StringIO()
@@ -99,7 +120,6 @@ async def export_audit_logs(
                 "user_id",
                 "user_name",
                 "full_name",
-                "role",
                 "status",
                 "event_type",
                 "ip_address",
@@ -107,31 +127,64 @@ async def export_audit_logs(
                 "created_at",
             ]
         )
-        for e in entries:
-            formatted = _format_audit_entry(e)
+        for r in rows:
+            meta = r.event_metadata or {}
+            if "status" in meta:
+                status_val = str(meta["status"]).lower()
+            elif any(
+                term in r.event_type for term in ["_failed", "_rejected", "_denied", "_error"]
+            ):
+                status_val = "failed"
+            else:
+                status_val = "success"
+
             writer.writerow(
                 [
-                    formatted["id"],
-                    formatted["user_id"] or "",
-                    formatted["user_name"] or "",
-                    formatted["full_name"] or "",
-                    formatted["role"] or "",
-                    formatted["status"],
-                    formatted["event_type"],
-                    formatted["ip_address"] or "",
-                    formatted["user_agent"] or "",
-                    formatted["created_at"] or "",
+                    str(r.id),
+                    str(r.user_id) if r.user_id else "",
+                    r.user_name or "",
+                    r.full_name or "",
+                    status_val,
+                    r.event_type,
+                    r.ip_address or "",
+                    r.user_agent or "",
+                    r.created_at.isoformat() if r.created_at else "",
                 ]
             )
-        output.seek(0)
-        return StreamingResponse(
-            io.BytesIO(output.getvalue().encode("utf-8")),
+        csv_bytes = output.getvalue().encode("utf-8")
+        return Response(
+            content=csv_bytes,
             media_type="text/csv",
             headers={"Content-Disposition": "attachment; filename=audit_logs.csv"},
         )
 
+    data = []
+    for r in rows:
+        meta = r.event_metadata or {}
+        if "status" in meta:
+            status_val = str(meta["status"]).lower()
+        elif any(term in r.event_type for term in ["_failed", "_rejected", "_denied", "_error"]):
+            status_val = "failed"
+        else:
+            status_val = "success"
+        data.append(
+            {
+                "id": str(r.id),
+                "user_id": str(r.user_id) if r.user_id else None,
+                "user_name": r.user_name,
+                "username": r.user_name,
+                "email": r.user_name,
+                "full_name": r.full_name,
+                "status": status_val,
+                "event_type": r.event_type,
+                "ip_address": r.ip_address,
+                "user_agent": r.user_agent,
+                "event_metadata": r.event_metadata,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+        )
     return ApiResponse(
-        data=[_format_audit_entry(e) for e in entries],
+        data=data,
         message="Audit logs exported successfully.",
     )
 
