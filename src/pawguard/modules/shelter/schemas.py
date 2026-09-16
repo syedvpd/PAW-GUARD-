@@ -233,6 +233,42 @@ class NearbyShelterDogResponse(BaseModel):
     temperament: DogTemperament | None
     status: DogStatus
     is_adoptable: bool
+    image_urls: list[str] = Field(default_factory=list)
+    photo_gallery_urls: list[str] = Field(default_factory=list)
+    photo_url: str | None = None
+    image_url: str | None = None
+
+    @field_validator("image_urls", mode="before")
+    @classmethod
+    def _coerce_shelter_dog_images(cls, v: Any) -> list[str]:
+        if v is None:
+            return []
+        if isinstance(v, list):
+            return [str(u) for u in v if u]
+        if isinstance(v, str):
+            v_str = v.strip()
+            if v_str.startswith("[") and v_str.endswith("]"):
+                import json
+
+                try:
+                    parsed = json.loads(v_str)
+                    if isinstance(parsed, list):
+                        return [str(u) for u in parsed if u]
+                except Exception:
+                    pass
+            if v_str and v_str.lower() != "null":
+                return [v_str]
+        return []
+
+    @model_validator(mode="after")
+    def _sync_photos(self) -> "NearbyShelterDogResponse":
+        first = self.image_urls[0] if self.image_urls else None
+        self.photo_gallery_urls = self.image_urls
+        if not self.photo_url:
+            self.photo_url = first
+        if not self.image_url:
+            self.image_url = first
+        return self
 
     model_config = ConfigDict(from_attributes=True)
 

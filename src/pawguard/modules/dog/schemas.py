@@ -282,11 +282,24 @@ class DogProfileResponse(BaseModel):
     @field_validator("image_urls", mode="before")
     @classmethod
     def _coerce_image_urls(cls, v: Any) -> list[str]:
-        """ORM column may be NULL; coerce to empty list for the response."""
+        """ORM column may be NULL, a JSON string, or a list; coerce cleanly."""
         if v is None:
             return []
         if isinstance(v, list):
             return [str(u) for u in v if u]
+        if isinstance(v, str):
+            v_str = v.strip()
+            if v_str.startswith("[") and v_str.endswith("]"):
+                import json
+
+                try:
+                    parsed = json.loads(v_str)
+                    if isinstance(parsed, list):
+                        return [str(u) for u in parsed if u]
+                except Exception:
+                    pass
+            if v_str and v_str.lower() != "null":
+                return [v_str]
         return []
 
     @model_validator(mode="after")
