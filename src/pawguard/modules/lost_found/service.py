@@ -1,5 +1,4 @@
-"""LostFoundService: owns lost/found registers and reunifying cross-matching logic (RULE-003)."""
-
+import asyncio
 import contextlib
 import hashlib
 import math
@@ -84,8 +83,10 @@ class LostFoundService:
         if self._arq is None:
             from pawguard.workers.jobs.lost_found_jobs import broadcast_lost_pet_alert
 
-            await broadcast_lost_pet_alert(
-                {"job_name": "broadcast_lost_pet_alert"}, report_id=str(report_id)
+            asyncio.create_task(
+                broadcast_lost_pet_alert(
+                    {"job_name": "broadcast_lost_pet_alert"}, report_id=str(report_id)
+                )
             )
         else:
             try:
@@ -99,8 +100,10 @@ class LostFoundService:
                 logger.warning("arq_enqueue_failed_broadcasting_inline", error=str(exc))
                 from pawguard.workers.jobs.lost_found_jobs import broadcast_lost_pet_alert
 
-                await broadcast_lost_pet_alert(
-                    {"job_name": "broadcast_lost_pet_alert"}, report_id=str(report_id)
+                asyncio.create_task(
+                    broadcast_lost_pet_alert(
+                        {"job_name": "broadcast_lost_pet_alert"}, report_id=str(report_id)
+                    )
                 )
         if self._audit:
             await self._audit.record(

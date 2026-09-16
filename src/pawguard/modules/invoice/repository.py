@@ -22,18 +22,18 @@ class InvoiceRepository:
         return invoice
 
     async def get_by_id(self, invoice_id: uuid.UUID) -> Invoice | None:
-        stmt = select(Invoice).where(Invoice.id == invoice_id, Invoice.is_deleted.is_(False))
+        stmt = select(Invoice).where(Invoice.id == invoice_id, Invoice.deleted_at.is_(None))
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def get_by_invoice_number(self, invoice_number: str) -> Invoice | None:
         stmt = select(Invoice).where(
-            Invoice.invoice_number == invoice_number, Invoice.is_deleted.is_(False)
+            Invoice.invoice_number == invoice_number, Invoice.deleted_at.is_(None)
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def get_by_payment_link_id(self, link_id: str) -> Invoice | None:
         stmt = select(Invoice).where(
-            Invoice.payment_link_id == link_id, Invoice.is_deleted.is_(False)
+            Invoice.payment_link_id == link_id, Invoice.deleted_at.is_(None)
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
@@ -60,7 +60,7 @@ class InvoiceRepository:
         start_date: date | None = None,
         end_date: date | None = None,
     ) -> tuple[Sequence[Invoice], int]:
-        stmt = select(Invoice).where(Invoice.is_deleted.is_(False))
+        stmt = select(Invoice).where(Invoice.deleted_at.is_(None))
 
         if status:
             stmt = stmt.where(Invoice.status == status)
@@ -114,7 +114,7 @@ class InvoiceRepository:
             Invoice.status == InvoiceStatus.SENT,
             Invoice.due_date.is_not(None),
             Invoice.due_date < as_of_date,
-            Invoice.is_deleted.is_(False),
+            Invoice.deleted_at.is_(None),
         )
         return (await self._session.execute(stmt)).scalars().all()
 

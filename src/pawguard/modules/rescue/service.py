@@ -2161,9 +2161,15 @@ class RescueService:
 
         result = []
         for v in vehicles:
-            if v.status == VehicleStatus.OUT_OF_SERVICE:
+            status_val = v.status.value if hasattr(v.status, "value") else str(v.status)
+            v_type_val = (
+                v.vehicle_type.value
+                if v.vehicle_type is not None and hasattr(v.vehicle_type, "value")
+                else (str(v.vehicle_type) if v.vehicle_type is not None else None)
+            )
+            if status_val == VehicleStatus.OUT_OF_SERVICE.value or status_val == "out_of_service":
                 availability = "out_of_service"
-            elif v.status == VehicleStatus.IN_MAINTENANCE:
+            elif status_val == VehicleStatus.IN_MAINTENANCE.value or status_val == "in_maintenance":
                 availability = "maintenance"
             elif v.id in assigned_map:
                 availability = "assigned"
@@ -2173,8 +2179,8 @@ class RescueService:
                 {
                     "vehicle_id": v.id,
                     "license_plate": v.license_plate,
-                    "vehicle_type": v.vehicle_type.value if v.vehicle_type else None,
-                    "operational_status": v.status.value,
+                    "vehicle_type": v_type_val,
+                    "operational_status": status_val,
                     "availability": availability,
                     "active_dispatch_id": assigned_map.get(v.id),
                 }

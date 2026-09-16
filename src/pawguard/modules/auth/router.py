@@ -445,7 +445,7 @@ async def get_user_summary(
     user = await auth_service._users.get_by_id(user_id)
     if user is None:
         raise NotFoundError("User not found.")
-    roles = await auth_service._users.get_user_roles(user_id)
+    roles = user.roles or []
     primary_role = roles[0].name if roles else None
     return ApiResponse(
         data=UserSummaryResponse(
