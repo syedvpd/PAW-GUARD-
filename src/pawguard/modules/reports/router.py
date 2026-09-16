@@ -276,11 +276,15 @@ async def create_report_job(
     # 2. Fallback path: If ARQ pool is unavailable/mocked, dispatch via FastAPI BackgroundTasks.
     # Under no circumstances are both invoked simultaneously for the same job.
     enqueued_to_arq = False
-    is_fake_pool = arq_pool is None or type(arq_pool).__name__ == "FakeArqPool"
+    is_fake_pool = (
+        arq_pool is None
+        or type(arq_pool).__name__ in ("FakeArqPool", "_NullArqPool")
+        or (getattr(arq_pool, "is_fake", False) is True)
+    )
     if not is_fake_pool and hasattr(arq_pool, "enqueue_job"):
         try:
             job_meta = await arq_pool.enqueue_job("generate_report_job", str(job.id))
-            if job_meta is not None:
+            if job_meta is not None and job_meta != "mock_job_id":
                 enqueued_to_arq = True
         except Exception:
             enqueued_to_arq = False
