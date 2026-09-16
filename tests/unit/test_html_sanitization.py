@@ -246,6 +246,109 @@ class TestVolunteerSchemaSanitization:
         assert "Available weekends." in payload.notes
 
 
+class TestFosterSchemaSanitization:
+    """Proves foster schemas sanitize progress logs and profile notes."""
+
+    def test_foster_progress_log_sanitized(self) -> None:
+        from pawguard.modules.foster.schemas import FosterProgressLogCreate
+
+        payload = FosterProgressLogCreate(
+            behavior_notes='<script>alert("xss")</script>Friendly and calm.',
+            feeding_notes='<img src="x" onerror="evil()">Ate all food.',
+            notes="<b>Great dog</b><iframe src='bad.com'></iframe>",
+        )
+        assert "<script>" not in (payload.behavior_notes or "")
+        assert "Friendly and calm." in (payload.behavior_notes or "")
+        assert "onerror" not in (payload.feeding_notes or "")
+        assert "Ate all food." in (payload.feeding_notes or "")
+        assert "<iframe" not in (payload.notes or "")
+        assert "Great dog" in (payload.notes or "")
+
+
+class TestAdoptionSchemaSanitization:
+    """Proves adoption schemas sanitize applicant and staff text fields."""
+
+    def test_adoption_application_create_sanitized(self) -> None:
+        import uuid
+
+        from pawguard.modules.adoption.schemas import AdoptionApplicationCreate
+
+        payload = AdoptionApplicationCreate(
+            dog_id=uuid.uuid4(),
+            residential_status="owned",
+            existing_pets_medical_details="<script>steal()</script>One healthy cat.",
+            pet_care_experience='<a href="javascript:alert(1)">Click</a>Experienced pet owner.',
+        )
+        assert "<script>" not in (payload.existing_pets_medical_details or "")
+        assert "One healthy cat." in (payload.existing_pets_medical_details or "")
+        assert "javascript:" not in (payload.pet_care_experience or "")
+        assert "Experienced pet owner." in (payload.pet_care_experience or "")
+
+    def test_adoption_application_update_sanitized(self) -> None:
+        from pawguard.modules.adoption.schemas import AdoptionApplicationUpdate
+
+        payload = AdoptionApplicationUpdate(
+            vetting_officer_notes="<script>alert(1)</script>Home check passed.",
+            home_inspection_notes='<img src="x" onerror="alert(1)">Yard is secure.',
+        )
+        assert "<script>" not in (payload.vetting_officer_notes or "")
+        assert "Home check passed." in (payload.vetting_officer_notes or "")
+        assert "onerror" not in (payload.home_inspection_notes or "")
+        assert "Yard is secure." in (payload.home_inspection_notes or "")
+
+
+class TestDogSchemaSanitization:
+    """Proves dog registration and update schemas sanitize text fields."""
+
+    def test_dog_create_and_weight_log_sanitized(self) -> None:
+        from pawguard.modules.dog.schemas import DogProfileCreate, DogWeightLogCreate
+
+        dog = DogProfileCreate(
+            name="<b>Barnaby</b><script>alert(1)</script>",
+            breed="Indie<img onerror=alert(1) src=x>",
+            distinctive_markers="White chest<script>bad()</script>",
+            medical_notes="Healthy<iframe src=evil.com></iframe>",
+        )
+        assert "<script>" not in dog.name
+        assert "onerror" not in dog.breed
+        assert "<script>" not in (dog.distinctive_markers or "")
+        assert "<iframe" not in (dog.medical_notes or "")
+
+        weight_log = DogWeightLogCreate(
+            weight=15.5,
+            notes="<script>alert(1)</script>Post-recovery weigh in",
+        )
+        assert "<script>" not in (weight_log.notes or "")
+        assert "Post-recovery weigh in" in (weight_log.notes or "")
+
+
+class TestMedicalSchemaSanitization:
+    """Proves medical exams and treatments sanitize text fields."""
+
+    def test_clinical_exam_and_treatment_sanitized(self) -> None:
+        import uuid
+
+        from pawguard.modules.medical.schemas import ClinicalExamCreate, MedicalTreatmentCreate
+
+        exam = ClinicalExamCreate(
+            dog_id=uuid.uuid4(),
+            body_condition_score=5,
+            triage_diagnosis="Stable<script>alert(1)</script>",
+            ocular_aural_notes="Clear<img onerror=alert(1) src=x>",
+        )
+        assert "<script>" not in exam.triage_diagnosis
+        assert "onerror" not in (exam.ocular_aural_notes or "")
+
+        treatment = MedicalTreatmentCreate(
+            dog_id=uuid.uuid4(),
+            treatment_type="Spay/Neuter",
+            description="Routine<script>alert(1)</script>",
+            anesthesia_log="Isoflurane<iframe src=bad.com></iframe>",
+        )
+        assert "<script>" not in treatment.description
+        assert "<iframe" not in (treatment.anesthesia_log or "")
+
+
 class TestDoubleFailureNotificationObservable:
     """ITEM 9b: Proves double-failure (PDF + push) is logged durably, not suppressed."""
 

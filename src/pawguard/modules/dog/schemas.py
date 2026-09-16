@@ -6,6 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from pawguard.core.sanitize import sanitize_html
 from pawguard.modules.dog.models import (
     DogActivityEventType,
     DogBreedClassification,
@@ -17,6 +18,84 @@ from pawguard.modules.dog.models import (
 )
 
 _shared_storage_service: Any = None
+
+
+class DogSummaryResponse(BaseModel):
+    """Lightweight summary schema for dog list endpoints (PRR 3.1).
+    Avoids per-item S3 URL signing and responsive variant generation overhead."""
+
+    id: uuid.UUID
+    registration_number: str
+    rescue_case_id: uuid.UUID | None = None
+    microchip_id: str | None = None
+    name: str
+    breed: str
+    breed_classification: DogBreedClassification
+    gender: DogGender
+    is_spayed_neutered: bool
+    estimated_age: str | None = None
+    age_months: int | None = None
+    weight: float | None = None
+    color: str | None = None
+    temperament: DogTemperament | None = None
+    ear_shape: DogEarShape | None = None
+    tail_type: DogTailType | None = None
+    distinctive_markers: str | None = None
+    status: DogStatus
+    shelter_facility_id: uuid.UUID | None = None
+    section_id: uuid.UUID | None = None
+    kennel_id: uuid.UUID | None = None
+    foster_home_id: uuid.UUID | None = None
+    is_adoptable: bool
+    is_quarantine_passed: bool
+    image_urls: list[str] = Field(default_factory=list)
+    photo_gallery_urls: list[str] = Field(default_factory=list)
+    photo_url: str | None = None
+    image_url: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    version_id: int = Field(default=1, description="Version counter for optimistic locking")
+
+    @field_validator("version_id", mode="before")
+    @classmethod
+    def _coerce_version_id(cls, v: Any) -> int:
+        if v is None:
+            return 1
+        return int(v)
+
+    @field_validator("image_urls", mode="before")
+    @classmethod
+    def _coerce_image_urls(cls, v: Any) -> list[str]:
+        if v is None:
+            return []
+        if isinstance(v, list):
+            return [str(u) for u in v if u]
+        if isinstance(v, str):
+            v_str = v.strip()
+            if v_str.startswith("[") and v_str.endswith("]"):
+                import json
+
+                try:
+                    parsed = json.loads(v_str)
+                    if isinstance(parsed, list):
+                        return [str(u) for u in parsed if u]
+                except Exception:
+                    pass
+            if v_str and v_str.lower() != "null":
+                return [v_str]
+        return []
+
+    @model_validator(mode="after")
+    def _sync_primary_photo(self) -> "DogSummaryResponse":
+        self.photo_gallery_urls = self.image_urls
+        first = self.image_urls[0] if self.image_urls else None
+        if not self.photo_url:
+            self.photo_url = first
+        if not self.image_url:
+            self.image_url = first
+        return self
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class DogProfileCreate(BaseModel):
@@ -154,6 +233,19 @@ class DogProfileCreate(BaseModel):
                 data.get("estimated_age"), str
             ):
                 data["estimated_age"] = str(data["estimated_age"])
+
+            # 6. Sanitize free-text strings
+            for text_field in (
+                "name",
+                "breed",
+                "color",
+                "distinctive_markers",
+                "intake_condition",
+                "medical_notes",
+                "rescue_location",
+            ):
+                if isinstance(data.get(text_field), str):
+                    data[text_field] = sanitize_html(data[text_field])
         return data
 
     model_config = ConfigDict(
@@ -212,6 +304,9 @@ class DogProfileUpdate(BaseModel):
     @classmethod
     def _sanitize_update_images(cls, data: Any) -> Any:
         if isinstance(data, dict):
+            for text_field in ("name", "breed", "color", "distinctive_markers"):
+                if isinstance(data.get(text_field), str):
+                    data[text_field] = sanitize_html(data[text_field])
             photo = data.get("photo_url") or data.get("image_url")
             raw_urls = data.get("image_urls") or data.get("photo_gallery_urls")
             if raw_urls is not None:
@@ -384,6 +479,13 @@ class DogWeightLogCreate(BaseModel):
     weight: float = Field(..., gt=0, le=2000, description="Weight in kg", examples=[16.4])
     measured_at: datetime | None = Field(None, description="Defaults to now when omitted.")
     notes: str | None = Field(None, max_length=512, examples=["Post-surgery weigh-in"])
+
+    @field_validator("notes", mode="before")
+    @classmethod
+    def _sanitize_weight_notes(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return sanitize_html(v)
+        return v
 
 
 class DogWeightLogResponse(BaseModel):

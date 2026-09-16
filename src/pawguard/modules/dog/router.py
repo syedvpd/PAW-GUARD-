@@ -1,6 +1,7 @@
 """API router for the Dog Management module. Routers only validate and call services (RULE-004)."""
 
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import Response
@@ -52,6 +53,7 @@ from pawguard.modules.dog.schemas import (
     DogSafetyTagResolveResponse,
     DogSafetyTagResponse,
     DogStatusUpdate,
+    DogSummaryResponse,
     DogWeightLogCreate,
     DogWeightLogResponse,
     PublicDogScanResponse,
@@ -73,7 +75,7 @@ def get_dog_service(
     return DogService(DogRepository(db), audit_service=audit, redis=redis)
 
 
-def _public_dog_view(dog: DogProfileResponse) -> DogProfileResponse:
+def _public_dog_view(dog: Any) -> Any:
     """Public adoption-directory view: strips internal identifiers (rescue
     case link, microchip, facility/section/kennel/foster-home UUIDs) that are
     meaningless - and potentially sensitive - on the anonymous public catalog."""
@@ -120,7 +122,7 @@ async def register_dog(
 
 @router.get(
     "",
-    response_model=PaginatedResponse[DogProfileResponse],
+    response_model=PaginatedResponse[DogSummaryResponse],
 )
 @cache_response(ttl_seconds=120, namespace="dog")
 async def list_dogs(
@@ -149,7 +151,7 @@ async def list_dogs(
     ),
     current_user: CurrentUser | None = Depends(get_optional_current_user),
     service: DogService = Depends(get_dog_service),
-) -> PaginatedResponse[DogProfileResponse]:
+) -> PaginatedResponse[DogSummaryResponse]:
     # Public adoption directory: only shelter staff (``shelter:read``), foster
     # coordinators (``foster:approve`` - they place non-adoptable dogs into
     # foster care, so they need the full catalogue too), and admins may browse
@@ -180,7 +182,7 @@ async def list_dogs(
         max_weight=max_weight,
         location=location,
     )
-    data = [DogProfileResponse.model_validate(d) for d in result.data]
+    data = [DogSummaryResponse.model_validate(d) for d in result.data]
     if public_view:
         data = [_public_dog_view(d) for d in data]
     return PaginatedResponse(data=data, meta=result.meta)

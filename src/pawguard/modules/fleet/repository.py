@@ -6,8 +6,14 @@ from collections.abc import Sequence
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from pawguard.core.bulk import bulk_set_column
 from pawguard.core.pagination import PageParams
-from pawguard.core.search import SortParams, apply_sorting, build_search_filter
+from pawguard.core.search import (
+    SortParams,
+    apply_equality_filters,
+    apply_sorting,
+    build_search_filter,
+)
 from pawguard.modules.auth.models import User
 from pawguard.modules.fleet.models import (
     EquipmentCheckout,
@@ -94,10 +100,6 @@ class FleetRepository:
         status: VehicleStatus | None = None,
         vehicle_type: VehicleType | None = None,
     ) -> tuple[Sequence[Vehicle], int]:
-        # Single round-trip pagination: a windowed COUNT() returns the total
-        # alongside the page rows, avoiding a second query + an extra ~half-RTT
-        # to the database. Window functions evaluate before OFFSET/LIMIT in
-        # PostgreSQL, so `total` reflects the full filtered result set.
         total_count = func.count().over().label("_total_count")
         stmt = select(Vehicle, total_count).where(Vehicle.deleted_at.is_(None))
 
@@ -105,12 +107,7 @@ class FleetRepository:
         if search_filter is not None:
             stmt = stmt.where(search_filter)
 
-        if status is not None:
-            stmt = stmt.where(Vehicle.status == status)
-
-        if vehicle_type is not None:
-            stmt = stmt.where(Vehicle.vehicle_type == vehicle_type)
-
+        stmt = apply_equality_filters(stmt, Vehicle, status=status, vehicle_type=vehicle_type)
         stmt = apply_sorting(stmt, sort, self.VEHICLE_SORTABLE_FIELDS)
 
         stmt = stmt.offset(page.offset).limit(page.limit)
@@ -129,9 +126,7 @@ class FleetRepository:
     ) -> tuple[Sequence[FleetMaintenance], int]:
         total_count = func.count().over().label("_total_count")
         stmt = select(FleetMaintenance, total_count)
-
-        if vehicle_id is not None:
-            stmt = stmt.where(FleetMaintenance.vehicle_id == vehicle_id)
+        stmt = apply_equality_filters(stmt, FleetMaintenance, vehicle_id=vehicle_id)
 
         stmt = apply_sorting(
             stmt, sort, self.MAINTENANCE_SORTABLE_FIELDS, default_field="service_date"
@@ -180,24 +175,12 @@ class FleetRepository:
         return (await self._session.execute(stmt)).scalars().all()
 
     async def bulk_update_vehicle_status(self, ids: list[uuid.UUID], status: VehicleStatus) -> int:
-        stmt = (
-            update(Vehicle)
-            .where(Vehicle.id.in_(ids), Vehicle.deleted_at.is_(None))
-            .values(status=status)
-        )
-        result = await self._session.execute(stmt)
-        return result.rowcount  # type: ignore[attr-defined,no-any-return]
+        return await bulk_set_column(self._session, Vehicle, ids, status=status)
 
     async def bulk_soft_delete_vehicles(self, ids: list[uuid.UUID]) -> int:
         from datetime import UTC, datetime
 
-        stmt = (
-            update(Vehicle)
-            .where(Vehicle.id.in_(ids), Vehicle.deleted_at.is_(None))
-            .values(deleted_at=datetime.now(UTC))
-        )
-        result = await self._session.execute(stmt)
-        return result.rowcount  # type: ignore[attr-defined,no-any-return]
+        return await bulk_set_column(self._session, Vehicle, ids, deleted_at=datetime.now(UTC))
 
     async def create_equipment_checkout(self, record: EquipmentCheckout) -> EquipmentCheckout:
         self._session.add(record)
@@ -281,9 +264,7 @@ class FleetRepository:
     ) -> tuple[Sequence[FuelLog], int]:
         total_count = func.count().over().label("_total_count")
         stmt = select(FuelLog, total_count)
-
-        if vehicle_id is not None:
-            stmt = stmt.where(FuelLog.vehicle_id == vehicle_id)
+        stmt = apply_equality_filters(stmt, FuelLog, vehicle_id=vehicle_id)
 
         stmt = apply_sorting(stmt, sort, self.FUEL_SORTABLE_FIELDS, default_field="filled_at")
 
@@ -315,10 +296,9 @@ class FleetRepository:
         total_count = func.count().over().label("_total_count")
         stmt = select(FleetBreakdownReport, total_count)
 
-        if vehicle_id is not None:
-            stmt = stmt.where(FleetBreakdownReport.vehicle_id == vehicle_id)
-        if status is not None:
-            stmt = stmt.where(FleetBreakdownReport.status == status)
+        stmt = apply_equality_filters(
+            stmt, FleetBreakdownReport, vehicle_id=vehicle_id, status=status
+        )
 
         search_filter = build_search_filter(
             FleetBreakdownReport, search_term, self.BREAKDOWN_SEARCH_FIELDS

@@ -14,6 +14,7 @@ from pawguard.core.upload import (
     ALLOWED_IMAGE_MIMES,
     ALLOWED_VIDEO_MIMES,
     MAX_BATCH_SIZE_BYTES,
+    MAX_IMAGE_COUNT,
     MAX_IMAGE_SIZE_BYTES,
     MAX_VIDEO_SIZE_BYTES,
 )
@@ -527,8 +528,10 @@ class StorageService:
 
         photos = photo_keys or []
         videos = [video_key] if video_key else []
-        if len(photos) + len(videos) > 5:
-            raise ValidationFailedError("Maximum 5 photos/videos total allowed per report.")
+        if len(photos) + len(videos) > MAX_IMAGE_COUNT:
+            raise ValidationFailedError(
+                f"Maximum {MAX_IMAGE_COUNT} photos/videos total allowed per report."
+            )
 
         allowed_photo_mimes = ALLOWED_IMAGE_MIMES
         allowed_video_mimes = ALLOWED_VIDEO_MIMES

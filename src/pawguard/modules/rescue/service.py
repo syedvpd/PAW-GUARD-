@@ -24,9 +24,11 @@ from pawguard.core.exceptions import (
     ValidationFailedError,
     parse_enum,
 )
+from pawguard.core.geocoding import validate_coordinates
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
+from pawguard.core.upload import MAX_IMAGE_COUNT
 from pawguard.modules.auth.models import AuthAuditEventType, AuthAuditLog, Role, User, UserRole
 from pawguard.modules.dog.models import (
     DogBreedClassification,
@@ -340,10 +342,15 @@ class RescueService:
             photo_keys = list(photo_keys) if photo_keys else []
 
         total_media_count = len(photo_keys) + (1 if video_key else 0)
-        if total_media_count > 5:
+        if total_media_count > MAX_IMAGE_COUNT:
             raise ValidationFailedError(
-                "Maximum 5 photos/videos total allowed per emergency report."
+                f"Maximum {MAX_IMAGE_COUNT} photos/videos total allowed per emergency report."
             )
+
+        if latitude is not None or longitude is not None:
+            geo_res = validate_coordinates(latitude, longitude, require_india_region=False)
+            if not geo_res.valid:
+                raise ValidationFailedError(geo_res.error or "Invalid coordinates.")
 
         if photo_keys or video_key:
             StorageService().validate_report_media(photo_keys, video_key)

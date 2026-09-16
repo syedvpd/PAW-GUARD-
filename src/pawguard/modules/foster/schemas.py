@@ -6,6 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from pawguard.core.sanitize import sanitize_html
 from pawguard.modules.auth.schemas import UserProfile
 from pawguard.modules.dog.schemas import DogProfileResponse
 from pawguard.modules.foster.models import (
@@ -28,6 +29,13 @@ class FosterProgressLogCreate(BaseModel):
     photo_urls: list[str] | None = Field(None, examples=[["https://example.com/foster/day1.jpg"]])
     mood_rating: int | None = Field(None, ge=1, le=5, examples=[4])
     notes: str | None = Field(None, examples=["Doing great overall."])
+
+    @field_validator("behavior_notes", "feeding_notes", "medication_notes", "notes", mode="before")
+    @classmethod
+    def _sanitize_progress_text(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return sanitize_html(v)
+        return v
 
     @field_validator("weight_kg", mode="before")
     @classmethod
@@ -90,6 +98,13 @@ class FosterProfileCreate(BaseModel):
     max_capacity: int = Field(1, ge=1, examples=[2])
     notes: str | None = Field(None, examples=["Fenced backyard, prior fostering experience."])
 
+    @field_validator("notes", mode="before")
+    @classmethod
+    def _sanitize_create_notes(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return sanitize_html(v)
+        return v
+
     @field_validator("preferences", mode="before")
     @classmethod
     def normalize_preferences(cls, v: Any) -> list[str] | None:
@@ -123,6 +138,21 @@ class FosterProfileUpdate(BaseModel):
     home_inspection_notes: str | None = Field(None, examples=["Fenced yard verified."])
     home_inspection_address: str | None = Field(None, examples=["123 Shelter Way"])
     inspected_at: datetime | None = Field(None)
+
+    @field_validator(
+        "notes",
+        "background_check_notes",
+        "reference_notes",
+        "vetting_notes",
+        "home_inspection_notes",
+        "home_inspection_address",
+        mode="before",
+    )
+    @classmethod
+    def _sanitize_update_notes(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return sanitize_html(v)
+        return v
 
     @field_validator("preferences", mode="before")
     @classmethod

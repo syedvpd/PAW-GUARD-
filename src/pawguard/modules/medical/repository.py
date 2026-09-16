@@ -8,11 +8,17 @@ import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
 
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from pawguard.core.bulk import bulk_set_column
 from pawguard.core.pagination import PageParams
-from pawguard.core.search import SortParams, apply_sorting, build_search_filter
+from pawguard.core.search import (
+    SortParams,
+    apply_equality_filters,
+    apply_sorting,
+    build_search_filter,
+)
 from pawguard.modules.medical.models import (
     ClinicalExam,
     MedicalClearance,
@@ -206,10 +212,7 @@ class MedicalRepository:
         if search_filter is not None:
             stmt = stmt.where(search_filter)
 
-        if dog_id is not None:
-            stmt = stmt.where(ClinicalExam.dog_id == dog_id)
-        if vet_id is not None:
-            stmt = stmt.where(ClinicalExam.vet_id == vet_id)
+        stmt = apply_equality_filters(stmt, ClinicalExam, dog_id=dog_id, vet_id=vet_id)
 
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self._session.execute(count_stmt)).scalar_one()
@@ -234,10 +237,7 @@ class MedicalRepository:
         if search_filter is not None:
             stmt = stmt.where(search_filter)
 
-        if dog_id is not None:
-            stmt = stmt.where(MedicalTreatment.dog_id == dog_id)
-        if vet_id is not None:
-            stmt = stmt.where(MedicalTreatment.vet_id == vet_id)
+        stmt = apply_equality_filters(stmt, MedicalTreatment, dog_id=dog_id, vet_id=vet_id)
 
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self._session.execute(count_stmt)).scalar_one()
@@ -284,10 +284,9 @@ class MedicalRepository:
         if search_filter is not None:
             stmt = stmt.where(search_filter)
 
-        if dog_id is not None:
-            stmt = stmt.where(VaccinationRecord.dog_id == dog_id)
-        if vet_id is not None:
-            stmt = stmt.where(VaccinationRecord.administered_by == vet_id)
+        stmt = apply_equality_filters(
+            stmt, VaccinationRecord, dog_id=dog_id, administered_by=vet_id
+        )
 
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self._session.execute(count_stmt)).scalar_one()
@@ -312,10 +311,7 @@ class MedicalRepository:
         if search_filter is not None:
             stmt = stmt.where(search_filter)
 
-        if dog_id is not None:
-            stmt = stmt.where(Prescription.dog_id == dog_id)
-        if vet_id is not None:
-            stmt = stmt.where(Prescription.vet_id == vet_id)
+        stmt = apply_equality_filters(stmt, Prescription, dog_id=dog_id, vet_id=vet_id)
 
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self._session.execute(count_stmt)).scalar_one()
@@ -333,13 +329,7 @@ class MedicalRepository:
         return (await self._session.execute(stmt)).scalars().all()
 
     async def bulk_update_prescription_status(self, ids: list[uuid.UUID], is_active: bool) -> int:
-        stmt = (
-            update(Prescription)
-            .where(Prescription.id.in_(ids), Prescription.deleted_at.is_(None))
-            .values(is_active=is_active)
-        )
-        result = await self._session.execute(stmt)
-        return result.rowcount  # type: ignore[attr-defined,no-any-return]
+        return await bulk_set_column(self._session, Prescription, ids, is_active=is_active)
 
     async def bulk_soft_delete(self, entity_type: str, ids: list[uuid.UUID]) -> int:
         from datetime import UTC, datetime
@@ -353,10 +343,4 @@ class MedicalRepository:
         model = model_map.get(entity_type)
         if model is None:
             return 0
-        stmt = (
-            update(model)
-            .where(model.id.in_(ids), model.deleted_at.is_(None))
-            .values(deleted_at=datetime.now(UTC))
-        )
-        result = await self._session.execute(stmt)
-        return result.rowcount  # type: ignore[attr-defined,no-any-return]
+        return await bulk_set_column(self._session, model, ids, deleted_at=datetime.now(UTC))

@@ -7,6 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from pawguard.core.sanitize import sanitize_html
 from pawguard.modules.adoption.models import AdoptionStatus, FollowUpStatus
 from pawguard.modules.auth.schemas import UserProfile
 from pawguard.modules.dog.schemas import DogProfileResponse
@@ -30,6 +31,15 @@ class AdoptionApplicationCreate(BaseModel):
         False,
         description="Applicant already has physical custody of this dog via an active foster placement.",
     )
+
+    @field_validator(
+        "existing_pets_medical_details", "pet_care_experience", "residential_status", mode="before"
+    )
+    @classmethod
+    def _sanitize_create_text(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return sanitize_html(v)
+        return v
 
 
 class AdoptionApplicationUpdate(BaseModel):
@@ -61,6 +71,15 @@ class AdoptionApplicationUpdate(BaseModel):
             raise ValueError("home_inspection_type must be 'physical' or 'virtual'")
         return v
 
+    @field_validator(
+        "vetting_officer_notes", "interview_notes", "home_inspection_notes", mode="before"
+    )
+    @classmethod
+    def _sanitize_update_notes(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return sanitize_html(v)
+        return v
+
 
 class AdoptionStatusUpdate(BaseModel):
     status: AdoptionStatus = Field(
@@ -75,6 +94,13 @@ class AdoptionStatusUpdate(BaseModel):
     version_id: int | None = Field(
         None, description="Expected version_id for optimistic locking", examples=[1]
     )
+
+    @field_validator("rejection_reason", "notes", mode="before")
+    @classmethod
+    def _sanitize_status_notes(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return sanitize_html(v)
+        return v
 
 
 class AdoptionFollowUpResponse(BaseModel):
@@ -185,6 +211,13 @@ class AdoptionScoreCreate(BaseModel):
         None, examples=["Strong candidate, active lifestyle matches dog's energy."]
     )
 
+    @field_validator("notes", mode="before")
+    @classmethod
+    def _sanitize_score_notes(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return sanitize_html(v)
+        return v
+
 
 class AdoptionScoreResponse(BaseModel):
     id: uuid.UUID
@@ -226,11 +259,25 @@ class AdoptionWithdrawRequest(BaseModel):
 
     reason: str | None = Field(None, max_length=2000, examples=["Found another dog."])
 
+    @field_validator("reason", mode="before")
+    @classmethod
+    def _sanitize_withdraw_reason(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return sanitize_html(v)
+        return v
+
 
 class AdoptionAgreementSignRequest(BaseModel):
     """Adopter self-serve e-signature attestation for the generated agreement PDF."""
 
     signature_name: str = Field(..., min_length=2, max_length=255, examples=["Jordan A. Rivera"])
+
+    @field_validator("signature_name", mode="before")
+    @classmethod
+    def _sanitize_signature_name(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return sanitize_html(v)
+        return v
 
 
 class AdoptionOverrideRequest(BaseModel):
@@ -239,6 +286,13 @@ class AdoptionOverrideRequest(BaseModel):
     reason: str = Field(
         ..., min_length=10, max_length=2000, examples=["Home inspection approval was fraudulent."]
     )
+
+    @field_validator("reason", mode="before")
+    @classmethod
+    def _sanitize_override_reason(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return sanitize_html(v)
+        return v
 
 
 class FollowUpProofCreate(BaseModel):
@@ -252,6 +306,13 @@ class FollowUpProofCreate(BaseModel):
     notes: str | None = Field(
         None, max_length=2000, examples=["Updated photos showing Buddy's progress."]
     )
+
+    @field_validator("notes", mode="before")
+    @classmethod
+    def _sanitize_followup_notes(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return sanitize_html(v)
+        return v
 
 
 class AdoptionFollowUpCreate(BaseModel):

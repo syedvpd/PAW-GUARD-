@@ -1048,16 +1048,35 @@ class FosterService:
             application.adoption_agreement_url = object_key
             await self._repo._session.flush()
         except Exception as exc:
-            # PDF generation or S3 upload failed.  Log durably so ops/staff can identify
-            # which applications need manual agreement generation.  Then attempt a best-effort
-            # push notification — but if THAT also fails, log it explicitly so the double
-            # failure is never silently discarded.
+            # PDF generation or S3 upload failed. Persist durable audit alert in DB so ops/staff can query
+            # and identify which applications need manual agreement generation.
             logger.error(
                 "adoption_lease_pdf_failed",
                 application_id=str(application.id),
                 error=str(exc),
                 exc_info=True,
             )
+            try:
+                from pawguard.modules.auth.models import AuthAuditLog
+
+                audit_log = AuthAuditLog(
+                    event_type="adoption_agreement_failed",
+                    actor_id=application.adopter_id,
+                    metadata={
+                        "application_id": str(application.id),
+                        "dog_id": str(application.dog_id) if application.dog_id else None,
+                        "error": str(exc),
+                        "status": "failed",
+                        "operation": "foster_to_adopt_lease_pdf_generation",
+                        "timestamp": datetime.now(UTC).isoformat(),
+                        "action_required": "manual_agreement_generation",
+                    },
+                )
+                self._repo._session.add(audit_log)
+                await self._repo._session.flush()
+            except Exception as audit_exc:
+                logger.error("adoption_lease_audit_persist_failed", error=str(audit_exc))
+
             try:
                 await self._send_push(
                     [application.adopter_id],
@@ -1069,8 +1088,6 @@ class FosterService:
                     action_url=f"/adoptions/{application.id}",
                 )
             except Exception as push_exc:
-                # Both PDF generation and push notification failed.
-                # Log at ERROR level so this double-failure surfaces in alerting.
                 logger.error(
                     "pdf_and_push_double_failure",
                     application_id=str(application.id),

@@ -1,14 +1,16 @@
+import contextlib
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.exceptions import NotFoundError, ValidationFailedError
 from pawguard.core.responses import ApiResponse
-from pawguard.db.session import get_db
+from pawguard.db.session import AsyncSessionLocal, get_db
 from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.models import AuthAuditEventType
@@ -26,6 +28,7 @@ from pawguard.modules.reports.schemas import (
 )
 from pawguard.modules.reports.service import ReportService
 from pawguard.services.audit_service import AuditService
+from pawguard.workers.pool import get_arq_pool
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -34,6 +37,18 @@ def get_report_service(
     db: AsyncSession = Depends(get_db),
 ) -> ReportService:
     return ReportService(db)
+
+
+async def _run_report_job_background(job_id: uuid.UUID) -> None:
+    """Background task runner for report jobs using a fresh dedicated AsyncSession."""
+    async with AsyncSessionLocal() as session:
+        try:
+            await execute_report_job(job_id, session)
+            if session.in_transaction():
+                await session.commit()
+        except Exception:
+            if session.in_transaction():
+                await session.rollback()
 
 
 @router.get(
@@ -216,8 +231,10 @@ async def list_report_formats(
 )
 async def create_report_job(
     payload: ReportRequest,
+    background_tasks: BackgroundTasks,
     current_user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    arq_pool: Any = Depends(get_arq_pool),
 ) -> ApiResponse[ReportJobResponse]:
     """Creates a ReportJob row and initiates asynchronous background generation."""
     job = ReportJob(
@@ -231,6 +248,11 @@ async def create_report_job(
     )
     db.add(job)
     await db.flush()
+
+    # Enqueue to ARQ worker pool if available and register FastAPI BackgroundTasks runner
+    with contextlib.suppress(Exception):
+        await arq_pool.enqueue_job("generate_report_job", str(job.id))
+    background_tasks.add_task(_run_report_job_background, job.id)
 
     res = ReportJobResponse(
         job_id=job.id,

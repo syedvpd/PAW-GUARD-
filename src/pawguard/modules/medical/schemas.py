@@ -2,10 +2,11 @@
 
 import uuid
 from datetime import date, datetime
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from pawguard.core.sanitize import sanitize_html
 from pawguard.modules.inventory.schemas import InventoryConsumptionItem
 
 
@@ -19,6 +20,20 @@ class ClinicalExamCreate(BaseModel):
     )
     visible_injuries: str | None = Field(None, examples=["Small laceration on left hind leg."])
     triage_diagnosis: str = Field(..., min_length=1, examples=["Stable, mild dehydration"])
+
+    @field_validator(
+        "dental_health",
+        "ocular_aural_notes",
+        "coat_condition",
+        "visible_injuries",
+        "triage_diagnosis",
+        mode="before",
+    )
+    @classmethod
+    def _sanitize_exam_notes(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return sanitize_html(v)
+        return v
 
 
 class ClinicalExamResponse(BaseModel):
@@ -50,6 +65,19 @@ class MedicalTreatmentCreate(BaseModel):
         None, examples=[[{"item_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6", "quantity": 2.0}]]
     )
 
+    @field_validator(
+        "treatment_type",
+        "description",
+        "anesthesia_log",
+        "post_op_notes",
+        mode="before",
+    )
+    @classmethod
+    def _sanitize_treatment_notes(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return sanitize_html(v)
+        return v
+
 
 class MedicalTreatmentResponse(BaseModel):
     id: uuid.UUID
@@ -71,6 +99,13 @@ class VaccinationRecordCreate(BaseModel):
     vaccine_name: str = Field(..., min_length=1, max_length=128, examples=["Rabies"])
     next_due_at: datetime | None = Field(None, examples=["2027-07-22T00:00:00Z"])
     lot_number: str | None = Field(None, max_length=64, examples=["LOT-48213"])
+
+    @field_validator("vaccine_name", "lot_number", mode="before")
+    @classmethod
+    def _sanitize_vaccination_fields(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return sanitize_html(v)
+        return v
 
 
 class VaccinationRecordResponse(BaseModel):
@@ -98,6 +133,13 @@ class PrescriptionCreate(BaseModel):
         None, examples=[[{"item_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6", "quantity": 1.0}]]
     )
 
+    @field_validator("drug_name", "dosage", "route", mode="before")
+    @classmethod
+    def _sanitize_prescription_fields(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return sanitize_html(v)
+        return v
+
 
 class PrescriptionUpdate(BaseModel):
     drug_name: str | None = Field(None, min_length=1, max_length=128, examples=["Amoxicillin"])
@@ -106,6 +148,13 @@ class PrescriptionUpdate(BaseModel):
     start_at: datetime | None = Field(None, examples=["2026-07-22T08:00:00Z"])
     end_at: datetime | None = Field(None, examples=["2026-07-29T08:00:00Z"])
     is_active: bool | None = Field(None, examples=[True])
+
+    @field_validator("drug_name", "dosage", "route", mode="before")
+    @classmethod
+    def _sanitize_update_prescription_fields(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return sanitize_html(v)
+        return v
 
 
 class PrescriptionStatusUpdate(BaseModel):
@@ -141,6 +190,13 @@ class MedicationAdministrationCreate(BaseModel):
     administered_at: datetime | None = Field(None, examples=["2026-07-29T10:00:00Z"])
     notes: str | None = Field(None, examples=["Given with food, tolerated well."])
 
+    @field_validator("medication_name", "dosage", "route", "notes", mode="before")
+    @classmethod
+    def _sanitize_admin_fields(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return sanitize_html(v)
+        return v
+
 
 class MedicationAdministrationResponse(BaseModel):
     id: uuid.UUID
@@ -162,6 +218,13 @@ class VaccineProtocolCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=128, examples=["Rabies"])
     default_interval_days: int = Field(..., ge=1, le=3650, examples=[365])
     is_required: bool = Field(True, examples=[True])
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def _sanitize_protocol_name(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return sanitize_html(v)
+        return v
 
 
 class VaccineProtocolResponse(BaseModel):
@@ -185,6 +248,13 @@ class MedicalClearanceCreate(BaseModel):
     status: Literal["approved", "denied", "pending"] = Field("approved", examples=["approved"])
     decision_notes: str | None = Field(None, examples=["Healthy, cleared for adoption."])
     expires_at: datetime | None = Field(None, examples=["2026-08-03T00:00:00Z"])
+
+    @field_validator("clearance_type", "decision_notes", mode="before")
+    @classmethod
+    def _sanitize_clearance_fields(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return sanitize_html(v)
+        return v
 
 
 class MedicalClearanceResponse(BaseModel):

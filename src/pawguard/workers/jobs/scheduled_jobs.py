@@ -958,3 +958,20 @@ async def check_equipment_checkout_expiry(ctx: dict[str, object]) -> int:
 
         await session.commit()
     return alerted
+
+
+async def generate_report_job(ctx: dict[str, Any], job_id: str | uuid.UUID) -> None:
+    """ARQ job to execute an asynchronous report generation pipeline."""
+    from pawguard.modules.reports.router import execute_report_job
+
+    parsed_id = uuid.UUID(str(job_id))
+    async with AsyncSessionLocal() as session:
+        try:
+            await execute_report_job(parsed_id, session)
+            if session.in_transaction():
+                await session.commit()
+        except Exception as exc:
+            if session.in_transaction():
+                await session.rollback()
+            logger.error("generate_report_job_failed", job_id=str(job_id), error=str(exc))
+            raise

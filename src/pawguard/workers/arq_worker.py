@@ -34,6 +34,7 @@ from pawguard.workers.jobs.scheduled_jobs import (
     check_missed_daily_care_logs,
     check_vaccination_renewals,
     check_vehicle_insurance_expiry,
+    generate_report_job,
     post_adoption_followups,
     process_sponsorship_charges,
     send_post_rescue_feedback_surveys,
@@ -153,6 +154,7 @@ _check_fleet_maintenance_due = _track_failures(check_fleet_maintenance_due)
 _check_vehicle_insurance_expiry = _track_failures(check_vehicle_insurance_expiry)
 _check_equipment_checkout_expiry = _track_failures(check_equipment_checkout_expiry)
 _sweep_overdue_invoices = _track_failures(sweep_overdue_invoices)
+_generate_report_job = _track_failures(generate_report_job)
 
 
 class WorkerSettings:
@@ -179,6 +181,7 @@ class WorkerSettings:
         _check_vehicle_insurance_expiry,
         _check_equipment_checkout_expiry,
         _sweep_overdue_invoices,
+        _generate_report_job,
     ]
     cron_jobs = [
         # Scheduled cron jobs: 2 tries is enough — a missed run just fires again

@@ -45,6 +45,12 @@ class TestAlertmanagerTemplate:
     def test_template_file_exists(self) -> None:
         assert os.path.exists(TEMPLATE_PATH), f"Template file not found at {TEMPLATE_PATH}"
 
+    def test_old_static_config_removed(self) -> None:
+        """The old un-interpolated alertmanager.yml must be removed to avoid config confusion."""
+        assert not os.path.exists(OLD_CONFIG_PATH), (
+            f"Old static config still exists at {OLD_CONFIG_PATH}"
+        )
+
     def test_template_is_valid_yaml_with_placeholder(self) -> None:
         """Template with placeholder substituted must be valid YAML."""
         with open(TEMPLATE_PATH) as f:

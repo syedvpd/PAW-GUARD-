@@ -6,6 +6,9 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
+from pawguard.core.geocoding import validate_coordinates
+from pawguard.core.sanitize import sanitize_html
+from pawguard.core.upload import MAX_IMAGE_COUNT
 from pawguard.modules.lost_found.schemas import ReportMediaResponse
 from pawguard.modules.rescue.models import (
     RescueEscalationStatus,
@@ -135,6 +138,20 @@ class RescueRequestCreate(BaseModel):
     )
     reporter_notes: str | None = Field(None, examples=["Dog appears friendly but scared"])
 
+    @field_validator(
+        "reporter_notes",
+        "environmental_factors",
+        "behavioral_indicators",
+        "location_landmark",
+        "location_address",
+        mode="before",
+    )
+    @classmethod
+    def _sanitize_text_fields(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return sanitize_html(v)
+        return v
+
     # The 5-item cap is enforced by Field(max_length=5) above; this validator
     # only normalises the keys (strip whitespace, reject empties).
     @field_validator("media_evidence")
@@ -182,12 +199,21 @@ class RescueRequestCreate(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def _validate_total_media_count(self) -> "RescueRequestCreate":
+    def _validate_total_media_count_and_coordinates(self) -> "RescueRequestCreate":
         total_photos = len(self.photo_object_keys or [])
         total_videos = 1 if self.video_object_key else 0
         total_evidence = len(self.media_evidence or [])
-        if max(total_photos + total_videos, total_evidence) > 5:
-            raise ValueError("Maximum 5 photos/videos total allowed per emergency report.")
+        if max(total_photos + total_videos, total_evidence) > MAX_IMAGE_COUNT:
+            raise ValueError(
+                f"Maximum {MAX_IMAGE_COUNT} photos/videos total allowed per emergency report."
+            )
+
+        if self.latitude is not None or self.longitude is not None:
+            geo_res = validate_coordinates(
+                self.latitude, self.longitude, require_india_region=False
+            )
+            if not geo_res.valid:
+                raise ValueError(geo_res.error)
         return self
 
     _normalise_condition = field_validator("physical_condition", mode="before")(
@@ -235,6 +261,13 @@ class RescueRequestUpdate(BaseModel):
     photo_object_keys: list[str] | None = Field(None, max_length=5)
     video_object_key: str | None = Field(None, max_length=512)
 
+    @field_validator("rejection_rationale", mode="before")
+    @classmethod
+    def _sanitize_update_text(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return sanitize_html(v)
+        return v
+
 
 class RescueDispatchCreate(BaseModel):
     assigned_coordinator_id: uuid.UUID | None = Field(
@@ -267,6 +300,13 @@ class RescueDispatchCreate(BaseModel):
     escalation_notes: str | None = Field(None, examples=["Second team needed - dog is aggressive."])
     notes: str | None = None
 
+    @field_validator("escalation_notes", "notes", "equipment_details", mode="before")
+    @classmethod
+    def _sanitize_dispatch_text(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return sanitize_html(v)
+        return v
+
 
 class RescueDispatchUpdate(BaseModel):
     assigned_coordinator_id: uuid.UUID | None = None
@@ -288,6 +328,13 @@ class RescueDispatchUpdate(BaseModel):
     rescued_at: datetime | None = None
     admitted_at: datetime | None = None
     failed_at: datetime | None = None
+
+    @field_validator("escalation_notes", "notes", "equipment_details", mode="before")
+    @classmethod
+    def _sanitize_dispatch_update_text(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return sanitize_html(v)
+        return v
 
 
 class RescueDispatchAgentResponse(BaseModel):

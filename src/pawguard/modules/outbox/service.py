@@ -8,12 +8,14 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from pawguard.core.resilience import retry_with_backoff
 from pawguard.modules.outbox.models import OutboxEvent
 from pawguard.services.email_service import EmailService
 
 logger = logging.getLogger(__name__)
 
 
+@retry_with_backoff(exceptions=(Exception,), max_retries=3, initial_delay=0.1)
 async def _dispatch_email_direct(job_name: str, payload: dict[str, Any]) -> None:
     email_svc = EmailService()
     to = payload.get("to") or payload.get("recipient_email") or payload.get("email")
@@ -60,7 +62,11 @@ async def _dispatch_job_direct(job_name: str, payload: dict[str, Any]) -> None:
         return
 
     ctx: dict[str, Any] = {}
-    if job_name == "broadcast_lost_pet_alert":
+    if job_name == "generate_report_job":
+        from pawguard.workers.jobs.scheduled_jobs import generate_report_job
+
+        await generate_report_job(ctx, **payload)
+    elif job_name == "broadcast_lost_pet_alert":
         from pawguard.workers.jobs.lost_found_jobs import broadcast_lost_pet_alert
 
         await broadcast_lost_pet_alert(ctx, **payload)

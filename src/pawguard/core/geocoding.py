@@ -23,6 +23,8 @@ from typing import Any
 
 import structlog
 
+from pawguard.core.resilience import retry_with_backoff
+
 logger = structlog.get_logger(__name__)
 
 # ── Coordinate range constants ─────────────────────────────────────────────────
@@ -197,6 +199,7 @@ class GoogleMapsGeocodingProvider(GeocodingProvider):
     def is_configured(self) -> bool:
         return bool(self._api_key)
 
+    @retry_with_backoff(exceptions=(TimeoutError, OSError), max_retries=2, initial_delay=0.1)
     async def reverse_geocode(
         self,
         lat: float,
