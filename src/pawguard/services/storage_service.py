@@ -520,8 +520,6 @@ class StorageService:
 
     def validate_report_media(self, photo_keys: list[str] | None, video_key: str | None) -> None:
         """Validate photo and video keys against size and MIME type constraints."""
-        from unittest.mock import MagicMock
-
         from botocore.exceptions import ClientError
 
         from pawguard.core.exceptions import ValidationFailedError
@@ -536,22 +534,16 @@ class StorageService:
         allowed_photo_mimes = ALLOWED_IMAGE_MIMES
         allowed_video_mimes = ALLOWED_VIDEO_MIMES
 
-        is_mock = isinstance(self._client, MagicMock) or "Mock" in type(self._client).__name__
-
         total_media_size = 0
 
         for key in photos:
             try:
                 response = self._client.head_object(Bucket=self._bucket, Key=key)
-                if not response or response == {}:
+                if not isinstance(response, dict):
                     continue
-                if is_mock and isinstance(response, MagicMock) and not response._mock_return_value:
-                    continue
-                content_type = response.get("ContentType", "")
+                content_type = response.get("ContentType")
                 size = response.get("ContentLength", 0)
-                if not content_type:
-                    continue
-                if isinstance(content_type, MagicMock) or isinstance(size, MagicMock):
+                if not isinstance(content_type, str) or not isinstance(size, (int, float)):
                     continue
                 if content_type not in allowed_photo_mimes:
                     raise ValidationFailedError(
@@ -574,15 +566,11 @@ class StorageService:
         for key in videos:
             try:
                 response = self._client.head_object(Bucket=self._bucket, Key=key)
-                if not response or response == {}:
+                if not isinstance(response, dict):
                     continue
-                if is_mock and isinstance(response, MagicMock) and not response._mock_return_value:
-                    continue
-                content_type = response.get("ContentType", "")
+                content_type = response.get("ContentType")
                 size = response.get("ContentLength", 0)
-                if not content_type:
-                    continue
-                if isinstance(content_type, MagicMock) or isinstance(size, MagicMock):
+                if not isinstance(content_type, str) or not isinstance(size, (int, float)):
                     continue
                 if content_type not in allowed_video_mimes:
                     raise ValidationFailedError(

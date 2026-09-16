@@ -143,11 +143,7 @@ class InventoryService:
                     f"Referenced {payload.reference_type} with ID '{payload.reference_id}' does not exist."
                 )
             del_val = getattr(ref_entity, "deleted_at", None)
-            if (
-                del_val is not None
-                and not type(del_val).__name__.startswith("MagicMock")
-                and not type(del_val).__name__.startswith("AsyncMock")
-            ):
+            if del_val is not None:
                 raise ValidationFailedError(
                     f"Referenced {payload.reference_type} with ID '{payload.reference_id}' has been soft-deleted and cannot be referenced."
                 )
