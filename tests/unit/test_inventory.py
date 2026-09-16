@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import UTC
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -437,6 +437,7 @@ class TestInventoryService:
         mock_repo.get_item.return_value = item
         mock_repo.create_movement.return_value = None
         ref_id = uuid.uuid4()
+        mock_repo._session.get.return_value = MagicMock(id=ref_id)
         payload = InventoryMovementCreate(
             item_id=item_id,
             movement_type=MovementType.CHECK_IN,

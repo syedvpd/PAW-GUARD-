@@ -194,3 +194,41 @@ class FuelLogResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class BreakdownReportCreate(BaseModel):
+    vehicle_id: uuid.UUID
+    breakdown_type: str = Field(..., min_length=1, max_length=64, examples=["Engine failure"])
+    severity: str = Field("moderate", examples=["critical"])
+    description: str = Field(..., min_length=1, examples=["Vehicle stalled in transit."])
+    location: str | None = Field(None, examples=["Main Street & 5th Ave"])
+    driver_id: uuid.UUID | None = Field(None)
+    notes: str | None = Field(None)
+
+
+class BreakdownReportUpdate(BaseModel):
+    breakdown_type: str | None = None
+    severity: str | None = None
+    description: str | None = None
+    location: str | None = None
+    status: str | None = None
+    resolved_at: datetime | None = None
+    notes: str | None = None
+
+
+class BreakdownReportResponse(BaseModel):
+    id: uuid.UUID
+    vehicle_id: uuid.UUID
+    driver_id: uuid.UUID | None
+    breakdown_type: str
+    severity: str
+    description: str
+    location: str | None
+    reported_at: datetime
+    resolved_at: datetime | None
+    status: str
+    notes: str | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

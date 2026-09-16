@@ -8,12 +8,15 @@ import uuid
 from collections.abc import Sequence
 from typing import Any
 
-from pawguard.core.exceptions import ConflictError, NotFoundError
+from pawguard.core.exceptions import ConflictError, NotFoundError, ValidationFailedError
 from pawguard.core.logging import get_logger
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
+from pawguard.modules.adoption.models import AdoptionApplication
 from pawguard.modules.auth.models import AuthAuditEventType
+from pawguard.modules.dog.models import DogProfile
+from pawguard.modules.foster.models import FosterPlacement, FosterProfile
 from pawguard.modules.inventory.models import (
     InventoryItem,
     InventoryMovement,
@@ -36,11 +39,27 @@ from pawguard.modules.inventory.schemas import (
     SupplierResponse,
     SupplierUpdate,
 )
+from pawguard.modules.medical.models import MedicalTreatment, Prescription
 from pawguard.modules.notifications.schemas import BroadcastCreate
 from pawguard.modules.notifications.service import NotificationService
+from pawguard.modules.rescue.models import RescueRequest
+from pawguard.modules.shelter.models import ShelterFacility
 from pawguard.services.audit_service import AuditService
 
 logger = get_logger(__name__)
+
+REFERENCE_TYPE_TABLE_MAP: dict[str, Any] = {
+    "dog": DogProfile,
+    "rescue": RescueRequest,
+    "treatment": MedicalTreatment,
+    "requisition": RequisitionOrder,
+    "prescription": Prescription,
+    "shelter_facility": ShelterFacility,
+    "foster": FosterProfile,
+    "foster_supply": FosterPlacement,
+    "foster_placement": FosterPlacement,
+    "adoption": AdoptionApplication,
+}
 
 
 class InventoryService:
@@ -103,6 +122,21 @@ class InventoryService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> InventoryMovement:
+        if (payload.reference_id is None) != (payload.reference_type is None):
+            raise ValidationFailedError(
+                "Both reference_type and reference_id must be provided together or both omitted."
+            )
+
+        if payload.reference_type is not None and payload.reference_id is not None:
+            model_cls = REFERENCE_TYPE_TABLE_MAP.get(payload.reference_type)
+            if model_cls is None:
+                raise ValidationFailedError(f"Invalid reference_type '{payload.reference_type}'.")
+            ref_entity = await self._repo._session.get(model_cls, payload.reference_id)
+            if ref_entity is None:
+                raise ValidationFailedError(
+                    f"Referenced {payload.reference_type} with ID '{payload.reference_id}' does not exist."
+                )
+
         item = await self._repo.get_item_for_update(payload.item_id)
         if item is None:
             item = await self._repo.get_item(payload.item_id)

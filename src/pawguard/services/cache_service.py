@@ -2,7 +2,7 @@
 
 import json
 import time
-from typing import Any
+from typing import Any, cast
 
 from pawguard.core.metrics import increment_counter, observe_histogram
 from pawguard.redis.client import RedisClient
@@ -170,7 +170,7 @@ class CacheService:
         end
         """
         try:
-            res = await self._redis.eval(lua_script, 1, self._key(lock_key), token)
+            res = await cast(Any, self._redis).eval(lua_script, 1, self._key(lock_key), token)
             ok = bool(res)
             elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
             observe_histogram(

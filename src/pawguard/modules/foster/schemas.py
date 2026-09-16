@@ -86,14 +86,26 @@ class FosterProgressLogResponse(BaseModel):
 
 
 class FosterProfileCreate(BaseModel):
-    preferences: str | None = Field(None, examples=["Puppies, Medical Recovery"])
+    preferences: list[str] | str | None = Field(None, examples=[["Puppies", "Medical Recovery"]])
     max_capacity: int = Field(1, ge=1, examples=[2])
     notes: str | None = Field(None, examples=["Fenced backyard, prior fostering experience."])
+
+    @field_validator("preferences", mode="before")
+    @classmethod
+    def normalize_preferences(cls, v: Any) -> list[str] | None:
+        if v is None:
+            return None
+        if isinstance(v, list):
+            return [str(item).strip() for item in v if str(item).strip()]
+        if isinstance(v, str):
+            parts = [p.strip() for p in v.split(",") if p.strip()]
+            return parts if parts else None
+        return None
 
 
 class FosterProfileUpdate(BaseModel):
     status: FosterStatus | None = Field(None, examples=["approved"])
-    preferences: str | None = Field(None, examples=["Senior Dogs"])
+    preferences: list[str] | str | None = Field(None, examples=[["Senior Dogs"]])
     max_capacity: int | None = Field(None, examples=[2])
     is_available: bool | None = Field(None, examples=[True])
     notes: str | None = Field(None, examples=["Home inspection passed on 2026-07-20."])
@@ -111,6 +123,18 @@ class FosterProfileUpdate(BaseModel):
     home_inspection_notes: str | None = Field(None, examples=["Fenced yard verified."])
     home_inspection_address: str | None = Field(None, examples=["123 Shelter Way"])
     inspected_at: datetime | None = Field(None)
+
+    @field_validator("preferences", mode="before")
+    @classmethod
+    def normalize_preferences(cls, v: Any) -> list[str] | None:
+        if v is None:
+            return None
+        if isinstance(v, list):
+            return [str(item).strip() for item in v if str(item).strip()]
+        if isinstance(v, str):
+            parts = [p.strip() for p in v.split(",") if p.strip()]
+            return parts if parts else None
+        return None
 
     @field_validator("status", mode="before")
     @classmethod
@@ -151,7 +175,7 @@ class FosterProfileResponse(BaseModel):
     id: uuid.UUID
     user_id: uuid.UUID
     status: FosterStatus
-    preferences: str | None
+    preferences: list[str] | None = None
     max_capacity: int
     active_count: int
     is_available: bool

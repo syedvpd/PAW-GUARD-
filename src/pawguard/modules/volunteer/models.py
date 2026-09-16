@@ -6,6 +6,8 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
+    ARRAY,
+    JSON,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -76,7 +78,9 @@ class VolunteerApplication(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMi
     emergency_contact_name: Mapped[str] = mapped_column(String(255), nullable=False)
     emergency_contact_phone: Mapped[str] = mapped_column(String(32), nullable=False)
     applied_role: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    skills: Mapped[str | None] = mapped_column(Text, nullable=True)
+    skills: Mapped[list[str] | None] = mapped_column(
+        ARRAY(String).with_variant(JSON, "sqlite"), nullable=True
+    )
     availability: Mapped[str | None] = mapped_column(String(255), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     medical_conditions: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -115,8 +119,10 @@ class VolunteerProfile(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin,
     emergency_contact_phone: Mapped[str] = mapped_column(String(32), nullable=False)
     applied_role: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
-    # comma separated e.g. "Grooming,Transport,Photography,Training"
-    skills: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # structured skills e.g. ["Grooming", "Transport", "Photography", "Training"]
+    skills: Mapped[list[str] | None] = mapped_column(
+        ARRAY(String).with_variant(JSON, "sqlite"), nullable=True
+    )
     availability: Mapped[str | None] = mapped_column(
         String(255), nullable=True
     )  # "Weekends", "Evenings", etc.

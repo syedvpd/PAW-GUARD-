@@ -78,3 +78,15 @@ def build_search_filter(
     from sqlalchemy import or_
 
     return or_(*conditions)
+
+
+def apply_equality_filters(
+    stmt: Any,
+    model: type[Any],
+    **filters: Any,
+) -> Any:
+    """Applies direct column equality filters to an existing SQLAlchemy select statement."""
+    for key, value in filters.items():
+        if value is not None and hasattr(model, key):
+            stmt = stmt.where(getattr(model, key) == value)
+    return stmt

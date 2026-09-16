@@ -1,9 +1,7 @@
-"""ORM models for the Medical, Surgical & Veterinary Suite module."""
-
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -191,3 +189,29 @@ class MedicalClearance(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin,
     decision_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     authorized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class DigitalCertificate(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
+    """Persisted digital certificates for health clearances and formal adoptions."""
+
+    __tablename__ = "digital_certificates"
+
+    cert_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    certificate_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    pet_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pet_id: Mapped[uuid.UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
+    recipient_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    clearance_purpose: Mapped[str | None] = mapped_column(Text, nullable=True)
+    authorized_by: Mapped[str | None] = mapped_column(Text, nullable=True)
+    issue_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="ACTIVE")
+    medical_clearance_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("medical_clearances.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_by_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )

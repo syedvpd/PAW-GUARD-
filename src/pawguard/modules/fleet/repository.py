@@ -11,6 +11,7 @@ from pawguard.core.search import SortParams, apply_sorting, build_search_filter
 from pawguard.modules.auth.models import User
 from pawguard.modules.fleet.models import (
     EquipmentCheckout,
+    FleetBreakdownReport,
     FleetMaintenance,
     FuelLog,
     Vehicle,
@@ -45,6 +46,8 @@ class FleetRepository:
     }
     FUEL_SORTABLE_FIELDS = {"filled_at", "volume_litres", "cost", "mileage_at_fill"}
     FUEL_SEARCH_FIELDS = ("vendor", "notes")
+    BREAKDOWN_SORTABLE_FIELDS = {"reported_at", "severity", "status", "created_at"}
+    BREAKDOWN_SEARCH_FIELDS = ("breakdown_type", "description", "location", "notes")
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -283,6 +286,49 @@ class FleetRepository:
             stmt = stmt.where(FuelLog.vehicle_id == vehicle_id)
 
         stmt = apply_sorting(stmt, sort, self.FUEL_SORTABLE_FIELDS, default_field="filled_at")
+
+        stmt = stmt.offset(page.offset).limit(page.limit)
+        rows = (await self._session.execute(stmt)).all()
+
+        results = [row[0] for row in rows]
+        total = int(rows[0]._total_count) if rows else 0
+
+        return results, total
+
+    async def create_breakdown_report(self, report: FleetBreakdownReport) -> FleetBreakdownReport:
+        self._session.add(report)
+        await self._session.flush()
+        return report
+
+    async def get_breakdown_report(self, report_id: uuid.UUID) -> FleetBreakdownReport | None:
+        stmt = select(FleetBreakdownReport).where(FleetBreakdownReport.id == report_id)
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def paginate_breakdown_reports(
+        self,
+        page: PageParams,
+        sort: SortParams,
+        vehicle_id: uuid.UUID | None = None,
+        status: str | None = None,
+        search_term: str | None = None,
+    ) -> tuple[Sequence[FleetBreakdownReport], int]:
+        total_count = func.count().over().label("_total_count")
+        stmt = select(FleetBreakdownReport, total_count)
+
+        if vehicle_id is not None:
+            stmt = stmt.where(FleetBreakdownReport.vehicle_id == vehicle_id)
+        if status is not None:
+            stmt = stmt.where(FleetBreakdownReport.status == status)
+
+        search_filter = build_search_filter(
+            FleetBreakdownReport, search_term, self.BREAKDOWN_SEARCH_FIELDS
+        )
+        if search_filter is not None:
+            stmt = stmt.where(search_filter)
+
+        stmt = apply_sorting(
+            stmt, sort, self.BREAKDOWN_SORTABLE_FIELDS, default_field="reported_at"
+        )
 
         stmt = stmt.offset(page.offset).limit(page.limit)
         rows = (await self._session.execute(stmt)).all()

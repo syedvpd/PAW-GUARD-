@@ -67,6 +67,13 @@ class InventoryItem(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Ba
 class InventoryMovement(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "inventory_movements"
 
+    __table_args__ = (
+        CheckConstraint(
+            "(reference_id IS NULL AND reference_type IS NULL) OR (reference_id IS NOT NULL AND reference_type IS NOT NULL)",
+            name="ck_inventory_movement_reference_pair",
+        ),
+    )
+
     item_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("inventory_items.id", ondelete="CASCADE"),

@@ -53,6 +53,15 @@ from pawguard.services.audit_service import AuditService
 logger = get_logger(__name__)
 
 
+VALID_MEDICAL_TRANSITIONS: dict[str, set[str]] = {
+    "pending": {"approved", "denied", "cancelled"},
+    "approved": {"completed", "cancelled"},
+    "denied": {"pending"},
+    "completed": set(),
+    "cancelled": set(),
+}
+
+
 class MedicalService:
     def __init__(
         self,

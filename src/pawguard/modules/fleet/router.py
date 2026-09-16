@@ -22,6 +22,9 @@ from pawguard.modules.auth.rbac import require_permission
 from pawguard.modules.fleet.models import VehicleStatus, VehicleType
 from pawguard.modules.fleet.repository import FleetRepository
 from pawguard.modules.fleet.schemas import (
+    BreakdownReportCreate,
+    BreakdownReportResponse,
+    BreakdownReportUpdate,
     EquipmentCheckoutCreate,
     EquipmentCheckoutResponse,
     EquipmentReturnRequest,
@@ -400,3 +403,85 @@ async def get_fuel_log(
 ) -> ApiResponse[FuelLogResponse]:
     log = await service.get_fuel_log(log_id)
     return ApiResponse(data=FuelLogResponse.model_validate(log))
+
+
+@router.post(
+    "/breakdowns",
+    response_model=ApiResponse[BreakdownReportResponse],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("vehicle:update"))],
+)
+async def report_breakdown(
+    payload: BreakdownReportCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FleetService = Depends(get_fleet_service),
+) -> ApiResponse[BreakdownReportResponse]:
+    report = await service.create_breakdown_report(
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(
+        data=BreakdownReportResponse.model_validate(report),
+        message="Breakdown report submitted.",
+    )
+
+
+@router.get(
+    "/breakdowns",
+    response_model=PaginatedResponse[BreakdownReportResponse],
+    dependencies=[Depends(require_permission("vehicle:read"))],
+)
+async def list_breakdown_reports(
+    page: PageParams = Depends(page_params),
+    sort: SortParams = Depends(sort_params),
+    vehicle_id: uuid.UUID | None = Query(None, description="Filter by vehicle ID"),
+    status: str | None = Query(None, description="Filter by breakdown status"),
+    search: str | None = Query(None, description="Search breakdown reports"),
+    service: FleetService = Depends(get_fleet_service),
+) -> PaginatedResponse[BreakdownReportResponse]:
+    return await service.list_breakdown_reports_paginated(
+        page=page,
+        sort=sort,
+        vehicle_id=vehicle_id,
+        status=status,
+        search_term=search,
+    )
+
+
+@router.get(
+    "/breakdowns/{report_id}",
+    response_model=ApiResponse[BreakdownReportResponse],
+    dependencies=[Depends(require_permission("vehicle:read"))],
+)
+async def get_breakdown_report(
+    report_id: uuid.UUID,
+    service: FleetService = Depends(get_fleet_service),
+) -> ApiResponse[BreakdownReportResponse]:
+    report = await service.get_breakdown_report(report_id)
+    return ApiResponse(data=BreakdownReportResponse.model_validate(report))
+
+
+@router.patch(
+    "/breakdowns/{report_id}",
+    response_model=ApiResponse[BreakdownReportResponse],
+    dependencies=[Depends(require_permission("vehicle:update"))],
+)
+async def update_breakdown_report(
+    report_id: uuid.UUID,
+    payload: BreakdownReportUpdate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: FleetService = Depends(get_fleet_service),
+) -> ApiResponse[BreakdownReportResponse]:
+    report = await service.update_breakdown_report(
+        report_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(
+        data=BreakdownReportResponse.model_validate(report),
+        message="Breakdown report updated.",
+    )

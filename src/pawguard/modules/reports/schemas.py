@@ -1,4 +1,5 @@
-from datetime import date
+import uuid
+from datetime import date, datetime
 from enum import StrEnum
 from typing import Any
 
@@ -231,3 +232,15 @@ class MedicalAnalyticsResponse(BaseModel):
 class ReportAnalyticsRequest(BaseModel):
     report_type: ReportType = Field(default=ReportType.INVENTORY, examples=["inventory", "medical"])
     filters: dict[str, str] | None = Field(None, examples=[{"category": "medical"}])
+
+
+class ReportJobResponse(BaseModel):
+    job_id: uuid.UUID
+    report_type: str
+    format: str
+    status: str
+    created_at: datetime
+    completed_at: datetime | None = None
+    result_object_key: str | None = None
+    download_url: str | None = None
+    error_message: str | None = None

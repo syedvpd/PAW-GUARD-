@@ -23,7 +23,9 @@ class VolunteerProfileCreate(BaseModel):
         max_length=255,
         examples=["Foster Care", "Transport", "Events & Outreach", "Shelter Support"],
     )
-    skills: str | None = Field(None, examples=["Grooming, Transport, Photography"])
+    skills: list[str] | str | None = Field(
+        None, examples=[["Grooming", "Transport", "Photography"]]
+    )
     availability: str | None = Field(None, max_length=255, examples=["Weekends, Evenings"])
     notes: str | None = Field(None, examples=["Available for emergency call-outs on weekends."])
     medical_conditions: str | None = Field(None, examples=["None"])
@@ -86,13 +88,25 @@ class VolunteerProfileCreate(BaseModel):
     def _sanitize_rich_text_create(cls, v):
         return sanitize_html(v)
 
+    @field_validator("skills", mode="before")
+    @classmethod
+    def _normalize_skills(cls, v: Any) -> list[str] | None:
+        if v is None:
+            return None
+        if isinstance(v, list):
+            return [str(item).strip() for item in v if str(item).strip()]
+        if isinstance(v, str):
+            parts = [p.strip() for p in v.split(",") if p.strip()]
+            return parts if parts else None
+        return None
+
 
 class VolunteerProfileUpdate(BaseModel):
     status: VolunteerStatus | None = Field(None, examples=["active"])
     emergency_contact_name: str | None = Field(None, examples=["Jane Doe"])
     emergency_contact_phone: str | None = Field(None, examples=["+1-555-0100"])
     applied_role: str | None = Field(None, max_length=255, examples=["Foster Care"])
-    skills: str | None = Field(None, examples=["Grooming, Transport"])
+    skills: list[str] | str | None = Field(None, examples=[["Grooming", "Transport"]])
     availability: str | None = Field(None, examples=["Weekends"])
     notes: str | None = Field(None, examples=["Onboarding completed."])
     medical_conditions: str | None = Field(None, examples=["None"])
@@ -107,6 +121,18 @@ class VolunteerProfileUpdate(BaseModel):
     def _sanitize_rich_text_update(cls, v: str | None) -> str | None:
         return sanitize_html(v)
 
+    @field_validator("skills", mode="before")
+    @classmethod
+    def _normalize_skills(cls, v: Any) -> list[str] | None:
+        if v is None:
+            return None
+        if isinstance(v, list):
+            return [str(item).strip() for item in v if str(item).strip()]
+        if isinstance(v, str):
+            parts = [p.strip() for p in v.split(",") if p.strip()]
+            return parts if parts else None
+        return None
+
 
 class VolunteerProfileResponse(BaseModel):
     id: uuid.UUID
@@ -115,7 +141,7 @@ class VolunteerProfileResponse(BaseModel):
     emergency_contact_name: str
     emergency_contact_phone: str
     applied_role: str | None = None
-    skills: str | None
+    skills: list[str] | None = None
     availability: str | None
     notes: str | None
     medical_conditions: str | None

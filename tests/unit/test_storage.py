@@ -1,6 +1,7 @@
 """Unit tests for StorageService with mocked repository and S3 client."""
 
 import base64
+import contextlib
 import uuid
 from datetime import UTC, datetime
 from io import BytesIO
@@ -262,10 +263,8 @@ class TestS3PresignedUploadUrl:
         with patch("pawguard.services.storage_service.boto3.client", return_value=mock_client):
             svc = S3StorageService()
             for _ in range(5):
-                try:
+                with contextlib.suppress(RuntimeError):
                     svc.delete_object(object_key="test.jpg")
-                except RuntimeError:
-                    pass
 
             with pytest.raises(CircuitBreakerOpenException):
                 svc.delete_object(object_key="test.jpg")

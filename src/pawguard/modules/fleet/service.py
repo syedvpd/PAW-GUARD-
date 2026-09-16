@@ -9,7 +9,9 @@ from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
 from pawguard.modules.auth.models import AuthAuditEventType, User
 from pawguard.modules.fleet.models import (
+    BreakdownStatus,
     EquipmentCheckout,
+    FleetBreakdownReport,
     FleetMaintenance,
     FuelLog,
     Vehicle,
@@ -18,6 +20,9 @@ from pawguard.modules.fleet.models import (
 )
 from pawguard.modules.fleet.repository import FleetRepository
 from pawguard.modules.fleet.schemas import (
+    BreakdownReportCreate,
+    BreakdownReportResponse,
+    BreakdownReportUpdate,
     EquipmentCheckoutCreate,
     EquipmentCheckoutResponse,
     EquipmentReturnRequest,
@@ -32,6 +37,12 @@ from pawguard.modules.fleet.schemas import (
 from pawguard.services.audit_service import AuditService
 
 DEFAULT_CHECKOUT_DURATION = timedelta(days=14)
+
+VALID_FLEET_TRANSITIONS: dict[str, set[str]] = {
+    "active": {"in_maintenance", "out_of_service"},
+    "in_maintenance": {"active", "out_of_service"},
+    "out_of_service": {"in_maintenance"},
+}
 
 
 class FleetService:
@@ -120,6 +131,18 @@ class FleetService:
         vehicle = await self._repo.get_vehicle(vehicle_id)
         if vehicle is None:
             raise NotFoundError("Vehicle not found.")
+
+        current_val = (
+            vehicle.status.value if hasattr(vehicle.status, "value") else str(vehicle.status)
+        )
+        target_val = status.value if hasattr(status, "value") else str(status)
+        if current_val != target_val:
+            allowed = VALID_FLEET_TRANSITIONS.get(current_val, set())
+            if target_val not in allowed:
+                raise ValidationFailedError(
+                    f"Cannot transition vehicle from '{current_val}' to '{target_val}'."
+                )
+
         updated = await self._repo.update_vehicle_status(vehicle_id, status)
         if updated is None:
             raise NotFoundError("Failed to update vehicle status.")
@@ -507,3 +530,107 @@ class FleetService:
         if log is None:
             raise NotFoundError("Fuel log not found.")
         return log
+
+    async def create_breakdown_report(
+        self,
+        payload: BreakdownReportCreate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> FleetBreakdownReport:
+        vehicle = await self._repo.get_vehicle(payload.vehicle_id)
+        if vehicle is None:
+            raise NotFoundError("Vehicle not found.")
+
+        driver_id = payload.driver_id or actor_id
+        if driver_id is not None and not await self._repo.user_exists(driver_id):
+            raise ValidationFailedError(f"Driver user {driver_id} does not exist.")
+
+        report = FleetBreakdownReport(
+            vehicle_id=payload.vehicle_id,
+            driver_id=driver_id,
+            breakdown_type=payload.breakdown_type,
+            severity=payload.severity,
+            description=payload.description,
+            location=payload.location,
+            reported_at=datetime.now(UTC),
+            status=BreakdownStatus.REPORTED,
+            notes=payload.notes,
+        )
+        record = await self._repo.create_breakdown_report(report)
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.FLEET_VEHICLE_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "breakdown_report_id": str(record.id),
+                    "vehicle_id": str(payload.vehicle_id),
+                },
+            )
+        return record
+
+    async def get_breakdown_report(self, report_id: uuid.UUID) -> FleetBreakdownReport:
+        report = await self._repo.get_breakdown_report(report_id)
+        if report is None:
+            raise NotFoundError("Breakdown report not found.")
+        return report
+
+    async def update_breakdown_report(
+        self,
+        report_id: uuid.UUID,
+        payload: BreakdownReportUpdate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> FleetBreakdownReport:
+        report = await self._repo.get_breakdown_report(report_id)
+        if report is None:
+            raise NotFoundError("Breakdown report not found.")
+
+        if payload.breakdown_type is not None:
+            report.breakdown_type = payload.breakdown_type
+        if payload.severity is not None:
+            report.severity = payload.severity
+        if payload.description is not None:
+            report.description = payload.description
+        if payload.location is not None:
+            report.location = payload.location
+        if payload.status is not None:
+            report.status = payload.status
+        if payload.resolved_at is not None:
+            report.resolved_at = payload.resolved_at
+        elif payload.status == "resolved" and report.resolved_at is None:
+            report.resolved_at = datetime.now(UTC)
+        if payload.notes is not None:
+            report.notes = payload.notes
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.FLEET_VEHICLE_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"breakdown_report_id": str(report.id), "status": report.status},
+            )
+        return report
+
+    async def list_breakdown_reports_paginated(
+        self,
+        page: PageParams,
+        sort: SortParams,
+        vehicle_id: uuid.UUID | None = None,
+        status: str | None = None,
+        search_term: str | None = None,
+    ) -> PaginatedResponse[BreakdownReportResponse]:
+        results, total = await self._repo.paginate_breakdown_reports(
+            page=page,
+            sort=sort,
+            vehicle_id=vehicle_id,
+            status=status,
+            search_term=search_term,
+        )
+        return PaginatedResponse(
+            data=[BreakdownReportResponse.model_validate(r) for r in results],
+            meta=build_pagination_meta(total=total, params=page),
+        )

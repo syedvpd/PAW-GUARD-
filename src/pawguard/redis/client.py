@@ -19,7 +19,7 @@ from pawguard.core.config import get_settings
 if TYPE_CHECKING:
     from redis.asyncio import Redis as _Redis
 
-    RedisClient = _Redis[str]
+    RedisClient = _Redis
 else:
     RedisClient = Redis
 

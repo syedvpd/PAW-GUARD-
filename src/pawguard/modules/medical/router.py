@@ -3,6 +3,7 @@
 Routers only validate and call services.
 """
 
+import contextlib
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -32,7 +33,7 @@ from pawguard.modules.auth.rbac import require_permission, require_role
 from pawguard.modules.dog.repository import DogRepository
 from pawguard.modules.inventory.repository import InventoryRepository
 from pawguard.modules.inventory.service import InventoryService
-from pawguard.modules.medical.models import MedicalClearance
+from pawguard.modules.medical.models import DigitalCertificate, MedicalClearance
 from pawguard.modules.medical.repository import MedicalRepository
 from pawguard.modules.medical.schemas import (
     ClinicalExamCreate,
@@ -752,9 +753,10 @@ async def issue_health_clearance_cert(
         authorized_by=payload.authorizing_veterinarian
         or current_user.user.full_name
         or "Authorized Veterinarian",
-        issue_date=payload.clearance_date or datetime.now().strftime("%Y-%m-%d"),
+        issue_date=payload.clearance_date or datetime.now(UTC).strftime("%Y-%m-%d"),
         status="ACTIVE",
     )
+    medical_clearance_id = None
     if payload.dog_id:
         clearance_record = MedicalClearance(
             dog_id=payload.dog_id,
@@ -766,6 +768,31 @@ async def issue_health_clearance_cert(
         )
         db.add(clearance_record)
         await db.flush()
+        medical_clearance_id = clearance_record.id
+
+    parsed_date = None
+    if payload.clearance_date:
+        with contextlib.suppress(Exception):
+            parsed_date = datetime.strptime(payload.clearance_date, "%Y-%m-%d").date()
+    if parsed_date is None:
+        parsed_date = datetime.now(UTC).date()
+
+    cert_row = DigitalCertificate(
+        id=item.id,
+        cert_id=cert_id,
+        certificate_type=item.certificate_type,
+        pet_name=resolved_pet_name,
+        pet_id=payload.dog_id,
+        recipient_name=None,
+        clearance_purpose=item.clearance_purpose,
+        authorized_by=item.authorized_by,
+        issue_date=parsed_date,
+        status="ACTIVE",
+        medical_clearance_id=medical_clearance_id,
+        created_by_id=current_user.id,
+    )
+    db.add(cert_row)
+    await db.flush()
 
     if audit:
         await audit.record(
@@ -819,9 +846,10 @@ async def generate_adoption_cert(
         recipient_name=recipient,
         clearance_purpose=f"Formal Adoption Certificate for {recipient}",
         authorized_by="PawGuard Rescue Authority",
-        issue_date=payload.adoption_date or datetime.now().strftime("%Y-%m-%d"),
+        issue_date=payload.adoption_date or datetime.now(UTC).strftime("%Y-%m-%d"),
         status="ACTIVE",
     )
+    medical_clearance_id = None
     if payload.dog_id:
         clearance_record = MedicalClearance(
             dog_id=payload.dog_id,
@@ -833,6 +861,31 @@ async def generate_adoption_cert(
         )
         db.add(clearance_record)
         await db.flush()
+        medical_clearance_id = clearance_record.id
+
+    parsed_date = None
+    if payload.adoption_date:
+        with contextlib.suppress(Exception):
+            parsed_date = datetime.strptime(payload.adoption_date, "%Y-%m-%d").date()
+    if parsed_date is None:
+        parsed_date = datetime.now(UTC).date()
+
+    cert_row = DigitalCertificate(
+        id=item.id,
+        cert_id=cert_id,
+        certificate_type=item.certificate_type,
+        pet_name=resolved_pet_name,
+        pet_id=payload.dog_id,
+        recipient_name=recipient,
+        clearance_purpose=item.clearance_purpose,
+        authorized_by=item.authorized_by,
+        issue_date=parsed_date,
+        status="ACTIVE",
+        medical_clearance_id=medical_clearance_id,
+        created_by_id=current_user.id,
+    )
+    db.add(cert_row)
+    await db.flush()
 
     if audit:
         await audit.record(
@@ -858,39 +911,29 @@ async def generate_adoption_cert(
 async def list_digital_certificates(
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[list[DigitalCertificateItem]]:
-    from sqlalchemy import select
-
-    from pawguard.modules.medical.models import MedicalClearance
-
     items: list[DigitalCertificateItem] = []
     try:
-        dog_repo = DogRepository(db)
         stmt = (
-            select(MedicalClearance)
-            .where(MedicalClearance.deleted_at.is_(None))
-            .order_by(MedicalClearance.created_at.desc())
-            .limit(20)
+            select(DigitalCertificate)
+            .where(DigitalCertificate.deleted_at.is_(None))
+            .order_by(DigitalCertificate.created_at.desc())
+            .limit(100)
         )
-        clearances = (await db.execute(stmt)).scalars().all()
-        for cl in clearances:
-            dog = await dog_repo.get_by_id(cl.dog_id)
-            d_name = f"{dog.name} ({dog.breed or 'Canine'})" if dog else "Rescue Dog"
+        res = await db.execute(stmt)
+        cert_rows = res.scalars().all()
+        for row in cert_rows:
             items.append(
                 DigitalCertificateItem(
-                    id=cl.id,
-                    certificate_id=f"CERT-HC-{cl.id.hex[:8].upper()}",
-                    certificate_type="Health Clearance Certificate",
-                    pet_name=d_name,
-                    pet_id=str(cl.dog_id),
-                    recipient_name=None,
-                    clearance_purpose=cl.clearance_type or "Medically Cleared",
-                    authorized_by="PawGuard Medical Officer",
-                    issue_date=(
-                        cl.created_at.strftime("%Y-%m-%d")
-                        if cl.created_at
-                        else datetime.now().strftime("%Y-%m-%d")
-                    ),
-                    status=cl.status.upper() if cl.status else "ACTIVE",
+                    id=row.id,
+                    certificate_id=row.cert_id,
+                    certificate_type=row.certificate_type,
+                    pet_name=row.pet_name or "Rescue Pet",
+                    pet_id=str(row.pet_id) if row.pet_id else row.cert_id,
+                    recipient_name=row.recipient_name,
+                    clearance_purpose=row.clearance_purpose or "",
+                    authorized_by=row.authorized_by or "Authorized Staff",
+                    issue_date=row.issue_date.strftime("%Y-%m-%d") if row.issue_date else "",
+                    status=row.status,
                 )
             )
     except Exception:

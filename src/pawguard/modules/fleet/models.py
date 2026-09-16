@@ -126,3 +126,44 @@ class FuelLog(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     receipt_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     filled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class BreakdownSeverity(StrEnum):
+    MINOR = "minor"
+    MODERATE = "moderate"
+    CRITICAL = "critical"
+
+
+class BreakdownStatus(StrEnum):
+    REPORTED = "reported"
+    IN_REPAIR = "in_repair"
+    RESOLVED = "resolved"
+
+
+class FleetBreakdownReport(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
+    __tablename__ = "fleet_breakdown_reports"
+
+    vehicle_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("vehicles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    driver_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    breakdown_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    severity: Mapped[str] = mapped_column(
+        String(32), default=BreakdownSeverity.MODERATE, nullable=False
+    )
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    location: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    status: Mapped[str] = mapped_column(
+        String(32), default=BreakdownStatus.REPORTED, nullable=False
+    )
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)

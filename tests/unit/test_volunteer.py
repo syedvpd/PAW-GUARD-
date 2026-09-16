@@ -456,7 +456,7 @@ class TestVolunteerService:
         mock_repo.get_profile_by_id.side_effect = [profile, profile]
         payload = VolunteerProfileUpdate(skills="Grooming")
         result = await service.update_profile(profile_id, payload)
-        assert result.skills == "Grooming"
+        assert result.skills == ["Grooming"]
 
     @pytest.mark.asyncio
     async def test_update_profile_not_found(self, service, mock_repo):
