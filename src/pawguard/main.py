@@ -1,5 +1,6 @@
 """FastAPI application factory: lifespan, middleware, exception handlers, health checks."""
 
+import contextlib
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -216,6 +217,13 @@ def create_app() -> FastAPI:
         docs_url="/docs" if settings.docs_enabled else None,
         redoc_url="/redoc" if settings.docs_enabled else None,
         openapi_url="/openapi.json" if settings.docs_enabled else None,
+        swagger_ui_parameters={
+            "docExpansion": "none",
+            "deepLinking": True,
+            "filter": True,
+            "persistAuthorization": True,
+            "displayRequestDuration": True,
+        },
         lifespan=lifespan,
     )
 
@@ -271,6 +279,11 @@ def create_app() -> FastAPI:
     register_exception_handlers(app)
 
     app.include_router(api_v1_router, prefix=settings.api_v1_prefix)
+
+    # Pre-warm the OpenAPI schema into memory so /docs and /openapi.json load in <60ms
+    if settings.docs_enabled:
+        with contextlib.suppress(Exception):
+            custom_openapi()
 
     @app.get("/", include_in_schema=False)
     @app.head("/", include_in_schema=False)
