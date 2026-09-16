@@ -141,9 +141,9 @@ class Settings(BaseSettings):
 
     # --- S3 ---
     s3_bucket_name: str = "pawguard-media"
-    s3_region: str = "us-east-1"
-    s3_endpoint_url: str = ""
-    aws_access_key_id: str = ""
+    s3_region: str = "ap-southeast-1"
+    s3_endpoint_url: str = "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/s3"
+    aws_access_key_id: str = "460314b093d6fc876bcb51515b33be93"
     aws_secret_access_key: str = ""
 
     # --- Mail ---
