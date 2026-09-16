@@ -218,7 +218,7 @@ def create_app() -> FastAPI:
         redoc_url="/redoc" if settings.docs_enabled else None,
         openapi_url="/openapi.json" if settings.docs_enabled else None,
         swagger_ui_parameters={
-            "docExpansion": "none",
+            "docExpansion": "list",
             "deepLinking": True,
             "filter": True,
             "persistAuthorization": True,
