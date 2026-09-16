@@ -59,8 +59,8 @@ async def test_volunteer_shift_capacity_trigger_enforcement(
             email=email,
             hashed_password="pw",
             full_name="Vol",
-            system_role="volunteer",
             is_active=True,
+            is_verified=True,
         )
         db_session.add(user)
         vprof = VolunteerProfile(
