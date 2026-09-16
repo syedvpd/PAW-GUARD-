@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from scripts.seed_roles_and_permissions import ROLE_DEFINITIONS
+from scripts.seed.seed_roles_and_permissions import ROLE_DEFINITIONS
 
 from pawguard.core.exceptions import register_exception_handlers
 from pawguard.core.security import AccessTokenClaims

@@ -131,7 +131,7 @@ async def _seed_roles() -> None:
     Reconciliation only creates missing roles/permissions and grants missing
     grants (never revokes), so it is cheap enough to run on every startup.
     """
-    from scripts.seed_roles_and_permissions import (
+    from scripts.seed.seed_roles_and_permissions import (
         backfill_default_role,
         reconcile_roles,
         reconcile_standard_accounts,

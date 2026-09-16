@@ -152,7 +152,7 @@ class TestReceiptAccessControl:
     ) -> None:
         """The public donor role must not carry the staff-level donation:read
         permission, or the permission fallback re-opens the IDOR."""
-        from scripts.seed_roles_and_permissions import ROLE_DEFINITIONS
+        from scripts.seed.seed_roles_and_permissions import ROLE_DEFINITIONS
 
         definitions = {name: perms for name, _, _, perms in ROLE_DEFINITIONS}
         assert "donation:read" not in definitions["donor"]

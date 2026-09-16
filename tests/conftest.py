@@ -291,7 +291,7 @@ async def engine() -> AsyncGenerator[AsyncEngine]:
     async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    from scripts.seed_roles_and_permissions import reconcile_roles
+    from scripts.seed.seed_roles_and_permissions import reconcile_roles
     from sqlalchemy.ext.asyncio import async_sessionmaker
 
     try:

@@ -15,7 +15,7 @@ if [ "$SKIP_SEEDING" = "true" ]; then
     echo "[docker-entrypoint] Skipping test dog seeding..."
 else
     echo "[docker-entrypoint] Seeding test dog profiles..."
-    python scripts/seed_dogs.py || echo "[docker-entrypoint] Seed completed or data already initialized."
+    python scripts/seed/seed_dogs.py || echo "[docker-entrypoint] Seed completed or data already initialized."
 fi
 
 exec "$@"

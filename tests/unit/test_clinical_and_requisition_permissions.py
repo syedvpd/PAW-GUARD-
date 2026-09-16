@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from scripts.seed_roles_and_permissions import ROLE_DEFINITIONS
+from scripts.seed.seed_roles_and_permissions import ROLE_DEFINITIONS
 
 from pawguard.core.exceptions import ForbiddenError
 from pawguard.modules.auth import permission_codes as pc

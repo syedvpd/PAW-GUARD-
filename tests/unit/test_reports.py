@@ -500,7 +500,7 @@ class TestStaffPerformanceReport:
 
 class TestReportPermissionsInSeed:
     def test_operational_staff_roles_hold_report_permissions(self):
-        from scripts.seed_roles_and_permissions import ROLE_DEFINITIONS
+        from scripts.seed.seed_roles_and_permissions import ROLE_DEFINITIONS
 
         from pawguard.modules.auth import permission_codes as pc
 

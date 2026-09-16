@@ -14,7 +14,7 @@ app startup).
 import uuid
 
 import pytest
-from scripts.seed_roles_and_permissions import reconcile_roles
+from scripts.seed.seed_roles_and_permissions import reconcile_roles
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload

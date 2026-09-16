@@ -7,7 +7,7 @@ contract: every record must be adoptable, carry a unique registration number,
 and use a valid DogStatus.
 """
 
-from scripts.seed_dogs import TEST_DOGS
+from scripts.seed.seed_dogs import TEST_DOGS
 
 from pawguard.modules.dog.models import DogStatus
 

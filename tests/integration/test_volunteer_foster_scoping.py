@@ -231,7 +231,7 @@ class TestVolunteerRosterSeedNoSelfServiceAccess:
     permissions, so a seed drift cannot silently re-open the roster."""
 
     async def test_volunteer_role_has_no_update_permission(self, db_session: AsyncSession) -> None:
-        from scripts.seed_roles_and_permissions import ROLE_DEFINITIONS
+        from scripts.seed.seed_roles_and_permissions import ROLE_DEFINITIONS
 
         definitions = {name: perms for name, _, _, perms in ROLE_DEFINITIONS}
         assert "volunteer:update" not in definitions["volunteer"]
@@ -239,7 +239,7 @@ class TestVolunteerRosterSeedNoSelfServiceAccess:
     async def test_foster_family_role_has_no_update_permission(
         self, db_session: AsyncSession
     ) -> None:
-        from scripts.seed_roles_and_permissions import ROLE_DEFINITIONS
+        from scripts.seed.seed_roles_and_permissions import ROLE_DEFINITIONS
 
         definitions = {name: perms for name, _, _, perms in ROLE_DEFINITIONS}
         assert "foster:update" not in definitions["foster_family"]

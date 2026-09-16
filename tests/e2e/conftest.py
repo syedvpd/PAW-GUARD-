@@ -95,7 +95,7 @@ async def engine() -> AsyncGenerator[AsyncEngine]:
         poolclass=NullPool,
         connect_args={"statement_cache_size": 0},
     )
-    from scripts.seed_roles_and_permissions import reconcile_roles
+    from scripts.seed.seed_roles_and_permissions import reconcile_roles
     from sqlalchemy.ext.asyncio import async_sessionmaker
 
     async with async_sessionmaker(bind=eng, expire_on_commit=False)() as seed_session:

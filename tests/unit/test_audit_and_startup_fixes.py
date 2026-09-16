@@ -61,15 +61,15 @@ class TestStartupRoleReconciliation:
         with (
             patch("pawguard.db.session.AsyncSessionLocal", return_value=async_cm),
             patch(
-                "scripts.seed_roles_and_permissions.reconcile_roles",
+                "scripts.seed.seed_roles_and_permissions.reconcile_roles",
                 new=AsyncMock(return_value=(0, 1)),
             ) as reconcile,
             patch(
-                "scripts.seed_roles_and_permissions.backfill_default_role",
+                "scripts.seed.seed_roles_and_permissions.backfill_default_role",
                 new=AsyncMock(return_value=0),
             ),
             patch(
-                "scripts.seed_roles_and_permissions.reconcile_standard_accounts",
+                "scripts.seed.seed_roles_and_permissions.reconcile_standard_accounts",
                 new=AsyncMock(return_value=0),
             ),
         ):
@@ -94,15 +94,15 @@ class TestStartupRoleReconciliation:
         with (
             patch("pawguard.db.session.AsyncSessionLocal", return_value=async_cm),
             patch(
-                "scripts.seed_roles_and_permissions.reconcile_roles",
+                "scripts.seed.seed_roles_and_permissions.reconcile_roles",
                 new=AsyncMock(return_value=(0, 0)),
             ),
             patch(
-                "scripts.seed_roles_and_permissions.backfill_default_role",
+                "scripts.seed.seed_roles_and_permissions.backfill_default_role",
                 new=AsyncMock(return_value=0),
             ),
             patch(
-                "scripts.seed_roles_and_permissions.reconcile_standard_accounts",
+                "scripts.seed.seed_roles_and_permissions.reconcile_standard_accounts",
                 new=AsyncMock(return_value=0),
             ),
         ):

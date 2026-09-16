@@ -20,7 +20,7 @@ import uuid
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
-from scripts.seed_roles_and_permissions import ROLE_DEFINITIONS, reconcile_roles
+from scripts.seed.seed_roles_and_permissions import ROLE_DEFINITIONS, reconcile_roles
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload

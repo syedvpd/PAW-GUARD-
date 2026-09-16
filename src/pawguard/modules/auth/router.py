@@ -783,7 +783,7 @@ async def unlink_oauth_account(
 async def reconcile_accounts_endpoint(
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[dict[str, Any]]:
-    from scripts.seed_roles_and_permissions import reconcile_standard_accounts
+    from scripts.seed.seed_roles_and_permissions import reconcile_standard_accounts
 
     res = await reconcile_standard_accounts(db, verbose=False)
     await db.commit()
