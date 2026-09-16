@@ -55,7 +55,7 @@ Submit a rescue incident through the PawGuard mobile app or portal. Our rapid di
 ### 10. Follow Up on Veterinary Clearance
 Ensure the rescued canine receives a full veterinary triage, rabies vaccination, and antiparasitic treatment before transitioning to shelter or foster care.
 """,
-        "cover_image_url": "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/blog%20success%20stories/pexels-anny-patterson-2163004403-38626454.jpg",
+        "cover_image_url": "https://images.unsplash.com/photo-1548199973-03cce0bbc87b?auto=format&fit=crop&w=1200&q=80",
         "status": ContentStatus.PUBLISHED,
     },
     {
@@ -81,7 +81,7 @@ Starving dogs cannot simply be offered large bowls of rich kibble. Rapid refeedi
 ### Monitoring Body Condition Score (BCS)
 Our veterinary suite tracks BCS metrics weekly on a 1-to-9 scale, aiming for a healthy 4 to 5 range before clearing dogs for foster or adoption.
 """,
-        "cover_image_url": "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/adoption%20images/pexels-kyoz-27732479.jpg",
+        "cover_image_url": "https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?auto=format&fit=crop&w=1200&q=80",
         "status": ContentStatus.PUBLISHED,
     },
     {
@@ -120,7 +120,7 @@ Bringing a rescue dog home is an exciting milestone, but transition shock is com
 - Ready for advanced training, agility, or social interactions.
 - **Tip:** Continue positive praise, gentle training, and routine veterinary wellness check-ups.
 """,
-        "cover_image_url": "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/blog%20success%20stories/pexels-evlivanburak-10996406.jpg",
+        "cover_image_url": "https://images.unsplash.com/photo-1537151625747-768eb6cf92b2?auto=format&fit=crop&w=1200&q=80",
         "status": ContentStatus.PUBLISHED,
     },
     {
@@ -142,7 +142,7 @@ Mass dog vaccination is the single most cost-effective and humane strategy for p
 
 Join our upcoming volunteer weekend to help census and collar strays in your residential block!
 """,
-        "cover_image_url": "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/blog%20success%20stories/pexels-humanistagram-12732006.jpg",
+        "cover_image_url": "https://images.unsplash.com/photo-1601758228041-f3b2795255f1?auto=format&fit=crop&w=1200&q=80",
         "status": ContentStatus.PUBLISHED,
     },
     {
@@ -165,7 +165,7 @@ While puppies attract immediate attention, senior dogs (ages 7 and older) posses
 
 Consider opening your home to a senior shelter resident today!
 """,
-        "cover_image_url": "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/blog%20success%20stories/pexels-gustavodenuncio-26607813.jpg",
+        "cover_image_url": "https://images.unsplash.com/photo-1518717758536-85ae29035b6d?auto=format&fit=crop&w=1200&q=80",
         "status": ContentStatus.PUBLISHED,
     },
     {
@@ -187,7 +187,7 @@ Road traffic accidents are the leading cause of emergency calls received at the 
 4. **Prevent Hypothermia:** Wrap the animal snugly to maintain core body temperature during transport.
 5. **Call Hotline:** Dial the 24/7 PawGuard emergency hotline (+91 98765 43210) for in-route doctor prep.
 """,
-        "cover_image_url": "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/blog%20success%20stories/pexels-mohit-chanderh-129199578-18109070.jpg",
+        "cover_image_url": "https://images.unsplash.com/photo-1587300003388-59208cc962cb?auto=format&fit=crop&w=1200&q=80",
         "status": ContentStatus.PUBLISHED,
     },
 ]
@@ -202,7 +202,7 @@ SUCCESS_STORIES_DATA = [
 
 Following emergency surgery and 4 weeks of structured foster rehabilitation, Maya made a full recovery. She was formally adopted into a loving family home where she now enjoys beach runs and playing with her favorite tennis ball.
 """,
-        "hero_image_url": "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/adoption%20images/pexels-kyoz-27732479.jpg",
+        "hero_image_url": "https://images.unsplash.com/photo-1601758228041-f3b2795255f1?w=800&h=500&fit=crop&auto=format",
         "is_featured": True,
         "status": ContentStatus.PUBLISHED,
     },
@@ -212,7 +212,7 @@ Following emergency surgery and 4 weeks of structured foster rehabilitation, May
         "slug": "daisys-happy-tail",
         "summary": "Found injured, Daisy recovered fully and was adopted by her rescue volunteer.",
         "body": """Daisy was found as a tiny puppy near a construction site, terrified of humans. Months of patient socialization at our shelter transformed her into a confident, affectionate young dog. Her rescue volunteer fell in love with her spirit and decided to officially welcome her into their family forever.""",
-        "hero_image_url": "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/blog%20success%20stories/pexels-mohit-chanderh-129199578-18109070.jpg",
+        "hero_image_url": "https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?w=800&h=500&fit=crop&auto=format",
         "is_featured": False,
         "status": ContentStatus.PUBLISHED,
     },
@@ -222,7 +222,7 @@ Following emergency surgery and 4 weeks of structured foster rehabilitation, May
         "slug": "maxs-new-adventure",
         "summary": "From a street rescue to a beloved family pet, Max's transformation is a testament to care and love.",
         "body": """Max was once a timid stray who flinched at raised voices. Through gentle desensitization, daily walks, and nutrition therapy, Max discovered his love for endurance running. Today he joins his adoptive family on weekly morning 10K jogs.""",
-        "hero_image_url": "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/blog%20success%20stories/pexels-gustavodenuncio-26607813.jpg",
+        "hero_image_url": "https://images.unsplash.com/photo-1552053831-71594a27632d?w=800&h=500&fit=crop&auto=format",
         "is_featured": False,
         "status": ContentStatus.PUBLISHED,
     },
@@ -232,7 +232,7 @@ Following emergency surgery and 4 weeks of structured foster rehabilitation, May
         "slug": "luna-lights-up-the-family",
         "summary": "Luna, a sweet Indie pup, brought joy and companionship to a retired couple living in Jubilee Hills.",
         "body": """Luna was one of four puppies born at our shelter to a rescued mother. When the Iyer family visited looking for a companion, Luna picked them immediately. Today she is a cherished family member bringing endless laughter and comfort.""",
-        "hero_image_url": "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/blog%20success%20stories/pexels-humanistagram-12732006.jpg",
+        "hero_image_url": "https://images.unsplash.com/photo-1518717758536-85ae29035b6d?w=800&h=500&fit=crop&auto=format",
         "is_featured": False,
         "status": ContentStatus.PUBLISHED,
     },
@@ -242,7 +242,7 @@ Following emergency surgery and 4 weeks of structured foster rehabilitation, May
         "slug": "rockys-second-chance",
         "summary": "Rocky found his perfect family after patience and care at PawGuard.",
         "body": """Rocky was brought to us with a severe spinal injury after being hit by a vehicle. Surgery and weeks of physiotherapy followed. Against all odds, he recovered and was placed with an experienced foster family who decided to adopt him permanently.""",
-        "hero_image_url": "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/blog%20success%20stories/pexels-evlivanburak-10996406.jpg",
+        "hero_image_url": "https://images.unsplash.com/photo-1561037404-61cd46aa615b?w=800&h=500&fit=crop&auto=format",
         "is_featured": False,
         "status": ContentStatus.PUBLISHED,
     },
@@ -252,16 +252,18 @@ Following emergency surgery and 4 weeks of structured foster rehabilitation, May
         "slug": "brunos-big-adventure-from-streets-to-sofa",
         "summary": "Bruno spent months in the shelter waiting for the right family. Today he has his own yard and best friend.",
         "body": """Bruno was first spotted limping near a busy intersection. Our rescue team reached him within the hour. After three months of medical care and behavioral training, Bruno found his forever home with a family who adore his gentle heart.""",
-        "hero_image_url": "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/blog%20success%20stories/pexels-anny-patterson-2163004403-38626454.jpg",
+        "hero_image_url": "https://images.unsplash.com/photo-1537151608828-ea2b11777ee8?w=800&h=500&fit=crop&auto=format",
         "is_featured": False,
         "status": ContentStatus.PUBLISHED,
     },
 ]
 
 
-async def seed_media_and_content():
-    settings = get_settings()
-    engine = create_async_engine(settings.database_url, connect_args={"statement_cache_size": 0})
+async def seed_database(label: str, db_url: str):
+    if not db_url:
+        return
+    print(f"\nSeeding database [{label}] ...")
+    engine = create_async_engine(db_url, connect_args={"statement_cache_size": 0})
     session_factory = async_sessionmaker(bind=engine, expire_on_commit=False)
     now = datetime.now(UTC)
 
@@ -278,8 +280,8 @@ async def seed_media_and_content():
                 {"slug": b["slug"], "id": uuid.UUID(b["id"])}
             )
 
-        # 2. Insert Blog Posts with Supabase S3 photos
-        print("--- Seeding Blog Posts with S3/Supabase Photos ---")
+        # 2. Insert Blog Posts with photos
+        print("--- Seeding Blog Posts with Photos ---")
         for b in BLOG_POSTS_DATA:
             await session.execute(
                 text("""
@@ -305,7 +307,7 @@ async def seed_media_and_content():
             print(f"  [INSERTED] Blog: {b['title']} -> Image: {b['cover_image_url']}")
 
         # 3. Insert Success Stories matching frontend UUIDs
-        print("\n--- Seeding Success Stories with S3/Supabase Photos ---")
+        print("\n--- Seeding Success Stories with Photos ---")
         for s in SUCCESS_STORIES_DATA:
             target_uuid = uuid.UUID(s["id"])
             await session.execute(
@@ -329,20 +331,27 @@ async def seed_media_and_content():
             )
             print(f"  [INSERTED] Story: {s['title']} ({target_uuid}) -> Image: {s['hero_image_url']}")
 
-        # Also update any other old stories in DB with full Supabase S3 media photos
+        # Clear any remaining stories with broken non-http URLs
         await session.execute(
             text("""
                 UPDATE success_stories 
-                SET hero_image_url = 'https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/blog%20success%20stories/pexels-gustavodenuncio-26607813.jpg'
+                SET hero_image_url = 'https://images.unsplash.com/photo-1548199973-03cce0bbc87b?auto=format&fit=crop&w=1200&q=80'
                 WHERE hero_image_url NOT LIKE 'http%'
             """)
         )
 
         await session.commit()
-        print("\n[SUCCESS] Successfully committed all blog posts and success stories with S3/Supabase photos!")
+        print(f"\n[SUCCESS] Successfully committed all blog posts and success stories for [{label}]!")
 
     await engine.dispose()
 
 
+async def main():
+    settings = get_settings()
+    await seed_database("Primary DB", settings.database_url)
+    if settings.database_url_frontend and settings.database_url_frontend != settings.database_url:
+        await seed_database("Frontend DB", settings.database_url_frontend)
+
+
 if __name__ == "__main__":
-    asyncio.run(seed_media_and_content())
+    asyncio.run(main())
