@@ -6,16 +6,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from sqlalchemy import select, update
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from pawguard.core.config import get_settings
-from pawguard.modules.auth.models import User
-from pawguard.modules.dog.models import DogProfile
-from pawguard.modules.portal.models import BlogPost, ContentStatus, SuccessStory
+from pawguard.modules.portal.models import ContentStatus
 
 BLOG_POSTS_DATA = [
     {
+        "id": "11111111-1111-4111-8111-111111111111",
         "title": "10 Essential Tips for First-Time Stray Dog Rescuers",
         "slug": "10-essential-tips-first-time-stray-dog-rescuers",
         "category": "Rescue Guides",
@@ -60,6 +59,7 @@ Ensure the rescued canine receives a full veterinary triage, rabies vaccination,
         "status": ContentStatus.PUBLISHED,
     },
     {
+        "id": "22222222-2222-4222-8222-222222222222",
         "title": "Understanding Canine Nutrition: Fueling Recovery in Shelter Dogs",
         "slug": "understanding-canine-nutrition-shelter-dogs",
         "category": "Health & Nutrition",
@@ -85,6 +85,7 @@ Our veterinary suite tracks BCS metrics weekly on a 1-to-9 scale, aiming for a h
         "status": ContentStatus.PUBLISHED,
     },
     {
+        "id": "33333333-3333-4333-8333-333333333333",
         "title": "The 3-3-3 Rule: What to Expect When Adopting a Rescued Pet",
         "slug": "the-3-3-3-rule-adopting-rescued-pet",
         "category": "Adoption Guides",
@@ -123,6 +124,7 @@ Bringing a rescue dog home is an exciting milestone, but transition shock is com
         "status": ContentStatus.PUBLISHED,
     },
     {
+        "id": "44444444-4444-4444-8444-444444444444",
         "title": "Community Vaccination Drives: Eradicating Rabies One Sector at a Time",
         "slug": "community-vaccination-drives-eradicating-rabies",
         "category": "Community Initiatives",
@@ -144,6 +146,7 @@ Join our upcoming volunteer weekend to help census and collar strays in your res
         "status": ContentStatus.PUBLISHED,
     },
     {
+        "id": "55555555-5555-4555-8555-555555555555",
         "title": "Senior Dogs: Why Older Canines Make the Most Loyal Companions",
         "slug": "senior-dogs-why-older-canines-make-loyal-companions",
         "category": "Adoption Guides",
@@ -166,6 +169,7 @@ Consider opening your home to a senior shelter resident today!
         "status": ContentStatus.PUBLISHED,
     },
     {
+        "id": "66666666-6666-4666-8666-666666666666",
         "title": "Emergency First Aid for Injured Animals on the Road",
         "slug": "emergency-first-aid-injured-animals-road",
         "category": "Emergency Care",
@@ -185,11 +189,12 @@ Road traffic accidents are the leading cause of emergency calls received at the 
 """,
         "cover_image_url": "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/blog%20success%20stories/pexels-mohit-chanderh-129199578-18109070.jpg",
         "status": ContentStatus.PUBLISHED,
-    }
+    },
 ]
 
 SUCCESS_STORIES_DATA = [
     {
+        "id": "5703f709-cd8b-4e6e-bc55-de11ad5b1368",
         "title": "Maya Melody Story",
         "slug": "maya-melody-story",
         "summary": "Maya is very cute and loving pet who found her second chance through PawGuard's intensive care and dedicated foster network.",
@@ -202,6 +207,7 @@ Following emergency surgery and 4 weeks of structured foster rehabilitation, May
         "status": ContentStatus.PUBLISHED,
     },
     {
+        "id": "ab325d36-9526-4f08-b8ff-09d8c5730a65",
         "title": "Daisy's Happy Tail",
         "slug": "daisys-happy-tail",
         "summary": "Found injured, Daisy recovered fully and was adopted by her rescue volunteer.",
@@ -211,6 +217,7 @@ Following emergency surgery and 4 weeks of structured foster rehabilitation, May
         "status": ContentStatus.PUBLISHED,
     },
     {
+        "id": "faa5658c-79a4-4451-85b5-7b33a0e61a1e",
         "title": "Max's New Adventure",
         "slug": "maxs-new-adventure",
         "summary": "From a street rescue to a beloved family pet, Max's transformation is a testament to care and love.",
@@ -220,6 +227,7 @@ Following emergency surgery and 4 weeks of structured foster rehabilitation, May
         "status": ContentStatus.PUBLISHED,
     },
     {
+        "id": "ea388158-0dc1-4007-86b6-52cc4c693e16",
         "title": "Luna Lights Up the Family",
         "slug": "luna-lights-up-the-family",
         "summary": "Luna, a sweet Indie pup, brought joy and companionship to a retired couple living in Jubilee Hills.",
@@ -229,6 +237,7 @@ Following emergency surgery and 4 weeks of structured foster rehabilitation, May
         "status": ContentStatus.PUBLISHED,
     },
     {
+        "id": "dd760a81-fc3b-4aae-b040-b210512d2f65",
         "title": "Rocky's Second Chance",
         "slug": "rockys-second-chance",
         "summary": "Rocky found his perfect family after patience and care at PawGuard.",
@@ -238,6 +247,7 @@ Following emergency surgery and 4 weeks of structured foster rehabilitation, May
         "status": ContentStatus.PUBLISHED,
     },
     {
+        "id": "8e239d3f-6f79-4edc-8961-c26e7232f816",
         "title": "Bruno's Big Adventure: From Streets to Sofa",
         "slug": "brunos-big-adventure-from-streets-to-sofa",
         "summary": "Bruno spent months in the shelter waiting for the right family. Today he has his own yard and best friend.",
@@ -245,7 +255,7 @@ Following emergency surgery and 4 weeks of structured foster rehabilitation, May
         "hero_image_url": "https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/blog%20success%20stories/pexels-anny-patterson-2163004403-38626454.jpg",
         "is_featured": False,
         "status": ContentStatus.PUBLISHED,
-    }
+    },
 ]
 
 
@@ -256,74 +266,80 @@ async def seed_media_and_content():
     now = datetime.now(UTC)
 
     async with session_factory() as session:
-        # 1. Seed or Update Blog Posts with photos
-        print("--- Seeding / Updating Blog Posts with S3/Supabase Photos ---")
-        for b in BLOG_POSTS_DATA:
-            existing = (await session.execute(select(BlogPost).where(BlogPost.slug == b["slug"]))).scalars().first()
-            if existing:
-                existing.title = b["title"]
-                existing.category = b["category"]
-                existing.excerpt = b["excerpt"]
-                existing.body = b["body"]
-                existing.cover_image_url = b["cover_image_url"]
-                existing.status = b["status"]
-                existing.author = b.get("author")
-                existing.tags = b.get("tags")
-                if not existing.published_at:
-                    existing.published_at = now
-                print(f"  [UPDATED] Blog: {b['slug']} -> Image: {b['cover_image_url']}")
-            else:
-                new_post = BlogPost(
-                    id=uuid.uuid4(),
-                    title=b["title"],
-                    slug=b["slug"],
-                    category=b["category"],
-                    author=b.get("author"),
-                    tags=b.get("tags"),
-                    excerpt=b["excerpt"],
-                    body=b["body"],
-                    cover_image_url=b["cover_image_url"],
-                    status=b["status"],
-                    published_at=now,
-                )
-                session.add(new_post)
-                print(f"  [CREATED] Blog: {b['slug']} -> Image: {b['cover_image_url']}")
-
-        # 2. Seed or Update Success Stories with photos
-        print("\n--- Seeding / Updating Success Stories with S3/Supabase Photos ---")
+        # 1. Clean old entries
         for s in SUCCESS_STORIES_DATA:
-            existing = (await session.execute(select(SuccessStory).where(
-                (SuccessStory.slug == s["slug"]) | (SuccessStory.title == s["title"])
-            ))).scalars().first()
-            if existing:
-                existing.title = s["title"]
-                existing.slug = s["slug"]
-                existing.summary = s["summary"]
-                existing.body = s["body"]
-                existing.hero_image_url = s["hero_image_url"]
-                existing.status = s["status"]
-                existing.is_featured = s["is_featured"]
-                if not existing.published_at:
-                    existing.published_at = now
-                print(f"  [UPDATED] Story: {s['title']} -> Image: {s['hero_image_url']}")
-            else:
-                new_story = SuccessStory(
-                    id=uuid.uuid4(),
-                    title=s["title"],
-                    slug=s["slug"],
-                    summary=s["summary"],
-                    body=s["body"],
-                    hero_image_url=s["hero_image_url"],
-                    status=s["status"],
-                    is_featured=s["is_featured"],
-                    has_consent=True,
-                    published_at=now,
-                )
-                session.add(new_story)
-                print(f"  [CREATED] Story: {s['title']} -> Image: {s['hero_image_url']}")
+            await session.execute(
+                text("DELETE FROM success_stories WHERE slug = :slug OR id = :id"),
+                {"slug": s["slug"], "id": uuid.UUID(s["id"])}
+            )
+        for b in BLOG_POSTS_DATA:
+            await session.execute(
+                text("DELETE FROM blog_posts WHERE slug = :slug OR id = :id"),
+                {"slug": b["slug"], "id": uuid.UUID(b["id"])}
+            )
+
+        # 2. Insert Blog Posts with Supabase S3 photos
+        print("--- Seeding Blog Posts with S3/Supabase Photos ---")
+        for b in BLOG_POSTS_DATA:
+            await session.execute(
+                text("""
+                    INSERT INTO blog_posts (id, title, slug, category, author, tags, excerpt, body, cover_image_url, status, published_at, created_at, updated_at)
+                    VALUES (:id, :title, :slug, :category, :author, :tags, :excerpt, :body, :cover_image_url, :status, :published_at, :created_at, :updated_at)
+                """),
+                {
+                    "id": uuid.UUID(b["id"]),
+                    "title": b["title"],
+                    "slug": b["slug"],
+                    "category": b["category"],
+                    "author": b.get("author"),
+                    "tags": b.get("tags"),
+                    "excerpt": b["excerpt"],
+                    "body": b["body"],
+                    "cover_image_url": b["cover_image_url"],
+                    "status": b["status"].value if hasattr(b["status"], "value") else b["status"],
+                    "published_at": now,
+                    "created_at": now,
+                    "updated_at": now,
+                }
+            )
+            print(f"  [INSERTED] Blog: {b['title']} -> Image: {b['cover_image_url']}")
+
+        # 3. Insert Success Stories matching frontend UUIDs
+        print("\n--- Seeding Success Stories with S3/Supabase Photos ---")
+        for s in SUCCESS_STORIES_DATA:
+            target_uuid = uuid.UUID(s["id"])
+            await session.execute(
+                text("""
+                    INSERT INTO success_stories (id, title, slug, summary, body, hero_image_url, status, is_featured, has_consent, sort_order, published_at, created_at, updated_at)
+                    VALUES (:id, :title, :slug, :summary, :body, :hero_image_url, :status, :is_featured, true, 0, :published_at, :created_at, :updated_at)
+                """),
+                {
+                    "id": target_uuid,
+                    "title": s["title"],
+                    "slug": s["slug"],
+                    "summary": s["summary"],
+                    "body": s["body"],
+                    "hero_image_url": s["hero_image_url"],
+                    "status": s["status"].value if hasattr(s["status"], "value") else s["status"],
+                    "is_featured": s["is_featured"],
+                    "published_at": now,
+                    "created_at": now,
+                    "updated_at": now,
+                }
+            )
+            print(f"  [INSERTED] Story: {s['title']} ({target_uuid}) -> Image: {s['hero_image_url']}")
+
+        # Also update any other old stories in DB with full Supabase S3 media photos
+        await session.execute(
+            text("""
+                UPDATE success_stories 
+                SET hero_image_url = 'https://rsllewhpzxpdstmjhmxj.storage.supabase.co/storage/v1/object/public/pawguard-media/blog%20success%20stories/pexels-gustavodenuncio-26607813.jpg'
+                WHERE hero_image_url NOT LIKE 'http%'
+            """)
+        )
 
         await session.commit()
-        print("\n[SUCCESS] Successfully committed all blog posts and success stories with photos!")
+        print("\n[SUCCESS] Successfully committed all blog posts and success stories with S3/Supabase photos!")
 
     await engine.dispose()
 
