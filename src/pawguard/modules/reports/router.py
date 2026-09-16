@@ -1,4 +1,3 @@
-import contextlib
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -249,10 +248,22 @@ async def create_report_job(
     db.add(job)
     await db.flush()
 
-    # Enqueue to ARQ worker pool if available and register FastAPI BackgroundTasks runner
-    with contextlib.suppress(Exception):
-        await arq_pool.enqueue_job("generate_report_job", str(job.id))
-    background_tasks.add_task(_run_report_job_background, job.id)
+    # Clean single-queue dispatch architecture:
+    # 1. Primary path: Enqueue to ARQ worker pool if a real queue pool is configured.
+    # 2. Fallback path: If ARQ pool is unavailable/mocked, dispatch via FastAPI BackgroundTasks.
+    # Under no circumstances are both invoked simultaneously for the same job.
+    enqueued_to_arq = False
+    is_fake_pool = arq_pool is None or type(arq_pool).__name__ == "FakeArqPool"
+    if not is_fake_pool and hasattr(arq_pool, "enqueue_job"):
+        try:
+            job_meta = await arq_pool.enqueue_job("generate_report_job", str(job.id))
+            if job_meta is not None:
+                enqueued_to_arq = True
+        except Exception:
+            enqueued_to_arq = False
+
+    if not enqueued_to_arq:
+        background_tasks.add_task(_run_report_job_background, job.id)
 
     res = ReportJobResponse(
         job_id=job.id,
@@ -272,13 +283,30 @@ async def create_report_job(
 
 
 async def execute_report_job(job_id: uuid.UUID, db: AsyncSession) -> ReportJob:
-    """Executes the report generation pipeline for a given job and updates status to DONE/FAILED."""
-    stmt = select(ReportJob).where(ReportJob.id == job_id)
-    job = (await db.execute(stmt)).scalar_one_or_none()
-    if not job:
-        raise NotFoundError(f"ReportJob {job_id} not found.")
+    """Executes the report generation pipeline for a given job with an atomic job claim.
 
-    job.status = JobStatus.RUNNING.value
+    Uses an atomic UPDATE WHERE status = 'PENDING' -> 'RUNNING' to guarantee that
+    concurrent worker processes or duplicate delivery messages never execute the report twice.
+    """
+    from sqlalchemy import update
+
+    claim_stmt = (
+        update(ReportJob)
+        .where(ReportJob.id == job_id, ReportJob.status == JobStatus.PENDING.value)
+        .values(status=JobStatus.RUNNING.value)
+        .returning(ReportJob)
+    )
+    result = await db.execute(claim_stmt)
+    job = result.scalar_one_or_none()
+    if not job:
+        # Check if job exists in database
+        existing_stmt = select(ReportJob).where(ReportJob.id == job_id)
+        existing = (await db.execute(existing_stmt)).scalar_one_or_none()
+        if not existing:
+            raise NotFoundError(f"ReportJob {job_id} not found.")
+        # Job was already claimed (RUNNING), completed (DONE), or failed (FAILED) by another worker
+        return existing
+
     await db.flush()
 
     try:

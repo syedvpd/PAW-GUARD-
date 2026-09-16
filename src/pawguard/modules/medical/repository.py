@@ -344,3 +344,10 @@ class MedicalRepository:
         if model is None:
             return 0
         return await bulk_set_column(self._session, model, ids, deleted_at=datetime.now(UTC))
+
+    async def get_clearance_by_id(self, clearance_id: uuid.UUID) -> MedicalClearance | None:
+        stmt = select(MedicalClearance).where(
+            MedicalClearance.id == clearance_id,
+            MedicalClearance.deleted_at.is_(None),
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()

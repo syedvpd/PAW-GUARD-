@@ -957,3 +957,113 @@ class TestFosterReturnToShelter:
         res = await service.get_foster_stats()
         assert res["total_placements"] == 5
         assert res["active_placements"] == 2
+
+
+class TestFosterToAdoptLeaseFailure:
+    """Proves foster-to-adopt PDF lease failure produces durable audit log and alerts staff."""
+
+    @pytest.mark.asyncio
+    async def test_lease_failure_persists_durable_audit_and_alerts_staff(self) -> None:
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from pawguard.modules.adoption.models import AdoptionApplication, AdoptionStatus
+        from pawguard.modules.auth.models import AuthAuditLog
+        from pawguard.modules.foster.models import FosterPlacement, FosterProfile, FosterStatus
+        from pawguard.modules.foster.repository import FosterRepository
+        from pawguard.modules.foster.service import FosterService
+
+        mock_repo = AsyncMock(spec=FosterRepository)
+        mock_repo._session = AsyncMock()
+        mock_dog_repo = AsyncMock(spec=DogRepository)
+
+        service = FosterService(mock_repo, mock_dog_repo)
+        service._send_push = AsyncMock()
+
+        placement_id = uuid.uuid4()
+        foster_id = uuid.uuid4()
+        dog_id = uuid.uuid4()
+        user_id = uuid.uuid4()
+        staff_id = uuid.uuid4()
+
+        placement = FosterPlacement(
+            id=placement_id,
+            foster_id=foster_id,
+            dog_id=dog_id,
+            is_active=True,
+            placed_at=datetime.now(UTC),
+        )
+        foster = FosterProfile(
+            id=foster_id,
+            user_id=user_id,
+            status=FosterStatus.APPROVED,
+            max_capacity=1,
+            active_count=1,
+            is_available=False,
+        )
+        dog = DogProfile(
+            id=dog_id,
+            registration_number="DOG-CONV-01",
+            name="Charlie",
+            breed="Labrador",
+            gender="male",
+            status=DogStatus.FOSTERED,
+        )
+
+        mock_repo.get_placement_by_id.return_value = placement
+        mock_repo.get_profile_by_id.return_value = foster
+        mock_dog_repo.get_by_id.return_value = dog
+
+        # Mock adoption repo on service
+        from pawguard.modules.adoption.repository import AdoptionRepository
+
+        mock_adopt_repo = AsyncMock(spec=AdoptionRepository)
+        mock_adopt_repo.get_approved_application_for_dog.return_value = None
+        mock_adopt_repo.get_active_siblings_for_dog.return_value = []
+
+        app_mock = AdoptionApplication(
+            id=uuid.uuid4(),
+            dog_id=dog_id,
+            adopter_id=user_id,
+            status=AdoptionStatus.APPROVED,
+        )
+        mock_adopt_repo.get_by_id.return_value = app_mock
+        service._adoption_repo = mock_adopt_repo
+
+        # Mock staff role and clearance query results
+        def execute_side_effect(stmt, *args, **kwargs):
+            mock_result = MagicMock()
+            mock_result.scalar_one_or_none.return_value = None
+            mock_result.scalars.return_value.all.return_value = [staff_id]
+            return mock_result
+
+        mock_repo._session.execute.side_effect = execute_side_effect
+
+        # Force PDF generation to fail
+        with patch(
+            "pawguard.core.pdf_generation.generate_adoption_agreement",
+            side_effect=RuntimeError("WeasyPrint error"),
+        ):
+            res = await service.convert_to_adoption(
+                placement_id=placement_id,
+                actor_id=user_id,
+            )
+
+        # Assert application was created
+        assert res is not None
+        assert res.status == AdoptionStatus.APPROVED
+
+        # Assert durable audit log was added to DB session
+        added_objs = [call.args[0] for call in mock_repo._session.add.call_args_list]
+        audit_logs = [obj for obj in added_objs if isinstance(obj, AuthAuditLog)]
+        assert len(audit_logs) >= 1
+        assert audit_logs[0].event_type == "adoption_agreement_failed"
+        assert audit_logs[0].event_metadata["error"] == "WeasyPrint error"
+
+        # Assert staff alert push was sent
+        staff_push_calls = [
+            call
+            for call in service._send_push.call_args_list
+            if "URGENT" in call.kwargs.get("title", "")
+            or "URGENT" in (call.args[1] if len(call.args) > 1 else "")
+        ]
+        assert len(staff_push_calls) >= 1

@@ -1061,8 +1061,8 @@ class FosterService:
 
                 audit_log = AuthAuditLog(
                     event_type="adoption_agreement_failed",
-                    actor_id=application.adopter_id,
-                    metadata={
+                    user_id=application.adopter_id,
+                    event_metadata={
                         "application_id": str(application.id),
                         "dog_id": str(application.dog_id) if application.dog_id else None,
                         "error": str(exc),
@@ -1077,13 +1077,53 @@ class FosterService:
             except Exception as audit_exc:
                 logger.error("adoption_lease_audit_persist_failed", error=str(audit_exc))
 
+            # 1. Alert staff & coordinators (Foster/Adoption Coordinators, Shelter Managers, Super Admins)
+            try:
+                from sqlalchemy import select
+
+                from pawguard.modules.auth.models import Role, UserRole
+
+                staff_roles_stmt = select(Role.id).where(
+                    Role.name.in_(
+                        [
+                            "foster_coordinator",
+                            "adoption_coordinator",
+                            "shelter_manager",
+                            "super_admin",
+                        ]
+                    )
+                )
+                staff_role_ids = (
+                    (await self._repo._session.execute(staff_roles_stmt)).scalars().all()
+                )
+                if staff_role_ids:
+                    staff_users_stmt = select(UserRole.user_id).where(
+                        UserRole.role_id.in_(staff_role_ids)
+                    )
+                    staff_user_ids = list(
+                        set((await self._repo._session.execute(staff_users_stmt)).scalars().all())
+                    )
+                else:
+                    staff_user_ids = []
+
+                if staff_user_ids:
+                    await self._send_push(
+                        staff_user_ids,
+                        title="URGENT: Foster Adoption Lease PDF Generation Failed",
+                        body=f"Lease PDF generation failed for application #{application.id} (dog #{application.dog_id}). Manual intervention required.",
+                        action_url=f"/admin/adoptions/{application.id}",
+                    )
+            except Exception as staff_push_exc:
+                logger.error("adoption_lease_staff_alert_failed", error=str(staff_push_exc))
+
+            # 2. Notify adopter of pending status
             try:
                 await self._send_push(
                     [application.adopter_id],
                     title="Adoption Agreement Pending",
                     body=(
-                        f"Your adoption lease PDF generation encountered a delay. "
-                        f"Staff has been alerted for Application #{application.id}."
+                        f"Your adoption agreement document is being processed manually by shelter staff. "
+                        f"Application #{application.id}."
                     ),
                     action_url=f"/adoptions/{application.id}",
                 )

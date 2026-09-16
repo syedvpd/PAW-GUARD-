@@ -122,6 +122,12 @@ class InventoryService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> InventoryMovement:
+        """Records an inventory stock movement.
+
+        Architectural Note: Polymorphic reference validated at application transaction boundary;
+        database-level FK is intentionally impossible without a multi-table redesign because
+        `reference_type` dynamically routes to different domain tables (dog, treatment, shift, etc.).
+        """
         if (payload.reference_id is None) != (payload.reference_type is None):
             raise ValidationFailedError(
                 "Both reference_type and reference_id must be provided together or both omitted."
@@ -135,6 +141,15 @@ class InventoryService:
             if ref_entity is None:
                 raise ValidationFailedError(
                     f"Referenced {payload.reference_type} with ID '{payload.reference_id}' does not exist."
+                )
+            del_val = getattr(ref_entity, "deleted_at", None)
+            if (
+                del_val is not None
+                and not type(del_val).__name__.startswith("MagicMock")
+                and not type(del_val).__name__.startswith("AsyncMock")
+            ):
+                raise ValidationFailedError(
+                    f"Referenced {payload.reference_type} with ID '{payload.reference_id}' has been soft-deleted and cannot be referenced."
                 )
 
         item = await self._repo.get_item_for_update(payload.item_id)

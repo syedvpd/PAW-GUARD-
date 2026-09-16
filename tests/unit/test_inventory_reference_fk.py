@@ -109,12 +109,84 @@ async def test_record_movement_rejects_invalid_reference_type(
 
 
 @pytest.mark.asyncio
+async def test_record_movement_rejects_type_without_id(
+    inventory_service: InventoryService,
+) -> None:
+    """Movement with reference_type but no reference_id is rejected."""
+    payload = InventoryMovementCreate(
+        item_id=uuid.uuid4(),
+        movement_type=MovementType.CHECK_OUT,
+        quantity=2.0,
+        reference_type="dog",
+        reference_id=None,
+    )
+
+    with pytest.raises(ValidationFailedError, match="Both reference_type and reference_id"):
+        await inventory_service.record_movement(
+            user_id=uuid.uuid4(),
+            payload=payload,
+        )
+
+
+@pytest.mark.asyncio
+async def test_record_movement_rejects_soft_deleted_reference_entity(
+    inventory_service: InventoryService, mock_session: AsyncMock
+) -> None:
+    """Movement referencing a soft-deleted entity is rejected."""
+    from datetime import UTC, datetime
+
+    mock_dog = MagicMock(spec=DogProfile)
+    mock_dog.id = uuid.uuid4()
+    mock_dog.deleted_at = datetime.now(UTC)
+    mock_session.get.return_value = mock_dog
+
+    payload = InventoryMovementCreate(
+        item_id=uuid.uuid4(),
+        movement_type=MovementType.CONSUMPTION,
+        quantity=3.0,
+        reference_type="dog",
+        reference_id=mock_dog.id,
+    )
+
+    with pytest.raises(ValidationFailedError, match="soft-deleted"):
+        await inventory_service.record_movement(
+            user_id=uuid.uuid4(),
+            payload=payload,
+        )
+
+
+@pytest.mark.asyncio
+async def test_record_movement_succeeds_with_null_reference_pair(
+    inventory_service: InventoryService, mock_repo: InventoryRepository
+) -> None:
+    """Movement with both reference_type and reference_id as None succeeds (standard movement)."""
+    payload = InventoryMovementCreate(
+        item_id=uuid.uuid4(),
+        movement_type=MovementType.CHECK_IN,
+        quantity=10.0,
+        reference_type=None,
+        reference_id=None,
+    )
+
+    result = await inventory_service.record_movement(
+        user_id=uuid.uuid4(),
+        payload=payload,
+    )
+
+    assert result is not None
+    assert result.reference_type is None
+    assert result.reference_id is None
+    mock_repo.create_movement.assert_called_once()
+
+
+@pytest.mark.asyncio
 async def test_record_movement_succeeds_with_valid_reference(
     inventory_service: InventoryService, mock_session: AsyncMock, mock_repo: InventoryRepository
 ) -> None:
     """Movement with valid referenced entity succeeds."""
     mock_dog = MagicMock(spec=DogProfile)
     mock_dog.id = uuid.uuid4()
+    mock_dog.deleted_at = None
     mock_session.get.return_value = mock_dog
 
     payload = InventoryMovementCreate(

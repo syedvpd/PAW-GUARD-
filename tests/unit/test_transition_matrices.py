@@ -74,3 +74,70 @@ async def test_fleet_service_allows_legal_transition() -> None:
     mock_repo.update_vehicle_status.assert_called_once_with(
         mock_vehicle.id, VehicleStatus.IN_MAINTENANCE
     )
+
+
+@pytest.mark.asyncio
+async def test_medical_service_enforces_transition_matrix() -> None:
+    """MedicalService.update_clearance_status strictly enforces VALID_MEDICAL_TRANSITIONS."""
+    from pawguard.modules.dog.repository import DogRepository
+    from pawguard.modules.medical.models import MedicalClearance
+    from pawguard.modules.medical.repository import MedicalRepository
+    from pawguard.modules.medical.service import MedicalService
+
+    mock_repo = AsyncMock(spec=MedicalRepository)
+    mock_repo._session = AsyncMock()
+    mock_dog_repo = AsyncMock(spec=DogRepository)
+
+    service = MedicalService(repository=mock_repo, dog_repo=mock_dog_repo)
+
+    clearance = MedicalClearance(
+        id=uuid.uuid4(),
+        dog_id=uuid.uuid4(),
+        authorized_by_id=uuid.uuid4(),
+        clearance_type="adoption_surgery",
+        status="pending",
+    )
+    mock_repo.get_clearance_by_id.return_value = clearance
+    mock_dog_repo.get_by_id.return_value = MagicMock()
+
+    # pending -> approved: PASS
+    res = await service.update_clearance_status(clearance.id, "approved")
+    assert res.status == "approved"
+
+    # approved -> completed: PASS
+    res = await service.update_clearance_status(clearance.id, "completed")
+    assert res.status == "completed"
+
+    # completed -> anything: FAIL (terminal)
+    with pytest.raises(
+        ValidationFailedError,
+        match="Invalid medical status transition from 'completed' to 'pending'",
+    ):
+        await service.update_clearance_status(clearance.id, "pending")
+
+    with pytest.raises(ValidationFailedError, match="terminal state"):
+        await service.update_clearance_status(clearance.id, "approved")
+
+    # pending -> completed: FAIL
+    clearance.status = "pending"
+    with pytest.raises(
+        ValidationFailedError,
+        match="Invalid medical status transition from 'pending' to 'completed'",
+    ):
+        await service.update_clearance_status(clearance.id, "completed")
+
+    # approved -> pending: FAIL
+    clearance.status = "approved"
+    with pytest.raises(
+        ValidationFailedError,
+        match="Invalid medical status transition from 'approved' to 'pending'",
+    ):
+        await service.update_clearance_status(clearance.id, "pending")
+
+    # cancelled -> anything: FAIL (terminal)
+    clearance.status = "cancelled"
+    with pytest.raises(
+        ValidationFailedError,
+        match="Invalid medical status transition from 'cancelled' to 'approved'",
+    ):
+        await service.update_clearance_status(clearance.id, "approved")

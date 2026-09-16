@@ -9,7 +9,12 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
-from pawguard.core.exceptions import ConflictError, ForbiddenError, NotFoundError
+from pawguard.core.exceptions import (
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+    ValidationFailedError,
+)
 from pawguard.core.logging import get_logger
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
@@ -352,6 +357,72 @@ class MedicalService:
 
     async def get_clearances_for_dog(self, dog_id: uuid.UUID) -> Sequence[MedicalClearance]:
         return await self._repo.get_clearances_by_dog(dog_id)
+
+    async def update_clearance_status(
+        self,
+        clearance_id: uuid.UUID,
+        new_status: str,
+        decision_notes: str | None = None,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> MedicalClearance:
+        """Enforces the medical transition matrix on medical clearance status mutations."""
+        clearance = await self._repo.get_clearance_by_id(clearance_id)
+        if clearance is None:
+            raise NotFoundError("Medical clearance record not found.")
+
+        current = clearance.status.lower()
+        target = new_status.lower()
+        allowed = VALID_MEDICAL_TRANSITIONS.get(current, set())
+        if target not in allowed:
+            raise ValidationFailedError(
+                f"Invalid medical status transition from '{current}' to '{target}'. "
+                f"Allowed transitions: {sorted(allowed) if allowed else 'None (terminal state)'}."
+            )
+
+        clearance.status = target
+        if decision_notes:
+            clearance.decision_notes = decision_notes
+
+        dog = await self._dog_repo.get_by_id(clearance.dog_id)
+        if dog:
+            if target == "approved":
+                dog.is_adoptable = True
+                dog.is_quarantine_passed = True
+                dog.status = DogStatus.SHELTER
+            elif target in ("denied", "cancelled"):
+                dog.is_adoptable = False
+
+        await self._repo._session.flush()
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.MEDICAL_RECORD_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "clearance_id": str(clearance.id),
+                    "previous_status": current,
+                    "new_status": target,
+                },
+            )
+
+        if target == "approved" and dog:
+            await self._notify(
+                title="Adoption Medical Clearance Approved",
+                body=f"{dog.name} has been cleared by a veterinarian and is now eligible for adoption.",
+                notification_type="medical_clearance_approved",
+                target_roles=["adoption_coordinator", "foster_coordinator"],
+            )
+        elif target == "denied" and dog:
+            await self._notify(
+                title="Adoption Medical Clearance Denied",
+                body=f"{dog.name}'s adoption medical clearance was denied — continued care/planning needed.",
+                notification_type="medical_clearance_denied",
+                target_roles=["shelter_manager"],
+            )
+
+        return clearance
 
     async def log_medication_administration(
         self,

@@ -272,6 +272,20 @@ class MedicalClearanceResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ClearanceStatusUpdate(BaseModel):
+    status: str = Field(
+        ..., description="Target status: pending, approved, denied, completed, cancelled"
+    )
+    decision_notes: str | None = None
+
+    @field_validator("status", "decision_notes", mode="before")
+    @classmethod
+    def _sanitize_clearance_status_fields(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return sanitize_html(v.strip())
+        return v
+
+
 class DogMedicalReminderItem(BaseModel):
     id: str
     kind: str  # vaccination, medication, preventative_care

@@ -36,6 +36,7 @@ from pawguard.modules.inventory.service import InventoryService
 from pawguard.modules.medical.models import DigitalCertificate, MedicalClearance
 from pawguard.modules.medical.repository import MedicalRepository
 from pawguard.modules.medical.schemas import (
+    ClearanceStatusUpdate,
     ClinicalExamCreate,
     ClinicalExamResponse,
     DogMedicalRemindersResponse,
@@ -227,6 +228,35 @@ async def get_dog_clearances(
     clearances = await service.get_clearances_for_dog(dog_id)
     return ApiResponse(
         data=[MedicalClearanceResponse.model_validate(c) for c in clearances],
+    )
+
+
+@router.patch(
+    "/clearances/{clearance_id}/status",
+    response_model=ApiResponse[MedicalClearanceResponse],
+    dependencies=[
+        Depends(require_permission("medical:clearance")),
+        Depends(require_role("veterinarian")),
+    ],
+)
+async def update_clearance_status(
+    clearance_id: uuid.UUID,
+    payload: ClearanceStatusUpdate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: MedicalService = Depends(get_medical_service),
+) -> ApiResponse[MedicalClearanceResponse]:
+    ip = request.client.host if request.client else None
+    clearance = await service.update_clearance_status(
+        clearance_id=clearance_id,
+        new_status=payload.status,
+        decision_notes=payload.decision_notes,
+        actor_id=current_user.id,
+        ip_address=ip,
+    )
+    return ApiResponse(
+        data=MedicalClearanceResponse.model_validate(clearance),
+        message=f"Medical clearance transitioned to {payload.status}.",
     )
 
 
