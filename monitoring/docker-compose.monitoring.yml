@@ -1,6 +1,15 @@
 version: '3.8'
 
 services:
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: pawguard-alertmanager
+    restart: unless-stopped
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+
   prometheus:
     image: prom/prometheus:v2.47.0
     container_name: pawguard-prometheus
@@ -11,6 +20,8 @@ services:
       - "9090:9090"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    depends_on:
+      - alertmanager
 
   grafana:
     image: grafana/grafana:10.1.0

@@ -87,6 +87,7 @@ async def upload_direct_file(
 )
 async def confirm_upload(
     file_id: uuid.UUID,
+    request: Request,
     batch_file_ids: str | None = Query(
         None,
         description="Comma-separated batch file IDs for combined size check",
@@ -99,7 +100,14 @@ async def confirm_upload(
         if batch_file_ids
         else None
     )
-    stored = await service.confirm_upload(file_id, batch_file_ids=ids)
+    actor_id = current_user.id if current_user else None
+    ip_address = request.client.host if request.client else None
+    stored = await service.confirm_upload(
+        file_id,
+        batch_file_ids=ids,
+        actor_id=actor_id,
+        ip_address=ip_address,
+    )
     return ApiResponse(
         data=StoredFileResponse.model_validate(stored),
         message="Upload confirmed successfully.",

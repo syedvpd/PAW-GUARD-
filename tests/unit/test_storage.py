@@ -123,29 +123,41 @@ class TestStorageService:
     @pytest.mark.asyncio
     async def test_confirm_upload_rejects_oversized_object(self, service, mock_repo, mock_s3):
         file_id = uuid.uuid4()
+        actor_id = uuid.uuid4()
+        ip_address = "192.168.1.100"
         stored = _make_file(id=file_id, mime_type="image/png")
         mock_repo.get_by_id.return_value = stored
         mock_s3.get_object_size.return_value = 60 * 1024 * 1024
         mock_s3.get_object_prefix_bytes.return_value = _PNG_BYTES
 
         with pytest.raises(ValidationFailedError, match="exceeds maximum limit"):
-            await service.confirm_upload(file_id)
+            await service.confirm_upload(file_id, actor_id=actor_id, ip_address=ip_address)
 
-        mock_s3.delete_object.assert_called_once_with(object_key=stored.object_key)
+        mock_s3.delete_object.assert_called_once_with(
+            object_key=stored.object_key,
+            actor_id=actor_id,
+            ip_address=ip_address,
+        )
         assert stored.is_uploaded is False
 
     @pytest.mark.asyncio
     async def test_confirm_upload_rejects_disallowed_signature(self, service, mock_repo, mock_s3):
         file_id = uuid.uuid4()
+        actor_id = uuid.uuid4()
+        ip_address = "192.168.1.100"
         stored = _make_file(id=file_id)
         mock_repo.get_by_id.return_value = stored
         mock_s3.get_object_size.return_value = 1024
         mock_s3.get_object_prefix_bytes.return_value = b"ELF binary garbage"
 
         with pytest.raises(ValidationFailedError, match="is not allowed"):
-            await service.confirm_upload(file_id)
+            await service.confirm_upload(file_id, actor_id=actor_id, ip_address=ip_address)
 
-        mock_s3.delete_object.assert_called_once_with(object_key=stored.object_key)
+        mock_s3.delete_object.assert_called_once_with(
+            object_key=stored.object_key,
+            actor_id=actor_id,
+            ip_address=ip_address,
+        )
         assert stored.is_uploaded is False
 
     @pytest.mark.asyncio

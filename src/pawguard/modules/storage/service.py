@@ -151,7 +151,12 @@ class StorageService:
         return await self._repo.create(stored)
 
     async def confirm_upload(
-        self, file_id: uuid.UUID, batch_file_ids: list[uuid.UUID] | None = None
+        self,
+        file_id: uuid.UUID,
+        batch_file_ids: list[uuid.UUID] | None = None,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
     ) -> StoredFile:
         """Verifies the object actually uploaded to S3 before trusting it.
 
@@ -194,7 +199,9 @@ class StorageService:
                     f"Uploaded file exceeds maximum limit of {limit_mb} MB (got {actual_size // (1024 * 1024)} MB)."
                 )
         except (UploadError, BotoClientError, BotoCoreError, Exception) as exc:
-            await _cleanup_s3_async(self._s3, stored.object_key)
+            await _cleanup_s3_async(
+                self._s3, stored.object_key, actor_id=actor_id, ip_address=ip_address
+            )
             await self._repo._session.delete(stored)
             await self._repo._session.flush()
             if isinstance(exc, UploadError):
