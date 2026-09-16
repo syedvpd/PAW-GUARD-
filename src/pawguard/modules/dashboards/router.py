@@ -410,6 +410,7 @@ async def get_executive_dashboard(
     "/public",
     response_model=ApiResponse[dict[str, Any]],
 )
+@cache_response(ttl_seconds=300, namespace="dashboards")
 async def get_public_dashboard(
     request: Request,
     db: AsyncSession = Depends(get_db),

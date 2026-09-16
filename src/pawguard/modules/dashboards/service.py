@@ -560,11 +560,12 @@ async def finance_dashboard(session: AsyncSession, redis: Any | None = None) -> 
     row = (await session.execute(stmt)).one()
 
     unreconciled_stmt = text("""
-        SELECT COALESCE(SUM(amount), 0) AS amount
-        FROM donations
-        WHERE status = 'success'
-          AND id NOT IN (
-              SELECT donation_id FROM financial_transactions WHERE donation_id IS NOT NULL AND status = 'reconciled'
+        SELECT COALESCE(SUM(d.amount), 0) AS amount
+        FROM donations d
+        WHERE d.status = 'success'
+          AND NOT EXISTS (
+              SELECT 1 FROM financial_transactions ft
+              WHERE ft.donation_id = d.id AND ft.status = 'reconciled'
           )
     """)
     unreconciled_row = (await session.execute(unreconciled_stmt)).one()
