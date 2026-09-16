@@ -11,6 +11,8 @@ from pawguard.core.exceptions import AppException
 from pawguard.core.logging import get_logger
 from pawguard.core.resilience import CircuitBreaker
 from pawguard.core.upload import (
+    ALLOWED_IMAGE_MIMES,
+    ALLOWED_VIDEO_MIMES,
     MAX_BATCH_SIZE_BYTES,
     MAX_IMAGE_SIZE_BYTES,
     MAX_VIDEO_SIZE_BYTES,
@@ -97,6 +99,7 @@ class StorageService:
         unique_name = f"{uuid.uuid4()}.{ext}" if ext else str(uuid.uuid4())
         return f"{folder}/{unique_name}"
 
+    @storage_breaker
     def generate_presigned_upload_url(
         self, *, object_key: str, content_type: str, expires_in: int = PRESIGNED_URL_EXPIRY_SECONDS
     ) -> str:
@@ -155,6 +158,7 @@ class StorageService:
                 "Could not prepare the photo upload right now. Please try again shortly."
             ) from exc
 
+    @storage_breaker
     def generate_presigned_download_url(
         self,
         *,
@@ -206,6 +210,9 @@ class StorageService:
                 duration_ms=duration_ms,
                 status="failed",
             )
+            # Record failure on circuit breaker so the breaker opens after threshold
+            # degradations even though we return a graceful fallback URL.
+            storage_breaker.record_failure()
             endpoint = (self._endpoint or "https://pawguard-media.s3.amazonaws.com").rstrip("/")
             return f"{endpoint}/{bucket}/{object_key}?token={uuid.uuid4()}"
 
@@ -294,6 +301,7 @@ class StorageService:
             "original": self.generate_public_url(key),
         }
 
+    @storage_breaker
     def sign_media_url(
         self, url_or_key: str | None, expires_in: int = 604800, prefer_public: bool = False
     ) -> str | None:
@@ -341,6 +349,9 @@ class StorageService:
                 ExpiresIn=expires_in,
             )
         except Exception:
+            # Record failure on circuit breaker before graceful fallback so the
+            # breaker still opens after threshold failures despite the fallback UX.
+            storage_breaker.record_failure()
             return self.generate_presigned_download_url(
                 object_key=object_key, expires_in=expires_in
             )
@@ -376,6 +387,7 @@ class StorageService:
         endpoint = self._endpoint.rstrip("/")
         return f"{endpoint}/{bucket}/{encoded_key}"
 
+    @storage_breaker
     def get_object_size(self, *, object_key: str) -> int:
         import time
 
@@ -407,6 +419,7 @@ class StorageService:
             )
             raise
 
+    @storage_breaker
     def get_object_prefix_bytes(self, *, object_key: str, num_bytes: int = 4096) -> bytes:
         import time
 
@@ -440,6 +453,7 @@ class StorageService:
             )
             raise
 
+    @storage_breaker
     def get_object(self, *, object_key: str) -> bytes:
         import time
 
@@ -471,6 +485,7 @@ class StorageService:
             )
             raise
 
+    @storage_breaker
     def put_object(self, *, object_key: str, content: bytes, content_type: str) -> None:
         import time
 
@@ -515,8 +530,8 @@ class StorageService:
         if len(photos) + len(videos) > 5:
             raise ValidationFailedError("Maximum 5 photos/videos total allowed per report.")
 
-        allowed_photo_mimes = {"image/jpeg", "image/png", "image/webp"}
-        allowed_video_mimes = {"video/mp4", "video/webm", "video/quicktime"}
+        allowed_photo_mimes = ALLOWED_IMAGE_MIMES
+        allowed_video_mimes = ALLOWED_VIDEO_MIMES
 
         is_mock = isinstance(self._client, MagicMock) or "Mock" in type(self._client).__name__
 

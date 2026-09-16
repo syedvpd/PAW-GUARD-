@@ -36,6 +36,11 @@ class CircuitBreaker:
         self.failure_count = 0
         self.last_state_change = time.time()
 
+    def reset(self) -> None:
+        self.failure_count = 0
+        self.state = CircuitState.CLOSED
+        self.last_state_change = time.time()
+
     def record_success(self) -> None:
         self.failure_count = 0
         self.state = CircuitState.CLOSED

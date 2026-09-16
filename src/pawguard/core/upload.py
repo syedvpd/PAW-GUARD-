@@ -9,14 +9,33 @@ from io import BytesIO
 import magic  # type: ignore[import-untyped]
 from PIL import Image, ImageOps
 
-ALLOWED_MIME_TYPES: frozenset[str] = frozenset(
+# ── Canonical MIME allow-lists — single source of truth for all upload paths. ──
+# storage_service.py imports these instead of maintaining a separate inline set.
+ALLOWED_IMAGE_MIMES: frozenset[str] = frozenset(
     {
         "image/jpeg",
         "image/png",
         "image/webp",
-        "application/pdf",
-        "video/mp4",
     }
+)
+
+ALLOWED_VIDEO_MIMES: frozenset[str] = frozenset(
+    {
+        "video/mp4",
+        "video/webm",
+        "video/quicktime",
+    }
+)
+
+ALLOWED_DOCUMENT_MIMES: frozenset[str] = frozenset(
+    {
+        "application/pdf",
+    }
+)
+
+# Combined set used by the generic verify_mime_type() gate.
+ALLOWED_MIME_TYPES: frozenset[str] = (
+    ALLOWED_IMAGE_MIMES | ALLOWED_VIDEO_MIMES | ALLOWED_DOCUMENT_MIMES
 )
 
 MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB limit for images

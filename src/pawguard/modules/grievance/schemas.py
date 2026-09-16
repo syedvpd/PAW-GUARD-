@@ -3,8 +3,9 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
+from pawguard.core.sanitize import sanitize_html, sanitize_plain
 from pawguard.modules.grievance.models import GrievanceStatus
 
 
@@ -25,6 +26,16 @@ class GrievanceCreate(BaseModel):
         examples=["Reported an injured dog at 9am but the team arrived after 6 hours."],
     )
 
+    @field_validator("details", mode="before")
+    @classmethod
+    def _sanitize_details(cls, v: str | None) -> str | None:
+        return sanitize_html(v)
+
+    @field_validator("reporter_name", "complaint_type", mode="before")
+    @classmethod
+    def _sanitize_plain_fields(cls, v: str | None) -> str | None:
+        return sanitize_plain(v)
+
 
 class GrievanceUpdate(BaseModel):
     status: GrievanceStatus | None = Field(None, examples=["investigating"])
@@ -32,6 +43,11 @@ class GrievanceUpdate(BaseModel):
     resolution_notes: str | None = Field(
         None, examples=["Dispatch delay traced to a vehicle shortage; process updated."]
     )
+
+    @field_validator("resolution_notes", mode="before")
+    @classmethod
+    def _sanitize_resolution_notes(cls, v: str | None) -> str | None:
+        return sanitize_html(v)
 
 
 class GrievanceResponse(BaseModel):
@@ -93,6 +109,11 @@ class CommentCreate(BaseModel):
     body: str = Field(..., min_length=1, examples=["We've dispatched an agent to follow up."])
     is_internal: bool = False
 
+    @field_validator("body", mode="before")
+    @classmethod
+    def _sanitize_body(cls, v: str | None) -> str | None:
+        return sanitize_html(v)
+
 
 class CommentResponse(BaseModel):
     id: uuid.UUID
@@ -111,6 +132,11 @@ class ServiceFeedbackCreate(BaseModel):
     adoption_application_id: uuid.UUID | None = None
     rating: int = Field(..., ge=1, le=5, examples=[5])
     comments: str | None = Field(None, examples=["The whole team was wonderful, thank you!"])
+
+    @field_validator("comments", mode="before")
+    @classmethod
+    def _sanitize_comments(cls, v: str | None) -> str | None:
+        return sanitize_html(v)
 
 
 class ServiceFeedbackResponse(BaseModel):

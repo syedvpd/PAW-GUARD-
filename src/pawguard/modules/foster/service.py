@@ -1,7 +1,6 @@
 """FosterService: owns foster applications, home availability, and placements (RULE-003)."""
 
 import asyncio
-import contextlib
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -1049,13 +1048,35 @@ class FosterService:
             application.adoption_agreement_url = object_key
             await self._repo._session.flush()
         except Exception as exc:
-            logger.warning("Failed to generate adoption lease for %s: %s", application.id, exc)
-            with contextlib.suppress(Exception):
+            # PDF generation or S3 upload failed.  Log durably so ops/staff can identify
+            # which applications need manual agreement generation.  Then attempt a best-effort
+            # push notification — but if THAT also fails, log it explicitly so the double
+            # failure is never silently discarded.
+            logger.error(
+                "adoption_lease_pdf_failed",
+                application_id=str(application.id),
+                error=str(exc),
+                exc_info=True,
+            )
+            try:
                 await self._send_push(
                     [application.adopter_id],
                     title="Adoption Agreement Pending",
-                    body=f"Your adoption lease PDF generation encountered a delay. Staff has been alerted for Application #{application.id}.",
+                    body=(
+                        f"Your adoption lease PDF generation encountered a delay. "
+                        f"Staff has been alerted for Application #{application.id}."
+                    ),
                     action_url=f"/adoptions/{application.id}",
+                )
+            except Exception as push_exc:
+                # Both PDF generation and push notification failed.
+                # Log at ERROR level so this double-failure surfaces in alerting.
+                logger.error(
+                    "pdf_and_push_double_failure",
+                    application_id=str(application.id),
+                    pdf_error=str(exc),
+                    push_error=str(push_exc),
+                    exc_info=True,
                 )
 
     async def request_vet_check(

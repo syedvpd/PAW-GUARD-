@@ -32,6 +32,7 @@ dependencies = [
     "razorpay>=2.0.0",
     "qrcode[pil]>=8.0.0",
     "firebase-admin>=6.5.0",
+    "nh3>=0.2.14",
 ]
 
 [project.optional-dependencies]

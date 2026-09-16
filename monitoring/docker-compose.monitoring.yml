@@ -7,8 +7,12 @@ services:
     restart: unless-stopped
     ports:
       - "9093:9093"
+    environment:
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
     volumes:
-      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./alertmanager.yml.template:/etc/alertmanager/alertmanager.yml.template:ro
+      - ./alertmanager-entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
 
   prometheus:
     image: prom/prometheus:v2.47.0

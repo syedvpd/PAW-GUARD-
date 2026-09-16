@@ -4,8 +4,9 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
+from pawguard.core.sanitize import sanitize_html
 from pawguard.modules.auth.schemas import UserProfile
 from pawguard.modules.volunteer.models import ApplicationStatus, AttendanceStatus, VolunteerStatus
 
@@ -80,6 +81,11 @@ class VolunteerProfileCreate(BaseModel):
 
         return self
 
+    @field_validator("notes", "medical_conditions", "animal_handling_experience", mode="before")
+    @classmethod
+    def _sanitize_rich_text_create(cls, v):
+        return sanitize_html(v)
+
 
 class VolunteerProfileUpdate(BaseModel):
     status: VolunteerStatus | None = Field(None, examples=["active"])
@@ -95,6 +101,11 @@ class VolunteerProfileUpdate(BaseModel):
     )
     background_check_completed: bool | None = Field(None, examples=[True])
     background_check_notes: str | None = Field(None, examples=["Clear, verified 2026-07-20."])
+
+    @field_validator("notes", "medical_conditions", "animal_handling_experience", mode="before")
+    @classmethod
+    def _sanitize_rich_text_update(cls, v: str | None) -> str | None:
+        return sanitize_html(v)
 
 
 class VolunteerProfileResponse(BaseModel):

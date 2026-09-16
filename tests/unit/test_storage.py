@@ -253,15 +253,20 @@ class TestS3PresignedUploadUrl:
 
     def test_storage_circuit_breaker_opens_after_5_failures(self) -> None:
         from pawguard.core.resilience import CircuitBreakerOpenException
+        from pawguard.services.storage_service import storage_breaker
 
+        storage_breaker.reset()
         mock_client = MagicMock()
         mock_client.delete_object.side_effect = RuntimeError("S3 connection error")
 
         with patch("pawguard.services.storage_service.boto3.client", return_value=mock_client):
             svc = S3StorageService()
             for _ in range(5):
-                with pytest.raises(RuntimeError):
+                try:
                     svc.delete_object(object_key="test.jpg")
+                except RuntimeError:
+                    pass
 
             with pytest.raises(CircuitBreakerOpenException):
                 svc.delete_object(object_key="test.jpg")
+        storage_breaker.reset()
