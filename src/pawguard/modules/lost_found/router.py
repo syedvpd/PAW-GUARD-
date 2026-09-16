@@ -544,35 +544,37 @@ async def resolve_match(
     service: LostFoundService = Depends(get_lost_found_service),
 ) -> ApiResponse[ReportMatchResponse]:
     match = await service.get_match(match_id)
-    # When a claim has been submitted, route through the audited claim-review
-    # workflow so the reviewer + timestamps are recorded (PRR 3.10).
-    if match.claim_submitted_at is not None:
-        match = await service.review_ownership_claim(
-            match_id,
-            OwnershipClaimReview(approve=approve),
-            actor_id=current_user.id,
-            ip_address=request.client.host if request.client else None,
+    if match.claim_submitted_at is None:
+        raise ValidationFailedError(
+            "Cannot resolve match: an ownership claim must be submitted first."
         )
-        status_val = MatchStatus.CONFIRMED if approve else MatchStatus.REJECTED
+
+    match = await service.review_ownership_claim(
+        match_id,
+        OwnershipClaimReview(approve=approve),
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    status_val = MatchStatus.CONFIRMED if approve else MatchStatus.REJECTED
+    ip_address = request.client.host if request.client else None
+    match = await service.update_match_status(
+        match_id,
+        status_val,
+        actor_id=current_user.id,
+        ip_address=ip_address,
+    )
+    if approve:
         ip_address = request.client.host if request.client else None
-        match = await service.update_match_status(
-            match_id,
-            status_val,
+        await service.resolve_lost_report(
+            match.lost_report_id,
             actor_id=current_user.id,
             ip_address=ip_address,
         )
-        if approve:
-            ip_address = request.client.host if request.client else None
-            await service.resolve_lost_report(
-                match.lost_report_id,
-                actor_id=current_user.id,
-                ip_address=ip_address,
-            )
-            await service.resolve_found_report(
-                match.found_report_id,
-                actor_id=current_user.id,
-                ip_address=ip_address,
-            )
+        await service.resolve_found_report(
+            match.found_report_id,
+            actor_id=current_user.id,
+            ip_address=ip_address,
+        )
 
     return ApiResponse(
         data=ReportMatchResponse.model_validate(match),
