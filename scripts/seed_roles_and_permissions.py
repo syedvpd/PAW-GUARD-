@@ -658,6 +658,7 @@ STANDARD_OPERATIONAL_ACCOUNTS = [
     ("foster.family@pawguard.com", "Foster Family", "foster_family"),
     ("donor@pawguard.com", "Donor", "donor"),
     ("public.user@pawguard.com", "General Public", "general_public"),
+    ("public@pawguard.com", "General Public", "general_public"),
 ]
 
 
