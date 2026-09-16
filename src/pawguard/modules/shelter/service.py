@@ -18,6 +18,7 @@ from pawguard.core.exceptions import (
     NotFoundError,
     ValidationFailedError,
 )
+from pawguard.core.geocoding import validate_coordinates
 from pawguard.core.logging import get_logger
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
@@ -157,10 +158,17 @@ class ShelterService:
         if existing is not None:
             raise ConflictError(f"A shelter facility named '{payload.name}' already exists.")
 
+        if payload.latitude is not None or payload.longitude is not None:
+            geo_res = validate_coordinates(payload.latitude, payload.longitude)
+            if not geo_res.valid:
+                raise ValidationFailedError(geo_res.error or "Invalid coordinates.")
+
         facility = ShelterFacility(
             name=payload.name,
             address=payload.address,
             phone=payload.phone,
+            latitude=payload.latitude,
+            longitude=payload.longitude,
             total_capacity=payload.total_capacity,
             facility_type=payload.facility_type,
         )
@@ -953,7 +961,15 @@ class ShelterService:
         facility = await self._repo.get_facility(facility_id)
         if facility is None:
             raise NotFoundError("Shelter facility not found.")
-        for field, value in payload.model_dump(exclude_unset=True).items():
+        dump = payload.model_dump(exclude_unset=True)
+        if "latitude" in dump or "longitude" in dump:
+            lat = dump.get("latitude", facility.latitude)
+            lon = dump.get("longitude", facility.longitude)
+            if lat is not None or lon is not None:
+                geo_res = validate_coordinates(lat, lon)
+                if not geo_res.valid:
+                    raise ValidationFailedError(geo_res.error or "Invalid coordinates.")
+        for field, value in dump.items():
             setattr(facility, field, value)
         await self._repo._session.flush()
         await self._repo._session.refresh(facility)

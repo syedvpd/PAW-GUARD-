@@ -263,6 +263,7 @@ class DonationRepository:
             await self._session.flush()
             return True
         except Exception:
+            await self._session.rollback()
             return False
 
     async def get_donation_by_id_for_update(self, donation_id: uuid.UUID) -> Donation | None:

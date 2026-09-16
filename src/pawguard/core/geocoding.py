@@ -79,6 +79,14 @@ def validate_coordinates(
             error="Latitude and longitude must both be provided or both omitted.",
         )
 
+    import math
+
+    if math.isnan(lat) or math.isnan(lon) or math.isinf(lat) or math.isinf(lon):
+        return CoordinateValidationResult(
+            valid=False,
+            error="Coordinates cannot be NaN or infinite.",
+        )
+
     # Range validation
     if not (LAT_MIN <= lat <= LAT_MAX):
         return CoordinateValidationResult(

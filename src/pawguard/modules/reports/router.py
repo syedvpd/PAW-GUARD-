@@ -1,3 +1,5 @@
+import contextlib
+import inspect
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -7,13 +9,17 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from pawguard.core.exceptions import NotFoundError, ValidationFailedError
+from pawguard.core.exceptions import (
+    ForbiddenError,
+    NotFoundError,
+    ValidationFailedError,
+)
 from pawguard.core.responses import ApiResponse
 from pawguard.db.session import AsyncSessionLocal, get_db
 from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.models import AuthAuditEventType
-from pawguard.modules.auth.rbac import require_permission
+from pawguard.modules.auth.rbac import is_admin_role, require_permission
 from pawguard.modules.reports.models import JobStatus, ReportJob
 from pawguard.modules.reports.schemas import (
     InventoryAnalyticsResponse,
@@ -30,6 +36,20 @@ from pawguard.services.audit_service import AuditService
 from pawguard.workers.pool import get_arq_pool
 
 router = APIRouter(prefix="/reports", tags=["reports"])
+
+
+async def _safe_commit(db: AsyncSession) -> None:
+    try:
+        in_tx = db.in_transaction()
+        if inspect.iscoroutine(in_tx):
+            in_tx = await in_tx
+        if in_tx:
+            await db.commit()
+        else:
+            await db.flush()
+    except Exception:
+        with contextlib.suppress(Exception):
+            await db.flush()
 
 
 def get_report_service(
@@ -246,7 +266,10 @@ async def create_report_job(
         created_at=datetime.now(UTC),
     )
     db.add(job)
-    await db.flush()
+    # Guarantee transaction commit before background / worker dispatch (CRITICAL FIX #1)
+    await _safe_commit(db)
+    with contextlib.suppress(Exception):
+        await db.refresh(job)
 
     # Clean single-queue dispatch architecture:
     # 1. Primary path: Enqueue to ARQ worker pool if a real queue pool is configured.
@@ -307,7 +330,7 @@ async def execute_report_job(job_id: uuid.UUID, db: AsyncSession) -> ReportJob:
         # Job was already claimed (RUNNING), completed (DONE), or failed (FAILED) by another worker
         return existing
 
-    await db.flush()
+    await _safe_commit(db)
 
     try:
         service = ReportService(db)
@@ -325,7 +348,7 @@ async def execute_report_job(job_id: uuid.UUID, db: AsyncSession) -> ReportJob:
         job.error_message = str(exc)
         job.completed_at = datetime.now(UTC)
 
-    await db.flush()
+    await _safe_commit(db)
     return job
 
 
@@ -336,6 +359,7 @@ async def execute_report_job(job_id: uuid.UUID, db: AsyncSession) -> ReportJob:
 )
 async def get_report_job_status(
     job_id: uuid.UUID,
+    current_user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[ReportJobResponse]:
     """Poll the status of an asynchronous report generation job."""
@@ -343,6 +367,9 @@ async def get_report_job_status(
     job = (await db.execute(stmt)).scalar_one_or_none()
     if not job:
         raise NotFoundError(f"Report job {job_id} not found.")
+
+    if job.requester_id != current_user.id and not is_admin_role(current_user.claims):
+        raise ForbiddenError("You do not have permission to view this report job.")
 
     download_url = None
     if job.status == JobStatus.DONE.value and job.result_object_key:
@@ -378,6 +405,9 @@ async def download_report_job(
     job = (await db.execute(stmt)).scalar_one_or_none()
     if not job:
         raise NotFoundError(f"Report job {job_id} not found.")
+
+    if job.requester_id != current_user.id and not is_admin_role(current_user.claims):
+        raise ForbiddenError("You do not have permission to download this report.")
 
     if job.status != JobStatus.DONE.value:
         raise ValidationFailedError(f"Report job is not ready for download (status: {job.status}).")
@@ -423,6 +453,9 @@ async def download_report(
     current_user: CurrentUser = Depends(get_current_user),
     audit: AuditService = Depends(get_audit_service),
 ) -> RedirectResponse:
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise ValidationFailedError("Invalid report filename.")
+
     # 1. Audit log
     await audit.record(
         event_type=AuthAuditEventType.REPORT_DOWNLOADED,

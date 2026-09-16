@@ -277,7 +277,7 @@ async def test_execute_report_job_transitions_to_done() -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_report_job_status_done_has_download_url() -> None:
+async def test_get_report_job_status_done_has_download_url(mock_user: CurrentUser) -> None:
     """GET /reports/jobs/{job_id} includes download_url when status is DONE."""
     job_id = uuid.uuid4()
     mock_job = ReportJob(
@@ -285,7 +285,7 @@ async def test_get_report_job_status_done_has_download_url() -> None:
         report_type=ReportType.MEDICAL.value,
         format=ReportFormat.PDF.value,
         status=JobStatus.DONE.value,
-        requester_id=uuid.uuid4(),
+        requester_id=mock_user.id,
         result_object_key=f"reports/medical_{job_id}.pdf",
         created_at=datetime.now(UTC),
         completed_at=datetime.now(UTC),
@@ -296,7 +296,7 @@ async def test_get_report_job_status_done_has_download_url() -> None:
     mock_exec_result.scalar_one_or_none.return_value = mock_job
     mock_db.execute.return_value = mock_exec_result
 
-    response = await get_report_job_status(job_id=job_id, db=mock_db)
+    response = await get_report_job_status(job_id=job_id, current_user=mock_user, db=mock_db)
 
     assert response.success is True
     assert response.data.status == JobStatus.DONE.value

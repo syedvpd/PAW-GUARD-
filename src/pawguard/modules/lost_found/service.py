@@ -16,6 +16,7 @@ from pawguard.core.exceptions import (
     NotFoundError,
     ValidationFailedError,
 )
+from pawguard.core.geocoding import validate_coordinates
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginatedResponse
 from pawguard.core.search import SortParams
@@ -171,6 +172,11 @@ class LostFoundService:
             if photo_keys or video_key:
                 StorageService().validate_report_media(photo_keys, video_key)
 
+            if payload.latitude is not None or payload.longitude is not None:
+                geo_res = validate_coordinates(payload.latitude, payload.longitude)
+                if not geo_res.valid:
+                    raise ValidationFailedError(geo_res.error or "Invalid coordinates.")
+
             # Legacy primary key to store on report model
             primary_key = photo_keys[0] if photo_keys else payload.photo_object_key
             # Resolve legacy photo url if primary key is present
@@ -250,6 +256,11 @@ class LostFoundService:
     async def record_public_sighting(
         self, payload: PetSightingCreate, ip_address: str | None = None
     ) -> PetSighting:
+        if payload.latitude is not None or payload.longitude is not None:
+            geo_res = validate_coordinates(payload.latitude, payload.longitude)
+            if not geo_res.valid:
+                raise ValidationFailedError(geo_res.error or "Invalid coordinates.")
+
         sighting = PetSighting(
             pet_id=payload.pet_id,
             lost_report_id=payload.lost_report_id,
@@ -359,6 +370,11 @@ class LostFoundService:
             # Validate S3 objects if present
             if photo_keys or video_key:
                 StorageService().validate_report_media(photo_keys, video_key)
+
+            if payload.latitude is not None or payload.longitude is not None:
+                geo_res = validate_coordinates(payload.latitude, payload.longitude)
+                if not geo_res.valid:
+                    raise ValidationFailedError(geo_res.error or "Invalid coordinates.")
 
             # Legacy primary key to store on report model
             primary_key = photo_keys[0] if photo_keys else payload.photo_object_key

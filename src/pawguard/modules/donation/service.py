@@ -596,13 +596,13 @@ class DonationService:
 
         if event.is_success:
             tx_id = f"TXN-{uuid.uuid4().hex[:12].upper()}"
-            updated = await self._repo.update_gateway_fields(
+            updated, transitioned_to_success = await self._repo.update_gateway_fields_atomic(
                 donation.id,
                 status=DonationStatus.SUCCESS,
                 gateway_payment_id=event.payment_id,
                 transaction_id=tx_id,
             )
-            if updated is not None:
+            if updated is not None and transitioned_to_success:
                 if self._audit:
                     await self._audit.record(
                         event_type=AuthAuditEventType.DONATION_RECEIVED,

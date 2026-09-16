@@ -43,7 +43,7 @@ from pawguard.modules.medical.models import MedicalTreatment, Prescription
 from pawguard.modules.notifications.schemas import BroadcastCreate
 from pawguard.modules.notifications.service import NotificationService
 from pawguard.modules.rescue.models import RescueRequest
-from pawguard.modules.shelter.models import ShelterFacility
+from pawguard.modules.shelter.models import DailyCareLog, ShelterFacility
 from pawguard.services.audit_service import AuditService
 
 logger = get_logger(__name__)
@@ -52,9 +52,11 @@ REFERENCE_TYPE_TABLE_MAP: dict[str, Any] = {
     "dog": DogProfile,
     "rescue": RescueRequest,
     "treatment": MedicalTreatment,
+    "medical_treatment": MedicalTreatment,
     "requisition": RequisitionOrder,
     "prescription": Prescription,
     "shelter_facility": ShelterFacility,
+    "daily_care_log": DailyCareLog,
     "foster": FosterProfile,
     "foster_supply": FosterPlacement,
     "foster_placement": FosterPlacement,
