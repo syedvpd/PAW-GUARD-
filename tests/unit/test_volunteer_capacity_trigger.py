@@ -34,80 +34,83 @@ async def test_volunteer_shift_capacity_trigger_enforcement(
     if db_session.bind and db_session.bind.dialect.name != "postgresql":
         pytest.skip("PostgreSQL required to test database-level trigger trg_check_shift_capacity")
 
-    # 1. Create a volunteer shift with capacity = 2
-    shift_id = uuid.uuid4()
-    shift = VolunteerShift(
-        id=shift_id,
-        role_name="Dog Walking",
-        start_at=datetime.now(UTC),
-        end_at=datetime.now(UTC) + timedelta(hours=2),
-        capacity=2,
-    )
-    db_session.add(shift)
-
-    # 2. Create 3 volunteers
-    v1_id, v2_id, v3_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
-    u1_id, u2_id, u3_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
-
-    for uid, vid, email in [
-        (u1_id, v1_id, f"vol1_{v1_id.hex[:6]}@example.com"),
-        (u2_id, v2_id, f"vol2_{v2_id.hex[:6]}@example.com"),
-        (u3_id, v3_id, f"vol3_{v3_id.hex[:6]}@example.com"),
-    ]:
-        user = User(
-            id=uid,
-            email=email,
-            hashed_password="pw",
-            full_name="Vol",
-            is_active=True,
-            is_verified=True,
+    try:
+        # 1. Create a volunteer shift with capacity = 2
+        shift_id = uuid.uuid4()
+        shift = VolunteerShift(
+            id=shift_id,
+            role_name="Dog Walking",
+            start_at=datetime.now(UTC),
+            end_at=datetime.now(UTC) + timedelta(hours=2),
+            capacity=2,
         )
-        db_session.add(user)
-        vprof = VolunteerProfile(
-            id=vid,
-            user_id=uid,
-            skills=["handling"],
-        )
-        db_session.add(vprof)
+        db_session.add(shift)
 
-    await db_session.flush()
+        # 2. Create 3 volunteers
+        v1_id, v2_id, v3_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+        u1_id, u2_id, u3_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
 
-    # 3. Insert Attendance 1 (capacity: 1/2) -> SUCCESS
-    att1 = ShiftAttendance(
-        id=uuid.uuid4(),
-        shift_id=shift_id,
-        volunteer_id=v1_id,
-        status=AttendanceStatus.CLAIMED,
-    )
-    db_session.add(att1)
-    await db_session.flush()
+        for uid, vid, email in [
+            (u1_id, v1_id, f"vol1_{v1_id.hex[:6]}@example.com"),
+            (u2_id, v2_id, f"vol2_{v2_id.hex[:6]}@example.com"),
+            (u3_id, v3_id, f"vol3_{v3_id.hex[:6]}@example.com"),
+        ]:
+            user = User(
+                id=uid,
+                email=email,
+                hashed_password="pw",
+                full_name="Vol",
+                is_active=True,
+                is_verified=True,
+            )
+            db_session.add(user)
+            vprof = VolunteerProfile(
+                id=vid,
+                user_id=uid,
+                emergency_contact_name="Emergency Contact",
+                emergency_contact_phone="+919876543210",
+                skills=["handling"],
+            )
+            db_session.add(vprof)
 
-    # 4. Insert Attendance 2 (capacity: 2/2) -> SUCCESS
-    att2 = ShiftAttendance(
-        id=uuid.uuid4(),
-        shift_id=shift_id,
-        volunteer_id=v2_id,
-        status=AttendanceStatus.CLAIMED,
-    )
-    db_session.add(att2)
-    await db_session.flush()
-
-    # 5. Insert Attendance 3 (capacity: 3/2) -> MUST BE REJECTED BY TRIGGER
-    att3 = ShiftAttendance(
-        id=uuid.uuid4(),
-        shift_id=shift_id,
-        volunteer_id=v3_id,
-        status=AttendanceStatus.CLAIMED,
-    )
-    db_session.add(att3)
-
-    with pytest.raises(Exception) as exc_info:
         await db_session.flush()
 
-    err_msg = str(exc_info.value)
-    assert "reached maximum capacity" in err_msg or "check_shift_capacity" in err_msg
+        # 3. Insert Attendance 1 (capacity: 1/2) -> SUCCESS
+        att1 = ShiftAttendance(
+            id=uuid.uuid4(),
+            shift_id=shift_id,
+            volunteer_id=v1_id,
+            status=AttendanceStatus.CLAIMED,
+        )
+        db_session.add(att1)
+        await db_session.flush()
 
-    await db_session.rollback()
+        # 4. Insert Attendance 2 (capacity: 2/2) -> SUCCESS
+        att2 = ShiftAttendance(
+            id=uuid.uuid4(),
+            shift_id=shift_id,
+            volunteer_id=v2_id,
+            status=AttendanceStatus.CLAIMED,
+        )
+        db_session.add(att2)
+        await db_session.flush()
+
+        # 5. Insert Attendance 3 (capacity: 3/2) -> MUST BE REJECTED BY TRIGGER
+        att3 = ShiftAttendance(
+            id=uuid.uuid4(),
+            shift_id=shift_id,
+            volunteer_id=v3_id,
+            status=AttendanceStatus.CLAIMED,
+        )
+        db_session.add(att3)
+
+        with pytest.raises(Exception) as exc_info:
+            await db_session.flush()
+
+        err_msg = str(exc_info.value)
+        assert "reached maximum capacity" in err_msg or "check_shift_capacity" in err_msg
+    finally:
+        await db_session.rollback()
 
 
 @pytest.mark.asyncio
