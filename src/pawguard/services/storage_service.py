@@ -307,9 +307,12 @@ class StorageService:
         if not url_or_key:
             return None
 
-        # If it is a third-party non-presigned external URL (e.g. Unsplash), return as-is
+        # If it is a full HTTP(S) URL:
         if url_or_key.startswith("http://") or url_or_key.startswith("https://"):
-            if "X-Amz-Algorithm" not in url_or_key and "storage.supabase.co" not in url_or_key:
+            # If it is already a permanent public asset URL or third-party URL (no expiring signature), return directly
+            if "/storage/v1/object/public/" in url_or_key or (
+                "X-Amz-Algorithm" not in url_or_key and "token=" not in url_or_key
+            ):
                 return url_or_key
 
         object_key = self.extract_object_key(url_or_key)
