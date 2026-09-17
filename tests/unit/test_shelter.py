@@ -781,3 +781,35 @@ class TestShelterService:
         )
         result = await service.create_section(facility_id, payload, actor_id=uuid.uuid4())
         assert result.section_type == SectionType.QUARANTINE
+
+    @pytest.mark.asyncio
+    async def test_record_daily_care_log_with_retrospective_feed_time(
+        self, service, mock_repo, mock_dog_repo
+    ):
+        """Verifies record_daily_care_log preserves custom retrospective feed_time if passed."""
+        from datetime import UTC
+
+        dog_id = uuid.uuid4()
+        user_id = uuid.uuid4()
+        custom_feed_time = datetime(2026, 9, 15, 8, 30, 0, tzinfo=UTC)
+        mock_dog_repo.get_by_id.return_value = DogProfile(
+            id=dog_id,
+            registration_number="DOG-789",
+            name="Max",
+            breed="Mix",
+            gender="male",
+            status=DogStatus.SHELTER,
+        )
+        mock_repo.create_care_log.side_effect = lambda log: log
+
+        payload = DailyCareLogCreate(
+            dog_id=dog_id,
+            feed_time=custom_feed_time,
+            dietary_requirements="Kibble 2 cups",
+        )
+        care_log = await service.submit_daily_care_log(
+            user_id=user_id, payload=payload, actor_id=user_id
+        )
+
+        assert care_log.feed_time == custom_feed_time
+        mock_repo.create_care_log.assert_awaited_once()

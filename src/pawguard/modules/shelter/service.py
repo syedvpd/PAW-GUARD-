@@ -820,7 +820,7 @@ class ShelterService:
         care_log = DailyCareLog(
             dog_id=payload.dog_id,
             logged_by=user_id,
-            feed_time=datetime.now(UTC),
+            feed_time=payload.feed_time or datetime.now(UTC),
             dietary_requirements=payload.dietary_requirements,
             exercise_hours=payload.exercise_hours,
             behavioral_enrichment=payload.behavioral_enrichment,

@@ -170,6 +170,9 @@ class FacilityTransferResponse(BaseModel):
 
 class DailyCareLogCreate(BaseModel):
     dog_id: uuid.UUID
+    feed_time: datetime | None = Field(
+        None, description="Time feeding occurred; defaults to current timestamp if omitted."
+    )
     dietary_requirements: str | None = Field(
         None, examples=["Grain-free diet, small portions 3x daily"]
     )
