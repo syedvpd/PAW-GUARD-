@@ -915,3 +915,30 @@ class TestMedicalPrr35:
         assert clearances[0].dog_id == dog_id
         assert clearances[0].status == "approved"
         assert clearances[0].decision_notes == "Healthy and cleared for adoption."
+
+    @pytest.mark.asyncio
+    async def test_bulk_update_prescription_status(self, service, mock_repo):
+        """Verifies bulk_update_prescription_status triggers deactivation notifications and updates repository."""
+        p_id1 = uuid.uuid4()
+        p_id2 = uuid.uuid4()
+        dog_id = uuid.uuid4()
+        p1 = Prescription(
+            id=p_id1,
+            dog_id=dog_id,
+            vet_id=uuid.uuid4(),
+            drug_name="Amoxicillin",
+            dosage="500mg",
+            route="oral",
+            start_at=datetime.now(UTC),
+            end_at=datetime.now(UTC) + timedelta(days=7),
+            is_active=True,
+        )
+        mock_repo.list_by_ids.return_value = [p1]
+        mock_repo.bulk_update_prescription_status.return_value = 1
+
+        updated_count = await service.bulk_update_prescription_status(
+            ids=[p_id1, p_id2], is_active=False, actor_id=uuid.uuid4()
+        )
+
+        assert updated_count == 1
+        mock_repo.bulk_update_prescription_status.assert_awaited_once_with([p_id1, p_id2], False)

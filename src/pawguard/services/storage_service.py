@@ -41,36 +41,15 @@ _s3_client = None
 
 
 class StorageService:
-    def __init__(self, audit_service: Any = None) -> None:
+    def __init__(self, audit_service: Any = None, client: Any = None) -> None:
         self._audit = audit_service
         global _s3_client
         settings = get_settings()
         self._bucket = settings.s3_bucket_name or "pawguard-media"
         self._endpoint = settings.s3_endpoint_url or ""
 
-        # In unit tests, boto3.client is often mocked/patched. Detect this and bypass the cache
-        # to use the mock. Also reset the global so future real instantiations are not stale.
-        is_mocked = (
-            hasattr(boto3.client, "return_value") or "mock" in type(boto3.client).__name__.lower()
-        )
-        if is_mocked:
-            access_key = settings.aws_access_key_id or "testing_access_key"
-            secret_key = settings.aws_secret_access_key or "testing_secret_key"
-            _s3_client = None  # Reset global so post-mock tests create a fresh real client
-            self._client = boto3.client(
-                "s3",
-                region_name=settings.s3_region or "ap-southeast-1",
-                endpoint_url=settings.s3_endpoint_url or None,
-                aws_access_key_id=access_key,
-                aws_secret_access_key=secret_key,
-                config=Config(
-                    signature_version="s3v4",
-                    s3={"addressing_style": "path"},
-                    connect_timeout=5,
-                    read_timeout=10,
-                    retries={"max_attempts": 3, "mode": "standard"},
-                ),
-            )
+        if client is not None:
+            self._client = client
             return
 
         if _s3_client is None:

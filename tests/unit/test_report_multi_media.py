@@ -1,6 +1,6 @@
 """Unit tests for multi-media support across Lost, Found, and Emergency Rescue reports."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -57,20 +57,18 @@ class TestReportMultiMediaValidation:
     def test_unsupported_image_mime_type_raises(self) -> None:
         mock_client = MagicMock()
         mock_client.head_object.return_value = {"ContentType": "image/gif", "ContentLength": 1000}
-        with patch("pawguard.services.storage_service.boto3.client", return_value=mock_client):
-            svc = StorageService()
+        svc = StorageService(client=mock_client)
 
-            with pytest.raises(ValidationFailedError, match="Unsupported image type"):
-                svc.validate_report_media(photo_keys=["lost-found/bad.gif"], video_key=None)
+        with pytest.raises(ValidationFailedError, match="Unsupported image type"):
+            svc.validate_report_media(photo_keys=["lost-found/bad.gif"], video_key=None)
 
     def test_unsupported_video_mime_type_raises(self) -> None:
         mock_client = MagicMock()
         mock_client.head_object.return_value = {"ContentType": "video/avi", "ContentLength": 500000}
-        with patch("pawguard.services.storage_service.boto3.client", return_value=mock_client):
-            svc = StorageService()
+        svc = StorageService(client=mock_client)
 
-            with pytest.raises(ValidationFailedError, match="Unsupported video type"):
-                svc.validate_report_media(photo_keys=[], video_key="lost-found/bad.avi")
+        with pytest.raises(ValidationFailedError, match="Unsupported video type"):
+            svc.validate_report_media(photo_keys=[], video_key="lost-found/bad.avi")
 
     def test_oversized_photo_raises(self) -> None:
         mock_client = MagicMock()
@@ -79,11 +77,10 @@ class TestReportMultiMediaValidation:
             "ContentType": "image/jpeg",
             "ContentLength": 60 * 1024 * 1024,
         }
-        with patch("pawguard.services.storage_service.boto3.client", return_value=mock_client):
-            svc = StorageService()
+        svc = StorageService(client=mock_client)
 
-            with pytest.raises(ValidationFailedError, match="exceeds the maximum 10MB limit"):
-                svc.validate_report_media(photo_keys=["lost-found/huge.jpg"], video_key=None)
+        with pytest.raises(ValidationFailedError, match="exceeds the maximum 10MB limit"):
+            svc.validate_report_media(photo_keys=["lost-found/huge.jpg"], video_key=None)
 
     def test_oversized_video_raises(self) -> None:
         mock_client = MagicMock()
@@ -92,11 +89,10 @@ class TestReportMultiMediaValidation:
             "ContentType": "video/mp4",
             "ContentLength": 120 * 1024 * 1024,
         }
-        with patch("pawguard.services.storage_service.boto3.client", return_value=mock_client):
-            svc = StorageService()
+        svc = StorageService(client=mock_client)
 
-            with pytest.raises(ValidationFailedError, match="exceeds the maximum"):
-                svc.validate_report_media(photo_keys=[], video_key="lost-found/huge.mp4")
+        with pytest.raises(ValidationFailedError, match="exceeds the maximum"):
+            svc.validate_report_media(photo_keys=[], video_key="lost-found/huge.mp4")
 
 
 class TestReportSchemaValidation:

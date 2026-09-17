@@ -5,7 +5,7 @@ import contextlib
 import uuid
 from datetime import UTC, datetime
 from io import BytesIO
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from PIL import Image
@@ -195,8 +195,7 @@ class TestS3PresignedUploadUrl:
     """
 
     def _service(self, mock_client: MagicMock) -> S3StorageService:
-        with patch("pawguard.services.storage_service.boto3.client", return_value=mock_client):
-            return S3StorageService()
+        return S3StorageService(client=mock_client)
 
     def test_upload_url_does_not_sign_content_type(self) -> None:
         mock_client = MagicMock()
@@ -237,9 +236,8 @@ class TestS3PresignedUploadUrl:
         mock_audit = AsyncMock(spec=AuditService)
         actor_id = uuid.uuid4()
 
-        with patch("pawguard.services.storage_service.boto3.client", return_value=mock_client):
-            svc = S3StorageService(audit_service=mock_audit)
-            svc.delete_object(object_key="dogs/abc.jpg", actor_id=actor_id, ip_address="127.0.0.1")
+        svc = S3StorageService(audit_service=mock_audit, client=mock_client)
+        svc.delete_object(object_key="dogs/abc.jpg", actor_id=actor_id, ip_address="127.0.0.1")
 
         mock_client.delete_object.assert_called_once_with(
             Bucket="pawguard-media", Key="dogs/abc.jpg"
@@ -260,12 +258,11 @@ class TestS3PresignedUploadUrl:
         mock_client = MagicMock()
         mock_client.delete_object.side_effect = RuntimeError("S3 connection error")
 
-        with patch("pawguard.services.storage_service.boto3.client", return_value=mock_client):
-            svc = S3StorageService()
-            for _ in range(5):
-                with contextlib.suppress(RuntimeError):
-                    svc.delete_object(object_key="test.jpg")
-
-            with pytest.raises(CircuitBreakerOpenException):
+        svc = S3StorageService(client=mock_client)
+        for _ in range(5):
+            with contextlib.suppress(RuntimeError):
                 svc.delete_object(object_key="test.jpg")
+
+        with pytest.raises(CircuitBreakerOpenException):
+            svc.delete_object(object_key="test.jpg")
         storage_breaker.reset()

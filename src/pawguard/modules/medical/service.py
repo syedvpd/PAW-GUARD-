@@ -744,7 +744,27 @@ class MedicalService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> int:
-        count = await self._repo.bulk_update_prescription_status(ids, is_active)
+        """Bulk update is_active status for non-deleted prescriptions.
+
+        Note: Prescription.is_active is a boolean toggle, not a multi-state string enum,
+        so a state transition matrix (like MedicalClearance.status) does not apply.
+        Deactivating active prescriptions mid-course triggers shelter_manager notifications
+        consistent with single-record deactivation (update_prescription_status).
+        """
+        if not is_active:
+            existing = await self._repo.list_by_ids(ids)
+            active_items = [p for p in existing if p.is_active]
+            count = await self._repo.bulk_update_prescription_status(ids, is_active)
+            for prescription in active_items:
+                await self._notify(
+                    title="Prescription Deactivated",
+                    body=f"{prescription.drug_name} for dog {prescription.dog_id} was deactivated mid-course.",
+                    notification_type="prescription_deactivated",
+                    target_roles=["shelter_manager"],
+                )
+        else:
+            count = await self._repo.bulk_update_prescription_status(ids, is_active)
+
         if self._audit and actor_id:
             await self._audit.record(
                 event_type=AuthAuditEventType.MEDICAL_RECORD_UPDATED,
