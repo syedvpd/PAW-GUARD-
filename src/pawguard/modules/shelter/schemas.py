@@ -6,6 +6,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from pawguard.core.sanitize import sanitize_html
 from pawguard.modules.dog.models import DogGender, DogStatus, DogTemperament
 from pawguard.modules.inventory.schemas import InventoryConsumptionItem
 from pawguard.modules.shelter.models import (
@@ -182,6 +183,13 @@ class DailyCareLogCreate(BaseModel):
         None, examples=[[{"item_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6", "quantity": 1.0}]]
     )
 
+    @field_validator("dietary_requirements", "behavioral_enrichment", mode="before")
+    @classmethod
+    def _sanitize_prose(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return sanitize_html(v)
+        return v
+
 
 class DailyCareLogResponse(BaseModel):
     id: uuid.UUID
@@ -200,6 +208,13 @@ class DailyCareLogResponse(BaseModel):
 class KennelCleaningLogCreate(BaseModel):
     method: str | None = Field(None, min_length=1, max_length=64, examples=["pressure wash"])
     notes: str | None = Field(None, examples=["Full disinfection after parvo case."])
+
+    @field_validator("method", "notes", mode="before")
+    @classmethod
+    def _sanitize_cleaning_prose(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return sanitize_html(v)
+        return v
 
 
 class KennelCleaningLogResponse(BaseModel):
@@ -305,6 +320,13 @@ class ShelterVetCheckRequest(BaseModel):
     urgency: Literal["routine", "urgent", "emergency"] = Field(
         "routine", description="Urgency level of the request"
     )
+
+    @field_validator("reason", "notes", mode="before")
+    @classmethod
+    def _sanitize_vet_prose(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return sanitize_html(v)
+        return v
 
     @field_validator("urgency", mode="before")
     @classmethod
