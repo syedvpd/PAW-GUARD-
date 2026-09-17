@@ -7,14 +7,10 @@ from typing import Any
 from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from pawguard.modules.auth.models import Role, User, UserRole
 from pawguard.modules.donation.models import Donation, DonationStatus
-from pawguard.modules.fleet.models import Vehicle
 from pawguard.modules.inventory.models import InventoryItem
 from pawguard.modules.medical.models import ClinicalExam, MedicalTreatment, VaccinationRecord
 from pawguard.modules.rescue.models import (
-    RescueDispatch,
-    RescueDispatchAgent,
     RescueRequest,
     RescueStatus,
 )
@@ -113,12 +109,6 @@ async def rescue_operations_dashboard(
     if cached is not None:
         return cached
 
-    active_statuses = [
-        RescueStatus.DISPATCHED,
-        RescueStatus.LOCATED,
-        RescueStatus.RESCUED,
-    ]
-
     status_res = await session.execute(
         select(RescueRequest.status, func.count())
         .where(RescueRequest.deleted_at.is_(None))
@@ -129,54 +119,24 @@ async def rescue_operations_dashboard(
         .where(RescueRequest.deleted_at.is_(None))
         .group_by(RescueRequest.severity)
     )
-    active_disp_res = await session.execute(
-        select(func.count(RescueDispatch.id))
-        .join(RescueRequest, RescueRequest.id == RescueDispatch.rescue_request_id)
-        .where(
-            RescueRequest.status.in_(active_statuses),
-            RescueRequest.deleted_at.is_(None),
-        )
-    )
-    agents_busy_res = await session.execute(
-        select(func.count(func.distinct(RescueDispatchAgent.agent_id)))
-        .join(RescueDispatch, RescueDispatch.id == RescueDispatchAgent.dispatch_id)
-        .join(RescueRequest, RescueRequest.id == RescueDispatch.rescue_request_id)
-        .where(
-            RescueRequest.status.in_(active_statuses),
-            RescueRequest.deleted_at.is_(None),
-        )
-    )
-    agents_total_res = await session.execute(
-        select(func.count(func.distinct(User.id)))
-        .join(UserRole, UserRole.user_id == User.id)
-        .join(Role, Role.id == UserRole.role_id)
-        .where(
-            User.deleted_at.is_(None),
-            User.is_active.is_(True),
-            Role.name == "rescue_agent",
-        )
-    )
-    veh_assigned_res = await session.execute(
-        select(func.count(func.distinct(RescueDispatch.assigned_vehicle_id)))
-        .join(RescueRequest, RescueRequest.id == RescueDispatch.rescue_request_id)
-        .where(
-            RescueDispatch.assigned_vehicle_id.isnot(None),
-            RescueRequest.status.in_(active_statuses),
-            RescueRequest.deleted_at.is_(None),
-        )
-    )
-    veh_total_res = await session.execute(
-        select(func.count(Vehicle.id)).where(Vehicle.deleted_at.is_(None))
-    )
+    metrics_stmt = text("""
+        SELECT
+            (SELECT COUNT(*) FROM rescue_dispatches rd JOIN rescue_requests rr ON rr.id = rd.rescue_request_id WHERE rr.status IN ('dispatched', 'located', 'rescued') AND rr.deleted_at IS NULL) AS active_dispatches,
+            (SELECT COUNT(DISTINCT rda.agent_id) FROM rescue_dispatch_agents rda JOIN rescue_dispatches rd ON rd.id = rda.dispatch_id JOIN rescue_requests rr ON rr.id = rd.rescue_request_id WHERE rr.status IN ('dispatched', 'located', 'rescued') AND rr.deleted_at IS NULL) AS agents_busy,
+            (SELECT COUNT(DISTINCT u.id) FROM users u JOIN user_roles ur ON ur.user_id = u.id JOIN roles r ON r.id = ur.role_id WHERE u.deleted_at IS NULL AND u.is_active = true AND r.name = 'rescue_agent') AS agents_total,
+            (SELECT COUNT(DISTINCT rd.assigned_vehicle_id) FROM rescue_dispatches rd JOIN rescue_requests rr ON rr.id = rd.rescue_request_id WHERE rd.assigned_vehicle_id IS NOT NULL AND rr.status IN ('dispatched', 'located', 'rescued') AND rr.deleted_at IS NULL) AS vehicles_assigned,
+            (SELECT COUNT(*) FROM fleet_vehicles WHERE deleted_at IS NULL) AS vehicles_total
+    """)
+    metrics_row = (await session.execute(metrics_stmt)).one()
 
     by_status: dict[str, int] = {str(row[0]): row[1] for row in status_res.all()}
     by_severity: dict[str, int] = {str(row[0]): row[1] for row in severity_res.all()}
-    active_dispatches = active_disp_res.scalar_one()
-    agents_busy = agents_busy_res.scalar_one()
-    agents_total = agents_total_res.scalar_one()
+    active_dispatches = int(metrics_row.active_dispatches or 0)
+    agents_busy = int(metrics_row.agents_busy or 0)
+    agents_total = int(metrics_row.agents_total or 0)
     agents_available = max(agents_total - agents_busy, 0)
-    vehicles_assigned = veh_assigned_res.scalar_one()
-    vehicles_total = veh_total_res.scalar_one()
+    vehicles_assigned = int(metrics_row.vehicles_assigned or 0)
+    vehicles_total = int(metrics_row.vehicles_total or 0)
     vehicles_available = max(vehicles_total - vehicles_assigned, 0)
 
     result = {
