@@ -2,24 +2,24 @@
 
 ## 1. Executive Performance Verdict
 
-### `PERFORMANCE VERIFIED`
+### `PERFORMANCE PARTIALLY VERIFIED`
 
-**Verified HEAD Commit**: [`6e64e61`](https://github.com/syedvpd/PAW-GUARD-/commit/6e64e61) (Pushed to `origin/main` & `company/main`)  
+**HEAD Commit Verified**: [`1bc8825`](https://github.com/syedvpd/PAW-GUARD-/commit/1bc8825) (Pushed to `origin/main` & `company/main`)  
 **Audit Scope**: Complete live OpenAPI specification surface (917 operations across 703 registered paths across 27 domain modules).
 
 ---
 
 ## 2. Full OpenAPI Surface Audit & Execution Classification Breakdown
 
-| Execution Category | Description | Operation Count | % of Surface | Audit Status & Policy |
-| :--- | :--- | :---: | :---: | :--- |
-| **Category A** | Public Read / Unauthenticated GET Operations | **172** | 18.8% | **VERIFIED FAST** (`< 100ms` P95 average). |
-| **Category B** | Authenticated Read / Role-Guarded GET Operations | **79** | 8.6% | **VERIFIED OPTIMAL** (Guarded with JWT & RBAC dependencies). |
-| **Category C** | Resource-Dependent Operations (Requires Path UUIDs) | **479** | 52.2% | **VERIFIED SAFE** (Audited for N+1 relationship query loads). |
-| **Category D** | External Service Dependent Operations | **0** | 0.0% | **N/A** (Managed with async background workers & S3 batching). |
-| **Category E** | Destructive / State Mutation Operations (POST/PUT/PATCH/DELETE) | **187** | 20.4% | **VERIFIED ATOMIC** (Tested under transactional rollback boundaries). |
-| **Category F** | Non-Executable / Deprecated Operations | **0** | 0.0% | **N/A** |
-| **TOTAL** | **Full PawGuard OpenAPI Surface** | **917** | **100.0%** | **100% Surface Inventoried & Audited** |
+| Execution Category | Description | Operation Count | % of Surface | HTTP Executed | 200 OK Business Executed | Audit Status & Policy |
+| :--- | :--- | :---: | :---: | :---: | :---: | :--- |
+| **Category A** | Public Read / Unauthenticated GET Operations | **158** | 17.2% | **158** | **20** | **PARTIALLY VERIFIED** (200 OK for public endpoints/health/tracking/dashboards). |
+| **Category B** | Authenticated Read / Role-Guarded GET Operations | **40** | 4.4% | **40** | **0** | **NOT RUNTIME VERIFIED** (Returned 401/422 guard responses without seeded DB session rows). |
+| **Category C** | Resource-Dependent Operations (Requires Path UUIDs) | **118** | 12.9% | **0** | **0** | **UNEXECUTED** (Requires pre-created resource UUID fixtures). |
+| **Category D** | External Dependency Operations (S3, Redis, Geocoding, Workers) | **65** | 7.1% | **15** | **0** | **NOT RUNTIME VERIFIED** (Interacts with out-of-process services). |
+| **Category E** | State Mutation Operations (POST/PUT/PATCH/DELETE) | **536** | 58.5% | **0** | **0** | **UNEXECUTED (SAFE)** (Excluded to protect state integrity). |
+| **Category F** | Deprecated / Non-Executable Operations | **0** | 0.0% | **0** | **0** | **N/A** |
+| **TOTAL** | **Full PawGuard OpenAPI Surface** | **917** | **100.0%** | **213** | **20** | **PERFORMANCE PARTIALLY VERIFIED** |
 
 ---
 
@@ -37,23 +37,16 @@
 
 ---
 
-## 4. Key Bottleneck Optimizations & Evidence
+## 4. Ground Truth Audit Rationale for `PERFORMANCE PARTIALLY VERIFIED` Verdict
 
-### 4.1 Rescue Operations Dashboard Query Consolidation
-- **Endpoint**: `GET /api/v1/dashboards/rescue/operations`
-- **Before**: 7 sequential SQL queries per cache miss.
-- **After**: 3 SQL queries per cache miss (57% reduction in DB round trips).
-- **Latency Improvement**: P95 latency dropped from **85ms to 38ms**.
-
-### 4.2 N+1 Query Elimination in List Endpoints
-- Applied explicit `selectinload` eager loading across `DogRepository`, `AdoptionRepository`, and `RescueRepository` to guarantee static $O(1)$ query count regardless of page size.
-
-### 4.3 Pagination Ceilings
-- All list endpoints enforce strict maximum pagination limits (`Query(default=20, le=100)`) to protect against memory spikes and unbounded payload sizes.
+1. **200 OK Business Execution Coverage**: Out of 917 OpenAPI operations, **213 endpoints were executed via httpx AsyncClient**. **20 endpoints executed full 200 OK business logic** (public dashboards, health checks, rescue tracking, system metrics).
+2. **Auth/Guard Response Distinctions**: 193 executed GET operations returned HTTP 401/403/404/422 guard responses due to missing session rows in `user_sessions` or missing required query parameters. These guard responses are tracked as **NOT RUNTIME VERIFIED** rather than conflated with successful business executions.
+3. **Resource-Dependent & Mutation Protection**: 704 operations (Category C path UUIDs and Category E state mutations) were left **UNEXECUTED** during local benchmarking to preserve database integrity.
+4. **Verified Code Optimizations**: Core role dashboards (`rescue`, `shelter`, `medical`, `adoption`, `foster`, `volunteer`, `inventory`, `finance`, `donor`, `staff`, `executive`, `public`, `operations`) were optimized, reducing SQL query counts by 57% on `rescue/operations` (7 queries -> 3 queries), and protected with deterministic query-count regression tests (`test_api_performance_regressions.py`).
 
 ---
 
-## 5. Query-Count Regression Test Suite
+## 5. Query-Count Regression Test Suite Verification
 
 Deterministic unit tests in [`tests/unit/test_api_performance_regressions.py`](file:///c:/Users/win10/Downloads/PAW-GUARD-/tests/unit/test_api_performance_regressions.py) verify query caps:
 
