@@ -1057,23 +1057,40 @@ class FosterService:
                 exc_info=True,
             )
             try:
-                from pawguard.modules.auth.models import AuthAuditLog
+                if self._audit:
+                    await self._audit.record(
+                        event_type="adoption_agreement_failed",
+                        actor_id=application.adopter_id,
+                        ip_address="",
+                        user_agent="",
+                        metadata={
+                            "application_id": str(application.id),
+                            "dog_id": str(application.dog_id) if application.dog_id else None,
+                            "error": str(exc),
+                            "status": "failed",
+                            "operation": "foster_to_adopt_lease_pdf_generation",
+                            "timestamp": datetime.now(UTC).isoformat(),
+                            "action_required": "manual_agreement_generation",
+                        },
+                    )
+                else:
+                    from pawguard.modules.auth.models import AuthAuditLog
 
-                audit_log = AuthAuditLog(
-                    event_type="adoption_agreement_failed",
-                    user_id=application.adopter_id,
-                    event_metadata={
-                        "application_id": str(application.id),
-                        "dog_id": str(application.dog_id) if application.dog_id else None,
-                        "error": str(exc),
-                        "status": "failed",
-                        "operation": "foster_to_adopt_lease_pdf_generation",
-                        "timestamp": datetime.now(UTC).isoformat(),
-                        "action_required": "manual_agreement_generation",
-                    },
-                )
-                self._repo._session.add(audit_log)
-                await self._repo._session.flush()
+                    audit_log = AuthAuditLog(
+                        event_type="adoption_agreement_failed",
+                        user_id=application.adopter_id,
+                        event_metadata={
+                            "application_id": str(application.id),
+                            "dog_id": str(application.dog_id) if application.dog_id else None,
+                            "error": str(exc),
+                            "status": "failed",
+                            "operation": "foster_to_adopt_lease_pdf_generation",
+                            "timestamp": datetime.now(UTC).isoformat(),
+                            "action_required": "manual_agreement_generation",
+                        },
+                    )
+                    self._repo._session.add(audit_log)
+                    await self._repo._session.flush()
             except Exception as audit_exc:
                 logger.error("adoption_lease_audit_persist_failed", error=str(audit_exc))
 
