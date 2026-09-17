@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from pawguard.core.cache_decorator import invalidate_route_cache
 from pawguard.core.exceptions import ConflictError, NotFoundError, ValidationFailedError
 from pawguard.core.pagination import PageParams, build_pagination_meta
 from pawguard.core.responses import PaginationMeta
@@ -784,6 +785,7 @@ class PortalService:
         await self._session.flush()
         # veterinary_partners feeds the transparency aggregate - purge it.
         await self._invalidate_stats_cache()
+        await invalidate_route_cache("portal")
         return result
 
     async def update_vet(
@@ -802,6 +804,7 @@ class PortalService:
         await self._session.refresh(partner)
         # veterinary_partners feeds the transparency aggregate - purge it.
         await self._invalidate_stats_cache()
+        await invalidate_route_cache("portal")
         return partner
 
     async def list_vets(
@@ -995,6 +998,7 @@ class PortalService:
         await self._repo.soft_delete_vet(partner_id)
         await self._session.flush()
         await self._invalidate_stats_cache()
+        await invalidate_route_cache("portal")
 
     # ── Bulk operations ─────────────────────────────────────────────────────
 

@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
@@ -699,6 +699,21 @@ class TestPortalService:
         await svc.create_vet(VeterinaryPartnerCreate(name="Vet", address="A", phone="+12345"))
         deleted = {c.args[0] for c in cache.delete.await_args_list}
         assert deleted == {"hero_stats", "transparency_stats"}
+
+    @pytest.mark.asyncio
+    async def test_create_update_delete_vet_invalidate_route_cache(self, service, mock_repo):
+        """A created/edited/deleted vet must not stay hidden behind the 300s
+        route cache on GET /portal/veterinary-network - each write busts it."""
+        vet = VeterinaryPartner(
+            id=uuid.uuid4(), name="Vet", address="A", phone="+12345", is_emergency=False, is_active=True
+        )
+        mock_repo.create_vet.return_value = vet
+        mock_repo.get_vet.return_value = vet
+        with patch("pawguard.modules.portal.service.invalidate_route_cache", new=AsyncMock()) as invalidate:
+            await service.create_vet(VeterinaryPartnerCreate(name="Vet", address="A", phone="+12345"))
+            await service.update_vet(vet.id, VeterinaryPartnerUpdate(name="Vet 2"))
+            await service.soft_delete_vet(vet.id)
+        assert invalidate.await_args_list == [call("portal")] * 3
 
     @pytest.mark.asyncio
     async def test_get_transparency_stats_cache_hit(self, mock_repo, mock_session):
