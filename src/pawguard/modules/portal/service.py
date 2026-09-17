@@ -1954,7 +1954,7 @@ class PortalService:
             if hasattr(self._session, "commit"):
                 with contextlib.suppress(Exception):
                     await self._session.commit()
-            return page
+            return await self._repo.get_cms_page_by_slug(slug) or page
         return None
 
     async def get_public_cms_page(self, slug: str) -> PublicCmsPageResponse:
@@ -1963,6 +1963,7 @@ class PortalService:
         page = await self._get_or_create_default_cms_page(slug)
         if page is None:
             raise NotFoundError(f"CMS page '{slug}' not found.")
+        page = await self._repo.get_cms_page_by_slug(slug) or page
 
         sections_dict: dict[str, dict[str, Any]] = {}
         for sec in page.sections:
@@ -2007,6 +2008,7 @@ class PortalService:
         page = await self._get_or_create_default_cms_page(slug)
         if page is None:
             raise NotFoundError(f"CMS page '{slug}' not found.")
+        page = await self._repo.get_cms_page_by_slug(slug) or page
         return CmsPageResponse.model_validate(page)
 
     async def update_admin_cms_page(
@@ -2083,7 +2085,8 @@ class PortalService:
                 metadata={"action": "cms_draft_saved", "slug": slug},
             )
 
-        return CmsPageResponse.model_validate(page)
+        refreshed_page = await self._repo.get_cms_page_by_slug(slug)
+        return CmsPageResponse.model_validate(refreshed_page or page)
 
     async def publish_admin_cms_page(
         self,
@@ -2137,7 +2140,8 @@ class PortalService:
                 metadata={"action": "cms_page_published", "slug": slug, "version": version_num},
             )
 
-        return CmsPageResponse.model_validate(page)
+        refreshed_page = await self._repo.get_cms_page_by_slug(slug)
+        return CmsPageResponse.model_validate(refreshed_page or page)
 
     async def discard_admin_cms_page(
         self,
@@ -2167,7 +2171,8 @@ class PortalService:
                 metadata={"action": "cms_draft_discarded", "slug": slug},
             )
 
-        return CmsPageResponse.model_validate(page)
+        refreshed_page = await self._repo.get_cms_page_by_slug(slug)
+        return CmsPageResponse.model_validate(refreshed_page or page)
 
 
 DEFAULT_CMS_PAGES_SEED: list[dict[str, Any]] = [
