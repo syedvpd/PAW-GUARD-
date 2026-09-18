@@ -484,6 +484,46 @@ class TestShelterService:
             await service.confirm_transfer_sender(uuid.uuid4())
 
     @pytest.mark.asyncio
+    async def test_list_transfers_with_no_managed_facility_still_sees_own_transfers(
+        self, service, mock_repo
+    ):
+        """A facility-scoped actor with managed_facility_id=None (a data gap,
+        not a permission the actor lacks) must still see transfers they
+        personally initiated, instead of an unconditional empty list."""
+        actor_id = uuid.uuid4()
+        own_transfer = FacilityTransfer(
+            id=uuid.uuid4(),
+            dog_id=uuid.uuid4(),
+            from_facility_id=uuid.uuid4(),
+            to_facility_id=uuid.uuid4(),
+            transferred_by=actor_id,
+            status=TransferStatus.PENDING,
+        )
+        others_transfer = FacilityTransfer(
+            id=uuid.uuid4(),
+            dog_id=uuid.uuid4(),
+            from_facility_id=uuid.uuid4(),
+            to_facility_id=uuid.uuid4(),
+            transferred_by=uuid.uuid4(),
+            status=TransferStatus.PENDING,
+        )
+        mock_repo.list_transfers.return_value = [own_transfer, others_transfer]
+
+        actor = User(
+            id=actor_id,
+            email="shelter.manager@test.com",
+            full_name="Shelter Manager",
+            roles=[Role(name="shelter_manager")],
+        )
+        actor.managed_facility_id = None
+        mock_repo._session.execute = AsyncMock(
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=actor))
+        )
+
+        result = await service.list_transfers(actor_id=actor_id)
+        assert [t.id for t in result] == [own_transfer.id]
+
+    @pytest.mark.asyncio
     async def test_submit_daily_care_log(self, service, mock_repo, mock_dog_repo):
         dog_id = uuid.uuid4()
         mock_dog_repo.get_by_id.return_value = DogProfile(

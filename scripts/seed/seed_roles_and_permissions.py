@@ -736,6 +736,30 @@ async def reconcile_standard_accounts(
                 if verbose:
                     print(f"  [SYNCED] {full_name} ({normalized_email})")
 
+        # shelter_manager is a facility-scoped role: several endpoints
+        # (confirm-sender/receiver on transfers, list_transfers, vet-check
+        # requests) reject the actor outright when managed_facility_id is
+        # None, so the demo account needs a real facility assigned or it
+        # can never complete the transfer workflows it's meant to exercise.
+        if role_name == "shelter_manager" and user.managed_facility_id is None:
+            from pawguard.modules.shelter.models import ShelterFacility
+
+            facility = (
+                await session.execute(
+                    select(ShelterFacility).order_by(ShelterFacility.created_at).limit(1)
+                )
+            ).scalar_one_or_none()
+            if facility is not None:
+                user.managed_facility_id = facility.id
+                updated_count += 1
+                if verbose:
+                    print(f"  [SYNCED] {full_name} ({normalized_email}) managed_facility_id -> {facility.id}")
+            elif verbose:
+                print(
+                    f"  [SKIP] {full_name} ({normalized_email}) has no managed_facility_id "
+                    "and no shelter facility exists yet to assign."
+                )
+
     await session.flush()
     return {"count": updated_count, "accounts": [e[0] for e in STANDARD_OPERATIONAL_ACCOUNTS]}
 

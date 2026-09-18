@@ -803,8 +803,12 @@ class ShelterService:
                 for t in transfers
                 if t.from_facility_id == actor.managed_facility_id
                 or t.to_facility_id == actor.managed_facility_id
+                or t.transferred_by == actor_id
             ]
-        return []
+        # No managed facility on record: still surface transfers this actor
+        # personally initiated, so a facility-scoped user isn't locked out of
+        # seeing their own in-flight requests (see managed_facility_id gap).
+        return [t for t in transfers if t.transferred_by == actor_id]
 
     async def submit_daily_care_log(
         self,
