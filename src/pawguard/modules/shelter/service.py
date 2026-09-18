@@ -458,7 +458,7 @@ class ShelterService:
                     "kennel_id": str(kennel_id),
                     "new_status": status.value,
                 },
-                before_state={"sanitation_state": prior_status.value},
+                before_state={"sanitation_state": KennelSanitationState(prior_status).value},
                 after_state={"sanitation_state": status.value},
             )
         return kennel
@@ -509,7 +509,7 @@ class ShelterService:
                     "new_status": KennelSanitationState.CLEAN.value,
                     "cleaning_log_id": str(log.id),
                 },
-                before_state={"sanitation_state": prior_status.value},
+                before_state={"sanitation_state": KennelSanitationState(prior_status).value},
                 after_state={"sanitation_state": KennelSanitationState.CLEAN.value},
             )
         return log
