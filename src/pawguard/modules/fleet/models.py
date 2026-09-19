@@ -4,7 +4,7 @@ import uuid
 from datetime import date, datetime
 from enum import StrEnum
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -24,6 +24,26 @@ class VehicleType(StrEnum):
     MOBILE_VET_UNIT = "mobile_vet_unit"
     UTILITY = "utility"
     OTHER = "other"
+
+
+class MaintenanceType(StrEnum):
+    SERVICE = "service"
+    SAFETY_INSPECTION = "safety_inspection"
+    REPAIR = "repair"
+
+
+class EquipmentCategory(StrEnum):
+    NET_GUN = "net_gun"
+    TRAP = "trap"
+    TEMPERATURE_CONTROLLED_CAGE = "temperature_controlled_cage"
+    MICROCHIP_READER = "microchip_reader"
+    OTHER = "other"
+
+
+class EquipmentCondition(StrEnum):
+    GOOD = "good"
+    NEEDS_REPAIR = "needs_repair"
+    RETIRED = "retired"
 
 
 class Vehicle(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
@@ -61,13 +81,48 @@ class FleetMaintenance(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
         index=True,
     )
     service_date: Mapped[date] = mapped_column(Date, nullable=False)
+    maintenance_type: Mapped[str] = mapped_column(
+        String(32), default=MaintenanceType.SERVICE, server_default="service", nullable=False
+    )
     description: Mapped[str] = mapped_column(Text, nullable=False)
     cost: Mapped[float] = mapped_column(Numeric(10, 2), default=0.0, nullable=False)
     next_due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
 
+class EquipmentAsset(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
+    """High-value capture equipment register (PRR 3.13)."""
+
+    __tablename__ = "equipment_assets"
+
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    category: Mapped[str] = mapped_column(
+        String(64), default=EquipmentCategory.OTHER, nullable=False
+    )
+    serial_number: Mapped[str | None] = mapped_column(String(128), unique=True, nullable=True)
+    condition: Mapped[str] = mapped_column(
+        String(32), default=EquipmentCondition.GOOD, nullable=False
+    )
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class EquipmentCheckout(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "equipment_checkouts"
+    __table_args__ = (
+        Index(
+            "uq_equipment_checkouts_asset_outstanding",
+            "asset_id",
+            unique=True,
+            postgresql_where=text("asset_id IS NOT NULL AND returned_at IS NULL"),
+            sqlite_where=text("asset_id IS NOT NULL AND returned_at IS NULL"),
+        ),
+    )
+
+    asset_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("equipment_assets.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     # Net Gun, Trap, Crate, etc.
     equipment_name: Mapped[str] = mapped_column(String(255), nullable=False)

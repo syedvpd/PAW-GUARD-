@@ -8,7 +8,7 @@ Vehicle fleet management, equipment checkout/release lifecycle, fuel logging, an
 
 ```
 fleet/
-  router.py          # 17 endpoints
+  router.py          # 27 endpoints
   service.py         # FleetService (vehicles, equipment, fuel)
   repository.py      # Data access
   models.py          # ORM models + enums
@@ -23,6 +23,10 @@ fleet/
 | `FleetMaintenance` | `fleet_maintenances` | Service records with next_due_date |
 | `EquipmentCheckout` | `equipment_checkouts` | Equipment tracking: who, when, return status |
 | `FuelLog` | `fuel_logs` | Fuel fill records with auto mileage update |
+| `FleetBreakdownReport` | `fleet_breakdown_reports` | Breakdown reports: reported -> in_repair -> resolved |
+| `EquipmentAsset` | `equipment_assets` | High-value capture equipment register (serial, category, condition) |
+
+`FleetMaintenance.maintenance_type` is `service`, `safety_inspection` or `repair`.
 
 ## Endpoints
 
@@ -45,13 +49,32 @@ fleet/
 | GET | `/fleet/fuel/{id}` | `vehicle:read` | Get fuel log |
 | POST | `/fleet/bulk/status-update` | `vehicle:update` | Bulk status |
 | POST | `/fleet/bulk/delete` | `vehicle:update` | Bulk soft delete |
+| GET | `/fleet/maintenance` | `vehicle:read` | List maintenance across the fleet |
+| GET | `/fleet/summary` | `vehicle:read` | Status counts, insurance expiring (30d), maintenance due (14d), outstanding/overdue equipment, open breakdowns |
+| POST | `/fleet/breakdowns` | `vehicle:update` or `rescue:execute` | Report a breakdown (Rescue Agents report from the field) |
+| GET | `/fleet/breakdowns` | `vehicle:read` | List breakdowns (`vehicle_id`, `status` filters) |
+| GET | `/fleet/breakdowns/{id}` | `vehicle:read` | Get breakdown |
+| PATCH | `/fleet/breakdowns/{id}` | `vehicle:update` | Update breakdown / move status |
+| POST | `/fleet/equipment-assets` | `vehicle:update` | Register equipment (serial numbers unique) |
+| GET | `/fleet/equipment-assets` | `vehicle:read` | List register with `current_checkout_id` |
+| GET | `/fleet/equipment-assets/{id}` | `vehicle:read` | Get asset |
+| PUT | `/fleet/equipment-assets/{id}` | `vehicle:update` | Update asset |
+
+`POST /fleet/vehicles` accepts the insurance fields (`insurance_provider`, `insurance_policy_number`, `insurance_expiry_date`, `insurance_contact_phone`).
+
+### Maintenance due
+
+Only a vehicle's most recent maintenance record (by `service_date`) decides when the next service is due. Older records are superseded, so their `next_due_date` never raises an alert. `/fleet/summary` and the `check_fleet_maintenance_due` job share `FleetRepository.list_maintenance_due`.
 
 ## Equipment Lifecycle
 
 ### Manual Checkout
 ```
-POST /fleet/equipment {equipment_name, assigned_to_agent_id?, expected_return_at?}
+POST /fleet/equipment {asset_id? | equipment_name, assigned_to_agent_id?, expected_return_at?}
   -> Validate vehicle if assigned
+  -> asset_id: asset must exist, not be retired, and have no outstanding checkout (409);
+     equipment_name defaults to the asset name. A partial unique index
+     (uq_equipment_checkouts_asset_outstanding) enforces one open checkout per asset.
   -> Set checked_out_at = now
   -> expected_return_at: explicit (must be future) or default now + 14 days
   -> Create EquipmentCheckout
@@ -68,6 +91,7 @@ FleetService.checkout_equipment_for_dispatch(rescue_dispatch_id, equipment_names
 ```
 POST /fleet/equipment/{id}/return
   -> Set returned_at = now
+  -> Optional `condition` updates the linked asset (e.g. needs_repair)
   -> If late (returned_at > expected_return_at): append "Returned late" note
   -> Late returns are flagged, never rejected
 ```

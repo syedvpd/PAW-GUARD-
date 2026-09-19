@@ -50,6 +50,7 @@ def _make_maint(**kw):
     vals = dict(
         vehicle_id=uuid.uuid4(),
         service_date=date.today(),
+        maintenance_type="service",
         description="",
         cost=0.0,
         created_at=now,

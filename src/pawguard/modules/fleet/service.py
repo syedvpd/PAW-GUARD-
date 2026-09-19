@@ -1,7 +1,7 @@
 """FleetService: owns vehicle fleet business behaviour (RULE-003)."""
 
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from pawguard.core.exceptions import ConflictError, NotFoundError, ValidationFailedError
 from pawguard.core.pagination import PageParams, build_pagination_meta
@@ -10,7 +10,9 @@ from pawguard.core.search import SortParams
 from pawguard.modules.auth.models import AuthAuditEventType, User
 from pawguard.modules.fleet.models import (
     BreakdownStatus,
+    EquipmentAsset,
     EquipmentCheckout,
+    EquipmentCondition,
     FleetBreakdownReport,
     FleetMaintenance,
     FuelLog,
@@ -23,9 +25,14 @@ from pawguard.modules.fleet.schemas import (
     BreakdownReportCreate,
     BreakdownReportResponse,
     BreakdownReportUpdate,
+    EquipmentAssetCreate,
+    EquipmentAssetResponse,
+    EquipmentAssetUpdate,
     EquipmentCheckoutCreate,
     EquipmentCheckoutResponse,
     EquipmentReturnRequest,
+    FleetSummaryResponse,
+    FleetSummaryVehicle,
     FuelLogCreate,
     FuelLogResponse,
     MaintenanceCreate,
@@ -37,6 +44,8 @@ from pawguard.modules.fleet.schemas import (
 from pawguard.services.audit_service import AuditService
 
 DEFAULT_CHECKOUT_DURATION = timedelta(days=14)
+MAINTENANCE_DUE_WINDOW = timedelta(days=14)
+INSURANCE_EXPIRY_WINDOW = timedelta(days=30)
 
 VALID_FLEET_TRANSITIONS: dict[str, set[str]] = {
     "active": {"in_maintenance", "out_of_service"},
@@ -304,11 +313,24 @@ class FleetService:
             vehicle = await self._repo.get_vehicle(payload.assigned_to_vehicle_id)
             if vehicle is None:
                 raise NotFoundError("Vehicle not found.")
+        equipment_name = payload.equipment_name.strip()
+        if payload.asset_id is not None:
+            asset = await self._repo.get_asset(payload.asset_id)
+            if asset is None:
+                raise NotFoundError("Equipment asset not found.")
+            if asset.condition == EquipmentCondition.RETIRED:
+                raise ConflictError(f"'{asset.name}' is retired and cannot be checked out.")
+            if await self._repo.get_outstanding_checkout_for_asset(asset.id) is not None:
+                raise ConflictError(f"'{asset.name}' is already checked out.")
+            equipment_name = equipment_name or asset.name
+        if not equipment_name:
+            raise ValidationFailedError("equipment_name or asset_id is required.")
         checked_out_at = datetime.now(UTC)
         expected_return_at = self._resolve_expected_return_at(payload.expected_return_at)
         record = await self._repo.create_equipment_checkout(
             EquipmentCheckout(
-                **payload.model_dump(exclude={"expected_return_at"}),
+                **payload.model_dump(exclude={"expected_return_at", "equipment_name"}),
+                equipment_name=equipment_name,
                 checked_out_at=checked_out_at,
                 expected_return_at=expected_return_at,
             )
@@ -433,6 +455,10 @@ class FleetService:
         record.returned_at = datetime.now(UTC)
         if payload.notes:
             record.notes = payload.notes
+        if payload.condition is not None and record.asset_id is not None:
+            asset = await self._repo.get_asset(record.asset_id)
+            if asset is not None:
+                asset.condition = payload.condition
         # Late return (PRR 3.13): never reject, but flag it on the ledger so
         # staff can follow up. The dispatch auto-release path skips this note
         # because dispatch equipment has no manual returner.
@@ -634,4 +660,89 @@ class FleetService:
         return PaginatedResponse(
             data=[BreakdownReportResponse.model_validate(r) for r in results],
             meta=build_pagination_meta(total=total, params=page),
+        )
+
+    async def create_asset(self, payload: EquipmentAssetCreate) -> EquipmentAssetResponse:
+        if payload.serial_number and await self._repo.get_asset_by_serial(payload.serial_number):
+            raise ConflictError(f"Serial number '{payload.serial_number}' is already registered.")
+        asset = await self._repo.create_asset(EquipmentAsset(**payload.model_dump()))
+        await self._repo._session.refresh(asset)
+        return EquipmentAssetResponse.model_validate(asset)
+
+    async def get_asset(self, asset_id: uuid.UUID) -> EquipmentAssetResponse:
+        asset = await self._repo.get_asset(asset_id)
+        if asset is None:
+            raise NotFoundError("Equipment asset not found.")
+        checkout = await self._repo.get_outstanding_checkout_for_asset(asset_id)
+        response = EquipmentAssetResponse.model_validate(asset)
+        response.current_checkout_id = checkout.id if checkout else None
+        return response
+
+    async def update_asset(
+        self, asset_id: uuid.UUID, payload: EquipmentAssetUpdate
+    ) -> EquipmentAssetResponse:
+        asset = await self._repo.get_asset(asset_id)
+        if asset is None:
+            raise NotFoundError("Equipment asset not found.")
+        if payload.serial_number and payload.serial_number != asset.serial_number:
+            if await self._repo.get_asset_by_serial(payload.serial_number):
+                raise ConflictError(
+                    f"Serial number '{payload.serial_number}' is already registered."
+                )
+        for field, value in payload.model_dump(exclude_unset=True).items():
+            setattr(asset, field, value)
+        await self._repo._session.flush()
+        await self._repo._session.refresh(asset)
+        return await self.get_asset(asset_id)
+
+    async def list_assets_paginated(
+        self,
+        page: PageParams,
+        sort: SortParams,
+        search_term: str | None = None,
+        category: str | None = None,
+        condition: str | None = None,
+    ) -> PaginatedResponse[EquipmentAssetResponse]:
+        rows, total = await self._repo.paginate_assets(
+            page=page, sort=sort, search_term=search_term, category=category, condition=condition
+        )
+        data = []
+        for asset, checkout_id in rows:
+            item = EquipmentAssetResponse.model_validate(asset)
+            item.current_checkout_id = checkout_id
+            data.append(item)
+        return PaginatedResponse(data=data, meta=build_pagination_meta(total=total, params=page))
+
+    async def get_summary(self) -> FleetSummaryResponse:
+        today = date.today()
+        by_status = await self._repo.count_vehicles_by_status()
+        insurance = await self._repo.list_insurance_expiring(today + INSURANCE_EXPIRY_WINDOW)
+        maintenance = await self._repo.list_maintenance_due(today + MAINTENANCE_DUE_WINDOW)
+        outstanding, overdue = await self._repo.count_equipment(datetime.now(UTC))
+        return FleetSummaryResponse(
+            total_vehicles=sum(by_status.values()),
+            by_status=by_status,
+            insurance_expiring=[
+                FleetSummaryVehicle(
+                    id=v.id,
+                    license_plate=v.license_plate,
+                    make_model=v.make_model,
+                    due_date=v.insurance_expiry_date,
+                )
+                for v in insurance
+                if v.insurance_expiry_date is not None
+            ],
+            maintenance_due=[
+                FleetSummaryVehicle(
+                    id=v.id,
+                    license_plate=v.license_plate,
+                    make_model=v.make_model,
+                    due_date=m.next_due_date,
+                )
+                for v, m in maintenance
+                if m.next_due_date is not None
+            ],
+            outstanding_equipment=outstanding,
+            overdue_equipment=overdue,
+            open_breakdowns=await self._repo.count_open_breakdowns(),
         )

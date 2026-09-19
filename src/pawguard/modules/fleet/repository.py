@@ -2,6 +2,7 @@
 
 import uuid
 from collections.abc import Sequence
+from datetime import date, datetime
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +17,8 @@ from pawguard.core.search import (
 )
 from pawguard.modules.auth.models import User
 from pawguard.modules.fleet.models import (
+    BreakdownStatus,
+    EquipmentAsset,
     EquipmentCheckout,
     FleetBreakdownReport,
     FleetMaintenance,
@@ -54,6 +57,8 @@ class FleetRepository:
     FUEL_SEARCH_FIELDS = ("vendor", "notes")
     BREAKDOWN_SORTABLE_FIELDS = {"reported_at", "severity", "status", "created_at"}
     BREAKDOWN_SEARCH_FIELDS = ("breakdown_type", "description", "location", "notes")
+    ASSET_SEARCH_FIELDS = ("name", "serial_number", "notes")
+    ASSET_SORTABLE_FIELDS = {"name", "category", "condition", "created_at"}
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -317,3 +322,127 @@ class FleetRepository:
         total = int(rows[0]._total_count) if rows else 0
 
         return results, total
+
+    async def create_asset(self, asset: EquipmentAsset) -> EquipmentAsset:
+        self._session.add(asset)
+        await self._session.flush()
+        return asset
+
+    async def get_asset(self, asset_id: uuid.UUID) -> EquipmentAsset | None:
+        return await self._session.get(EquipmentAsset, asset_id)
+
+    async def get_asset_by_serial(self, serial_number: str) -> EquipmentAsset | None:
+        stmt = select(EquipmentAsset).where(EquipmentAsset.serial_number == serial_number)
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def get_outstanding_checkout_for_asset(
+        self, asset_id: uuid.UUID
+    ) -> EquipmentCheckout | None:
+        stmt = select(EquipmentCheckout).where(
+            EquipmentCheckout.asset_id == asset_id, EquipmentCheckout.returned_at.is_(None)
+        )
+        return (await self._session.execute(stmt)).scalars().first()
+
+    async def paginate_assets(
+        self,
+        page: PageParams,
+        sort: SortParams,
+        search_term: str | None = None,
+        category: str | None = None,
+        condition: str | None = None,
+    ) -> tuple[Sequence[tuple[EquipmentAsset, uuid.UUID | None]], int]:
+        total_count = func.count().over().label("_total_count")
+        current_checkout = (
+            select(EquipmentCheckout.id)
+            .where(
+                EquipmentCheckout.asset_id == EquipmentAsset.id,
+                EquipmentCheckout.returned_at.is_(None),
+            )
+            .limit(1)
+            .correlate(EquipmentAsset)
+            .scalar_subquery()
+            .label("current_checkout_id")
+        )
+        stmt = select(EquipmentAsset, current_checkout, total_count)
+        search_filter = build_search_filter(EquipmentAsset, search_term, self.ASSET_SEARCH_FIELDS)
+        if search_filter is not None:
+            stmt = stmt.where(search_filter)
+        stmt = apply_equality_filters(stmt, EquipmentAsset, category=category, condition=condition)
+        stmt = apply_sorting(stmt, sort, self.ASSET_SORTABLE_FIELDS, default_field="name")
+        stmt = stmt.offset(page.offset).limit(page.limit)
+        rows = (await self._session.execute(stmt)).all()
+        total = int(rows[0]._total_count) if rows else 0
+        return [(row[0], row[1]) for row in rows], total
+
+    async def count_vehicles_by_status(self) -> dict[str, int]:
+        stmt = (
+            select(Vehicle.status, func.count())
+            .where(Vehicle.deleted_at.is_(None))
+            .group_by(Vehicle.status)
+        )
+        rows = (await self._session.execute(stmt)).all()
+        return {str(getattr(status, "value", status)): int(count) for status, count in rows}
+
+    async def list_insurance_expiring(self, cutoff: date) -> Sequence[Vehicle]:
+        stmt = (
+            select(Vehicle)
+            .where(
+                Vehicle.deleted_at.is_(None),
+                Vehicle.insurance_expiry_date.isnot(None),
+                Vehicle.insurance_expiry_date <= cutoff,
+            )
+            .order_by(Vehicle.insurance_expiry_date)
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def list_maintenance_due(
+        self, cutoff: date
+    ) -> Sequence[tuple[Vehicle, FleetMaintenance]]:
+        """Latest maintenance record per vehicle whose next_due_date is on or before cutoff.
+
+        Older records are superseded by the most recent service, so their stale
+        next_due_date never counts as due.
+        """
+        ranked = select(
+            FleetMaintenance.id.label("maintenance_id"),
+            func.row_number()
+            .over(
+                partition_by=FleetMaintenance.vehicle_id,
+                order_by=(FleetMaintenance.service_date.desc(), FleetMaintenance.created_at.desc()),
+            )
+            .label("rn"),
+        ).subquery()
+        stmt = (
+            select(Vehicle, FleetMaintenance)
+            .join(FleetMaintenance, FleetMaintenance.vehicle_id == Vehicle.id)
+            .join(ranked, ranked.c.maintenance_id == FleetMaintenance.id)
+            .where(
+                ranked.c.rn == 1,
+                Vehicle.deleted_at.is_(None),
+                FleetMaintenance.next_due_date.isnot(None),
+                FleetMaintenance.next_due_date <= cutoff,
+            )
+            .order_by(FleetMaintenance.next_due_date)
+        )
+        return [(row[0], row[1]) for row in (await self._session.execute(stmt)).all()]
+
+    async def count_equipment(self, now: datetime) -> tuple[int, int]:
+        outstanding = EquipmentCheckout.returned_at.is_(None)
+        stmt = select(
+            func.count().filter(outstanding),
+            func.count().filter(
+                outstanding,
+                EquipmentCheckout.expected_return_at.isnot(None),
+                EquipmentCheckout.expected_return_at <= now,
+            ),
+        ).select_from(EquipmentCheckout)
+        row = (await self._session.execute(stmt)).one()
+        return int(row[0]), int(row[1])
+
+    async def count_open_breakdowns(self) -> int:
+        stmt = (
+            select(func.count())
+            .select_from(FleetBreakdownReport)
+            .where(FleetBreakdownReport.status != BreakdownStatus.RESOLVED)
+        )
+        return int((await self._session.execute(stmt)).scalar_one())

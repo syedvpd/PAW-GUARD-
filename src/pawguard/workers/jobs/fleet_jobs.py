@@ -12,7 +12,9 @@ from sqlalchemy import and_, select
 
 from pawguard.db.session import AsyncSessionLocal
 from pawguard.modules.auth import permission_codes as pc
-from pawguard.modules.fleet.models import EquipmentCheckout, FleetMaintenance, Vehicle
+from pawguard.modules.fleet.models import EquipmentCheckout, Vehicle
+from pawguard.modules.fleet.repository import FleetRepository
+from pawguard.modules.fleet.service import MAINTENANCE_DUE_WINDOW
 from pawguard.modules.notifications.repository import NotificationRepository
 from pawguard.modules.notifications.schemas import NotificationCreate
 from pawguard.modules.notifications.service import NotificationService
@@ -20,21 +22,14 @@ from pawguard.workers.jobs.scheduled_jobs import _staff_user_ids
 
 
 async def check_fleet_maintenance_due(ctx: dict[str, object]) -> None:
-    """Alert staff when maintenance is due within 14 days or already overdue."""
-    cutoff = date.today() + timedelta(days=14)
+    """Alert staff when a vehicle's latest service says the next one is due
+    within 14 days or already overdue. Superseded records never alert."""
+    cutoff = date.today() + MAINTENANCE_DUE_WINDOW
 
     async with AsyncSessionLocal() as session:
-        result = await session.execute(
-            select(FleetMaintenance).where(
-                and_(
-                    FleetMaintenance.next_due_date.isnot(None),
-                    FleetMaintenance.next_due_date <= cutoff,
-                )
-            )
-        )
-        due_records = result.scalars().all()
+        due = await FleetRepository(session).list_maintenance_due(cutoff)
 
-        if not due_records:
+        if not due:
             return
 
         staff_user_ids = await _staff_user_ids(session, pc.VEHICLE_READ)
@@ -42,26 +37,22 @@ async def check_fleet_maintenance_due(ctx: dict[str, object]) -> None:
             return
 
         notification_svc = NotificationService(repository=NotificationRepository(session))
-        for record in due_records:
+        for vehicle, record in due:
+            body = f"Vehicle {vehicle.license_plate} has maintenance due on {record.next_due_date}."
             for user_id in staff_user_ids:
                 await notification_svc.create_notification(
                     payload=NotificationCreate(
                         user_id=user_id,
                         title="Fleet Maintenance Due",
-                        body=(
-                            f"Vehicle {record.vehicle_id} has maintenance due "
-                            f"on {record.next_due_date}."
-                        ),
+                        body=body,
                         notification_type="fleet_alert",
                     )
                 )
-        # Push notifications for maintenance due
-        for record in due_records:
             await notification_svc._send_push_to_users(
                 staff_user_ids,
                 "Fleet Maintenance Due",
-                f"Vehicle {record.vehicle_id} has maintenance due on {record.next_due_date}.",
-                "/fleet",
+                body,
+                f"/fleet/{vehicle.id}",
             )
         await session.commit()
 

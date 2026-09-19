@@ -19,15 +19,24 @@ from pawguard.db.session import get_db
 from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.rbac import require_permission
-from pawguard.modules.fleet.models import VehicleStatus, VehicleType
+from pawguard.modules.fleet.models import (
+    EquipmentCategory,
+    EquipmentCondition,
+    VehicleStatus,
+    VehicleType,
+)
 from pawguard.modules.fleet.repository import FleetRepository
 from pawguard.modules.fleet.schemas import (
     BreakdownReportCreate,
     BreakdownReportResponse,
     BreakdownReportUpdate,
+    EquipmentAssetCreate,
+    EquipmentAssetResponse,
+    EquipmentAssetUpdate,
     EquipmentCheckoutCreate,
     EquipmentCheckoutResponse,
     EquipmentReturnRequest,
+    FleetSummaryResponse,
     FuelLogCreate,
     FuelLogResponse,
     MaintenanceCreate,
@@ -409,7 +418,7 @@ async def get_fuel_log(
     "/breakdowns",
     response_model=ApiResponse[BreakdownReportResponse],
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_permission("vehicle:update"))],
+    dependencies=[Depends(require_permission("vehicle:update", "rescue:execute"))],
 )
 async def report_breakdown(
     payload: BreakdownReportCreate,
@@ -484,4 +493,73 @@ async def update_breakdown_report(
     return ApiResponse(
         data=BreakdownReportResponse.model_validate(report),
         message="Breakdown report updated.",
+    )
+
+
+@router.get(
+    "/summary",
+    response_model=ApiResponse[FleetSummaryResponse],
+    dependencies=[Depends(require_permission("vehicle:read"))],
+)
+async def get_fleet_summary(
+    service: FleetService = Depends(get_fleet_service),
+) -> ApiResponse[FleetSummaryResponse]:
+    return ApiResponse(data=await service.get_summary())
+
+
+@router.post(
+    "/equipment-assets",
+    response_model=ApiResponse[EquipmentAssetResponse],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("vehicle:update"))],
+)
+async def create_equipment_asset(
+    payload: EquipmentAssetCreate,
+    service: FleetService = Depends(get_fleet_service),
+) -> ApiResponse[EquipmentAssetResponse]:
+    return ApiResponse(data=await service.create_asset(payload), message="Equipment registered.")
+
+
+@router.get(
+    "/equipment-assets",
+    response_model=PaginatedResponse[EquipmentAssetResponse],
+    dependencies=[Depends(require_permission("vehicle:read"))],
+)
+async def list_equipment_assets(
+    page: PageParams = Depends(page_params),
+    sort: SortParams = Depends(sort_params),
+    search: str | None = Query(None, description="Search by name, serial number, notes"),
+    category: EquipmentCategory | None = Query(None),
+    condition: EquipmentCondition | None = Query(None),
+    service: FleetService = Depends(get_fleet_service),
+) -> PaginatedResponse[EquipmentAssetResponse]:
+    return await service.list_assets_paginated(
+        page=page, sort=sort, search_term=search, category=category, condition=condition
+    )
+
+
+@router.get(
+    "/equipment-assets/{asset_id}",
+    response_model=ApiResponse[EquipmentAssetResponse],
+    dependencies=[Depends(require_permission("vehicle:read"))],
+)
+async def get_equipment_asset(
+    asset_id: uuid.UUID,
+    service: FleetService = Depends(get_fleet_service),
+) -> ApiResponse[EquipmentAssetResponse]:
+    return ApiResponse(data=await service.get_asset(asset_id))
+
+
+@router.put(
+    "/equipment-assets/{asset_id}",
+    response_model=ApiResponse[EquipmentAssetResponse],
+    dependencies=[Depends(require_permission("vehicle:update"))],
+)
+async def update_equipment_asset(
+    asset_id: uuid.UUID,
+    payload: EquipmentAssetUpdate,
+    service: FleetService = Depends(get_fleet_service),
+) -> ApiResponse[EquipmentAssetResponse]:
+    return ApiResponse(
+        data=await service.update_asset(asset_id, payload), message="Equipment updated."
     )
