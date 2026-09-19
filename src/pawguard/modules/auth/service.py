@@ -735,11 +735,14 @@ class AuthService:
 
     @staticmethod
     def _is_admin(user: User) -> bool:
-        """True when the user holds the `system:admin` permission via any role.
+        """True for admin-tier accounts (Super Administrator, Rescue Centre Admin)
+        or any role holding `system:admin`.
 
         Used to enforce mandatory MFA for admin accounts: admins always hit
         the MFA challenge at login and can never disable MFA.
         """
+        if any(r.name in (SUPER_ADMIN_ROLE, "rescue_centre_admin") for r in user.roles):
+            return True
         for role in user.roles:
             for permission in role.permissions:
                 if permission.code == pc.SYSTEM_ADMIN:
@@ -1240,6 +1243,17 @@ class AdminService:
         self._audit = audit_service
         self._redis = redis
 
+    @staticmethod
+    def _guard_system_admin_grant(role_name: str, permission_codes: list[str] | None) -> None:
+        if (
+            permission_codes
+            and pc.SYSTEM_ADMIN in permission_codes
+            and role_name != SUPER_ADMIN_ROLE
+        ):
+            raise ForbiddenError(
+                "system:admin is reserved for the Super Administrator role (PRR 2.1)."
+            )
+
     async def _invalidate_rbac_cache(self) -> None:
         """Drop cached role->permission sets so RBAC changes apply immediately.
 
@@ -1281,6 +1295,7 @@ class AdminService:
 
             raise ConflictError(f"Role '{name}' already exists.")
 
+        self._guard_system_admin_grant(name, permission_codes)
         role = Role(name=name, description=description, is_system=False)
         await self._roles.create(role)
         if permission_codes:
@@ -1332,6 +1347,7 @@ class AdminService:
         if description is not None:
             role.description = description
         if permission_codes is not None:
+            self._guard_system_admin_grant(role.name, permission_codes)
             perms = await self._permissions.get_by_codes(permission_codes)
             found_codes = {p.code for p in perms}
             invalid_codes = set(permission_codes) - found_codes

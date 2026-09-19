@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pawguard.core.cache_decorator import cache_response
 from pawguard.core.responses import ApiResponse
 from pawguard.db.session import get_db
-from pawguard.modules.auth.rbac import require_permission
+from pawguard.modules.auth.rbac import require_admin_tier
 from pawguard.modules.auth.repository import AuthAuditLogRepository, audit_filters
 
 audit_router = APIRouter(prefix="/admin/audit-logs", tags=["admin-audit"])
@@ -54,7 +54,7 @@ def _format_audit_entry(e: Any) -> dict[str, Any]:
 
 @audit_router.get(
     "",
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 @cache_response(ttl_seconds=30, namespace="admin")
 async def list_audit_logs(
@@ -83,11 +83,11 @@ async def list_audit_logs(
 
 @audit_router.get(
     "/export",
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 @audit_router.post(
     "/export",
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def export_audit_logs(
     format: str = Query("csv", description="Export format: 'csv' or 'json'"),
@@ -219,7 +219,7 @@ async def export_audit_logs(
 
 @audit_router.get(
     "/{entry_id}",
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def get_audit_log(
     entry_id: uuid.UUID,

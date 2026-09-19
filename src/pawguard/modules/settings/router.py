@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pawguard.core.responses import ApiResponse
 from pawguard.db.session import get_db
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
-from pawguard.modules.auth.rbac import require_permission
+from pawguard.modules.auth.rbac import require_admin_tier
 from pawguard.modules.settings.repository import (
     BusinessRuleRepository,
     PasswordPolicyRepository,
@@ -61,7 +61,7 @@ def get_public_content_service(db: AsyncSession = Depends(get_db)) -> PublicCont
 @router.get(
     "/general",
     response_model=ApiResponse[GeneralSettingsResponse],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def get_general_settings(
     service: SystemSettingService = Depends(get_setting_service),
@@ -73,7 +73,7 @@ async def get_general_settings(
 @router.put(
     "/general",
     response_model=ApiResponse[dict[str, Any]],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def update_general_settings(
     payload: dict[str, Any],
@@ -92,7 +92,7 @@ async def update_general_settings(
 @router.get(
     "/email",
     response_model=ApiResponse[EmailSettingsResponse],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def get_email_settings(
     service: SystemSettingService = Depends(get_setting_service),
@@ -104,7 +104,7 @@ async def get_email_settings(
 @router.put(
     "/email",
     response_model=ApiResponse[EmailSettingsResponse],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def update_email_settings(
     payload: EmailSettingsUpdate,
@@ -123,7 +123,7 @@ async def update_email_settings(
 @router.get(
     "/storage",
     response_model=ApiResponse[dict[str, Any]],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def get_storage_settings() -> ApiResponse[dict[str, Any]]:
     data = AppConfigService().get_storage_settings()
@@ -144,7 +144,7 @@ async def get_public_content(
 @router.put(
     "/public-content",
     response_model=ApiResponse[PublicContentResponse],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def update_public_content(
     payload: PublicContentUpdate,
@@ -160,7 +160,7 @@ async def update_public_content(
 @router.get(
     "/system",
     response_model=ApiResponse[list[SystemSettingResponse]],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def list_settings(
     category: str | None = Query(None),
@@ -176,7 +176,7 @@ async def list_settings(
 @router.get(
     "/system/{key}",
     response_model=ApiResponse[SystemSettingResponse],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def get_setting(
     key: str,
@@ -190,7 +190,7 @@ async def get_setting(
     "/system",
     response_model=ApiResponse[SystemSettingResponse],
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def create_setting(
     payload: SystemSettingCreate,
@@ -212,7 +212,7 @@ async def create_setting(
 @router.put(
     "/system/{key}",
     response_model=ApiResponse[SystemSettingResponse],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def update_setting(
     key: str,
@@ -236,7 +236,7 @@ async def update_setting(
 @router.delete(
     "/system/{setting_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def delete_setting(
     setting_id: uuid.UUID,
@@ -254,7 +254,7 @@ async def delete_setting(
 @router.get(
     "/password-policy",
     response_model=ApiResponse[PasswordPolicyResponse],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def get_password_policy(
     service: PasswordPolicyService = Depends(get_password_policy_service),
@@ -266,7 +266,7 @@ async def get_password_policy(
 @router.put(
     "/password-policy",
     response_model=ApiResponse[PasswordPolicyResponse],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def update_password_policy(
     payload: PasswordPolicyUpdate,
@@ -288,7 +288,7 @@ async def update_password_policy(
 @router.get(
     "/business-rules",
     response_model=ApiResponse[list[BusinessRuleResponse]],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def list_business_rules(
     module: str | None = Query(None),
@@ -304,7 +304,7 @@ async def list_business_rules(
 @router.get(
     "/business-rules/{rule_key}",
     response_model=ApiResponse[BusinessRuleResponse],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def get_business_rule(
     rule_key: str,
@@ -318,7 +318,7 @@ async def get_business_rule(
     "/business-rules",
     response_model=ApiResponse[BusinessRuleResponse],
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def create_business_rule(
     payload: BusinessRuleCreate,
@@ -340,7 +340,7 @@ async def create_business_rule(
 @router.put(
     "/business-rules/{rule_key}",
     response_model=ApiResponse[BusinessRuleResponse],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def update_business_rule(
     rule_key: str,
@@ -364,7 +364,7 @@ async def update_business_rule(
 @router.delete(
     "/business-rules/{rule_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def delete_business_rule(
     rule_id: uuid.UUID,

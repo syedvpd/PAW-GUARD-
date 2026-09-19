@@ -1,7 +1,8 @@
 """Admin endpoints: user provisioning, role/permission CRUD.
 
-Every endpoint enforces ``require_permission("system:admin")`` so only
-Super Administrators can access these.
+User provisioning and read-only role/permission lookups are admin tier (Super
+Administrator or Rescue Centre Admin). Role definitions, permission overrides,
+account recovery and restore-and-reset are Super Administrator only (PRR 2.1).
 """
 
 import uuid
@@ -28,7 +29,7 @@ from pawguard.modules.auth.admin_schemas import (
 )
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
 from pawguard.modules.auth.models import AuthAuditEventType
-from pawguard.modules.auth.rbac import require_permission, require_role
+from pawguard.modules.auth.rbac import require_admin_tier, require_role
 from pawguard.modules.auth.repository import (
     PermissionRepository,
     RoleRepository,
@@ -69,7 +70,7 @@ def _get_admin_service(
 @admin_router.get(
     "/roles",
     response_model=ApiResponse[list[RoleResponse]],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 @cache_response(ttl_seconds=60, namespace="admin")
 async def list_roles(
@@ -84,7 +85,7 @@ async def list_roles(
     "/roles",
     response_model=ApiResponse[RoleResponse],
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=SUPER_ADMIN_ONLY,
 )
 async def create_role(
     payload: RoleCreateRequest,
@@ -106,7 +107,7 @@ async def create_role(
 @admin_router.get(
     "/roles/{role_id}",
     response_model=ApiResponse[RoleResponse],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def get_role(
     role_id: uuid.UUID,
@@ -119,7 +120,7 @@ async def get_role(
 @admin_router.put(
     "/roles/{role_id}",
     response_model=ApiResponse[RoleResponse],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=SUPER_ADMIN_ONLY,
 )
 async def update_role(
     role_id: uuid.UUID,
@@ -142,7 +143,7 @@ async def update_role(
 @admin_router.delete(
     "/roles/{role_id}",
     response_model=ApiResponse[None],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=SUPER_ADMIN_ONLY,
 )
 async def delete_role(
     role_id: uuid.UUID,
@@ -165,7 +166,7 @@ async def delete_role(
 @admin_router.get(
     "/permissions",
     response_model=ApiResponse[list[PermissionResponse]],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 @cache_response(ttl_seconds=300, namespace="admin")
 async def list_permissions(
@@ -182,7 +183,7 @@ async def list_permissions(
 @admin_router.get(
     "/users",
     response_model=ApiResponse[list[AdminUserResponse]],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def list_users(
     response: Response,
@@ -210,7 +211,7 @@ async def list_users(
     "/users",
     response_model=ApiResponse[AdminUserResponse],
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def create_user(
     payload: AdminUserCreateRequest,
@@ -236,7 +237,7 @@ async def create_user(
 @admin_router.get(
     "/users/{user_id}",
     response_model=ApiResponse[AdminUserResponse],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def get_user(
     user_id: uuid.UUID,
@@ -249,7 +250,7 @@ async def get_user(
 @admin_router.put(
     "/users/{user_id}",
     response_model=ApiResponse[AdminUserResponse],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def update_user(
     user_id: uuid.UUID,
@@ -279,7 +280,7 @@ async def update_user(
 @admin_router.delete(
     "/users/{user_id}",
     response_model=ApiResponse[None],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def delete_user(
     user_id: uuid.UUID,
@@ -299,7 +300,7 @@ async def delete_user(
 @admin_router.post(
     "/users/restore-and-reset",
     response_model=ApiResponse[AdminUserResponse],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=SUPER_ADMIN_ONLY,
 )
 async def restore_and_reset_password(
     payload: AdminRestorePasswordRequest,
@@ -417,7 +418,7 @@ async def send_user_password_reset(
 @admin_router.get(
     "/users/{user_id}/permissions",
     response_model=ApiResponse[list[str]],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def list_user_direct_permissions(
     user_id: uuid.UUID,

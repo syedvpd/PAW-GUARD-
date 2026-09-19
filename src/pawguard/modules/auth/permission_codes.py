@@ -132,6 +132,8 @@ NOTIFICATION_PAUSE = "notification:pause"
 NOTIFICATION_RESUME = "notification:resume"
 NOTIFICATION_AUDIT = "notification:audit"
 NOTIFICATION_GLOBAL_CONTROL = "notification:global_control"
+DOG_READ = "dog:read"
+LOST_FOUND_READ = "lost_found:read"
 
 # ── Client-facing permission aliases (app vocabulary) ────────────────────────
 # The Flutter/web clients gate UI actions on coarse action verbs

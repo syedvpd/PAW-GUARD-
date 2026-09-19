@@ -161,6 +161,7 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
             pc.VOLUNTEER_SCHEDULE,
             pc.VOLUNTEER_DELETE,
             pc.INVENTORY_READ,
+            pc.INVENTORY_CREATE,
             pc.INVENTORY_UPDATE,
             pc.INVENTORY_DELETE,
             pc.REQUISITION_CREATE,
@@ -173,8 +174,15 @@ ROLE_DEFINITIONS: list[tuple[str, str, bool, list[str]]] = [
             pc.GRIEVANCE_UPDATE,
             pc.GRIEVANCE_ASSIGN,
             pc.GRIEVANCE_COMMENT,
-            pc.SYSTEM_ADMIN,
             pc.NOTIFICATION_READ,
+            pc.NOTIFICATION_VIEW,
+            pc.NOTIFICATION_APPROVE,
+            pc.NOTIFICATION_REJECT,
+            pc.NOTIFICATION_PAUSE,
+            pc.NOTIFICATION_RESUME,
+            pc.NOTIFICATION_AUDIT,
+            pc.DOG_READ,
+            pc.LOST_FOUND_READ,
             pc.DASHBOARD_RESCUE,
             pc.DASHBOARD_SHELTER,
             pc.DASHBOARD_MEDICAL,
@@ -753,7 +761,9 @@ async def reconcile_standard_accounts(
                 user.managed_facility_id = facility.id
                 updated_count += 1
                 if verbose:
-                    print(f"  [SYNCED] {full_name} ({normalized_email}) managed_facility_id -> {facility.id}")
+                    print(
+                        f"  [SYNCED] {full_name} ({normalized_email}) managed_facility_id -> {facility.id}"
+                    )
             elif verbose:
                 print(
                     f"  [SKIP] {full_name} ({normalized_email}) has no managed_facility_id "

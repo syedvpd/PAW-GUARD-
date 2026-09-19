@@ -13,7 +13,7 @@ from pawguard.db.session import get_db
 from pawguard.modules.admin.dashboard_repository import DashboardRepository
 from pawguard.modules.admin.dashboard_service import DashboardService
 from pawguard.modules.auth.models import AuthAuditEventType, AuthAuditLog, Role, User, UserRole
-from pawguard.modules.auth.rbac import require_permission, require_role
+from pawguard.modules.auth.rbac import require_admin_tier, require_permission, require_role
 from pawguard.redis.client import RedisClient, get_redis
 
 admin_dashboard_router = APIRouter(prefix="/admin/dashboard", tags=["admin-dashboard"])
@@ -30,7 +30,7 @@ def get_dashboard_service(
 @admin_dashboard_router.get(
     "/metrics",
     response_model=ApiResponse[dict[str, int]],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 @cache_response(ttl_seconds=300, namespace="admin_dashboard")
 async def get_system_metrics(
@@ -44,7 +44,7 @@ async def get_system_metrics(
 @admin_dashboard_router.get(
     "/summary",
     response_model=ApiResponse[dict[str, Any]],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 @cache_response(ttl_seconds=300, namespace="admin_dashboard")
 async def get_summary(
@@ -58,7 +58,7 @@ async def get_summary(
 @admin_dashboard_router.get(
     "/kpis",
     response_model=ApiResponse[dict[str, Any]],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 @cache_response(ttl_seconds=300, namespace="admin_dashboard")
 async def get_kpis(
@@ -72,7 +72,7 @@ async def get_kpis(
 @admin_dashboard_router.get(
     "/charts",
     response_model=ApiResponse[dict[str, Any]],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 @cache_response(ttl_seconds=300, namespace="admin_dashboard")
 async def get_charts(
@@ -86,7 +86,7 @@ async def get_charts(
 @admin_dashboard_router.get(
     "/recent-activity",
     response_model=ApiResponse[list[dict[str, Any]]],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 @cache_response(ttl_seconds=300, namespace="admin_dashboard")
 async def get_recent_activity(

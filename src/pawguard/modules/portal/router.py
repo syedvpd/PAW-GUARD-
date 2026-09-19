@@ -26,7 +26,7 @@ from pawguard.modules.auth.dependencies import (
     get_current_user,
     get_optional_current_user,
 )
-from pawguard.modules.auth.rbac import require_permission
+from pawguard.modules.auth.rbac import require_admin_tier, require_permission
 from pawguard.modules.auth.router import _build_request_context
 from pawguard.modules.portal.models import ContactInquiryStatus, ContentStatus, LegalDocumentType
 from pawguard.modules.portal.repository import PortalRepository
@@ -1195,7 +1195,7 @@ async def admin_list_legal_docs(
     "/admin/urgent-alerts",
     response_model=ApiResponse[UrgentAlertResponse],
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def create_urgent_alert(
     payload: UrgentAlertCreate,
@@ -1219,7 +1219,7 @@ async def create_urgent_alert(
 @router.get(
     "/admin/urgent-alerts/{alert_id}",
     response_model=ApiResponse[UrgentAlertResponse],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def get_urgent_alert(
     alert_id: uuid.UUID,
@@ -1232,7 +1232,7 @@ async def get_urgent_alert(
 @router.put(
     "/admin/urgent-alerts/{alert_id}",
     response_model=ApiResponse[UrgentAlertResponse],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def update_urgent_alert(
     alert_id: uuid.UUID,
@@ -1258,7 +1258,7 @@ async def update_urgent_alert(
 @router.delete(
     "/admin/urgent-alerts/{alert_id}",
     response_model=ApiResponse[None],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def soft_delete_urgent_alert(
     alert_id: uuid.UUID,
@@ -1279,7 +1279,7 @@ async def soft_delete_urgent_alert(
 @router.get(
     "/admin/urgent-alerts",
     response_model=PaginatedResponse[UrgentAlertResponse],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def admin_list_urgent_alerts(
     params: PageParams = Depends(page_params),

@@ -13,7 +13,7 @@ from pawguard.core.metrics import dec_gauge, inc_gauge, track_sse_bytes
 from pawguard.core.responses import ApiResponse
 from pawguard.db.session import get_db
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
-from pawguard.modules.auth.rbac import require_permission
+from pawguard.modules.auth.rbac import require_admin_tier, require_permission
 from pawguard.modules.dashboards import service as dasvc
 from pawguard.redis.client import RedisClient, get_redis
 
@@ -377,7 +377,7 @@ async def get_donor_dashboard(
 @router.get(
     "/staff",
     response_model=ApiResponse[dict[str, Any]],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 @cache_response(ttl_seconds=300, namespace="dashboards")
 async def get_staff_dashboard(
@@ -393,7 +393,7 @@ async def get_staff_dashboard(
 @router.get(
     "/executive",
     response_model=ApiResponse[dict[str, Any]],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 @cache_response(ttl_seconds=300, namespace="dashboards")
 async def get_executive_dashboard(
@@ -426,7 +426,7 @@ async def get_public_dashboard(
 @router.get(
     "/operations",
     response_model=ApiResponse[dict[str, Any]],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 @cache_response(ttl_seconds=60, namespace="dashboards")
 async def get_operations_dashboard(

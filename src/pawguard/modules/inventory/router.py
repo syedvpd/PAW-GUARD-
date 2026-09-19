@@ -19,7 +19,7 @@ from pawguard.core.search import SortParams, sort_params
 from pawguard.db.session import get_db
 from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
-from pawguard.modules.auth.rbac import has_permission, require_permission
+from pawguard.modules.auth.rbac import is_admin_tier, require_permission
 from pawguard.modules.inventory.models import ItemCategory, MovementType, RequisitionStatus
 from pawguard.modules.inventory.repository import InventoryRepository
 from pawguard.modules.inventory.schemas import (
@@ -297,9 +297,7 @@ async def update_requisition_status(
     # Workflow 8: the requisition APPROVAL step requires administrator
     # authority; the requesting Inventory Manager cannot self-approve. Other
     # transitions (reject, mark received) remain with inventory:update.
-    if payload.status == RequisitionStatus.APPROVED and not has_permission(
-        current_user.user, "system:admin"
-    ):
+    if payload.status == RequisitionStatus.APPROVED and not is_admin_tier(current_user.user):
         raise ForbiddenError("Requisition approval requires administrator privileges.")
     ip = request.client.host if request.client else None
     req = await service.update_requisition_status(
@@ -372,9 +370,7 @@ async def bulk_update_requisition_status(
     status = parse_enum(RequisitionStatus, payload.status)
     # Same rule as the single-requisition endpoint: approval requires
     # administrator authority, not just inventory:update.
-    if status == RequisitionStatus.APPROVED and not has_permission(
-        current_user.user, "system:admin"
-    ):
+    if status == RequisitionStatus.APPROVED and not is_admin_tier(current_user.user):
         raise ForbiddenError("Requisition approval requires administrator privileges.")
     updated = await service.bulk_update_requisition_status(
         payload.ids,

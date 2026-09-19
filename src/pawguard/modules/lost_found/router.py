@@ -22,7 +22,12 @@ from pawguard.modules.auth.dependencies import (
     get_current_user,
     get_optional_current_user,
 )
-from pawguard.modules.auth.rbac import is_admin_role, require_permission
+from pawguard.modules.auth.rbac import (
+    is_admin_role,
+    is_admin_tier,
+    require_admin_tier,
+    require_permission,
+)
 from pawguard.modules.lost_found.models import MatchStatus, ReportStatus, Species
 from pawguard.modules.lost_found.repository import LostFoundRepository
 from pawguard.modules.lost_found.schemas import (
@@ -78,8 +83,7 @@ def _mask_reporter_identity(
     if current_user is not None and item.user_id == current_user.id:
         return
     if current_user is not None:
-        user_permissions = {p.code for r in current_user.user.roles for p in r.permissions}
-        if "system:admin" in user_permissions:
+        if is_admin_tier(current_user.user):
             return
     # Mask reporter identity (email + name + phone) per PRR §6.1 - the public
     # listing must not expose reporter PII to anonymous visitors or non-owner staff.
@@ -506,7 +510,7 @@ async def submit_ownership_claim(
 @router.post(
     "/matches/{match_id}/claim/review",
     response_model=ApiResponse[ReportMatchResponse],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def review_ownership_claim(
     match_id: uuid.UUID,
@@ -534,7 +538,7 @@ async def review_ownership_claim(
 @router.post(
     "/matches/{match_id}/resolve",
     response_model=ApiResponse[ReportMatchResponse],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def resolve_match(
     match_id: uuid.UUID,
@@ -585,7 +589,7 @@ async def resolve_match(
 @router.delete(
     "/lost/{report_id}",
     response_model=ApiResponse[None],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def delete_lost_report(
     report_id: uuid.UUID,
@@ -605,7 +609,7 @@ async def delete_lost_report(
 @router.delete(
     "/found/{report_id}",
     response_model=ApiResponse[None],
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def delete_found_report(
     report_id: uuid.UUID,
@@ -625,7 +629,7 @@ async def delete_found_report(
 @router.post(
     "/lost/bulk/delete",
     response_model=BulkDeleteResponse,
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def bulk_delete_lost_reports(
     payload: BulkDeleteRequest,
@@ -648,7 +652,7 @@ async def bulk_delete_lost_reports(
 @router.post(
     "/found/bulk/delete",
     response_model=BulkDeleteResponse,
-    dependencies=[Depends(require_permission("system:admin"))],
+    dependencies=[Depends(require_admin_tier())],
 )
 async def bulk_delete_found_reports(
     payload: BulkDeleteRequest,

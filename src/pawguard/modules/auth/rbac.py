@@ -29,6 +29,13 @@ ADMIN_ROLES = {
 }
 
 
+ADMIN_TIER_ROLES = frozenset({"super_admin", "rescue_centre_admin"})
+
+
+def is_admin_tier(user: User) -> bool:
+    return any(r.name in ADMIN_TIER_ROLES for r in (user.roles or []))
+
+
 def is_admin_role(claims) -> bool:
     """True when the token carries a role with unrestricted admin access."""
     if claims is None:
@@ -149,3 +156,7 @@ class RequireRole:
 
 def require_role(*role_names: str) -> RequireRole:
     return RequireRole(*role_names)
+
+
+def require_admin_tier() -> RequireRole:
+    return RequireRole("rescue_centre_admin")

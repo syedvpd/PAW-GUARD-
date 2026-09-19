@@ -14,7 +14,7 @@ from pawguard.core.search import SortParams, sort_params
 from pawguard.db.session import get_db
 from pawguard.modules.auth.audit import get_audit_service
 from pawguard.modules.auth.dependencies import CurrentUser, get_current_user
-from pawguard.modules.auth.rbac import require_permission
+from pawguard.modules.auth.rbac import has_permission, is_admin_role, require_permission
 from pawguard.modules.auth.repository import UserRepository
 from pawguard.modules.notifications.repository import (
     NotificationPreferenceRepository,
@@ -194,7 +194,6 @@ async def mark_all_read(
 @router.post(
     "/bulk/delete",
     response_model=ApiResponse[BulkDeleteResponse],
-    dependencies=[Depends(require_permission("notification:manage"))],
 )
 async def bulk_delete_notifications(
     payload: BulkDeleteRequest,
@@ -202,10 +201,14 @@ async def bulk_delete_notifications(
     current_user: CurrentUser = Depends(get_current_user),
     service: NotificationService = Depends(get_notification_service),
 ) -> ApiResponse[BulkDeleteResponse]:
+    can_manage = is_admin_role(current_user.claims) or has_permission(
+        current_user.user, "notification:manage"
+    )
     deleted = await service.bulk_delete(
         payload.ids,
         actor_id=current_user.id,
         ip_address=request.client.host if request.client else None,
+        owner_id=None if can_manage else current_user.id,
     )
     return ApiResponse(
         data=BulkDeleteResponse(

@@ -111,12 +111,13 @@ class NotificationRepository:
         await self._session.delete(notification)
         return True
 
-    async def bulk_soft_delete(self, ids: list[uuid.UUID]) -> int:
-        stmt = (
-            update(Notification)
-            .where(Notification.id.in_(ids), Notification.deleted_at.is_(None))
-            .values(deleted_at=datetime.now(UTC))
+    async def bulk_soft_delete(self, ids: list[uuid.UUID], user_id: uuid.UUID | None = None) -> int:
+        stmt = update(Notification).where(
+            Notification.id.in_(ids), Notification.deleted_at.is_(None)
         )
+        if user_id is not None:
+            stmt = stmt.where(Notification.user_id == user_id)
+        stmt = stmt.values(deleted_at=datetime.now(UTC))
         result = await self._session.execute(stmt)
         return result.rowcount  # type: ignore[attr-defined,no-any-return]
 

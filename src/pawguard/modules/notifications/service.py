@@ -180,8 +180,9 @@ class NotificationService:
         ids: list[uuid.UUID],
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
+        owner_id: uuid.UUID | None = None,
     ) -> int:
-        return await self._repo.bulk_soft_delete(ids)
+        return await self._repo.bulk_soft_delete(ids, user_id=owner_id)
 
     async def send_notification(
         self,
