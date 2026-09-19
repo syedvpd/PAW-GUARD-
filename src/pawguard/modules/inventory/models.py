@@ -4,7 +4,17 @@ import uuid
 from datetime import date
 from enum import StrEnum
 
-from sqlalchemy import Boolean, CheckConstraint, Date, ForeignKey, Numeric, String, Text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Date,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    Text,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -39,11 +49,29 @@ class InventoryItem(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Ba
     __tablename__ = "inventory_items"
 
     __table_args__ = (
-        CheckConstraint("quantity >= 0", name="ck_inventory_items_quantity_non_negative"),
         CheckConstraint("unit_cost >= 0", name="ck_inventory_items_unit_cost_non_negative"),
+        Index(
+            "uq_inventory_items_name_facility",
+            "name",
+            "facility_id",
+            unique=True,
+            postgresql_where=text("facility_id IS NOT NULL AND deleted_at IS NULL"),
+        ),
+        Index(
+            "uq_inventory_items_name_unassigned",
+            "name",
+            unique=True,
+            postgresql_where=text("facility_id IS NULL AND deleted_at IS NULL"),
+        ),
     )
 
-    name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    facility_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("shelter_facilities.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     category: Mapped[ItemCategory] = mapped_column(String(64), nullable=False, index=True)
     quantity: Mapped[float] = mapped_column(
         Numeric(10, 2, asdecimal=False),
@@ -109,6 +137,12 @@ class RequisitionOrder(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
         index=True,
     )
     quantity: Mapped[float] = mapped_column(Numeric(10, 2, asdecimal=False), nullable=False)
+    supplier_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("suppliers.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     status: Mapped[RequisitionStatus] = mapped_column(
         String(32), default=RequisitionStatus.PENDING, nullable=False, index=True
     )
@@ -132,6 +166,16 @@ class Supplier(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMixin, Base):
 
 class InventoryItemSupplier(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     __tablename__ = "inventory_item_suppliers"
+
+    __table_args__ = (
+        Index("uq_inventory_item_suppliers_item_supplier", "item_id", "supplier_id", unique=True),
+        Index(
+            "uq_inventory_item_suppliers_one_preferred",
+            "item_id",
+            unique=True,
+            postgresql_where=text("is_preferred"),
+        ),
+    )
 
     item_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),

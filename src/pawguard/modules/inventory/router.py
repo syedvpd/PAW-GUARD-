@@ -25,9 +25,14 @@ from pawguard.modules.inventory.repository import InventoryRepository
 from pawguard.modules.inventory.schemas import (
     InventoryItemCreate,
     InventoryItemResponse,
+    InventoryItemSupplierCreate,
+    InventoryItemSupplierResponse,
     InventoryItemUpdate,
     InventoryMovementCreate,
     InventoryMovementResponse,
+    InventorySummaryResponse,
+    InventoryTransferCreate,
+    InventoryTransferResponse,
     RequisitionOrderCreate,
     RequisitionOrderResponse,
     RequisitionStatusUpdate,
@@ -111,9 +116,12 @@ async def list_items(
     sort: SortParams = Depends(sort_params),
     search: str | None = None,
     category: ItemCategory | None = None,
+    facility_id: uuid.UUID | None = None,
     service: InventoryService = Depends(get_inventory_service),
 ) -> PaginatedResponse[InventoryItemResponse]:
-    result = await service.list_items_paginated(page, sort, search_term=search, category=category)
+    result = await service.list_items_paginated(
+        page, sort, search_term=search, category=category, facility_id=facility_id
+    )
     return PaginatedResponse(
         data=[InventoryItemResponse.model_validate(i) for i in result.data],
         meta=result.meta,
@@ -357,6 +365,7 @@ async def bulk_delete_items(
 )
 async def bulk_update_requisition_status(
     payload: BulkStatusUpdateRequest,
+    request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     service: InventoryService = Depends(get_inventory_service),
 ) -> BulkStatusUpdateResponse:
@@ -367,7 +376,13 @@ async def bulk_update_requisition_status(
         current_user.user, "system:admin"
     ):
         raise ForbiddenError("Requisition approval requires administrator privileges.")
-    updated = await service.bulk_update_requisition_status(payload.ids, status)
+    updated = await service.bulk_update_requisition_status(
+        payload.ids,
+        status,
+        user_id=current_user.id,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
     return BulkStatusUpdateResponse(
         message=f"{updated} requisitions updated.",
         updated_count=updated,
@@ -472,3 +487,92 @@ async def delete_supplier(
         ip_address=ip,
     )
     return ApiResponse(message="Supplier deleted.")
+
+
+# ── Stock summary, vendor links and inter-facility transfers ────────────
+
+
+@router.get(
+    "/summary",
+    response_model=ApiResponse[InventorySummaryResponse],
+    dependencies=[Depends(require_permission("inventory:read"))],
+)
+async def get_inventory_summary(
+    service: InventoryService = Depends(get_inventory_service),
+) -> ApiResponse[InventorySummaryResponse]:
+    return ApiResponse(data=await service.get_summary())
+
+
+@router.get(
+    "/items/{item_id}/suppliers",
+    response_model=ApiResponse[list[InventoryItemSupplierResponse]],
+    dependencies=[Depends(require_permission("inventory:read"))],
+)
+async def list_item_suppliers(
+    item_id: uuid.UUID,
+    service: InventoryService = Depends(get_inventory_service),
+) -> ApiResponse[list[InventoryItemSupplierResponse]]:
+    return ApiResponse(data=await service.list_item_suppliers(item_id))
+
+
+@router.post(
+    "/items/{item_id}/suppliers",
+    response_model=ApiResponse[InventoryItemSupplierResponse],
+    dependencies=[Depends(require_permission("inventory:update"))],
+)
+async def link_item_supplier(
+    item_id: uuid.UUID,
+    payload: InventoryItemSupplierCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: InventoryService = Depends(get_inventory_service),
+) -> ApiResponse[InventoryItemSupplierResponse]:
+    link = await service.link_item_supplier(
+        item_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(data=link, message="Vendor linked to item.")
+
+
+@router.delete(
+    "/items/{item_id}/suppliers/{supplier_id}",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(require_permission("inventory:update"))],
+)
+async def unlink_item_supplier(
+    item_id: uuid.UUID,
+    supplier_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: InventoryService = Depends(get_inventory_service),
+) -> ApiResponse[None]:
+    await service.unlink_item_supplier(
+        item_id,
+        supplier_id,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(data=None, message="Vendor unlinked from item.")
+
+
+@router.post(
+    "/transfers",
+    response_model=ApiResponse[InventoryTransferResponse],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("inventory:update"))],
+)
+async def transfer_stock(
+    payload: InventoryTransferCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: InventoryService = Depends(get_inventory_service),
+) -> ApiResponse[InventoryTransferResponse]:
+    result = await service.transfer_stock(
+        current_user.id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(data=result, message="Stock transferred.")

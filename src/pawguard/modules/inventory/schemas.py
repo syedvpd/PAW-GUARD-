@@ -38,6 +38,9 @@ class InventoryItemCreate(BaseModel):
     reorder_threshold: float = Field(0.0, ge=0.0)
     expiry_date: date | None = Field(None)
     unit_cost: float = Field(0.0, ge=0.0)
+    facility_id: uuid.UUID | None = Field(
+        None, description="Shelter facility whose store holds this stock."
+    )
 
     @field_validator("category", mode="before")
     @classmethod
@@ -73,6 +76,7 @@ class InventoryItemResponse(BaseModel):
     reorder_threshold: float
     expiry_date: date | None
     unit_cost: float
+    facility_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -136,6 +140,7 @@ class InventoryMovementResponse(BaseModel):
 class RequisitionOrderCreate(BaseModel):
     item_id: uuid.UUID
     quantity: float = Field(..., gt=0.0, examples=[100.0])
+    supplier_id: uuid.UUID | None = Field(None, description="Vendor the stock is ordered from.")
 
 
 class RequisitionOrderResponse(BaseModel):
@@ -143,6 +148,7 @@ class RequisitionOrderResponse(BaseModel):
     item_id: uuid.UUID
     requester_id: uuid.UUID
     quantity: float
+    supplier_id: uuid.UUID | None = None
     status: RequisitionStatus
     created_at: datetime
     updated_at: datetime
@@ -156,8 +162,11 @@ class InventoryItemUpdate(BaseModel):
     quantity: float | None = Field(None, ge=0.0, examples=[45.0])
     unit: str | None = Field(None, min_length=1, max_length=32, examples=["vial"])
     reorder_threshold: float | None = Field(None, ge=0.0, examples=[15.0])
-    expiry_date: date | None = Field(None, examples=["2027-03-01"])
+    expiry_date: date | None = Field(
+        None, examples=["2027-03-01"], description="Send null explicitly to clear the expiry date."
+    )
     unit_cost: float | None = Field(None, ge=0.0, examples=[4.75])
+    facility_id: uuid.UUID | None = Field(None, description="Send null explicitly to unassign.")
 
     @field_validator("category", mode="before")
     @classmethod
@@ -233,7 +242,6 @@ class SupplierResponse(BaseModel):
 
 
 class InventoryItemSupplierCreate(BaseModel):
-    item_id: uuid.UUID
     supplier_id: uuid.UUID
     unit_cost: float = Field(..., gt=0.0, examples=[4.50])
     lead_time_days: int | None = Field(None, ge=0, examples=[7])
@@ -247,6 +255,34 @@ class InventoryItemSupplierResponse(BaseModel):
     unit_cost: float
     lead_time_days: int | None
     is_preferred: bool
+    supplier_name: str | None = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class InventoryTransferCreate(BaseModel):
+    item_id: uuid.UUID
+    to_facility_id: uuid.UUID
+    quantity: float = Field(..., gt=0.0, examples=[10.0])
+    notes: str | None = Field(None, max_length=2000)
+
+
+class InventoryTransferResponse(BaseModel):
+    transfer_id: uuid.UUID
+    source_item: InventoryItemResponse
+    destination_item: InventoryItemResponse
+
+
+class InventorySummaryResponse(BaseModel):
+    total_items: int
+    out_of_stock_count: int
+    low_stock_count: int
+    expiring_count: int
+    expired_count: int
+    total_stock_value: float
+    average_unit_cost: float
+    expiry_warning_days: int
+    out_of_stock: list[InventoryItemResponse]
+    low_stock: list[InventoryItemResponse]
+    expiring: list[InventoryItemResponse]

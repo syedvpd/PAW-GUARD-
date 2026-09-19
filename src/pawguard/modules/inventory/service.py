@@ -6,6 +6,7 @@ Adheres to RULE-003.
 import contextlib
 import uuid
 from collections.abc import Sequence
+from datetime import date, timedelta
 from typing import Any
 
 from pawguard.core.exceptions import ConflictError, NotFoundError, ValidationFailedError
@@ -19,6 +20,7 @@ from pawguard.modules.dog.models import DogProfile
 from pawguard.modules.foster.models import FosterPlacement, FosterProfile
 from pawguard.modules.inventory.models import (
     InventoryItem,
+    InventoryItemSupplier,
     InventoryMovement,
     ItemCategory,
     MovementType,
@@ -30,9 +32,14 @@ from pawguard.modules.inventory.repository import InventoryRepository
 from pawguard.modules.inventory.schemas import (
     InventoryItemCreate,
     InventoryItemResponse,
+    InventoryItemSupplierCreate,
+    InventoryItemSupplierResponse,
     InventoryItemUpdate,
     InventoryMovementCreate,
     InventoryMovementResponse,
+    InventorySummaryResponse,
+    InventoryTransferCreate,
+    InventoryTransferResponse,
     RequisitionOrderCreate,
     RequisitionOrderResponse,
     SupplierCreate,
@@ -63,6 +70,24 @@ REFERENCE_TYPE_TABLE_MAP: dict[str, Any] = {
     "adoption": AdoptionApplication,
 }
 
+EXPIRY_WARNING_DAYS = 60
+
+REQUISITION_TRANSITIONS: dict[RequisitionStatus, frozenset[RequisitionStatus]] = {
+    RequisitionStatus.PENDING: frozenset({RequisitionStatus.APPROVED, RequisitionStatus.REJECTED}),
+    RequisitionStatus.APPROVED: frozenset({RequisitionStatus.RECEIVED, RequisitionStatus.REJECTED}),
+    RequisitionStatus.REJECTED: frozenset(),
+    RequisitionStatus.RECEIVED: frozenset(),
+}
+
+_NON_NULLABLE_ITEM_FIELDS = (
+    "name",
+    "category",
+    "quantity",
+    "unit",
+    "reorder_threshold",
+    "unit_cost",
+)
+
 
 class InventoryService:
     def __init__(
@@ -91,12 +116,14 @@ class InventoryService:
         actor_id: uuid.UUID | None = None,
         ip_address: str | None = None,
     ) -> InventoryItem:
-        existing = await self._repo.get_item_by_name(payload.name)
+        await self._ensure_facility(payload.facility_id)
+        existing = await self._repo.get_item_by_name(payload.name, payload.facility_id)
         if existing is not None:
             raise ConflictError(f"Inventory item '{payload.name}' already registered.")
 
         item = InventoryItem(
             name=payload.name,
+            facility_id=payload.facility_id,
             category=payload.category,
             quantity=payload.quantity,
             unit=payload.unit,
@@ -116,6 +143,10 @@ class InventoryService:
                 metadata={"item_id": str(result.id)},
             )
         return result
+
+    async def _ensure_facility(self, facility_id: uuid.UUID | None) -> None:
+        if facility_id is not None and not await self._repo.facility_exists(facility_id):
+            raise NotFoundError("Shelter facility not found.")
 
     async def record_movement(
         self,
@@ -280,11 +311,18 @@ class InventoryService:
         item = await self._repo.get_item(payload.item_id)
         if item is None:
             raise NotFoundError("Inventory item not found.")
+        if payload.supplier_id is not None:
+            supplier = await self._repo.get_supplier_by_id(payload.supplier_id)
+            if supplier is None:
+                raise NotFoundError("Supplier not found.")
+            if not supplier.is_active:
+                raise ConflictError(f"Supplier '{supplier.name}' is inactive.")
 
         req = RequisitionOrder(
             item_id=payload.item_id,
             requester_id=user_id,
             quantity=payload.quantity,
+            supplier_id=payload.supplier_id,
             status=RequisitionStatus.PENDING,
         )
         return await self._repo.create_requisition(req)
@@ -303,6 +341,10 @@ class InventoryService:
 
         if req.status == RequisitionStatus.RECEIVED:
             raise ConflictError("Requisition order is already marked as received.")
+        if status not in REQUISITION_TRANSITIONS[req.status]:
+            raise ConflictError(
+                f"Requisition cannot move from {req.status.value} to {status.value}."
+            )
 
         if status == RequisitionStatus.RECEIVED:
             item = await self._repo.get_item(req.item_id)
@@ -348,11 +390,18 @@ class InventoryService:
         item = await self._repo.get_item(item_id)
         if item is None:
             raise NotFoundError("Inventory item not found.")
-        update_data = payload.model_dump(exclude_unset=True, exclude_none=True)
-        if "name" in update_data and update_data["name"] != item.name:
-            existing = await self._repo.get_item_by_name(update_data["name"])
-            if existing is not None:
-                raise ConflictError(f"Inventory item '{update_data['name']}' already registered.")
+        update_data = payload.model_dump(exclude_unset=True)
+        for field in _NON_NULLABLE_ITEM_FIELDS:
+            if field in update_data and update_data[field] is None:
+                update_data.pop(field)
+        if update_data.get("facility_id") is not None:
+            await self._ensure_facility(update_data["facility_id"])
+        target_name = update_data.get("name", item.name)
+        target_facility = update_data.get("facility_id", item.facility_id)
+        if (target_name, target_facility) != (item.name, item.facility_id):
+            existing = await self._repo.get_item_by_name(target_name, target_facility)
+            if existing is not None and existing.id != item.id:
+                raise ConflictError(f"Inventory item '{target_name}' already registered.")
         updated = await self._repo.update_item(item, **update_data)
         await self._invalidate_dashboard_cache()
         if self._audit and actor_id:
@@ -363,7 +412,7 @@ class InventoryService:
                 user_agent="",
                 metadata={
                     "item_id": str(item_id),
-                    "changes": update_data,
+                    "changes": {k: None if v is None else str(v) for k, v in update_data.items()},
                 },
             )
         return updated
@@ -393,12 +442,14 @@ class InventoryService:
         sort: SortParams,
         search_term: str | None = None,
         category: ItemCategory | None = None,
+        facility_id: uuid.UUID | None = None,
     ) -> PaginatedResponse[InventoryItemResponse]:
         items, total = await self._repo.list_items_paginated(
             page_params,
             sort,
             search_term=search_term,
             category=category,
+            facility_id=facility_id,
         )
         return PaginatedResponse(
             data=list(items),
@@ -486,8 +537,25 @@ class InventoryService:
         self,
         ids: list[uuid.UUID],
         status: RequisitionStatus,
+        user_id: uuid.UUID,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
     ) -> int:
-        return await self._repo.bulk_update_requisition_status(ids, status)
+        reqs = []
+        for req_id in dict.fromkeys(ids):
+            req = await self._repo.get_requisition(req_id)
+            if req is None:
+                raise NotFoundError(f"Requisition order {req_id} not found.")
+            if status not in REQUISITION_TRANSITIONS[req.status]:
+                raise ConflictError(
+                    f"Requisition {req_id} cannot move from {req.status.value} to {status.value}."
+                )
+            reqs.append(req)
+        for req in reqs:
+            await self.update_requisition_status(
+                user_id, req.id, status, actor_id=actor_id, ip_address=ip_address
+            )
+        return len(reqs)
 
     # ── Supplier CRUD ─────────────────────────────────────────────────
 
@@ -593,3 +661,190 @@ class InventoryService:
                 user_agent="",
                 metadata={"supplier_id": str(supplier_id)},
             )
+
+    # ── Stock summary ─────────────────────────────────────────────────
+
+    async def get_summary(self, today: date | None = None) -> InventorySummaryResponse:
+        today = today or date.today()
+        total, value, avg_cost = await self._repo.stock_totals()
+        out_of_stock = await self._repo.list_out_of_stock()
+        low_stock = await self._repo.list_low_stock()
+        expiring = await self._repo.list_expiring(today + timedelta(days=EXPIRY_WARNING_DAYS))
+
+        def to_response(items: Sequence[InventoryItem]) -> list[InventoryItemResponse]:
+            return [InventoryItemResponse.model_validate(i) for i in items]
+
+        return InventorySummaryResponse(
+            total_items=total,
+            out_of_stock_count=len(out_of_stock),
+            low_stock_count=len(low_stock),
+            expiring_count=len(expiring),
+            expired_count=sum(
+                1 for i in expiring if i.expiry_date is not None and i.expiry_date < today
+            ),
+            total_stock_value=round(value, 2),
+            average_unit_cost=round(avg_cost, 2),
+            expiry_warning_days=EXPIRY_WARNING_DAYS,
+            out_of_stock=to_response(out_of_stock),
+            low_stock=to_response(low_stock),
+            expiring=to_response(expiring),
+        )
+
+    # ── Item-vendor links ─────────────────────────────────────────────
+
+    async def list_item_suppliers(self, item_id: uuid.UUID) -> list[InventoryItemSupplierResponse]:
+        await self.get_item(item_id)
+        return [
+            InventoryItemSupplierResponse.model_validate(link).model_copy(
+                update={"supplier_name": name}
+            )
+            for link, name in await self._repo.list_item_supplier_links(item_id)
+        ]
+
+    async def link_item_supplier(
+        self,
+        item_id: uuid.UUID,
+        payload: InventoryItemSupplierCreate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> InventoryItemSupplierResponse:
+        await self.get_item(item_id)
+        supplier = await self.get_supplier(payload.supplier_id)
+        link = await self._repo.get_item_supplier(item_id, payload.supplier_id)
+        if payload.is_preferred:
+            await self._repo.clear_preferred_supplier(item_id)
+        if link is None:
+            link = await self._repo.create_item_supplier(
+                InventoryItemSupplier(
+                    item_id=item_id,
+                    supplier_id=payload.supplier_id,
+                    unit_cost=payload.unit_cost,
+                    lead_time_days=payload.lead_time_days,
+                    is_preferred=payload.is_preferred,
+                )
+            )
+        else:
+            link.unit_cost = payload.unit_cost
+            link.lead_time_days = payload.lead_time_days
+            link.is_preferred = payload.is_preferred
+            await self._repo._session.flush()
+        await self._repo._session.refresh(link)
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.INVENTORY_ITEM_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "item_id": str(item_id),
+                    "supplier_id": str(payload.supplier_id),
+                    "is_preferred": payload.is_preferred,
+                },
+            )
+        return InventoryItemSupplierResponse.model_validate(link).model_copy(
+            update={"supplier_name": supplier.name}
+        )
+
+    async def unlink_item_supplier(
+        self,
+        item_id: uuid.UUID,
+        supplier_id: uuid.UUID,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> None:
+        if not await self._repo.delete_item_supplier(item_id, supplier_id):
+            raise NotFoundError("Vendor is not linked to this item.")
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.INVENTORY_ITEM_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"item_id": str(item_id), "unlinked_supplier_id": str(supplier_id)},
+            )
+
+    # ── Inter-facility transfers ──────────────────────────────────────
+
+    async def transfer_stock(
+        self,
+        user_id: uuid.UUID,
+        payload: InventoryTransferCreate,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> InventoryTransferResponse:
+        source = await self._repo.get_item_for_update(payload.item_id)
+        if source is None:
+            raise NotFoundError("Inventory item not found.")
+        if source.facility_id == payload.to_facility_id:
+            raise ValidationFailedError("Source and destination facility must differ.")
+        await self._ensure_facility(payload.to_facility_id)
+        if source.quantity < payload.quantity:
+            raise ConflictError(
+                f"Insufficient stock for '{source.name}'. "
+                f"Available: {source.quantity} {source.unit}, Requested: {payload.quantity}"
+            )
+
+        existing = await self._repo.get_item_by_name(source.name, payload.to_facility_id)
+        if existing is None:
+            destination = await self._repo.create_item(
+                InventoryItem(
+                    name=source.name,
+                    facility_id=payload.to_facility_id,
+                    category=source.category,
+                    quantity=0.0,
+                    unit=source.unit,
+                    reorder_threshold=source.reorder_threshold,
+                    expiry_date=source.expiry_date,
+                    unit_cost=source.unit_cost,
+                )
+            )
+        else:
+            if existing.unit != source.unit:
+                raise ConflictError(
+                    f"'{source.name}' is tracked in {existing.unit} at the destination, "
+                    f"not {source.unit}."
+                )
+            destination = await self._repo.get_item_for_update(existing.id) or existing
+
+        transfer_id = uuid.uuid4()
+        source.quantity -= payload.quantity
+        destination.quantity += payload.quantity
+        for item, movement_type in (
+            (source, MovementType.CHECK_OUT),
+            (destination, MovementType.CHECK_IN),
+        ):
+            await self._repo.create_movement(
+                InventoryMovement(
+                    item_id=item.id,
+                    moved_by=user_id,
+                    movement_type=movement_type,
+                    quantity=payload.quantity,
+                    notes=payload.notes,
+                    reference_type="inventory_transfer",
+                    reference_id=transfer_id,
+                )
+            )
+        await self._repo._session.flush()
+        await self._repo._session.refresh(source)
+        await self._repo._session.refresh(destination)
+        await self._invalidate_dashboard_cache()
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.INVENTORY_STOCK_ADJUSTED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "transfer_id": str(transfer_id),
+                    "source_item_id": str(source.id),
+                    "destination_item_id": str(destination.id),
+                    "quantity": payload.quantity,
+                },
+            )
+        if source.quantity <= source.reorder_threshold:
+            await self._alert_low_stock(source)
+        return InventoryTransferResponse(
+            transfer_id=transfer_id,
+            source_item=InventoryItemResponse.model_validate(source),
+            destination_item=InventoryItemResponse.model_validate(destination),
+        )

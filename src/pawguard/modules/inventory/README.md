@@ -19,9 +19,11 @@ inventory/
 
 | Model | Table | Purpose |
 |-------|-------|---------|
-| `InventoryItem` | `inventory_items` | Stock item: name, category, quantity, reorder threshold, expiry |
+| `InventoryItem` | `inventory_items` | Stock item held at a facility (`facility_id`, nullable = central store). Name is unique per facility. Quantity may go negative after an emergency override |
 | `InventoryMovement` | `inventory_movements` | Stock movement log with reference tracking |
-| `RequisitionOrder` | `requisition_orders` | Requisition workflow |
+| `RequisitionOrder` | `requisition_orders` | Requisition workflow, optional vendor (`supplier_id`) |
+| `Supplier` | `suppliers` | Vendor register |
+| `InventoryItemSupplier` | `inventory_item_suppliers` | Item-vendor link with unit cost, lead time; at most one preferred vendor per item |
 
 **DB Constraints:** `quantity >= 0`, `unit_cost >= 0`
 
@@ -39,7 +41,17 @@ inventory/
 | PUT | `/inventory/requisitions/{id}/status` | `inventory:update` | Update requisition status |
 | DELETE | `/inventory/items/{id}` | `inventory:update` | Soft delete |
 | POST | `/inventory/items/bulk/delete` | `inventory:update` | Bulk soft delete |
-| POST | `/inventory/requisitions/bulk/status` | `inventory:update` | Bulk requisition status |
+| POST | `/inventory/requisitions/bulk/status` | `inventory:update` | Bulk requisition status (same transition rules and stock effects as single updates; all-or-nothing) |
+| GET | `/inventory/items?facility_id=` | `inventory:read` | List items held at one facility |
+| PUT | `/inventory/items/{id}` | `inventory:update` | Update item; `expiry_date: null` / `facility_id: null` clear the value |
+| GET | `/inventory/movements` | `inventory:read` | Movement ledger across items (`movement_type` filter) |
+| GET | `/inventory/summary` | `inventory:read` | Stock totals, out-of-stock / low-stock / expiring (60 days) lists, computed in SQL |
+| GET | `/inventory/items/{id}/suppliers` | `inventory:read` | Vendors linked to an item, preferred first, with `supplier_name` |
+| POST | `/inventory/items/{id}/suppliers` | `inventory:update` | Link or update a vendor for an item; `is_preferred` clears the previous preferred |
+| DELETE | `/inventory/items/{id}/suppliers/{supplier_id}` | `inventory:update` | Unlink a vendor |
+| POST | `/inventory/transfers` | `inventory:update` | Move stock to another facility: check-out at source, check-in at destination (created if missing), both with `reference_type=inventory_transfer` and a shared `reference_id` |
+| GET/POST | `/inventory/suppliers` | `inventory:read` / `inventory:create` | Vendor list / create |
+| GET/PUT/DELETE | `/inventory/suppliers/{id}` | `inventory:read` / `inventory:update` | Vendor detail / update / soft delete |
 
 ## Movement Types
 
@@ -80,9 +92,12 @@ POST /inventory/movements {item_id, movement_type, quantity, reference_type?, re
 
 ```
 PENDING ──approve──> APPROVED ──receive──> RECEIVED (terminal)
-   │
-   └──reject──> REJECTED (terminal)
+   │                    │
+   └──reject──> REJECTED <──reject──┘ (terminal)
 ```
+
+Transitions are enforced by `REQUISITION_TRANSITIONS` in `service.py`; any other move
+returns 409. Approval additionally requires `system:admin`.
 
 **Auto-delivery on RECEIVED:** Creates `CHECK_IN` movement for the requisition quantity.
 

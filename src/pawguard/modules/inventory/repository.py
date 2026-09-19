@@ -5,8 +5,9 @@ Repositories never contain business decisions (RULE-002).
 
 import uuid
 from collections.abc import Sequence
+from datetime import date
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.pagination import PageParams
@@ -21,6 +22,7 @@ from pawguard.modules.inventory.models import (
     RequisitionStatus,
     Supplier,
 )
+from pawguard.modules.shelter.models import ShelterFacility
 
 
 class InventoryRepository:
@@ -63,12 +65,72 @@ class InventoryRepository:
         result = await self._session.execute(stmt)
         return {row.id: row for row in result.scalars().all()}
 
-    async def get_item_by_name(self, name: str) -> InventoryItem | None:
+    async def get_item_by_name(
+        self, name: str, facility_id: uuid.UUID | None = None
+    ) -> InventoryItem | None:
+        facility_filter = (
+            InventoryItem.facility_id.is_(None)
+            if facility_id is None
+            else InventoryItem.facility_id == facility_id
+        )
         stmt = select(InventoryItem).where(
             InventoryItem.name == name,
+            facility_filter,
             InventoryItem.deleted_at.is_(None),
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def facility_exists(self, facility_id: uuid.UUID) -> bool:
+        stmt = select(ShelterFacility.id).where(
+            ShelterFacility.id == facility_id,
+            ShelterFacility.deleted_at.is_(None),
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none() is not None
+
+    async def stock_totals(self) -> tuple[int, float, float]:
+        stmt = select(
+            func.count(InventoryItem.id),
+            func.coalesce(
+                func.sum(func.greatest(InventoryItem.quantity, 0) * InventoryItem.unit_cost), 0
+            ),
+            func.coalesce(func.avg(InventoryItem.unit_cost), 0),
+        ).where(InventoryItem.deleted_at.is_(None))
+        count, value, avg_cost = (await self._session.execute(stmt)).one()
+        return int(count), float(value), float(avg_cost)
+
+    async def list_out_of_stock(self) -> Sequence[InventoryItem]:
+        stmt = (
+            select(InventoryItem)
+            .where(InventoryItem.deleted_at.is_(None), InventoryItem.quantity <= 0)
+            .order_by(InventoryItem.name.asc())
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def list_low_stock(self) -> Sequence[InventoryItem]:
+        stmt = (
+            select(InventoryItem)
+            .where(
+                InventoryItem.deleted_at.is_(None),
+                InventoryItem.quantity > 0,
+                InventoryItem.quantity <= InventoryItem.reorder_threshold,
+            )
+            .order_by(
+                (InventoryItem.quantity / func.nullif(InventoryItem.reorder_threshold, 0)).asc()
+            )
+        )
+        return (await self._session.execute(stmt)).scalars().all()
+
+    async def list_expiring(self, cutoff: date) -> Sequence[InventoryItem]:
+        stmt = (
+            select(InventoryItem)
+            .where(
+                InventoryItem.deleted_at.is_(None),
+                InventoryItem.expiry_date.is_not(None),
+                InventoryItem.expiry_date <= cutoff,
+            )
+            .order_by(InventoryItem.expiry_date.asc())
+        )
+        return (await self._session.execute(stmt)).scalars().all()
 
     async def update_item(self, item: InventoryItem, **kwargs: object) -> InventoryItem:
         for key, value in kwargs.items():
@@ -117,8 +179,11 @@ class InventoryRepository:
         sort: SortParams,
         search_term: str | None = None,
         category: ItemCategory | None = None,
+        facility_id: uuid.UUID | None = None,
     ) -> tuple[Sequence[InventoryItem], int]:
         filters = [InventoryItem.deleted_at.is_(None)]
+        if facility_id is not None:
+            filters.append(InventoryItem.facility_id == facility_id)
 
         search_filter = build_search_filter(InventoryItem, search_term, ("name", "category"))
         if search_filter is not None:
@@ -215,16 +280,6 @@ class InventoryRepository:
         await self._session.flush()
         return len(items)
 
-    async def bulk_update_requisition_status(
-        self,
-        ids: list[uuid.UUID],
-        status: RequisitionStatus,
-    ) -> int:
-        stmt = update(RequisitionOrder).where(RequisitionOrder.id.in_(ids)).values(status=status)
-        result = await self._session.execute(stmt)
-        await self._session.flush()
-        return result.rowcount  # type: ignore[attr-defined,no-any-return]
-
     # ── Supplier CRUD ─────────────────────────────────────────────────
 
     SEARCH_FIELDS_SUPPLIERS = ("name", "contact_person", "email", "phone", "gst_number")
@@ -307,3 +362,42 @@ class InventoryRepository:
     async def get_supplier_items(self, supplier_id: uuid.UUID) -> Sequence[InventoryItemSupplier]:
         stmt = select(InventoryItemSupplier).where(InventoryItemSupplier.supplier_id == supplier_id)
         return (await self._session.execute(stmt)).scalars().all()
+
+    async def get_item_supplier(
+        self, item_id: uuid.UUID, supplier_id: uuid.UUID
+    ) -> InventoryItemSupplier | None:
+        stmt = select(InventoryItemSupplier).where(
+            InventoryItemSupplier.item_id == item_id,
+            InventoryItemSupplier.supplier_id == supplier_id,
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def list_item_supplier_links(
+        self, item_id: uuid.UUID
+    ) -> Sequence[tuple[InventoryItemSupplier, str]]:
+        stmt = (
+            select(InventoryItemSupplier, Supplier.name)
+            .join(Supplier, Supplier.id == InventoryItemSupplier.supplier_id)
+            .where(InventoryItemSupplier.item_id == item_id, Supplier.deleted_at.is_(None))
+            .order_by(InventoryItemSupplier.is_preferred.desc(), Supplier.name.asc())
+        )
+        rows = (await self._session.execute(stmt)).all()
+        return [(link, name) for link, name in rows]
+
+    async def clear_preferred_supplier(self, item_id: uuid.UUID) -> None:
+        stmt = (
+            update(InventoryItemSupplier)
+            .where(InventoryItemSupplier.item_id == item_id, InventoryItemSupplier.is_preferred)
+            .values(is_preferred=False)
+        )
+        await self._session.execute(stmt)
+        await self._session.flush()
+
+    async def delete_item_supplier(self, item_id: uuid.UUID, supplier_id: uuid.UUID) -> bool:
+        stmt = delete(InventoryItemSupplier).where(
+            InventoryItemSupplier.item_id == item_id,
+            InventoryItemSupplier.supplier_id == supplier_id,
+        )
+        result = await self._session.execute(stmt)
+        await self._session.flush()
+        return bool(result.rowcount)  # type: ignore[attr-defined]
