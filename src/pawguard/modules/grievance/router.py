@@ -103,9 +103,12 @@ async def list_tickets(
 async def list_feedback(
     request: Request,
     params: PageParams = Depends(page_params),
+    adoption_application_id: uuid.UUID | None = Query(None),
     service: GrievanceService = Depends(get_grievance_service),
 ) -> PaginatedResponse[ServiceFeedbackResponse]:
-    feedback, meta = await service.list_feedback(page_params=params)
+    feedback, meta = await service.list_feedback(
+        page_params=params, adoption_application_id=adoption_application_id
+    )
     return PaginatedResponse(
         data=[ServiceFeedbackResponse.model_validate(f) for f in feedback],
         meta=meta,

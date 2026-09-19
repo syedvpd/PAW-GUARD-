@@ -404,10 +404,15 @@ class GrievanceService:
         return await self._repo.create_feedback(ServiceFeedback(**payload.model_dump()))
 
     async def list_feedback(
-        self, *, page_params: PageParams | None = None
+        self,
+        *,
+        page_params: PageParams | None = None,
+        adoption_application_id: uuid.UUID | None = None,
     ) -> tuple[list[ServiceFeedback], PaginationMeta]:
-        total = await self._repo.count_feedback()
-        feedback = await self._repo.list_feedback(page_params=page_params)
+        total = await self._repo.count_feedback(adoption_application_id=adoption_application_id)
+        feedback = await self._repo.list_feedback(
+            page_params=page_params, adoption_application_id=adoption_application_id
+        )
         meta = build_pagination_meta(total=total, params=page_params or PageParams())
         return list(feedback), meta
 

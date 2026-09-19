@@ -26,7 +26,7 @@ SUBMITTED ──> SCREENING ──> INTERVIEW ──> HOME_CHECK ──> APPROVE
 | From | To | Notes |
 |------|----|-------|
 | SUBMITTED | SCREENING | Initial review |
-| SCREENING | INTERVIEW | Background check |
+| SCREENING | INTERVIEW | **Requires verified applicant documents** (`documents_verified_at`) |
 | INTERVIEW | HOME_CHECK | **Exclusivity lock activated** |
 | HOME_CHECK | APPROVED | **Agreement PDF generated** |
 | APPROVED | COMPLETED | **Dog status -> ADOPTED** |
@@ -36,8 +36,8 @@ SUBMITTED ──> SCREENING ──> INTERVIEW ──> HOME_CHECK ──> APPROVE
 
 | Model | Table | Purpose |
 |-------|-------|---------|
-| `AdoptionApplication` | `adoption_applications` | Core application with status, vetting notes, fee |
-| `AdoptionScore` | `adoption_scores` | 4-dimension evaluation (home, pet_care, financial, lifestyle) |
+| `AdoptionApplication` | `adoption_applications` | Core application with status, vetting notes, applicant documents |
+| `AdoptionScore` | `adoption_scores` | 4-dimension evaluation, typed `interview` or `home_inspection` |
 | `AdoptionFollowUp` | `adoption_follow_ups` | 30/90/180-day post-adoption milestones |
 
 ## Endpoints
@@ -53,7 +53,12 @@ SUBMITTED ──> SCREENING ──> INTERVIEW ──> HOME_CHECK ──> APPROVE
 | PATCH | `/adoptions/{id}/status` | `adoption:process` | Update status |
 | POST | `/adoptions/{id}/scores` | `adoption:process` | Add evaluation score |
 | GET | `/adoptions/{id}/scores` | Authenticated | View scores |
-| PUT | `/adoptions/{id}/fee` | `adoption:process` | Set adoption fee |
+| PUT | `/adoptions/{id}/fee` | `adoption:process` | Set adoption fee (not printed on the agreement) |
+| POST | `/adoptions/{id}/documents/upload-url` | Owner or `adoption:process` | Presigned upload URL (PDF/JPEG/PNG, 10MB) |
+| POST | `/adoptions/{id}/documents` | Owner or `adoption:process` | Attach an uploaded applicant document |
+| POST | `/adoptions/{id}/documents/verify` | `adoption:process` | Mark Phase 1 documents verified |
+| DELETE | `/adoptions/{id}/documents/{doc_id}` | Owner or `adoption:process` | Remove a wrongly uploaded document |
+| GET | `/adoptions/{id}/documents/{doc_id}/download` | Owner or `adoption:read` | Presigned download URL |
 | POST | `/adoptions/{id}/follow-ups` | `adoption:process` | Create follow-up |
 | GET | `/adoptions/{id}/follow-ups` | Authenticated | View follow-ups |
 | POST | `/adoptions/{id}/follow-ups/{fid}/proof` | Owner or `adoption:process` | Submit proof |
@@ -92,10 +97,19 @@ CacheService.acquire_lock("lock:dog:{dog_id}", token, expire_ms=10000)
 ## Agreement PDF
 
 Auto-generated on APPROVED status:
-- Content: org header, adopter name, dog details, fee, liability waiver, signature line
+- Content: org header, adopter name, dog details, liability waiver, signature line (no fee: adoption is free)
 - Generated via `reportlab` in a thread (CPU-bound)
 - Uploaded to S3: `documents/agreement_{application_id}.pdf`
 - Download via presigned URL
+
+## Applicant Documents (Phase 1)
+
+Document types: `identity_proof`, `address_proof`, `landlord_approval`, `pet_medical_record`, `other`.
+
+- Verification requires an `identity_proof`, plus a `landlord_approval` when `residential_status` is rented.
+- Verification is only possible while SUBMITTED or SCREENING, and SCREENING -> INTERVIEW is refused until it is done
+  (also enforced on bulk status updates). Foster-to-Adopt applications skip straight to HOME_CHECK (PRR 3.8).
+- Adding or removing a document while SUBMITTED/SCREENING clears an earlier verification so the change is reviewed.
 
 ## Follow-Up System
 
@@ -118,7 +132,8 @@ OVERDUE ──late submit──> SUBMITTED
 - `financial_readiness_score`
 - `lifestyle_compatibility_score`
 
-**Overall** = average of all four. Multiple scores can be recorded per application.
+**Overall** = average of all four. Multiple scores can be recorded per application; `score_type` separates the
+phone-interview score sheet from the home-inspection one (defaults to `interview` for older clients).
 
 ## Cross-Module Interactions
 

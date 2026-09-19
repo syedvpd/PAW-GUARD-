@@ -710,6 +710,9 @@ class TestAdoptionService:
                     interview_completed_at=(
                         datetime.now(UTC) if start_status == AdoptionStatus.INTERVIEW else None
                     ),
+                    documents_verified_at=(
+                        datetime.now(UTC) if start_status == AdoptionStatus.SCREENING else None
+                    ),
                     residential_status="owned",
                     is_foster_to_adopt=False,
                 )
@@ -754,8 +757,8 @@ class TestAdoptionService:
                     )
 
     @pytest.mark.asyncio
-    async def test_update_application_fee_in_agreement(self, mock_repo, mock_dog_repo, mock_audit):
-        """Agreement PDF must reflect the actual fee_amount, not a hardcoded 0.0."""
+    async def test_agreement_carries_no_adoption_fee(self, mock_repo, mock_dog_repo, mock_audit):
+        """Adoption is free: the agreement PDF must not print a fee line."""
         from unittest.mock import patch
 
         app_id = uuid.uuid4()
@@ -805,7 +808,7 @@ class TestAdoptionService:
             )
             mock_gen.assert_called_once()
             call_kwargs = mock_gen.call_args.kwargs
-            assert call_kwargs["fee_amount"] == 250.0
+            assert "fee_amount" not in call_kwargs
 
     @pytest.mark.asyncio
     async def test_record_followup_proof(self, service, mock_repo):

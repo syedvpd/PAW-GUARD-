@@ -162,13 +162,32 @@ class TestEndToEndModuleFlows:
         )
         assert screening_resp.status_code == 200
 
+        for doc_type in ("identity_proof",):
+            doc_resp = await client.post(
+                f"/api/v1/adoptions/{app_id}/documents",
+                json={
+                    "doc_type": doc_type,
+                    "media_key": f"documents/{doc_type}.pdf",
+                    "filename": f"{doc_type}.pdf",
+                    "mime_type": "application/pdf",
+                },
+                headers=headers,
+            )
+            assert doc_resp.status_code == 201
+        verify_resp = await client.post(
+            f"/api/v1/adoptions/{app_id}/documents/verify", headers=headers
+        )
+        assert verify_resp.status_code == 200
+
         interview_resp = await client.put(
             f"/api/v1/adoptions/{app_id}", json={"status": "interview"}, headers=headers
         )
         assert interview_resp.status_code == 200
 
         home_check_resp = await client.put(
-            f"/api/v1/adoptions/{app_id}", json={"status": "home_check"}, headers=headers
+            f"/api/v1/adoptions/{app_id}",
+            json={"status": "home_check", "interview_completed_at": "2026-08-10T15:20:00Z"},
+            headers=headers,
         )
         assert home_check_resp.status_code == 200
         get_dog_resp = await client.get(f"/api/v1/dogs/{dog_id}", headers=headers)

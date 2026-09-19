@@ -23,6 +23,7 @@ from pawguard.modules.adoption.models import (
     AdoptionFollowUp,
     AdoptionScore,
     AdoptionStatus,
+    ApplicantDocumentType,
     FollowUpStatus,
 )
 from pawguard.modules.adoption.repository import AdoptionRepository
@@ -31,6 +32,9 @@ from pawguard.modules.adoption.schemas import (
     AdoptionApplicationResponse,
     AdoptionApplicationUpdate,
     AdoptionScoreCreate,
+    ApplicantDocumentCreate,
+    ApplicantDocumentUploadUrlRequest,
+    ApplicantDocumentUploadUrlResponse,
 )
 from pawguard.modules.auth.models import AuthAuditEventType
 from pawguard.modules.dog.models import DogProfile, DogStatus
@@ -103,6 +107,22 @@ FOSTER_TO_ADOPT_EXTRA_TRANSITIONS: dict[AdoptionStatus, set[AdoptionStatus]] = {
 # permission is also seeded to adoption_coordinator for routine locking.
 ADOPTION_OVERRIDE_ROLES = frozenset({"rescue_centre_admin", "super_admin"})
 
+APPLICANT_DOCUMENT_MIME_TYPES = frozenset({"image/jpeg", "image/png", "application/pdf"})
+
+_RENTED_RESIDENTIAL_STATUSES = frozenset({"rented", "renter", "tenant"})
+
+_DOCUMENT_EDITABLE_STATUSES = frozenset(
+    {
+        AdoptionStatus.SUBMITTED,
+        AdoptionStatus.SCREENING,
+        AdoptionStatus.INTERVIEW,
+        AdoptionStatus.HOME_CHECK,
+        AdoptionStatus.APPROVED,
+    }
+)
+
+_DOCUMENT_REVIEW_STATUSES = frozenset({AdoptionStatus.SUBMITTED, AdoptionStatus.SCREENING})
+
 
 class AdoptionService:
     def __init__(
@@ -170,7 +190,6 @@ class AdoptionService:
                 dog_name=dog.name if dog else "Dog",
                 dog_registration_number=dog.registration_number if dog else "",
                 dog_breed=dog.breed if dog else "",
-                fee_amount=float(application.fee_amount or Decimal("0.00")),
                 org_name=settings.org_name,
                 org_address=settings.org_address,
             )
@@ -232,6 +251,24 @@ class AdoptionService:
                 f"Cannot transition adoption application from '{old_status.value}' "
                 f"to '{new_status.value}'."
             )
+
+    @staticmethod
+    def _check_stage_requirements(
+        app: AdoptionApplication,
+        new_status: AdoptionStatus,
+        *,
+        interview_completed_at: datetime | None,
+    ) -> None:
+        if app.status == AdoptionStatus.SCREENING and new_status == AdoptionStatus.INTERVIEW:
+            if app.documents_verified_at is None:
+                raise ValidationFailedError(
+                    "Verify the applicant's identity documents before scheduling the interview."
+                )
+        if app.status == AdoptionStatus.INTERVIEW and new_status == AdoptionStatus.HOME_CHECK:
+            if interview_completed_at is None:
+                raise ValidationFailedError(
+                    "Complete the interview call before scheduling the home inspection."
+                )
 
     async def _invalidate_adoption_list_caches(self) -> None:
         """Bust the cached GET /adoptions list/dashboard responses on any
@@ -480,14 +517,13 @@ class AdoptionService:
                 app.status, new_status, is_foster_to_adopt=app.is_foster_to_adopt
             )
 
-            if app.status == AdoptionStatus.INTERVIEW and new_status == AdoptionStatus.HOME_CHECK:
-                effective_interview_completed_at = update_data.get(
+            self._check_stage_requirements(
+                app,
+                new_status,
+                interview_completed_at=update_data.get(
                     "interview_completed_at", app.interview_completed_at
-                )
-                if effective_interview_completed_at is None:
-                    raise ValidationFailedError(
-                        "Complete the interview call before scheduling the home inspection."
-                    )
+                ),
+            )
 
             locked_dog = None
             if new_status in AdoptionRepository.LOCKING_STATUSES:
@@ -572,11 +608,9 @@ class AdoptionService:
                 else notes.strip()
             )
 
-        if old_status == AdoptionStatus.INTERVIEW and status == AdoptionStatus.HOME_CHECK:
-            if app.interview_completed_at is None:
-                raise ValidationFailedError(
-                    "Complete the interview call before scheduling the home inspection."
-                )
+        self._check_stage_requirements(
+            app, status, interview_completed_at=app.interview_completed_at
+        )
 
         locked_dog = None
         if status in AdoptionRepository.LOCKING_STATUSES:
@@ -1009,6 +1043,7 @@ class AdoptionService:
             financial_readiness_score=payload.financial_readiness_score,
             lifestyle_compatibility_score=payload.lifestyle_compatibility_score,
             overall_score=total,
+            score_type=payload.score_type,
             recommendation=payload.recommendation,
             notes=payload.notes,
             scored_at=datetime.now(UTC),
@@ -1025,11 +1060,171 @@ class AdoptionService:
                     "adoption_id": str(application_id),
                     "score_id": str(score.id),
                     "overall_score": float(total),
+                    "score_type": payload.score_type.value,
                     "recommendation": payload.recommendation,
                 },
             )
 
         return score
+
+    def generate_applicant_document_upload_url(
+        self, payload: ApplicantDocumentUploadUrlRequest
+    ) -> ApplicantDocumentUploadUrlResponse:
+        if payload.mime_type not in APPLICANT_DOCUMENT_MIME_TYPES:
+            raise ValidationFailedError(
+                f"Unsupported document type '{payload.mime_type}'. Allowed types: JPEG, PNG, PDF."
+            )
+        storage = self._storage or StorageService()
+        object_key = storage.build_object_key(folder="documents", filename=payload.filename)
+        upload_url = storage.generate_presigned_upload_url(
+            object_key=object_key, content_type=payload.mime_type
+        )
+        return ApplicantDocumentUploadUrlResponse(upload_url=upload_url, media_key=object_key)
+
+    async def add_applicant_document(
+        self,
+        app_id: uuid.UUID,
+        payload: ApplicantDocumentCreate,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> AdoptionApplication:
+        app = await self.get_application(app_id)
+        if AdoptionStatus(app.status) not in _DOCUMENT_EDITABLE_STATUSES:
+            raise ValidationFailedError("Documents cannot be added to a closed application.")
+        if payload.mime_type not in APPLICANT_DOCUMENT_MIME_TYPES:
+            raise ValidationFailedError(
+                f"Unsupported document type '{payload.mime_type}'. Allowed types: JPEG, PNG, PDF."
+            )
+        if not payload.media_key.startswith("documents/") or ".." in payload.media_key:
+            raise ValidationFailedError("Invalid document key.")
+
+        document = {
+            "id": str(uuid.uuid4()),
+            "doc_type": payload.doc_type.value,
+            "object_key": payload.media_key,
+            "filename": payload.filename,
+            "mime_type": payload.mime_type,
+            "uploaded_by_id": str(actor_id) if actor_id else None,
+            "uploaded_at": datetime.now(UTC).isoformat(),
+        }
+        app.applicant_documents = [*(app.applicant_documents or []), document]
+        if AdoptionStatus(app.status) in _DOCUMENT_REVIEW_STATUSES:
+            app.documents_verified_at = None
+            app.documents_verified_by_id = None
+        await self._repo._session.flush()
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.ADOPTION_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "adoption_id": str(app_id),
+                    "document_id": document["id"],
+                    "doc_type": document["doc_type"],
+                },
+            )
+        await self._invalidate_adoption_list_caches()
+        return await self.get_application(app_id)
+
+    async def verify_applicant_documents(
+        self,
+        app_id: uuid.UUID,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> AdoptionApplication:
+        app = await self.get_application(app_id)
+        if AdoptionStatus(app.status) not in _DOCUMENT_REVIEW_STATUSES:
+            raise ValidationFailedError(
+                "Documents can only be verified while the application is submitted or in screening."
+            )
+        doc_types = {d.get("doc_type") for d in app.applicant_documents or []}
+        missing = []
+        if ApplicantDocumentType.IDENTITY_PROOF.value not in doc_types:
+            missing.append("identity proof")
+        if (
+            (app.residential_status or "").lower() in _RENTED_RESIDENTIAL_STATUSES
+            and ApplicantDocumentType.LANDLORD_APPROVAL.value not in doc_types
+        ):
+            missing.append("landlord approval")
+        if missing:
+            raise ValidationFailedError(
+                f"Upload the applicant's {' and '.join(missing)} before verifying documents."
+            )
+
+        app.documents_verified_at = datetime.now(UTC)
+        app.documents_verified_by_id = actor_id
+        await self._repo._session.flush()
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.ADOPTION_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={"adoption_id": str(app_id), "documents_verified": True},
+                before_state={"documents_verified": False},
+                after_state={"documents_verified": True},
+            )
+        await self._invalidate_adoption_list_caches()
+        return await self.get_application(app_id)
+
+    async def remove_applicant_document(
+        self,
+        app_id: uuid.UUID,
+        document_id: str,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+    ) -> AdoptionApplication:
+        app = await self.get_application(app_id)
+        if AdoptionStatus(app.status) not in _DOCUMENT_EDITABLE_STATUSES:
+            raise ValidationFailedError("Documents cannot be removed from a closed application.")
+        documents = list(app.applicant_documents or [])
+        removed = next((d for d in documents if d.get("id") == document_id), None)
+        if removed is None:
+            raise NotFoundError("Applicant document not found.")
+
+        app.applicant_documents = [d for d in documents if d is not removed]
+        if AdoptionStatus(app.status) in _DOCUMENT_REVIEW_STATUSES:
+            app.documents_verified_at = None
+            app.documents_verified_by_id = None
+        await self._repo._session.flush()
+
+        if self._storage is not None:
+            try:
+                await asyncio.to_thread(
+                    self._storage.delete_object, object_key=str(removed["object_key"])
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to delete stored applicant document %s", document_id, exc_info=True
+                )
+
+        if self._audit and actor_id:
+            await self._audit.record(
+                event_type=AuthAuditEventType.ADOPTION_UPDATED,
+                actor_id=actor_id,
+                ip_address=ip_address or "",
+                user_agent="",
+                metadata={
+                    "adoption_id": str(app_id),
+                    "removed_document_id": document_id,
+                    "doc_type": removed.get("doc_type"),
+                },
+            )
+        await self._invalidate_adoption_list_caches()
+        return await self.get_application(app_id)
+
+    async def get_applicant_document_key(self, app_id: uuid.UUID, document_id: str) -> str:
+        app = await self.get_application(app_id)
+        for document in app.applicant_documents or []:
+            if document.get("id") == document_id:
+                return str(document["object_key"])
+        raise NotFoundError("Applicant document not found.")
 
     async def get_scores(self, application_id: uuid.UUID) -> list[AdoptionScore]:
         app = await self._repo.get_by_id(application_id)
@@ -1161,6 +1356,9 @@ class AdoptionService:
         apps = await self._repo.get_by_ids(ids)
         for app in apps:
             self._check_transition(app.status, status, is_foster_to_adopt=app.is_foster_to_adopt)
+            self._check_stage_requirements(
+                app, status, interview_completed_at=app.interview_completed_at
+            )
 
         updated = await self._repo.bulk_update_status(ids, status)
 

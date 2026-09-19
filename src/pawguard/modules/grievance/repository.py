@@ -130,15 +130,22 @@ class GrievanceRepository:
         await self._session.flush()
         return feedback
 
-    async def count_feedback(self) -> int:
+    async def count_feedback(self, *, adoption_application_id: uuid.UUID | None = None) -> int:
         stmt = select(func.count(ServiceFeedback.id)).where(ServiceFeedback.deleted_at.is_(None))
+        if adoption_application_id is not None:
+            stmt = stmt.where(ServiceFeedback.adoption_application_id == adoption_application_id)
         result = await self._session.execute(stmt)
         return result.scalar_one()
 
     async def list_feedback(
-        self, *, page_params: PageParams | None = None
+        self,
+        *,
+        page_params: PageParams | None = None,
+        adoption_application_id: uuid.UUID | None = None,
     ) -> Sequence[ServiceFeedback]:
         stmt = select(ServiceFeedback).where(ServiceFeedback.deleted_at.is_(None))
+        if adoption_application_id is not None:
+            stmt = stmt.where(ServiceFeedback.adoption_application_id == adoption_application_id)
         stmt = stmt.order_by(ServiceFeedback.created_at.desc())
         if page_params:
             stmt = stmt.offset(page_params.offset).limit(page_params.limit)

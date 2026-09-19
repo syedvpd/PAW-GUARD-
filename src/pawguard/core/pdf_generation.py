@@ -167,7 +167,6 @@ def generate_adoption_agreement(
     dog_name: str,
     dog_registration_number: str,
     dog_breed: str,
-    fee_amount: float,
     org_name: str,
     org_address: str,
 ) -> bytes:
@@ -195,7 +194,6 @@ def generate_adoption_agreement(
         ["Dog Name:", dog_name],
         ["Registration Number:", dog_registration_number],
         ["Breed:", dog_breed],
-        ["Adoption Fee:", f"{fee_amount:,.2f}"],
     ]
     table = Table(agreement_data, colWidths=[2 * inch, 3.5 * inch])
     table.setStyle(

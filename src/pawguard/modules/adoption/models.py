@@ -39,6 +39,19 @@ class AdoptionStatus(StrEnum):
     VETTING = "vetting"  # deprecated legacy value, kept for data compatibility
 
 
+class ApplicantDocumentType(StrEnum):
+    IDENTITY_PROOF = "identity_proof"
+    ADDRESS_PROOF = "address_proof"
+    LANDLORD_APPROVAL = "landlord_approval"
+    PET_MEDICAL_RECORD = "pet_medical_record"
+    OTHER = "other"
+
+
+class ScoreType(StrEnum):
+    INTERVIEW = "interview"
+    HOME_INSPECTION = "home_inspection"
+
+
 class FollowUpStatus(StrEnum):
     PENDING = "pending"
     SUBMITTED = "submitted"
@@ -116,6 +129,16 @@ class AdoptionApplication(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AuditMix
     # the dog via an active foster placement, so the home is already known and
     # SCREENING/INTERVIEW are redundant - see FOSTER_TO_ADOPT_TRANSITIONS.
     is_foster_to_adopt: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Phase 1 (PRR 3.7): identity / residence evidence reviewed before the interview.
+    applicant_documents: Mapped[list[dict[str, str]] | None] = mapped_column(JSONB, nullable=True)
+    documents_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    documents_verified_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     dog: Mapped["DogProfile"] = relationship("DogProfile", lazy="joined")
     adopter: Mapped["User"] = relationship("User", foreign_keys=[adopter_id], lazy="joined")
@@ -173,6 +196,12 @@ class AdoptionScore(UUIDPkMixin, TimestampMixin, AuditMixin, Base):
     financial_readiness_score: Mapped[int] = mapped_column(Integer, nullable=False)
     lifestyle_compatibility_score: Mapped[int] = mapped_column(Integer, nullable=False)
     overall_score: Mapped[float] = mapped_column(Numeric(4, 1), nullable=False)
+    score_type: Mapped[ScoreType] = mapped_column(
+        String(16),
+        default=ScoreType.INTERVIEW,
+        server_default=ScoreType.INTERVIEW.value,
+        nullable=False,
+    )
     recommendation: Mapped[str] = mapped_column(String(32), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     scored_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

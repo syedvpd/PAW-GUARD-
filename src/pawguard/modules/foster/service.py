@@ -1020,7 +1020,6 @@ class FosterService:
                 dog_name=dog.name if dog else "Dog",
                 dog_registration_number=dog.registration_number if dog else "",
                 dog_breed=dog.breed if dog else "",
-                fee_amount=float(application.fee_amount or 0.0),
                 org_name=settings.org_name,
                 org_address=settings.org_address,
             )

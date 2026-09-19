@@ -43,6 +43,9 @@ from pawguard.modules.adoption.schemas import (
     AdoptionScoreResponse,
     AdoptionStatusUpdate,
     AdoptionWithdrawRequest,
+    ApplicantDocumentCreate,
+    ApplicantDocumentUploadUrlRequest,
+    ApplicantDocumentUploadUrlResponse,
     FollowUpProofCreate,
 )
 from pawguard.modules.adoption.service import AdoptionService
@@ -432,6 +435,120 @@ async def get_scores(
     scores = await service.get_scores(app_id)
     return ApiResponse(
         data=[AdoptionScoreResponse.model_validate(s) for s in scores],
+    )
+
+
+async def _require_applicant_or(
+    service: AdoptionService, app_id: uuid.UUID, current_user: CurrentUser, permission: str
+) -> None:
+    app = await service.get_application(app_id)
+    if app.adopter_id != current_user.user.id and not has_permission(current_user.user, permission):
+        raise ForbiddenError("You do not have permission to access this application's documents.")
+
+
+@router.post(
+    "/{app_id}/documents/upload-url",
+    response_model=ApiResponse[ApplicantDocumentUploadUrlResponse],
+)
+async def generate_applicant_document_upload_url(
+    app_id: uuid.UUID,
+    payload: ApplicantDocumentUploadUrlRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: AdoptionService = Depends(get_adoption_service),
+) -> ApiResponse[ApplicantDocumentUploadUrlResponse]:
+    await _require_applicant_or(service, app_id, current_user, "adoption:process")
+    return ApiResponse(
+        data=service.generate_applicant_document_upload_url(payload),
+        message="Presigned upload URL generated successfully.",
+    )
+
+
+@router.post(
+    "/{app_id}/documents",
+    response_model=ApiResponse[AdoptionApplicationResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_applicant_document(
+    app_id: uuid.UUID,
+    payload: ApplicantDocumentCreate,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: AdoptionService = Depends(get_adoption_service),
+) -> ApiResponse[AdoptionApplicationResponse]:
+    await _require_applicant_or(service, app_id, current_user, "adoption:process")
+    updated = await service.add_applicant_document(
+        app_id,
+        payload,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(
+        data=AdoptionApplicationResponse.model_validate(updated),
+        message="Document added.",
+    )
+
+
+@router.post(
+    "/{app_id}/documents/verify",
+    response_model=ApiResponse[AdoptionApplicationResponse],
+    dependencies=[Depends(require_permission("adoption:process"))],
+)
+async def verify_applicant_documents(
+    app_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: AdoptionService = Depends(get_adoption_service),
+) -> ApiResponse[AdoptionApplicationResponse]:
+    updated = await service.verify_applicant_documents(
+        app_id,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(
+        data=AdoptionApplicationResponse.model_validate(updated),
+        message="Applicant documents verified.",
+    )
+
+
+@router.delete(
+    "/{app_id}/documents/{document_id}",
+    response_model=ApiResponse[AdoptionApplicationResponse],
+)
+async def remove_applicant_document(
+    app_id: uuid.UUID,
+    document_id: str,
+    request: Request,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: AdoptionService = Depends(get_adoption_service),
+) -> ApiResponse[AdoptionApplicationResponse]:
+    await _require_applicant_or(service, app_id, current_user, "adoption:process")
+    updated = await service.remove_applicant_document(
+        app_id,
+        document_id,
+        actor_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+    )
+    return ApiResponse(
+        data=AdoptionApplicationResponse.model_validate(updated),
+        message="Document removed.",
+    )
+
+
+@router.get(
+    "/{app_id}/documents/{document_id}/download",
+    response_model=ApiResponse[DownloadUrlResponse],
+)
+async def get_applicant_document_download_url(
+    app_id: uuid.UUID,
+    document_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+    service: AdoptionService = Depends(get_adoption_service),
+) -> ApiResponse[DownloadUrlResponse]:
+    await _require_applicant_or(service, app_id, current_user, "adoption:read")
+    object_key = await service.get_applicant_document_key(app_id, document_id)
+    download_url = StorageService().generate_presigned_download_url(object_key=object_key)
+    return ApiResponse(
+        data=DownloadUrlResponse(download_url=download_url, object_key=object_key, file_id=app_id),
     )
 
 

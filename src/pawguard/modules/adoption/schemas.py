@@ -8,7 +8,12 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from pawguard.core.sanitize import sanitize_html
-from pawguard.modules.adoption.models import AdoptionStatus, FollowUpStatus
+from pawguard.modules.adoption.models import (
+    AdoptionStatus,
+    ApplicantDocumentType,
+    FollowUpStatus,
+    ScoreType,
+)
 from pawguard.modules.auth.schemas import UserProfile
 from pawguard.modules.dog.schemas import DogProfileResponse
 
@@ -118,6 +123,16 @@ class AdoptionFollowUpResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ApplicantDocumentResponse(BaseModel):
+    id: str
+    doc_type: ApplicantDocumentType
+    object_key: str
+    filename: str
+    mime_type: str
+    uploaded_by_id: str | None = None
+    uploaded_at: datetime
+
+
 class AdoptionApplicationResponse(BaseModel):
     id: uuid.UUID
     dog_id: uuid.UUID
@@ -156,6 +171,17 @@ class AdoptionApplicationResponse(BaseModel):
     agreement_signature_name: str | None = None
     is_foster_to_adopt: bool = False
     fee_amount: Decimal | None = Field(None, description="Adoption fee amount")
+    applicant_documents: list[ApplicantDocumentResponse] = Field(
+        default_factory=list, description="Phase 1 identity / residence evidence"
+    )
+    documents_verified_at: datetime | None = None
+    documents_verified_by_id: uuid.UUID | None = None
+
+    @field_validator("applicant_documents", mode="before")
+    @classmethod
+    def _documents_default(cls, v: Any) -> Any:
+        return v or []
+
     completed_at: datetime | None
     created_at: datetime
     submitted_at: datetime | None = Field(
@@ -202,6 +228,7 @@ class AdoptionApplicationResponse(BaseModel):
 
 
 class AdoptionScoreCreate(BaseModel):
+    score_type: ScoreType = Field(ScoreType.INTERVIEW, examples=["interview"])
     home_environment_score: int = Field(..., ge=1, le=10, examples=[8])
     pet_care_knowledge_score: int = Field(..., ge=1, le=10, examples=[7])
     financial_readiness_score: int = Field(..., ge=1, le=10, examples=[9])
@@ -228,6 +255,7 @@ class AdoptionScoreResponse(BaseModel):
     financial_readiness_score: int
     lifestyle_compatibility_score: int
     overall_score: Decimal
+    score_type: ScoreType = ScoreType.INTERVIEW
     recommendation: str
     notes: str | None
     scored_at: datetime
@@ -342,3 +370,26 @@ class AdoptionFollowUpUploadUrlResponse(BaseModel):
         description="The object key / mediaKey to submit in FollowUpProofCreate payload",
         examples=["documents/adoption_followup_1a2b3c4d5e6f.jpg"],
     )
+
+
+_APPLICANT_DOCUMENT_MAX_BYTES = 10 * 1024 * 1024
+
+
+class ApplicantDocumentUploadUrlRequest(BaseModel):
+    filename: str = Field(..., max_length=255, examples=["aadhaar_front.jpg"])
+    mime_type: str = Field(..., examples=["application/pdf"])
+    file_size: int = Field(
+        ..., ge=1, le=_APPLICANT_DOCUMENT_MAX_BYTES, description="File size in bytes (max 10MB)"
+    )
+
+
+class ApplicantDocumentUploadUrlResponse(BaseModel):
+    upload_url: str
+    media_key: str
+
+
+class ApplicantDocumentCreate(BaseModel):
+    doc_type: ApplicantDocumentType = Field(..., examples=["identity_proof"])
+    media_key: str = Field(..., min_length=1, max_length=512, examples=["documents/id_1a2b3c.pdf"])
+    filename: str = Field(..., min_length=1, max_length=255, examples=["aadhaar_front.jpg"])
+    mime_type: str = Field(..., examples=["image/jpeg"])
