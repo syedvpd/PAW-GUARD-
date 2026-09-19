@@ -377,3 +377,22 @@ async def delete_business_rule(
         actor_id=current_user.id,
         ip_address=request.client.host if request.client else None,
     )
+
+
+SESSION_IDLE_TIMEOUT_KEY = "session_idle_timeout_minutes"
+DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES = 15
+
+
+@router.get("/session-policy", response_model=ApiResponse[dict[str, int]])
+async def get_session_policy(
+    _: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ApiResponse[dict[str, int]]:
+    setting = await SystemSettingRepository(db).get_by_key(SESSION_IDLE_TIMEOUT_KEY)
+    try:
+        minutes = (
+            int(setting.value) if setting is not None else DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES
+        )
+    except ValueError:
+        minutes = DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES
+    return ApiResponse(data={"idle_timeout_minutes": max(minutes, 0)})

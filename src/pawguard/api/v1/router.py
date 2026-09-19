@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from pawguard.modules.admin.audit_router import audit_router
+from pawguard.modules.admin.backup_router import backup_router
 from pawguard.modules.admin.dashboard_router import admin_dashboard_router
 from pawguard.modules.adoption.router import router as adoption_router
 from pawguard.modules.auth.admin_router import admin_router
@@ -38,6 +39,7 @@ api_v1_router.include_router(admin_notifications_router)
 api_v1_router.include_router(dashboards_router)
 api_v1_router.include_router(admin_dashboard_router)
 api_v1_router.include_router(audit_router)
+api_v1_router.include_router(backup_router)
 api_v1_router.include_router(rescue_router)
 api_v1_router.include_router(rescue_router, prefix="/dispatches")
 api_v1_router.include_router(rescue_router, prefix="/dispatch")

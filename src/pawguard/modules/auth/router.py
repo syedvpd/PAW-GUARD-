@@ -40,6 +40,7 @@ from pawguard.modules.auth.schemas import (
     EmailVerificationConfirmRequest,
     LoginRequest,
     LoginResponse,
+    MFABootstrapRequest,
     MFADisableRequest,
     MFAEnrollResponse,
     MFALoginVerifyRequest,
@@ -679,6 +680,37 @@ async def confirm_mfa_enrollment(
         user=current.user, code=payload.code, ctx=_build_request_context(request)
     )
     return ApiResponse(message="MFA enabled.")
+
+
+@router.post(
+    "/mfa/enroll/bootstrap",
+    response_model=ApiResponse[MFAEnrollResponse],
+    dependencies=[Depends(mfa_enroll_confirm_rate_limiter)],
+)
+async def bootstrap_mfa_enrollment(
+    payload: MFABootstrapRequest,
+    auth_service: AuthService = Depends(get_auth_service),
+) -> ApiResponse[MFAEnrollResponse]:
+    secret, uri = await auth_service.bootstrap_mfa_enrollment(pre_auth_token=payload.pre_auth_token)
+    return ApiResponse(data=MFAEnrollResponse(secret=secret, provisioning_uri=uri))
+
+
+@router.post(
+    "/mfa/enroll/bootstrap/confirm",
+    response_model=ApiResponse[None],
+    dependencies=[Depends(mfa_enroll_confirm_rate_limiter)],
+)
+async def confirm_bootstrap_mfa(
+    payload: MFALoginVerifyRequest,
+    request: Request,
+    auth_service: AuthService = Depends(get_auth_service),
+) -> ApiResponse[None]:
+    await auth_service.confirm_bootstrap_mfa(
+        pre_auth_token=payload.pre_auth_token,
+        code=payload.code,
+        ctx=_build_request_context(request),
+    )
+    return ApiResponse(message="MFA enabled. Finish signing in with /auth/mfa/verify.")
 
 
 @router.post(

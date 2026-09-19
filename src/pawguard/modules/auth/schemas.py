@@ -199,6 +199,10 @@ class MFALoginVerifyRequest(BaseModel):
     device: DeviceContext = DeviceContext()
 
 
+class MFABootstrapRequest(BaseModel):
+    pre_auth_token: str = Field(..., examples=["a1b2c3d4e5f6-pre-auth"])
+
+
 class MFADisableRequest(BaseModel):
     password: str | None = Field(None, examples=["CurrentP@ssw0rd"])
     totp_code: str | None = Field(None, min_length=6, max_length=6, examples=["482913"])

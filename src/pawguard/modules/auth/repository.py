@@ -3,7 +3,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -85,6 +85,61 @@ class UserRepository:
             .order_by(User.created_at.desc())
         )
         return list((await self._session.execute(stmt)).scalars().all())
+
+    async def search(
+        self,
+        *,
+        page: int,
+        page_size: int,
+        role: str | None = None,
+        is_active: bool | None = None,
+        q: str | None = None,
+    ) -> tuple[list[User], int]:
+        from pawguard.modules.auth.models import UserRole
+
+        filters = [User.deleted_at.is_(None)]
+        if is_active is not None:
+            filters.append(User.is_active.is_(is_active))
+        if q:
+            term = f"%{q.strip().lower()}%"
+            filters.append(
+                or_(
+                    func.lower(User.email).like(term),
+                    func.lower(User.full_name).like(term),
+                    User.phone.like(term),
+                )
+            )
+        if role:
+            filters.append(
+                User.id.in_(
+                    select(UserRole.user_id)
+                    .join(Role, Role.id == UserRole.role_id)
+                    .where(Role.name == role)
+                )
+            )
+        total = (
+            await self._session.execute(select(func.count(User.id)).where(*filters))
+        ).scalar_one()
+        stmt = (
+            select(User)
+            .options(selectinload(User.roles))
+            .where(*filters)
+            .order_by(User.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        return list((await self._session.execute(stmt)).scalars().all()), total
+
+    async def count_active_with_role(self, role_name: str) -> int:
+        from pawguard.modules.auth.models import UserRole
+
+        stmt = (
+            select(func.count(func.distinct(User.id)))
+            .join(UserRole, UserRole.user_id == User.id)
+            .join(Role, Role.id == UserRole.role_id)
+            .where(User.is_active.is_(True), User.deleted_at.is_(None), Role.name == role_name)
+        )
+        return (await self._session.execute(stmt)).scalar_one()
 
     async def list_staff_user_ids(self) -> list[uuid.UUID]:
         """Active users holding operational staff roles (excluding general_public and user).
@@ -540,6 +595,29 @@ class OAuthAccountRepository:
             await self._session.flush()
 
 
+def audit_filters(
+    *,
+    event_type: str | None = None,
+    user_id: uuid.UUID | None = None,
+    module: str | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+) -> list:
+    conditions = []
+    if event_type:
+        conditions.append(AuthAuditLog.event_type == event_type)
+    if user_id:
+        conditions.append(AuthAuditLog.user_id == user_id)
+    if module:
+        prefix = module.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        conditions.append(AuthAuditLog.event_type.like(f"{prefix}\\_%", escape="\\"))
+    if date_from:
+        conditions.append(AuthAuditLog.created_at >= date_from)
+    if date_to:
+        conditions.append(AuthAuditLog.created_at <= date_to)
+    return conditions
+
+
 class AuthAuditLogRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -556,14 +634,21 @@ class AuthAuditLogRepository:
         limit: int = 50,
         event_type: str | None = None,
         user_id: uuid.UUID | None = None,
+        module: str | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
     ) -> list[AuthAuditLog]:
         stmt = select(AuthAuditLog).options(
             selectinload(AuthAuditLog.user).selectinload(User.roles)
         )
-        if event_type:
-            stmt = stmt.where(AuthAuditLog.event_type == event_type)
-        if user_id:
-            stmt = stmt.where(AuthAuditLog.user_id == user_id)
+        for condition in audit_filters(
+            event_type=event_type,
+            user_id=user_id,
+            module=module,
+            date_from=date_from,
+            date_to=date_to,
+        ):
+            stmt = stmt.where(condition)
         stmt = stmt.order_by(AuthAuditLog.created_at.desc()).offset(skip).limit(limit)
         return list((await self._session.execute(stmt)).scalars().all())
 

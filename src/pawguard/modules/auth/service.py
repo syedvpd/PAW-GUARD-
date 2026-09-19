@@ -100,6 +100,7 @@ logger = get_logger(__name__)
 
 MAX_FAILED_LOGIN_ATTEMPTS = 5
 ACCOUNT_LOCKOUT_MINUTES = 15
+SUPER_ADMIN_ROLE = "super_admin"
 _UNSET: Any = object()
 
 
@@ -254,13 +255,7 @@ class AuthService:
         except TokenError as exc:
             raise InvalidTokenError("Pre-authentication token is invalid or expired.") from exc
 
-        user_id = uuid.UUID(payload["sub"])
-        session_id = uuid.UUID(payload["sid"])
-
-        user = await self._users.get_by_id(user_id)
-        session = await self._sessions.get_by_id(session_id)
-        if user is None or session is None or not session.is_active:
-            raise InvalidSessionError("Session is no longer valid.")
+        user, session = await self._pre_auth_user(payload)
 
         device_record = await self._mfa.get_for_user(user.id)
 
@@ -300,6 +295,32 @@ class AuthService:
             user_agent=ctx.user_agent,
         )
         return tokens
+
+    async def _pre_auth_user(self, payload: dict[str, Any]) -> tuple[User, UserSession]:
+        user = await self._users.get_by_id(uuid.UUID(payload["sub"]))
+        session = await self._sessions.get_by_id(uuid.UUID(payload["sid"]))
+        if user is None or session is None or not session.is_active:
+            raise InvalidSessionError("Session is no longer valid.")
+        return user, session
+
+    def _decode_pre_auth(self, pre_auth_token: str) -> dict[str, Any]:
+        try:
+            return decode_token(pre_auth_token, expected_type=TokenType.PRE_AUTH)
+        except TokenError as exc:
+            raise InvalidTokenError("Pre-authentication token is invalid or expired.") from exc
+
+    async def bootstrap_mfa_enrollment(self, *, pre_auth_token: str) -> tuple[str, str]:
+        user, _ = await self._pre_auth_user(self._decode_pre_auth(pre_auth_token))
+        return await self.enroll_mfa(user=user)
+
+    async def confirm_bootstrap_mfa(
+        self, *, pre_auth_token: str, code: str, ctx: RequestContext
+    ) -> None:
+        """Enable MFA for a pre-auth user; sign-in then completes via verify_mfa_login."""
+        user, _ = await self._pre_auth_user(self._decode_pre_auth(pre_auth_token))
+        if user.mfa_enabled:
+            raise MFAAlreadyEnabledError("MFA is already enabled for this account.")
+        await self.confirm_mfa_enrollment(user=user, code=code, ctx=ctx)
 
     # --- Refresh (with rotation + reuse detection) ---
 
@@ -1371,6 +1392,108 @@ class AdminService:
     async def list_users(self) -> list[User]:
         return await self._users.list_all()
 
+    async def search_users(
+        self,
+        *,
+        page: int,
+        page_size: int,
+        role: str | None = None,
+        is_active: bool | None = None,
+        q: str | None = None,
+    ) -> tuple[list[User], int]:
+        return await self._users.search(
+            page=page, page_size=page_size, role=role, is_active=is_active, q=q
+        )
+
+    @staticmethod
+    def _user_state(user: User) -> dict[str, Any]:
+        return {
+            "full_name": user.full_name,
+            "phone": user.phone,
+            "is_active": user.is_active,
+            "can_drive": user.can_drive,
+            "managed_facility_id": user.managed_facility_id,
+            "roles": sorted(r.name for r in (user.roles or [])),
+        }
+
+    async def _guard_actor_can_manage(
+        self, user: User | None, actor_id: uuid.UUID | None, role_names: list[str] | None
+    ) -> None:
+        touches_super_admin = (role_names is not None and SUPER_ADMIN_ROLE in role_names) or (
+            user is not None and SUPER_ADMIN_ROLE in {r.name for r in (user.roles or [])}
+        )
+        if not touches_super_admin or actor_id is None:
+            return
+        actor = await self._users.get_by_id(actor_id)
+        if actor is None or SUPER_ADMIN_ROLE not in {r.name for r in (actor.roles or [])}:
+            raise ForbiddenError(
+                "Only a Super Administrator can manage Super Administrator accounts."
+            )
+
+    async def _guard_super_admin_loss(self, user: User, actor_id: uuid.UUID | None) -> None:
+        if SUPER_ADMIN_ROLE not in {r.name for r in (user.roles or [])}:
+            return
+        if actor_id is not None and user.id == actor_id:
+            raise ForbiddenError("You cannot remove your own Super Administrator access.")
+        if user.is_active and await self._users.count_active_with_role(SUPER_ADMIN_ROLE) <= 1:
+            raise ForbiddenError("At least one active Super Administrator must remain.")
+
+    async def _revoke_user_sessions(self, user_id: uuid.UUID, reason: str) -> None:
+        db = self._users._session
+        await SessionRepository(db).revoke_all_for_user(user_id, reason=reason)
+        await RefreshTokenRepository(db).revoke_all_for_user(user_id, reason=reason)
+
+    async def list_user_sessions(self, user_id: uuid.UUID) -> list[UserSession]:
+        await self.get_user(user_id)
+        return await SessionRepository(self._users._session).list_active_for_user(user_id)
+
+    async def revoke_user_sessions(
+        self,
+        user_id: uuid.UUID,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+    ) -> None:
+        user = await self.get_user(user_id)
+        await self._revoke_user_sessions(user.id, "admin_revoked")
+        await self._audit.record(
+            event_type=AuthAuditEventType.ADMIN_USER_SESSIONS_REVOKED,
+            actor_id=actor_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            metadata={"user_id": str(user.id), "email": user.email},
+        )
+
+    async def reset_user_mfa(
+        self,
+        user_id: uuid.UUID,
+        *,
+        actor_id: uuid.UUID | None = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+    ) -> User:
+        user = await self.get_user(user_id)
+        if actor_id is not None and user.id == actor_id:
+            raise ForbiddenError("Use your own MFA settings to change your authenticator.")
+        device = await MFARepository(self._users._session).get_for_user(user.id)
+        if device is not None:
+            device.is_verified = False
+        was_enabled = user.mfa_enabled
+        user.mfa_enabled = False
+        await self._revoke_user_sessions(user.id, "admin_mfa_reset")
+        await self._audit.record(
+            event_type=AuthAuditEventType.ADMIN_USER_MFA_RESET,
+            actor_id=actor_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            metadata={"user_id": str(user.id), "email": user.email},
+            before_state={"mfa_enabled": was_enabled},
+            after_state={"mfa_enabled": False},
+        )
+        await self._users._session.flush()
+        return await self.get_user(user_id)
+
     async def get_user(self, user_id: uuid.UUID) -> User:
         user = await self._users.get_by_id(user_id)
         if user is None:
@@ -1391,6 +1514,7 @@ class AdminService:
         ip_address: str | None = None,
         user_agent: str | None = None,
     ) -> User:
+        await self._guard_actor_can_manage(None, actor_id, role_names)
         normalized_email = email.lower().strip()
         existing = await self._users.get_by_email(normalized_email)
         if existing is not None:
@@ -1448,6 +1572,11 @@ class AdminService:
         if user is None:
             raise NotFoundError(f"User {user_id} not found.")
 
+        await self._guard_actor_can_manage(user, actor_id, role_names)
+        before = self._user_state(user)
+        if is_active is False or (role_names is not None and SUPER_ADMIN_ROLE not in role_names):
+            await self._guard_super_admin_loss(user, actor_id)
+
         if full_name is not None:
             user.full_name = full_name
         if phone is not None:
@@ -1480,12 +1609,17 @@ class AdminService:
         await self._users._session.flush()
         await self._users._session.refresh(user)
         fresh = await self._users.get_by_id(user_id)
+        after = self._user_state(fresh or user)
+        if (before["is_active"] and not after["is_active"]) or before["roles"] != after["roles"]:
+            await self._revoke_user_sessions(user_id, "admin_access_changed")
         await self._audit.record(
             event_type=AuthAuditEventType.ADMIN_USER_UPDATED,
             actor_id=actor_id,
             ip_address=ip_address,
             user_agent=user_agent,
-            metadata={"user_id": str(user_id)},
+            metadata={"user_id": str(user_id), "password_changed": password is not None},
+            before_state=before,
+            after_state=after,
         )
         return fresh or user
 
@@ -1500,13 +1634,21 @@ class AdminService:
         user = await self._users.get_by_id(user_id)
         if user is None:
             raise NotFoundError(f"User {user_id} not found.")
+        if actor_id is not None and user.id == actor_id:
+            raise ForbiddenError("You cannot delete your own account from User Management.")
+        await self._guard_actor_can_manage(user, actor_id, None)
+        await self._guard_super_admin_loss(user, actor_id)
+        before = self._user_state(user)
         user.deleted_at = datetime.now(UTC)
+        await self._revoke_user_sessions(user_id, "admin_deleted")
         await self._audit.record(
             event_type=AuthAuditEventType.ADMIN_USER_DELETED,
             actor_id=actor_id,
             ip_address=ip_address,
             user_agent=user_agent,
             metadata={"user_id": str(user_id), "email": user.email},
+            before_state=before,
+            after_state={"deleted": True},
         )
 
     async def restore_and_reset_password(
@@ -1559,6 +1701,11 @@ class AdminService:
         user = await self._users.get_by_id(user_id)
         if user is None:
             raise NotFoundError(f"User {user_id} not found.")
+        if pc.SYSTEM_ADMIN in permission_codes:
+            raise ForbiddenError(
+                "system:admin cannot be granted directly; assign the Super Administrator role."
+            )
+        before = await self.list_user_permissions(user_id)
         perms = await self._permissions.get_by_codes(permission_codes)
         found_codes = {p.code for p in perms}
         invalid_codes = set(permission_codes) - found_codes
@@ -1575,7 +1722,7 @@ class AdminService:
         await self._invalidate_rbac_cache()
         if self._audit and actor_id:
             await self._audit.record(
-                event_type=AuthAuditEventType.ADMIN_ROLE_UPDATED,
+                event_type=AuthAuditEventType.ADMIN_USER_PERMISSIONS_CHANGED,
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
@@ -1584,6 +1731,8 @@ class AdminService:
                     "action": "grant_permissions",
                     "permission_codes": permission_codes,
                 },
+                before_state={"direct_permissions": sorted(before)},
+                after_state={"direct_permissions": sorted(set(before) | found_codes)},
             )
         return sorted(found_codes)
 
@@ -1604,11 +1753,12 @@ class AdminService:
             raise NotFoundError(f"Permission '{permission_code}' not found.")
         up_repo = self._user_permissions
         assert up_repo is not None
+        before = await self.list_user_permissions(user_id)
         revoked = await up_repo.revoke_permission(user_id, perm.id)
         await self._invalidate_rbac_cache()
         if self._audit and actor_id:
             await self._audit.record(
-                event_type=AuthAuditEventType.ADMIN_ROLE_UPDATED,
+                event_type=AuthAuditEventType.ADMIN_USER_PERMISSIONS_CHANGED,
                 actor_id=actor_id,
                 ip_address=ip_address or "",
                 user_agent="",
@@ -1616,6 +1766,10 @@ class AdminService:
                     "user_id": str(user_id),
                     "action": "revoke_permission",
                     "permission_code": permission_code,
+                },
+                before_state={"direct_permissions": sorted(before)},
+                after_state={
+                    "direct_permissions": sorted(c for c in before if c != permission_code)
                 },
             )
         return revoked

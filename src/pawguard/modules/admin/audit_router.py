@@ -1,6 +1,8 @@
 """Admin audit log viewer endpoints (RULE-004)."""
 
+import json
 import uuid
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -10,7 +12,7 @@ from pawguard.core.cache_decorator import cache_response
 from pawguard.core.responses import ApiResponse
 from pawguard.db.session import get_db
 from pawguard.modules.auth.rbac import require_permission
-from pawguard.modules.auth.repository import AuthAuditLogRepository
+from pawguard.modules.auth.repository import AuthAuditLogRepository, audit_filters
 
 audit_router = APIRouter(prefix="/admin/audit-logs", tags=["admin-audit"])
 
@@ -61,10 +63,21 @@ async def list_audit_logs(
     limit: int = Query(50, ge=1, le=200),
     event_type: str | None = Query(None),
     user_id: uuid.UUID | None = Query(None),
+    module: str | None = Query(None, max_length=40),
+    date_from: datetime | None = Query(None),
+    date_to: datetime | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[list[dict[str, Any]]]:
     repo = AuthAuditLogRepository(db)
-    entries = await repo.list(skip=skip, limit=limit, event_type=event_type, user_id=user_id)
+    entries = await repo.list(
+        skip=skip,
+        limit=limit,
+        event_type=event_type,
+        user_id=user_id,
+        module=module,
+        date_from=date_from,
+        date_to=date_to,
+    )
     return ApiResponse(data=[_format_audit_entry(e) for e in entries])
 
 
@@ -80,6 +93,9 @@ async def export_audit_logs(
     format: str = Query("csv", description="Export format: 'csv' or 'json'"),
     event_type: str | None = Query(None),
     user_id: uuid.UUID | None = Query(None),
+    module: str | None = Query(None, max_length=40),
+    date_from: datetime | None = Query(None),
+    date_to: datetime | None = Query(None),
     limit: int = Query(500, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),
 ):
@@ -100,13 +116,19 @@ async def export_audit_logs(
         AuthAuditLog.ip_address,
         AuthAuditLog.user_agent,
         AuthAuditLog.event_metadata,
+        AuthAuditLog.before_state,
+        AuthAuditLog.after_state,
         AuthAuditLog.created_at,
     ).outerjoin(User, User.id == AuthAuditLog.user_id)
 
-    if event_type:
-        stmt = stmt.where(AuthAuditLog.event_type == event_type)
-    if user_id:
-        stmt = stmt.where(AuthAuditLog.user_id == user_id)
+    for condition in audit_filters(
+        event_type=event_type,
+        user_id=user_id,
+        module=module,
+        date_from=date_from,
+        date_to=date_to,
+    ):
+        stmt = stmt.where(condition)
     stmt = stmt.order_by(AuthAuditLog.created_at.desc()).limit(limit)
 
     rows = (await db.execute(stmt)).all()
@@ -124,6 +146,8 @@ async def export_audit_logs(
                 "event_type",
                 "ip_address",
                 "user_agent",
+                "before_state",
+                "after_state",
                 "created_at",
             ]
         )
@@ -148,6 +172,8 @@ async def export_audit_logs(
                     r.event_type,
                     r.ip_address or "",
                     r.user_agent or "",
+                    json.dumps(r.before_state) if r.before_state is not None else "",
+                    json.dumps(r.after_state) if r.after_state is not None else "",
                     r.created_at.isoformat() if r.created_at else "",
                 ]
             )
@@ -180,6 +206,8 @@ async def export_audit_logs(
                 "ip_address": r.ip_address,
                 "user_agent": r.user_agent,
                 "event_metadata": r.event_metadata,
+                "before_state": r.before_state,
+                "after_state": r.after_state,
                 "created_at": r.created_at.isoformat() if r.created_at else None,
             }
         )

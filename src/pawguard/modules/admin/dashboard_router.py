@@ -1,8 +1,10 @@
 """Admin dashboard endpoints: analytics, metrics, system overview (RULE-004)."""
 
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pawguard.core.cache_decorator import cache_response
@@ -10,7 +12,8 @@ from pawguard.core.responses import ApiResponse
 from pawguard.db.session import get_db
 from pawguard.modules.admin.dashboard_repository import DashboardRepository
 from pawguard.modules.admin.dashboard_service import DashboardService
-from pawguard.modules.auth.rbac import require_permission
+from pawguard.modules.auth.models import AuthAuditEventType, AuthAuditLog, Role, User, UserRole
+from pawguard.modules.auth.rbac import require_permission, require_role
 from pawguard.redis.client import RedisClient, get_redis
 
 admin_dashboard_router = APIRouter(prefix="/admin/dashboard", tags=["admin-dashboard"])
@@ -249,3 +252,73 @@ async def get_grievance_stats(
 ) -> ApiResponse[dict[str, Any]]:
     data = await service.get_grievance_stats()
     return ApiResponse(data=data)
+
+
+@admin_dashboard_router.get(
+    "/governance",
+    response_model=ApiResponse[dict[str, Any]],
+    dependencies=[Depends(require_role("super_admin"))],
+)
+async def get_governance_summary(
+    db: AsyncSession = Depends(get_db),
+) -> ApiResponse[dict[str, Any]]:
+    now = datetime.now(UTC)
+    live = (User.deleted_at.is_(None),)
+    by_role = (
+        await db.execute(
+            select(Role.name, func.count(func.distinct(User.id)))
+            .join(UserRole, UserRole.role_id == Role.id)
+            .join(User, User.id == UserRole.user_id)
+            .where(*live, User.is_active.is_(True))
+            .group_by(Role.name)
+        )
+    ).all()
+    inactive = (
+        await db.execute(select(func.count(User.id)).where(*live, User.is_active.is_(False)))
+    ).scalar_one()
+    locked = (
+        await db.execute(select(func.count(User.id)).where(*live, User.locked_until > now))
+    ).scalar_one()
+    admins_without_mfa = (
+        await db.execute(
+            select(User.id, User.email, User.full_name)
+            .join(UserRole, UserRole.user_id == User.id)
+            .join(Role, Role.id == UserRole.role_id)
+            .where(
+                *live,
+                User.is_active.is_(True),
+                User.mfa_enabled.is_(False),
+                Role.name.in_(("super_admin", "rescue_centre_admin")),
+            )
+            .distinct()
+        )
+    ).all()
+    failed_logins = (
+        await db.execute(
+            select(func.count(AuthAuditLog.id)).where(
+                AuthAuditLog.event_type == AuthAuditEventType.LOGIN_FAILED.value,
+                AuthAuditLog.created_at >= now - timedelta(hours=24),
+            )
+        )
+    ).scalar_one()
+    last_backup = (
+        await db.execute(
+            select(func.max(AuthAuditLog.created_at)).where(
+                AuthAuditLog.event_type == AuthAuditEventType.BACKUP_CREATED.value
+            )
+        )
+    ).scalar_one()
+    return ApiResponse(
+        data={
+            "users_by_role": {name: count for name, count in by_role},
+            "active_users": sum(count for _, count in by_role),
+            "inactive_users": inactive,
+            "locked_accounts": locked,
+            "admins_without_mfa": [
+                {"id": str(uid), "email": email, "full_name": name}
+                for uid, email, name in admins_without_mfa
+            ],
+            "failed_logins_24h": failed_logins,
+            "last_backup_at": last_backup.isoformat() if last_backup else None,
+        }
+    )
